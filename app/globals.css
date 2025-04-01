@@ -3,9 +3,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-}
-
-@theme inline {
+  --primary: #3b82f6;
+  --primary-dark: #2563eb;
+  --secondary: #10b981;
+  --accent: #8b5cf6;
+  
+  /* Replace @theme with standard CSS variables */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -16,11 +19,250 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --primary: #4f46e5;
+    --primary-dark: #4338ca;
+    --secondary: #059669;
+    --accent: #7c3aed;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans, Arial, Helvetica, sans-serif);
+}
+
+/* Custom gradient background for hero section */
+.hero-gradient {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
+}
+
+/* Custom card hover effect */
+.feature-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Custom button styles */
+.btn-primary {
+  background-color: var(--primary);
+  color: white;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-dark);
+}
+
+/* Animation for fade-in elements */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+/* ReactFlow personalizaciones */
+.react-flow__node {
+  transition: all 0.3s ease;
+  /* Eliminar cualquier sombra o fondo por defecto */
+  box-shadow: none !important;
+  background-color: transparent !important;
+}
+
+/* Fijar específicamente el fondo transparente para nodos-grupo */
+.react-flow__node-group {
+  background-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+div[data-id].react-flow__node {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.react-flow__node > div[data-type="group"] {
+  background-color: rgba(255, 192, 203, 0.1) !important;
+}
+
+.react-flow__node.selected {
+  z-index: 10 !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Asegurar que los controles de los nodos siempre sean visibles */
+.node-controls-container {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 10;
+}
+
+.node-controls {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Asegurar que los nodos hijos permanezcan dentro de los límites del grupo */
+.react-flow__node[data-parent-node] {
+  max-width: calc(100% - 20px) !important;
+  max-height: calc(100% - 50px) !important; /* Considerando el espacio para la cabecera */
+}
+
+/* Mejora para la visualización en modo oscuro */
+.dark .react-flow__node {
+  color-scheme: dark;
+}
+
+/* Efectos para el modo de foco - mejorado sin opacidad en contenedor */
+.react-flow__node:not(.focused) .react-flow.focus-mode {
+  opacity: 0.3;
+  filter: grayscale(80%);
+}
+
+.react-flow__node.focused {
+  opacity: 1 !important;
+  z-index: 50 !important;
+  filter: none !important;
+  /* Eliminamos la sombra especial para el modo focus */
+}
+
+/* Asegurar que los controles sean visibles */
+.react-flow__node button {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Asegurar que los nodos de GCP muestren correctamente sus iconos */
+.react-flow__node[data-provider="gcp"] button {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  color: #4285F4 !important;
+  border: 1px solid rgba(66, 133, 244, 0.3) !important;
+}
+
+/* Estilos especiales para grupos - mantener la transparencia pero eliminar sombras incorrectas */
+.react-flow__node[data-type="group"] {
+  background-color: transparent !important;
+  overflow: visible !important; /* Permitir que los controles sean visibles fuera del grupo */
+  z-index: 5 !important;
+}
+
+/* Corrección para nodos seleccionados - borde negro delgado */
+.react-flow__node.selected {
+  outline: 1px solid rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 0 2px 0px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Eliminar el borde azul fuerte cuando se selecciona */
+.react-flow__node.selected .ring-2,
+.react-flow__node.selected .ring-primary {
+  box-shadow: none !important;
+  outline: none !important;
+  border-color: transparent !important;
+}
+
+/* Corregir el borde azul para el enfoque también */
+.react-flow__node:focus,
+.react-flow__node:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Corrección de redimensionamiento para eliminar sombras incorrectas pero mantener visibilidad */
+.react-flow__resize-control {
+  z-index: 20 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  background-color: white !important;
+  border: 1px solid rgba(0, 0, 0, 0.3) !important;
+}
+
+.react-flow__resize-control.handle {
+  width: 6px !important;
+  height: 6px !important;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  background: white;
+}
+
+/* Eliminar box-shadows incorrectos solo para selectores específicos que tenían problemas */
+.react-flow__node .ring-2 {
+  box-shadow: none !important;
+}
+
+/* Asegurar que los nodos hijos ocultos realmente estén ocultos */
+.react-flow__node.hidden,
+.react-flow__node[data-hidden="true"],
+.react-flow__node[hidden] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Mejorar handles de conexión */
+.react-flow__handle {
+  z-index: 10;
+  background-color: var(--primary) !important;
+}
+
+/* Animación suave para transiciones */
+.react-flow__node, 
+.react-flow__edge {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Estilos especiales para nodos en listas */
+.list-node-item {
+  padding: 5px;
+  margin-bottom: 5px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-left: 3px solid var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Reset para NodeResizer - solo quitar sombras incorrectas */
+.resize-handle {
+  box-shadow: none !important;
+  border-color: var(--primary) !important;
+  background-color: white !important;
+}
+
+.resize-line {
+  box-shadow: none !important;
+  border-color: var(--primary) !important;
+}
+
+.react-flow__node-group::before,
+.react-flow__node-group::after {
+  display: none !important;
+  content: none !important;
+}
+
+.react-flow__node.nopan.selectable {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.react-flow__node-group > div {
+  box-shadow: none !important;
+}
+
+.react-flow__node.parent {
+  border: none !important;
+  background: none !important;
+  background-color: transparent !important;
 }
