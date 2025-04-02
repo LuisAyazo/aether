@@ -29,6 +29,10 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   const [originalDimensions, setOriginalDimensions] = useState<{width?: number, height?: number}>({});
   const reactFlowInstance = useReactFlow();
   const groupRef = useRef<HTMLDivElement>(null);
+  // Add state for title editing
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleText, setTitleText] = useState(data.label || 'Group');
+  const titleInputRef = useRef<HTMLInputElement>(null);
   
   // Color mapping based on provider - softer than regular nodes
   const getProviderColor = useCallback(() => {
@@ -552,6 +556,165 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     };
   }, [id]);
 
+  // Handle title click and editing
+  const startTitleEdit = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditingTitle(true);
+    // Focus the input after it renders
+    setTimeout(() => {
+      if (titleInputRef.current) {
+        titleInputRef.current.focus();
+        titleInputRef.current.select();
+      }
+    }, 10);
+  }, []);
+
+  const saveTitleEdit = useCallback(() => {
+    setIsEditingTitle(false);
+    // Update the node data with the new label
+    reactFlowInstance.setNodes(nodes =>
+      nodes.map(node => {
+        if (node.id === id) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              label: titleText.trim() || 'Group'
+            }
+          };
+        }
+        return node;
+      })
+    );
+  }, [titleText, id, reactFlowInstance]);
+
+  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      saveTitleEdit();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
+      setTitleText(data.label); // Reset to original
+    }
+  }, [saveTitleEdit, data.label]);
+
+  // Add event listener for context menu actions
+  useEffect(() => {
+    const handleNodeAction = (event: CustomEvent) => {
+      const { action, nodeId, targetNodeIds } = event.detail;
+      
+      // Only process if this action is for this node
+      if (nodeId === id) {
+        switch(action) {
+          case 'toggleCollapse':
+            toggleCollapse({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'toggleMinimize':
+            toggleMinimize({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'toggleFocus':
+            toggleFocus({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'addNodeToGroup':
+            addNodeToGroup({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'addSelectedNodesToGroup':
+            // New action to add selected nodes to this group
+            if (targetNodeIds && targetNodeIds.length > 0) {
+              addNodesToGroup(targetNodeIds);
+            }
+            break;
+          case 'deleteNode':
+            // Delete this node
+            reactFlowInstance.setNodes(nodes => 
+              nodes.filter(node => node.id !== id)
+            );
+            break;
+        }
+      }
+    };
+    
+    // Add event listener
+    document.addEventListener('nodeAction', handleNodeAction as EventListener);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('nodeAction', handleNodeAction as EventListener);
+    };
+  }, [id, toggleCollapse, toggleMinimize, toggleFocus, addNodeToGroup, reactFlowInstance]);
+
+  // Function to add multiple existing nodes to this group - fixed version
+  const addNodesToGroup = useCallback((nodeIds: string[]) => {
+    if (isMinimized) return;
+    
+    try {
+      // Get the group node for position calculation
+      const groupNode = reactFlowInstance.getNode(id);
+      if (!groupNode) return;
+      
+      const groupWidth = (groupNode.style?.width as number) || 200;
+      const groupHeight = (groupNode.style?.height as number) || 150;
+      
+      console.log(`Adding nodes to group: ${id}`, nodeIds);
+      console.log("Group dimensions:", groupWidth, groupHeight);
+      
+      // Spread nodes inside the group
+      let positionMap = new Map<string, {x: number, y: number}>();
+      
+      // Calculate relative positions - use a grid layout
+      const margin = 20;
+      const cols = 3; // Max 3 nodes per row
+      let row = 0;
+      let col = 0;
+      
+      nodeIds.forEach(nodeId => {
+        const node = reactFlowInstance.getNode(nodeId);
+        if (!node) return;
+        
+        // Calculate position in grid
+        const x = margin + (col * ((groupWidth - margin*2) / cols));
+        const y = margin + 30 + (row * 60); // Add extra space for header
+        
+        positionMap.set(nodeId, {x, y});
+        
+        // Update grid position
+        col++;
+        if (col >= cols) {
+          col = 0;
+          row++;
+        }
+      });
+      
+      // Update all specified nodes to belong to this group
+      reactFlowInstance.setNodes(nodes => 
+        nodes.map(node => {
+          if (nodeIds.includes(node.id)) {
+            // Use calculated grid position
+            const position = positionMap.get(node.id) || { x: 50, y: 50 };
+            
+            console.log(`Setting node ${node.id} position:`, position);
+            
+            return {
+              ...node,
+              parentNode: id,
+              extent: 'parent' as const,
+              position: position,
+              selected: false
+            };
+          }
+          return node;
+        })
+      );
+      
+      // Force a redraw of edges
+      setTimeout(() => {
+        const edges = reactFlowInstance.getEdges();
+        reactFlowInstance.setEdges([...edges]);
+      }, 50);
+    } catch (error) {
+      console.error("Error adding nodes to group:", error);
+    }
+  }, [id, reactFlowInstance, isMinimized]);
+
   // Si está minimizado, mostrar solo un icono compacto
   if (isMinimized) {
     return (
@@ -688,9 +851,25 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
         </button>
       </div>
 
-      {/* Título del grupo */}
-      <div className="text-md font-bold mb-2 w-full bg-white/80 dark:bg-gray-800/80 p-1 rounded">
-        {data.label}
+      {/* Título del grupo - make it editable */}
+      <div 
+        className="text-md font-bold mb-2 w-full bg-white/80 dark:bg-gray-800/80 p-1 rounded cursor-pointer"
+        onClick={startTitleEdit}
+      >
+        {isEditingTitle ? (
+          <input
+            ref={titleInputRef}
+            type="text"
+            value={titleText}
+            onChange={(e) => setTitleText(e.target.value)}
+            onBlur={saveTitleEdit}
+            onKeyDown={handleTitleKeyDown}
+            className="w-full bg-transparent focus:outline-none"
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          data.label
+        )}
       </div>
 
       {/* Contador de servicios */}

@@ -74,6 +74,8 @@ body {
   /* Eliminar cualquier sombra o fondo por defecto */
   box-shadow: none !important;
   background-color: transparent !important;
+  pointer-events: all !important; 
+  cursor: pointer !important;
 }
 
 /* Fijar específicamente el fondo transparente para nodos-grupo */
@@ -101,6 +103,8 @@ div[data-id].react-flow__node {
   z-index: 10 !important;
   box-shadow: none !important;
   border: none !important;
+  outline: 3px solid #4f46e5 !important;
+  outline-offset: 2px !important;
 }
 
 /* Asegurar que los controles de los nodos siempre sean visibles */
@@ -265,4 +269,386 @@ div[data-id].react-flow__node {
   border: none !important;
   background: none !important;
   background-color: transparent !important;
+}
+
+/* Selection mode styles */
+.selection-mode {
+  cursor: crosshair !important;
+}
+
+.selection-mode .react-flow__selection {
+  border: 2px dashed var(--primary) !important;
+  border-radius: 4px;
+  background-color: rgba(var(--primary-rgb), 0.1) !important;
+}
+
+/* Enhanced selection mode styles */
+.selection-mode,
+.lasso-active {
+  cursor: crosshair !important;
+}
+
+/* Make selection area more visible */
+.react-flow__selection {
+  border: 2px dashed #4f46e5 !important; 
+  background-color: rgba(79, 70, 229, 0.1) !important;
+  border-radius: 4px;
+}
+
+/* Fix selection handles and styling */
+.react-flow .react-flow__nodesselection {
+  background-color: rgba(79, 70, 229, 0.05);
+  border: 2px dashed #4f46e5;
+}
+
+/* Fix selection styling for nodes */
+.react-flow__node.selected {
+  outline: 2px solid #4f46e5 !important;
+}
+
+/* Ensure nodes can be selected */
+.react-flow__node {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  cursor: pointer !important;
+}
+
+/* Make the selection area more visible when active */
+.lasso-active .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+/* Make selection area more precise and visible */
+.react-flow__selection {
+  border: 2px dashed #4f46e5 !important; 
+  background-color: rgba(79, 70, 229, 0.15) !important;
+  border-radius: 4px;
+  /* Add a subtle shadow for better visibility */
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.2) !important;
+}
+
+/* Make selection box more precise */
+.react-flow .react-flow__nodesselection {
+  background-color: rgba(79, 70, 229, 0.08);
+  border: 2px dashed #4f46e5;
+}
+
+/* Make nodes easier to select with a slightly larger hit area but strict selection mode */
+.selectable-node {
+  /* Increase contrast for easier selection */
+  filter: contrast(1.02) !important;
+}
+
+/* Make nodes clearer when selected */
+.react-flow__node.selected {
+  outline: 2px solid #4f46e5 !important;
+  z-index: 5 !important;
+}
+
+/* Change to a more obvious selection cursor */
+.lasso-active .react-flow__pane {
+  cursor: cell !important;
+}
+
+/* Make the selection box drag affordance clearer */
+.lasso-active .react-flow__selection-box {
+  cursor: crosshair !important;
+}
+
+/* Improved selection styles */
+.react-flow__selection {
+  border: 2px dashed #4f46e5 !important; 
+  background-color: rgba(79, 70, 229, 0.15) !important;
+  border-radius: 4px;
+}
+
+/* Fix selection behavior for nodes - make nodes easier to select */
+.react-flow__node {
+  cursor: pointer !important;
+  /* Improve hit area for better selection */
+  position: relative;
+}
+
+/* Add specific selector to prevent selecting things that should be inside nodes */
+.react-flow__node * {
+  pointer-events: none;
+}
+
+/* But allow interactivity for buttons and form controls inside nodes */
+.react-flow__node button,
+.react-flow__node input,
+.react-flow__node textarea,
+.react-flow__node select,
+.react-flow__node .resize-handle,
+.react-flow__handle {
+  pointer-events: all !important;
+}
+
+/* Make the selection box more visible */
+.lasso-active .react-flow__selection-box {
+  border: 2px dashed #4f46e5 !important;
+  background-color: rgba(79, 70, 229, 0.1) !important;
+  border-radius: 4px;
+}
+
+/* Make selected nodes stand out more clearly */
+.react-flow__node.selected {
+  outline: 2px solid #4f46e5 !important;
+  outline-offset: 2px !important;
+}
+
+/* Fix pointer events behavior for selection */
+.react-flow__pane {
+  cursor: default;
+}
+
+/* In lasso mode, make the pane use crosshair cursor */
+.lasso-active .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+/* Fix selector for node contents to improve selection behavior */
+.react-flow__node * {
+  pointer-events: none;
+}
+
+/* Only enable pointer events for interactive elements */
+.react-flow__node .react-flow__handle,
+.react-flow__node button,
+.react-flow__node input,
+.react-flow__node select,
+.react-flow__node textarea,
+.react-flow__node a,
+.react-flow__node .resize-handle {
+  pointer-events: all !important;
+}
+
+/* Clear styling rules for nodes to avoid interference */
+.react-flow__node {
+  position: relative;
+  user-select: none;
+  transform-origin: 0 0;
+}
+
+/* Make selected nodes stand out more clearly */
+.react-flow__node.selected {
+  z-index: 10 !important;
+  outline: 2px solid #4f46e5 !important;
+  outline-offset: 2px !important;
+}
+
+/* Make the selection box more visible */
+.react-flow__selection {
+  border: 2px dashed #4f46e5 !important;
+  background-color: rgba(79, 70, 229, 0.1) !important;
+}
+
+/* When in selection mode, don't show the blue bounding box */
+.selection-mode .react-flow__nodesselection-rect {
+  display: none;
+}
+
+/* Improve save button appearance */
+button.bg-primary {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+}
+
+/* Fix selection behavior - ensure only nodes inside the selection box are selected */
+.react-flow__selection {
+  border: 3px dashed #4f46e5 !important;
+  background-color: rgba(79, 70, 229, 0.2) !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Make the selection tool more precise */
+.selection-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+/* Make the selection box more visible */
+.selection-mode .react-flow__selection-box {
+  border: 3px dashed #4f46e5 !important;
+  background-color: rgba(79, 70, 229, 0.2) !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Clear all pointer-events for node children unless explicitly enabled */
+.react-flow__node * {
+  pointer-events: none !important;
+}
+
+/* Enable pointer events only for interactive elements */
+.react-flow__node .react-flow__handle,
+.react-flow__node button,
+.react-flow__node input,
+.react-flow__node select,
+.react-flow__node textarea,
+.react-flow__node a,
+.react-flow__node .resize-handle {
+  pointer-events: auto !important;
+}
+
+/* Make nodes themselves selectable */
+.react-flow__node {
+  pointer-events: auto !important;
+  cursor: default;
+}
+
+/* Fix save button appearance to ensure visibility */
+button.bg-blue-600 {
+  color: white;
+  font-weight: 500;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* Fix the selection tool indicator appearance */
+.fixed.bottom-4 {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-width: 90%;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+/* Custom selection overlay */
+.custom-selection-overlay {
+  position: fixed;
+  border: 2px dashed #4f46e5;
+  background-color: rgba(79, 70, 229, 0.15);
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+/* Make nodes clearly selectable when in lasso mode */
+.lasso-selection-mode .react-flow__node {
+  cursor: pointer !important;
+  pointer-events: all !important;
+}
+
+/* Fix selection box appearance */
+.lasso-active .react-flow__selection {
+  display: none !important; /* Hide ReactFlow's built-in selection */
+}
+
+/* Ensure node outlines are clearly visible when selected */
+.react-flow__node.selected {
+  outline: 2px solid #4f46e5 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
+  z-index: 10;
+}
+
+/* Clear specific pointer events issues */
+.lasso-selection-mode .react-flow__node * {
+  pointer-events: none !important;
+}
+
+.lasso-selection-mode .react-flow__node {
+  pointer-events: all !important;
+}
+
+/* Make the custom selection overlay more visible */
+.custom-selection-overlay {
+  position: fixed;
+  border: 2px dashed #4f46e5;
+  background-color: rgba(79, 70, 229, 0.15);
+  pointer-events: none;
+  z-index: 10000;
+  display: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+/* Fix pointer events to ensure nodes are clickable */
+.react-flow__node {
+  pointer-events: all !important; 
+  cursor: pointer !important;
+}
+
+/* Only disable pointer events on child elements inside nodes */
+.react-flow__node > * > * {
+  pointer-events: none;
+}
+
+/* But allow buttons and interactive elements to receive events */
+.react-flow__node button,
+.react-flow__node .react-flow__handle,
+.react-flow__node input,
+.react-flow__node select,
+.react-flow__node a {
+  pointer-events: all !important;
+}
+
+/* Fix selection styling to make it more visible */
+.react-flow__node.selected {
+  z-index: 10 !important;
+  outline: 3px solid #4f46e5 !important;
+  outline-offset: 2px !important;
+}
+
+/* Fix ReactFlow's built-in selection box in lasso mode */
+.lasso-active .react-flow__selection {
+  border: 2px solid #4f46e5 !important;
+  background-color: rgba(79, 70, 229, 0.1) !important;
+}
+
+/* Make the selection box more visible */
+.lasso-selection-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+/* Remove any conflicting styles that might be affecting selection */
+.lasso-selection-mode .react-flow__selection-rect,
+.lasso-selection-mode .react-flow__nodesselection-rect {
+  display: block !important;
+  pointer-events: none !important;
+}
+
+/* Ocultar el cuadro de selección predeterminado cuando estamos en modo 'selection-hidden' */
+.selection-hidden .react-flow__selection {
+  display: none !important;
+}
+
+/* Estilos para nuestro selector personalizado */
+.custom-selection-overlay {
+  position: fixed;
+  border: 2px dashed #4f46e5;
+  background-color: rgba(79, 70, 229, 0.15);
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+/* Ocultar cualquier recuadro de selección predeterminado */
+.react-flow__nodesselection,
+.react-flow__nodesselection-rect,
+.react-flow__selection-rect,
+.react-flow__selection {
+  display: none !important;
+  border: none !important;
+  background: none !important;
+}
+
+/* Resaltar solo los nodos seleccionados con un contorno claro */
+.react-flow__node.selected {
+  outline: 2px solid #4f46e5 !important;
+  outline-offset: 2px !important;
+  z-index: 10 !important;
+}
+
+/* Permitir que el selector personalizado sea más visible */
+.custom-selection-overlay {
+  position: fixed;
+  border: 2px dashed #4f46e5;
+  background-color: rgba(79, 70, 229, 0.15);
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
 }
