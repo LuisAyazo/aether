@@ -989,6 +989,12 @@ const FlowEditorContent = ({
                 selected: node.id === nodeId
               }))
             );
+            
+            // Update our selectedNodes state manually
+            const selectedNode = reactFlowInstance.getNode(nodeId);
+            if (selectedNode) {
+              setSelectedNodes([selectedNode]);
+            }
           }
         }
         return;
@@ -1022,7 +1028,7 @@ const FlowEditorContent = ({
         );
       });
       
-      // Update selection
+      // Update selection in ReactFlow
       reactFlowInstance.setNodes(nodes => 
         nodes.map(node => ({
           ...node,
@@ -1030,31 +1036,43 @@ const FlowEditorContent = ({
         }))
       );
       
+      // IMPORTANT FIX: Manually update selectedNodes state to force synchronization
+      setSelectedNodes(nodesToSelect);
+      
       // Show the selection menu if multiple nodes are selected
       if (nodesToSelect.length > 1) {
         // Position the menu above the selection area
         const menuX = (selectionBox.x1 + selectionBox.x2) / 2;
         const menuY = selectionBox.y1 - 25; // Position above the selection box
         
-        setSelectionMenu({
-          visible: true,
-          x: menuX,
-          y: menuY
-        });
+        setTimeout(() => {
+          setSelectionMenu({
+            visible: true,
+            x: menuX,
+            y: Math.max(menuY, flowBounds.top + 10)
+          });
+        }, 10);
       }
     };
     
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     
-  }, [activeTool, reactFlowInstance, reactFlowWrapper, setSelectionMenu]);
+  }, [activeTool, reactFlowInstance, reactFlowWrapper, setSelectionMenu, setSelectedNodes]);
 
   // Función para crear un grupo con los nodos seleccionados
   const createGroupWithSelectedNodes = useCallback(() => {
-    if (selectedNodes.length > 0) {
-      groupSelectedNodes();
+    console.log("Creando grupo con nodos:", selectedNodes);
+    
+    if (selectedNodes.length > 1) {
+      // Llamar explícitamente a la función de agrupación
+      const groupId = groupSelectedNodes();
+      console.log("Grupo creado con ID:", groupId);
+      
       // Ocultar el menú
       setSelectionMenu({ ...selectionMenu, visible: false });
+    } else {
+      console.warn("Se necesitan al menos 2 nodos para crear un grupo");
     }
   }, [selectedNodes, groupSelectedNodes, selectionMenu]);
 
@@ -1083,11 +1101,17 @@ const FlowEditorContent = ({
         setSelectionMenu({
           visible: true,
           x: screenX,
-          y: screenY
+          y: Math.max(screenY, flowBounds.top + 10)
         });
       }
     }
   }, [selectedNodes, selectionMenu.visible, reactFlowInstance, reactFlowWrapper]);
+
+  // Nueva función para debug que nos muestra en consola cuando los nodos seleccionados cambian
+  useEffect(() => {
+    console.log("Nodos seleccionados actualizados:", selectedNodes.length);
+    console.log("IDs:", selectedNodes.map(n => n.id).join(", "));
+  }, [selectedNodes]);
 
   return (
     <div className="w-full h-full flex relative">
@@ -1371,7 +1395,7 @@ const FlowEditorContent = ({
           )}
 
           {/* Menú flotante para nodos seleccionados */}
-          {selectionMenu.visible && (
+          {selectionMenu.visible && selectedNodes.length > 1 && (
             <div 
               ref={selectionMenuRef}
               className="quick-group-button"

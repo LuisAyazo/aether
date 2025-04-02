@@ -23,7 +23,6 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   const [isCollapsed, setIsCollapsed] = useState(data.isCollapsed !== false);
   const [isMinimized, setIsMinimized] = useState(data.isMinimized === true);
   const [isFocused, setIsFocused] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false); // Estado para controlar si se muestran todas las opciones
   const [childNodes, setChildNodes] = useState<Node[]>([]);
   // Almacenar las dimensiones originales al minimizar
   const [originalDimensions, setOriginalDimensions] = useState<{width?: number, height?: number}>({});
@@ -411,11 +410,6 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     }
   };
 
-  const toggleOptions = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Evitar que el click llegue al nodo y lo seleccione
-    setIsExpanded(!isExpanded);
-  };
-
   const toggleFocus = (e: React.MouseEvent) => {
     e.stopPropagation(); // Evitar que el click llegue al nodo y lo seleccione
     const newFocusedState = !isFocused;
@@ -780,7 +774,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   return (
     <div 
       ref={groupRef}
-      className="rounded-md p-2 w-full h-full min-w-[200px] min-h-[150px] flex flex-col items-start relative group"
+      className="rounded-md p-2 w-full h-full min-w-[200px] min-h-[150px] flex flex-col items-start relative group node-group"
       style={{
         outline: selected ? `2px solid ${getBorderColor()}` : 'none',
         border: `2px dashed ${getBorderColor()}`,
@@ -800,56 +794,45 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
         onResize={onResize}
       />
 
-      {/* Inicialmente solo mostrar el botón de minimizar */}
-      <div className="absolute -top-8 flex gap-1 node-controls-container">
-        {/* Botón principal para minimizar */}
+      {/* Controles del grupo - Posicionados fuera del grupo */}
+      <div className="group-controls" style={{ top: '-28px', left: '0', position: 'absolute' }}>
+        {/* Botón para minimizar */}
         <button
           onClick={toggleMinimize}
-          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20"
+          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
           title="Minimizar grupo"
         >
           <ArrowsPointingInIcon className="w-4 h-4" />
         </button>
         
-        {/* Opciones adicionales que se muestran solo si se hace clic en el botón de opciones */}
-        {isExpanded && (
-          <>
-            <button
-              onClick={toggleCollapse}
-              className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20"
-              title={isCollapsed ? "Expandir nodos" : "Colapsar nodos"}
-            >
-              {isCollapsed ? <PlusIcon className="w-4 h-4" /> : <MinusIcon className="w-4 h-4" />}
-            </button>
-            <button
-              onClick={toggleFocus}
-              className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20"
-              title={isFocused ? "Ver todos" : "Enfocar en este grupo"}
-            >
-              <ViewfinderCircleIcon className="w-4 h-4" />
-            </button>
-            {!isCollapsed && (
-              <button
-                onClick={addNodeToGroup}
-                className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20"
-                title="Añadir nuevo servicio"
-              >
-                <PlusIcon className="w-4 h-4" />
-              </button>
-            )}
-          </>
-        )}
-        
-        {/* Botón para mostrar/ocultar opciones adicionales */}
+        {/* Opción de colapsar/expandir nodos */}
         <button
-          onClick={toggleOptions}
-          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20"
-          title={isExpanded ? "Ocultar opciones" : "Mostrar opciones"}
+          onClick={toggleCollapse}
+          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
+          title={isCollapsed ? "Expandir nodos" : "Colapsar nodos"}
         >
-          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-          </svg>
+          {isCollapsed ? <PlusIcon className="w-4 h-4" /> : <MinusIcon className="w-4 h-4" />}
         </button>
+        
+        {/* Opción de enfocar */}
+        <button
+          onClick={toggleFocus}
+          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
+          title={isFocused ? "Ver todos" : "Enfocar en este grupo"}
+        >
+          <ViewfinderCircleIcon className="w-4 h-4" />
+        </button>
+        
+        {/* Opción de añadir nodo (solo visible si no está colapsado) */}
+        {!isCollapsed && (
+          <button
+            onClick={addNodeToGroup}
+            className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
+            title="Añadir nuevo servicio"
+          >
+            <PlusIcon className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Título del grupo - mejorado para edición */}

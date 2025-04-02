@@ -108,9 +108,9 @@ div[data-id].react-flow__node {
 }
 
 /* Asegurar que los controles de los nodos siempre sean visibles */
-.node-controls-container {
-  opacity: 1 !important;
-  visibility: visible !important;
+.node-controls-container:not(.group-controls) {
+  opacity: 1;
+  visibility: visible;
   z-index: 10;
 }
 
@@ -158,7 +158,7 @@ div[data-id].react-flow__node {
 /* Estilos especiales para grupos - mantener la transparencia pero eliminar sombras incorrectas */
 .react-flow__node[data-type="group"] {
   background-color: transparent !important;
-  overflow: visible !important; /* Permitir que los controles sean visibles fuera del grupo */
+  overflow: visible !important; /* Crucial to allow elements outside the group bounds */
   z-index: 5 !important;
 }
 
@@ -263,6 +263,7 @@ div[data-id].react-flow__node {
 
 .react-flow__node-group > div {
   box-shadow: none !important;
+  overflow: visible !important;
 }
 
 .react-flow__node.parent {
@@ -759,4 +760,111 @@ button.bg-blue-600 {
 .group-tooltip:hover::before {
   opacity: 1;
   visibility: visible;
+}
+
+/* Estilo para los controles de grupo con animación */
+.group-controls {
+  opacity: 0 !important; /* Prioridad máxima para ocultar */
+  transform: translateY(5px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none !important;
+  visibility: hidden !important; /* Forzar ocultar */
+  position: absolute;
+  top: -28px !important; /* Force position outside group */
+  left: 0;
+  display: flex;
+  gap: 1px;
+  z-index: 1000;
+}
+
+/* Solo mostrar al hacer hover en el contenedor principal */
+div[data-type="group"]:hover .group-controls {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(0);
+  pointer-events: all !important;
+}
+
+/* También mostrar cuando el grupo está seleccionado */
+.react-flow__node.selected .group-controls {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(0);
+  pointer-events: all !important;
+}
+
+/* Hacer que todos los botones de control sean visibles */
+.control-button {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Animar aparición de controles para un efecto más suave */
+.react-flow__node-group .control-button {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.react-flow__node-group:hover .control-button {
+  transform: scale(1);
+}
+
+/* Mejorar visibilidad de los botones de control */
+.node-controls-container {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 3px;
+}
+
+/* Estilo para los controles de grupo con animación - versión mejorada */
+.group-controls {
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none !important;
+  visibility: hidden;
+}
+
+/* Mostrar controles solo cuando se hace hover sobre el grupo */
+.node-group:hover .group-controls {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: all !important;
+  visibility: visible;
+}
+
+/* También mostrar controles cuando el grupo está seleccionado */
+.react-flow__node.selected .group-controls {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: all !important;
+  visibility: visible;
+}
+
+/* Botones de control con efecto de aparición suave */
+.group-controls .control-button {
+  opacity: 0;
+  transform: scale(0.9);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* Animar los botones de control cuando aparecen */
+.node-group:hover .group-controls .control-button,
+.react-flow__node.selected .group-controls .control-button {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Aplicar delay en cascada para un efecto más elegante */
+.group-controls .control-button:nth-child(1) { transition-delay: 0.05s; }
+.group-controls .control-button:nth-child(2) { transition-delay: 0.1s; }
+.group-controls .control-button:nth-child(3) { transition-delay: 0.15s; }
+.group-controls .control-button:nth-child(4) { transition-delay: 0.2s; }
+
+/* Mejorar visibilidad y estilo de los controles */
+.node-controls-container {
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: 4px;
+  padding: 3px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  z-index: 999;
 }
