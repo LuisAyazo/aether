@@ -753,8 +753,9 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
           <div className="flex flex-col items-center justify-center gap-1 w-full h-full">
             {/* Iniciales del grupo con hint visual */}
             <div 
-              className="text-xs font-bold text-center bg-white/90 rounded-full w-7 h-7 flex items-center justify-center z-10"
+              className="text-xs font-bold text-center bg-white/90 rounded-full w-7 h-7 flex items-center justify-center z-10 group-tooltip"
               title={data.label}
+              data-tooltip={data.label}
             >
               {data.label ? data.label.substring(0, 2).toUpperCase() : 'G'}
             </div>
@@ -851,10 +852,15 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
         </button>
       </div>
 
-      {/* Título del grupo - make it editable */}
+      {/* Título del grupo - mejorado para edición */}
       <div 
-        className="text-md font-bold mb-2 w-full bg-white/80 dark:bg-gray-800/80 p-1 rounded cursor-pointer"
-        onClick={startTitleEdit}
+        className="text-md font-bold mb-2 w-full bg-white/80 dark:bg-gray-800/80 p-1 rounded cursor-pointer z-50 relative group-header editable-title"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          startTitleEdit(e);
+        }}
+        title="Haz clic para editar el nombre del grupo"
       >
         {isEditingTitle ? (
           <input
@@ -864,11 +870,14 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             onChange={(e) => setTitleText(e.target.value)}
             onBlur={saveTitleEdit}
             onKeyDown={handleTitleKeyDown}
-            className="w-full bg-transparent focus:outline-none"
+            className="w-full p-1 rounded border border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ zIndex: 9999, pointerEvents: 'auto' }}
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          data.label
+          <div className="w-full text-center py-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors clickable-element">
+            {data.label || 'Group'}
+          </div>
         )}
       </div>
 

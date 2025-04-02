@@ -97,10 +97,92 @@ const FlowEditorContent = ({
     nodeType: null
   });
 
-  // Track node selection changes
+  // Añadir estado para edición de nombre de grupo
+  const [editingGroup, setEditingGroup] = useState<{
+    id: string;
+    label: string;
+  } | null>(null);
+
+  // Handler para iniciar la edición de nombre de grupo
+  const startEditingGroupName = useCallback((groupId: string, currentLabel: string) => {
+    setEditingGroup({
+      id: groupId,
+      label: currentLabel
+    });
+  }, []);
+
+  // Handler para guardar el nombre editado
+  const saveGroupName = useCallback((newName: string) => {
+    if (!editingGroup) return;
+    
+    reactFlowInstance.setNodes(nodes => 
+      nodes.map(node => 
+        node.id === editingGroup.id 
+          ? { ...node, data: { ...node.data, label: newName } } 
+          : node
+      )
+    );
+    
+    setEditingGroup(null);
+  }, [editingGroup, reactFlowInstance]);
+
+  // Referencia para la posición del menú flotante
+  const selectionMenuRef = useRef<HTMLDivElement>(null);
+  
+  // Estado para controlar la visibilidad del menú flotante cuando hay nodos seleccionados
+  const [selectionMenu, setSelectionMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0
+  });
+
+  // Track node selection changes and mostrar menú flotante
   useOnSelectionChange({
     onChange: ({ nodes }) => {
       setSelectedNodes(nodes);
+      
+      // Mostrar menú flotante si hay múltiples nodos seleccionados
+      if (nodes.length > 1) {
+        // Calcular la posición para el menú (centrado respecto a los nodos seleccionados)
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        
+        nodes.forEach(node => {
+          const nodeWidth = (node.width || 150);
+          const nodeHeight = (node.height || 80);
+          
+          minX = Math.min(minX, node.position.x);
+          minY = Math.min(minY, node.position.y);
+          maxX = Math.max(maxX, node.position.x + nodeWidth);
+          maxY = Math.max(maxY, node.position.y + nodeHeight);
+        });
+        
+        // Convertir a coordenadas de pantalla
+        const { x: vpX, y: vpY, zoom } = reactFlowInstance.getViewport();
+        const flowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+        
+        if (flowBounds) {
+          // Mostrar el botón de agrupación inmediatamente encima de los nodos seleccionados
+          const centerX = flowBounds.left + ((minX + maxX) / 2 * zoom + vpX);
+          const topY = flowBounds.top + (minY * zoom + vpY) - 50; // 50px arriba del nodo más alto
+          
+          console.log("Mostrando botón de agrupación en:", centerX, topY);
+          
+          // Ensure the button is visible and positioned correctly
+          setTimeout(() => {
+            setSelectionMenu({
+              visible: true,
+              x: centerX,
+              y: Math.max(topY, flowBounds.top + 50) // Ensure it's not too high
+            });
+          }, 0);
+        }
+      } else {
+        // Ocultar el menú si no hay múltiples nodos seleccionados
+        setSelectionMenu(prev => ({...prev, visible: false}));
+      }
     },
   });
 
@@ -126,6 +208,89 @@ const FlowEditorContent = ({
       }, 300);
     }
   }, []);
+
+  // This function declaration is removed because it's already defined earlier in the code
+
+  // Declare handleToolClick with type signature first
+  const handleToolClick = useCallback<(tool: ToolType) => void>((tool) => {
+    setActiveTool(tool);
+    
+    if (tool === 'lasso') {
+      setSelectionActive(true);
+      
+      // Reset selections 
+      reactFlowInstance.setNodes(nodes =>
+        nodes.map(node => ({
+          ...node,
+          selected: false,
+          selectable: true
+        }))
+      );
+      
+      document.body.classList.add('lasso-selection-mode');
+    } else {
+      setSelectionActive(false);
+      document.body.classList.remove('lasso-selection-mode');
+    }
+    
+    switch(tool) {
+      case 'createGroup':
+        // For create group, create immediately and go back to select mode
+        createEmptyGroup();
+        setActiveTool('select');
+        break;
+      case 'group':
+        // Group selected nodes
+        groupSelectedNodes();
+        setActiveTool('select');
+        break;
+      case 'ungroup':
+        // Ungroup selected nodes
+        ungroupNodes();
+        setActiveTool('select');
+        break;
+      case 'select':
+      case 'lasso':
+      default:
+        // Just use the selection mode
+        break;
+    }
+  }, []);  // Start with empty dependencies
+
+  // Añadimos un nuevo efecto para manejar los atajos de teclado y la selección múltiple
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Shift+S para activar modo lasso
+      if (event.shiftKey && event.key === 's') {
+        handleToolClick('lasso');
+      }
+      // Escape para volver al modo de selección normal
+      if (event.key === 'Escape' && activeTool === 'lasso') {
+        handleToolClick('select');
+      }
+      
+      // Agregar soporte para selección múltiple con Shift
+      if (event.shiftKey) {
+        document.body.classList.add('multi-selection-mode');
+      }
+    };
+    
+    const handleKeyUp = (event: KeyboardEvent) => {
+      // Quitar modo de selección múltiple cuando se suelta la tecla Shift
+      if (event.key === 'Shift') {
+        document.body.classList.remove('multi-selection-mode');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      document.body.classList.remove('multi-selection-mode');
+    };
+  }, [activeTool, handleToolClick]);
 
   // Función para verificar si un nodo está dentro de un grupo
   const isInsideGroup = (position: { x: number, y: number }, group: Node) => {
@@ -335,6 +500,13 @@ const FlowEditorContent = ({
     const node = reactFlowInstance.getNode(contextMenu.nodeId);
     if (!node) return;
     
+    // Nueva acción para renombrar grupo
+    if (action === 'renameGroup' && contextMenu.nodeType === 'group') {
+      startEditingGroupName(contextMenu.nodeId, node.data?.label || 'Group');
+      setContextMenu(prev => ({...prev, visible: false}));
+      return;
+    }
+    
     // Handle node removal from group
     if (action === 'removeFromGroup' && node.parentNode) {
       // Get parent position for calculating absolute position
@@ -396,7 +568,7 @@ const FlowEditorContent = ({
     
     // Hide the context menu
     setContextMenu(prev => ({...prev, visible: false}));
-  }, [contextMenu, reactFlowInstance, selectedNodes]);
+  }, [contextMenu, reactFlowInstance, selectedNodes, startEditingGroupName]);
 
   // Function to create a new empty group
   const createEmptyGroup = useCallback((provider: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic') => {
@@ -439,7 +611,12 @@ const FlowEditorContent = ({
 
   // Function to group selected nodes
   const groupSelectedNodes = useCallback(() => {
-    if (selectedNodes.length < 1) return;
+    console.log("Agrupando nodos seleccionados:", selectedNodes.length);
+    // Verificar que tenemos al menos 2 nodos para agrupar
+    if (selectedNodes.length < 2) {
+      console.warn("Se necesitan al menos 2 nodos para agrupar");
+      return;
+    }
 
     // Get positions of selected nodes to determine group boundaries
     let minX = Infinity;
@@ -452,8 +629,8 @@ const FlowEditorContent = ({
     
     selectedNodes.forEach(node => {
       // Calculate boundaries
-      const nodeWidth = (node.style?.width as number) || 150;
-      const nodeHeight = (node.style?.height as number) || 80;
+      const nodeWidth = (node.width || 150);
+      const nodeHeight = (node.height || 80);
       
       minX = Math.min(minX, node.position.x);
       minY = Math.min(minY, node.position.y);
@@ -494,7 +671,7 @@ const FlowEditorContent = ({
       type: 'group',
       position: { x: minX, y: minY },
       data: {
-        label: 'Group',
+        label: 'Grupo',
         provider: mostCommonProvider,
         isCollapsed: false,
         isMinimized: false
@@ -505,13 +682,15 @@ const FlowEditorContent = ({
       }
     };
     
+    console.log("Creando grupo con dimensiones:", {width, height, minX, minY, maxX, maxY});
+    
     // Update all selected nodes to be children of this group
     const updatedNodes = reactFlowInstance.getNodes().map(node => {
       if (selectedNodes.some(selectedNode => selectedNode.id === node.id)) {
+        console.log(`Añadiendo nodo ${node.id} al grupo ${newGroupId}`);
         return {
           ...node,
           parentNode: newGroupId,
-          // Fix the type error by using the literal 'parent' instead of a string type
           extent: 'parent' as const,
           position: {
             x: node.position.x - minX,
@@ -524,56 +703,125 @@ const FlowEditorContent = ({
     });
     
     // Add the group and update nodes
+    console.log(`Actualizando flujo con ${updatedNodes.length} nodos + grupo nuevo`);
     reactFlowInstance.setNodes([...updatedNodes, newGroup]);
     
-    // Clear selection
+    // Clear selection after creating the group
     setSelectedNodes([]);
     
-  }, [selectedNodes, reactFlowInstance]);
-
+    return newGroupId;
+  }, [selectedNodes, reactFlowInstance, setSelectedNodes]);
+  
   // Function to ungroup selected groups
   const ungroupNodes = useCallback(() => {
-    const selectedGroups = selectedNodes.filter(node => node.type === 'group');
-    if (selectedGroups.length === 0) return;
+    console.log("Desagrupando nodos seleccionados");
+    // Obtener nodos seleccionados que son de tipo 'group'
+    const selectedGroupNodes = selectedNodes.filter(node => node.type === 'group');
     
-    // Process each selected group
-    selectedGroups.forEach(group => {
-      // Find all child nodes
-      const childNodes = reactFlowInstance.getNodes().filter(node => node.parentNode === group.id);
+    if (selectedGroupNodes.length === 0) {
+      // Si no hay ningún grupo seleccionado, verificar si el usuario ha seleccionado nodos que están dentro de grupos
+      const nodesInGroups = selectedNodes.filter(node => node.parentNode);
       
-      // Update child nodes (remove parent reference and fix position)
-      const updatedNodes = reactFlowInstance.getNodes().map(node => {
-        if (node.parentNode === group.id) {
+      if (nodesInGroups.length > 0) {
+        // Si hay nodos dentro de grupos, extraer los IDs de los grupos para desagruparlos
+        const parentGroupIds = [...new Set(nodesInGroups.map(node => node.parentNode))].filter(Boolean) as string[];
+        console.log("Desagrupando los grupos padres:", parentGroupIds);
+        
+        if (parentGroupIds.length > 0) {
+          // Eliminar los grupos y mover los nodos fuera
+          const allNodes = reactFlowInstance.getNodes();
+          
+          const updatedNodes = allNodes.map(node => {
+            if (parentGroupIds.includes(node.id)) {
+              // Este es un grupo que debemos eliminar
+              console.log(`Eliminando grupo ${node.id}`);
+              return null;
+            }
+            
+            if (node.parentNode && parentGroupIds.includes(node.parentNode)) {
+              // Este nodo pertenece a un grupo que estamos eliminando
+              // Buscar el grupo padre para obtener su posición
+              const parentGroup = allNodes.find(n => n.id === node.parentNode);
+              
+              if (parentGroup) {
+                console.log(`Moviendo nodo ${node.id} fuera del grupo ${node.parentNode}`);
+                return {
+                  ...node,
+                  parentNode: undefined,
+                  extent: undefined,
+                  position: {
+                    x: parentGroup.position.x + node.position.x,
+                    y: parentGroup.position.y + node.position.y
+                  }
+                };
+              }
+            }
+            
+            return node;
+          }).filter(Boolean) as Node[];
+          
+          // Actualizar el flujo con los nodos modificados
+          reactFlowInstance.setNodes(updatedNodes);
+          // Limpiar selección
+          setSelectedNodes([]);
+          return;
+        }
+      }
+      
+      console.warn("No hay grupos seleccionados para desagrupar");
+      return;
+    }
+    
+    // Get all nodes
+    const allNodes = reactFlowInstance.getNodes();
+    
+    // Get IDs of groups to ungroup
+    const groupsToUngroup = selectedGroupNodes.map(group => group.id);
+    console.log("Grupos a desagrupar:", groupsToUngroup);
+    
+    // Create updated nodes array
+    const updatedNodes = allNodes.map(node => {
+      // If this is a child node of a group being ungrouped
+      if (node.parentNode && groupsToUngroup.includes(node.parentNode)) {
+        // Find the parent group
+        const parentGroup = allNodes.find(n => n.id === node.parentNode);
+        
+        if (parentGroup) {
+          // Calculate absolute position
+          console.log(`Moviendo nodo ${node.id} fuera del grupo ${node.parentNode}`);
           return {
             ...node,
             parentNode: undefined,
-            // Set extent to undefined when ungrouping
             extent: undefined,
             position: {
-              x: node.position.x + group.position.x,
-              y: node.position.y + group.position.y
-            },
-            selected: false
+              x: parentGroup.position.x + node.position.x,
+              y: parentGroup.position.y + node.position.y
+            }
           };
         }
-        // Remove the group itself
-        if (node.id === group.id) {
-          return null;
-        }
-        return node;
-      }).filter(Boolean) as Node[];
+      }
       
-      // Update all nodes
-      reactFlowInstance.setNodes(updatedNodes);
-    });
+      // Remove the groups being ungrouped
+      if (groupsToUngroup.includes(node.id)) {
+        console.log(`Eliminando grupo ${node.id}`);
+        return null;
+      }
+      
+      // Keep other nodes unchanged
+      return node;
+    }).filter(Boolean) as Node[];
+    
+    // Update the flow with the new nodes
+    reactFlowInstance.setNodes(updatedNodes);
     
     // Clear selection
     setSelectedNodes([]);
+  }, [selectedNodes, reactFlowInstance, setSelectedNodes]);
     
-  }, [selectedNodes, reactFlowInstance]);
+  // Already moved above, keeping this comment to avoid duplicate function
 
   // Handle toolbar button clicks with precise selection behavior
-  const handleToolClick = useCallback((tool: ToolType) => {
+  Object.assign(handleToolClick, useCallback((tool: ToolType) => {
     setActiveTool(tool);
     
     if (tool === 'lasso') {
@@ -616,7 +864,7 @@ const FlowEditorContent = ({
         // Just use the selection mode
         break;
     }
-  }, [createEmptyGroup, groupSelectedNodes, ungroupNodes, reactFlowInstance]);
+  }, [createEmptyGroup, groupSelectedNodes, ungroupNodes, reactFlowInstance]));
 
   // Handle deletion of nodes and groups properly
   const onNodesDelete = useCallback((nodesToDelete: Node[]) => {
@@ -670,6 +918,15 @@ const FlowEditorContent = ({
     // Only handle in lasso mode
     if (activeTool !== 'lasso') return;
     
+    // Check if we're clicking on a node (to allow dragging even in lasso mode)
+    const element = document.elementFromPoint(event.clientX, event.clientY);
+    const nodeElement = element?.closest('.react-flow__node');
+    
+    if (nodeElement) {
+      // If clicking on a node, let the normal drag behavior happen
+      return;
+    }
+    
     // Mark we're handling this event to prevent default behaviors
     event.preventDefault();
     
@@ -681,10 +938,15 @@ const FlowEditorContent = ({
     
     // Track movement
     let hasMoved = false;
-    let selectionBox: { x1: number; y1: number; x2: number; y2: number } = { x1: 0, y1: 0, x2: 0, y2: 0 }; // Initialize with y2
+    let selectionBox: { x1: number; y1: number; x2: number; y2: number } = { x1: 0, y1: 0, x2: 0, y2: 0 };
     
     const overlay = document.createElement('div');
     overlay.className = 'custom-selection-overlay';
+    overlay.style.backgroundColor = 'rgba(59, 130, 246, 0.1)'; // Azul transparente
+    overlay.style.border = '2px dashed #3b82f6'; // Borde discontinuo azul
+    overlay.style.position = 'absolute';
+    overlay.style.pointerEvents = 'none'; // Evitar que interfiera con otros elementos
+    overlay.style.zIndex = '9999'; // Ensure it's on top
     document.body.appendChild(overlay);
     
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -767,12 +1029,65 @@ const FlowEditorContent = ({
           selected: nodesToSelect.some(n => n.id === node.id)
         }))
       );
+      
+      // Show the selection menu if multiple nodes are selected
+      if (nodesToSelect.length > 1) {
+        // Position the menu above the selection area
+        const menuX = (selectionBox.x1 + selectionBox.x2) / 2;
+        const menuY = selectionBox.y1 - 25; // Position above the selection box
+        
+        setSelectionMenu({
+          visible: true,
+          x: menuX,
+          y: menuY
+        });
+      }
     };
     
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     
-  }, [activeTool, reactFlowInstance, reactFlowWrapper]);
+  }, [activeTool, reactFlowInstance, reactFlowWrapper, setSelectionMenu]);
+
+  // Función para crear un grupo con los nodos seleccionados
+  const createGroupWithSelectedNodes = useCallback(() => {
+    if (selectedNodes.length > 0) {
+      groupSelectedNodes();
+      // Ocultar el menú
+      setSelectionMenu({ ...selectionMenu, visible: false });
+    }
+  }, [selectedNodes, groupSelectedNodes, selectionMenu]);
+
+  // Ensure the selection menu is always visible when it should be
+  useEffect(() => {
+    if (selectedNodes.length > 1 && !selectionMenu.visible) {
+      // Calculate average position of selected nodes
+      let avgX = 0;
+      let avgY = Infinity; // Start with highest possible to find minimum
+      
+      selectedNodes.forEach(node => {
+        avgX += node.position.x;
+        avgY = Math.min(avgY, node.position.y);
+      });
+      
+      avgX = avgX / selectedNodes.length;
+      
+      // Convert to screen coordinates
+      const { x: vpX, y: vpY, zoom } = reactFlowInstance.getViewport();
+      const flowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+      
+      if (flowBounds) {
+        const screenX = flowBounds.left + (avgX * zoom + vpX);
+        const screenY = flowBounds.top + (avgY * zoom + vpY) - 50;
+        
+        setSelectionMenu({
+          visible: true,
+          x: screenX,
+          y: screenY
+        });
+      }
+    }
+  }, [selectedNodes, selectionMenu.visible, reactFlowInstance, reactFlowWrapper]);
 
   return (
     <div className="w-full h-full flex relative">
@@ -832,7 +1147,7 @@ const FlowEditorContent = ({
           onNodeDragStop={onNodeDragStop}
           onNodeContextMenu={onNodeContextMenu}
           onPaneClick={onPaneClick}
-          onNodesDelete={onNodesDelete} // Add this handler
+          onNodesDelete={onNodesDelete}
           fitView
           snapToGrid={true}
           snapGrid={[10, 10]}
@@ -848,10 +1163,11 @@ const FlowEditorContent = ({
           // Configuración óptima para la selección de nodos
           selectionMode={SelectionMode.Partial}
           selectionOnDrag={activeTool === 'lasso'}
-          selectNodesOnDrag={activeTool === 'select'} // Permite seleccionar nodos al arrastrarlos en modo select
-          multiSelectionKeyCode={null} // Desactiva la selección múltiple con teclas, solo usar lasso
-          panOnDrag={activeTool !== 'lasso'} // Permitir paneo excepto en modo lasso
+          selectNodesOnDrag={activeTool === 'select'}
+          panOnDrag={activeTool !== 'lasso'}
           onSelectionStart={activeTool === 'lasso' ? onSelectionStart : undefined}
+          selectionKeyCode={['Shift']}
+          multiSelectionKeyCode={['Shift']}
           
           // Make sure nodes are selectable and draggable
           elementsSelectable={true}
@@ -861,6 +1177,7 @@ const FlowEditorContent = ({
             bg-slate-50 dark:bg-slate-900 
             ${focusedNodeId ? 'focus-mode' : ''} 
             ${activeTool === 'lasso' ? 'lasso-active' : ''}
+            ${selectionActive ? 'selection-active' : ''}
           `}
         >
           {/* Top panel with save and sidebar toggle */}
@@ -998,6 +1315,12 @@ const FlowEditorContent = ({
                             Añadir {selectedNodes.length === 1 ? 'nodo seleccionado' : `${selectedNodes.length} nodos`}
                           </button>
                         )}
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('renameGroup')}
+                        >
+                          Renombrar grupo
+                        </button>
                       </div>
                     )}
                     
@@ -1046,6 +1369,23 @@ const FlowEditorContent = ({
               })()}
             </div>
           )}
+
+          {/* Menú flotante para nodos seleccionados */}
+          {selectionMenu.visible && (
+            <div 
+              ref={selectionMenuRef}
+              className="quick-group-button"
+              onClick={createGroupWithSelectedNodes}
+              style={{ 
+                left: `${selectionMenu.x}px`, 
+                top: `${selectionMenu.y}px`,
+                zIndex: 9999, // Ensure it's always on top
+              }}
+              title="Agrupar nodos seleccionados"
+            >
+              <FolderPlusIcon className="w-5 h-5" />
+            </div>
+          )}
         </ReactFlow>
 
         {/* Selection tool indicator */}
@@ -1055,6 +1395,44 @@ const FlowEditorContent = ({
               <path d="M7 17L17 7M7 7h10v10" />
             </svg>
             Modo selección múltiple - Haz clic en un nodo o dibuja un área para seleccionar varios
+          </div>
+        )}
+        
+        {/* Editor para renombrar grupos */}
+        {editingGroup && (
+          <div className="fixed z-[1001] top-0 left-0 w-full h-full flex items-center justify-center bg-black/30">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-96 max-w-[90%]">
+              <h3 className="text-lg font-medium mb-4">Renombrar grupo</h3>
+              <input
+                type="text"
+                className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                value={editingGroup.label}
+                onChange={(e) => setEditingGroup({...editingGroup, label: e.target.value})}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveGroupName(editingGroup.label);
+                  }
+                  if (e.key === 'Escape') {
+                    setEditingGroup(null);
+                  }
+                }}
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => setEditingGroup(null)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  onClick={() => saveGroupName(editingGroup.label)}
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
