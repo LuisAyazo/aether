@@ -2,7 +2,6 @@ import { useCallback, useState, useEffect } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
-import { MinusIcon, PlusIcon, ViewfinderCircleIcon } from '@heroicons/react/24/outline';
 
 interface BaseResourceNodeProps extends NodeProps {
   data: {
@@ -182,6 +181,38 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
     );
   };
 
+  // Add event listener for context menu actions
+  useEffect(() => {
+    const handleNodeAction = (event: CustomEvent) => {
+      const { action, nodeId } = event.detail;
+      
+      if (nodeId === id) {
+        switch(action) {
+          case 'toggleListView':
+            toggleListView({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'toggleFocus':
+            toggleFocus({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'toggleCollapse':
+            toggleCollapse({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'deleteNode':
+            reactFlowInstance.setNodes(nodes => 
+              nodes.filter(node => node.id !== id)
+            );
+            break;
+        }
+      }
+    };
+    
+    document.addEventListener('nodeAction', handleNodeAction as EventListener);
+    
+    return () => {
+      document.removeEventListener('nodeAction', handleNodeAction as EventListener);
+    };
+  }, [id, toggleListView, toggleFocus, toggleCollapse, reactFlowInstance]);
+
   // Si estamos en vista de lista (modo compacto)
   if (isListView) {
     return (
@@ -196,18 +227,6 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
           </div>
         )}
         <div className="flex-1 text-xs font-medium truncate">{data.label}</div>
-        
-        <div className="flex gap-1">
-          <button 
-            onClick={toggleListView}
-            className="bg-white/90 dark:bg-gray-700/90 rounded p-0.5 hover:bg-white shadow-sm z-10"
-            title="Cambiar a vista completa"
-          >
-            <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-            </svg>
-          </button>
-        </div>
         
         {/* Input and output handles más pequeños para lista */}
         <Handle
@@ -247,38 +266,6 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
         lineClassName="border-primary"
         handleClassName="h-3 w-3 bg-white border-2 border-primary rounded z-20"
       />
-      
-      {/* Toolbar siempre visible */}
-      <div className="absolute -top-6 right-1 flex items-center gap-1 node-controls">
-        <button 
-          onClick={toggleListView}
-          className="bg-white/90 dark:bg-gray-700/90 rounded p-1 hover:bg-white shadow-sm z-10"
-          title="Cambiar a vista de lista"
-        >
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
-          </svg>
-        </button>
-        
-        <button 
-          onClick={toggleFocus}
-          className="bg-white/90 dark:bg-gray-700/90 rounded p-1 hover:bg-white shadow-sm z-10"
-          title={isFocused ? "Salir de enfoque" : "Enfocar en este nodo"}
-        >
-          <ViewfinderCircleIcon className="h-3 w-3" />
-        </button>
-        
-        <button 
-          onClick={toggleCollapse}
-          className="bg-white/90 dark:bg-gray-700/90 rounded p-1 hover:bg-white shadow-sm z-10"
-          title={isCollapsed ? "Expandir" : "Contraer"}
-        >
-          {isCollapsed ? 
-            <PlusIcon className="h-3 w-3" /> : 
-            <MinusIcon className="h-3 w-3" />
-          }
-        </button>
-      </div>
       
       <div className="flex items-center gap-1 overflow-hidden">
         {data.icon && (

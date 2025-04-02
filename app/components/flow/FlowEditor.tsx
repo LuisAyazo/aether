@@ -14,7 +14,8 @@ import ReactFlow, {
   OnEdgesChange,
   OnConnect,
   Connection,
-  addEdge
+  addEdge,
+  NodeMouseHandler
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -29,6 +30,15 @@ interface ResourceItem {
   name: string;
   description: string;
   icon?: React.ReactNode;
+}
+
+// Add a new interface for the context menu
+interface ContextMenu {
+  visible: boolean;
+  x: number;
+  y: number;
+  nodeId: string | null;
+  nodeType: string | null;
 }
 
 interface FlowEditorProps {
@@ -58,6 +68,15 @@ const FlowEditorContent = ({
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [activeDrag, setActiveDrag] = useState<{ item: any, offset: { x: number, y: number } } | null>(null);
   const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  
+  // Add state for context menu
+  const [contextMenu, setContextMenu] = useState<ContextMenu>({
+    visible: false,
+    x: 0,
+    y: 0,
+    nodeId: null,
+    nodeType: null
+  });
 
   // Añadir listener global para el evento personalizado de focus
   useEffect(() => {
@@ -277,6 +296,47 @@ const FlowEditorContent = ({
     }));
   };
 
+  // Handle right-click on nodes
+  const onNodeContextMenu: NodeMouseHandler = useCallback((event, node) => {
+    // Prevent default context menu
+    event.preventDefault();
+    
+    // Show our custom context menu with correct position
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: node.id,
+      nodeType: node.type ?? null
+    });
+  }, []);
+  
+  // Close context menu when clicking elsewhere
+  const onPaneClick = useCallback(() => {
+    setContextMenu(prev => ({...prev, visible: false}));
+  }, []);
+
+  // Handle context menu actions
+  const handleContextMenuAction = useCallback((action: string) => {
+    if (!contextMenu.nodeId) return;
+    
+    const node = reactFlowInstance.getNode(contextMenu.nodeId);
+    if (!node) return;
+    
+    // Create a custom event to trigger the appropriate action
+    const actionEvent = new CustomEvent('nodeAction', {
+      detail: {
+        action,
+        nodeId: contextMenu.nodeId,
+        nodeType: contextMenu.nodeType
+      }
+    });
+    document.dispatchEvent(actionEvent);
+    
+    // Hide the context menu
+    setContextMenu(prev => ({...prev, visible: false}));
+  }, [contextMenu, reactFlowInstance]);
+
   return (
     <div className="w-full h-full flex relative">
       {/* Sidebar */}
@@ -333,6 +393,8 @@ const FlowEditorContent = ({
           onDragOver={onDragOver}
           onDrop={onDrop}
           onNodeDragStop={onNodeDragStop}
+          onNodeContextMenu={onNodeContextMenu}
+          onPaneClick={onPaneClick}
           fitView
           snapToGrid={true}
           snapGrid={[10, 10]}
@@ -380,6 +442,89 @@ const FlowEditorContent = ({
             className="bg-white/80 dark:bg-gray-800/80"
           />
           <Background gap={12} size={1} />
+          
+          {/* Context Menu - Fixed positioning */}
+          {contextMenu.visible && (
+            <div 
+              className="fixed z-[1000] bg-white dark:bg-gray-800 shadow-lg rounded-md border border-gray-200 dark:border-gray-700 p-1"
+              style={{ 
+                top: `${contextMenu.y}px`, 
+                left: `${contextMenu.x}px`,
+                minWidth: '160px',
+                transform: 'translate(0, 0)',
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}
+            >
+              {(() => {
+                const currentNode = contextMenu.nodeId ? reactFlowInstance.getNode(contextMenu.nodeId) : null;
+                
+                return (
+                  <>
+                    {contextMenu.nodeType === 'group' && (
+                      <div className="flex flex-col">
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('toggleCollapse')}
+                        >
+                          {currentNode?.data?.isCollapsed ? 'Expandir' : 'Colapsar'}
+                        </button>
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('toggleMinimize')}
+                        >
+                          {currentNode?.data?.isMinimized ? 'Maximizar' : 'Minimizar'}
+                        </button>
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('toggleFocus')}
+                        >
+                          Enfocar
+                        </button>
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('addNodeToGroup')}
+                        >
+                          Añadir nodo
+                        </button>
+                      </div>
+                    )}
+                    
+                    {contextMenu.nodeType && contextMenu.nodeType !== 'group' && (
+                      <div className="flex flex-col">
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('toggleListView')}
+                        >
+                          Cambiar vista
+                        </button>
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('toggleFocus')}
+                        >
+                          Enfocar
+                        </button>
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('toggleCollapse')}
+                        >
+                          {currentNode?.data?.isCollapsed ? 'Expandir' : 'Colapsar'}
+                        </button>
+                      </div>
+                    )}
+                    
+                    {/* Common actions for all nodes */}
+                    <button 
+                      className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-red-600 dark:text-red-400"
+                      onClick={() => handleContextMenuAction('deleteNode')}
+                    >
+                      Eliminar
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </ReactFlow>
       </div>
     </div>
