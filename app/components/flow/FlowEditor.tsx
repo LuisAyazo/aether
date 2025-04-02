@@ -147,61 +147,39 @@ const FlowEditorContent = ({
         const dataStr = event.dataTransfer.getData('application/reactflow');
         const nodeData = JSON.parse(dataStr);
         
-        // Calcular posición ajustando para el desplazamiento
-        let offsetX = 0;
-        let offsetY = 0;
-        
-        if (activeDrag) {
-          offsetX = activeDrag.offset.x;
-          offsetY = activeDrag.offset.y;
-        }
-        
-        // Obtener la posición del cliente ajustada para la posición del contenedor
-        const position = reactFlowInstance.screenToFlowPosition({
-          x: event.clientX - reactFlowBounds.left - offsetX,
-          y: event.clientY - reactFlowBounds.top - offsetY,
+        // Get exact cursor position in flow coordinates
+        // Important: We need to calculate this correctly relative to the flow container
+        const position = reactFlowInstance.project({
+          x: event.clientX - reactFlowBounds.left,
+          y: event.clientY - reactFlowBounds.top
         });
         
-        // Comprobar si estamos soltando sobre un grupo
+        // Check if we're dropping on a group
         let parentNode: string | undefined = undefined;
         let adjustedPosition = { ...position };
-        let foundGroup = false;
         
-        // Primero verificamos los grupos expandidos
+        // Check for groups that aren't minimized
         const groups = reactFlowInstance.getNodes()
           .filter(node => node.type === 'group' && !node.data?.isMinimized);
         
         for (const group of groups) {
           if (isInsideGroup(position, group)) {
-            foundGroup = true;
             parentNode = group.id;
-            // Ajustar posición para ser relativa al padre
+            
+            // Calculate position relative to the parent
             adjustedPosition = {
               x: position.x - group.position.x,
               y: position.y - group.position.y
             };
-            
-            // Asegurar que el nodo no se coloque fuera de los límites del padre
-            const groupWidth = (group.style?.width as number) || 200;
-            const groupHeight = (group.style?.height as number) || 150;
-            
-            adjustedPosition.x = Math.max(30, Math.min(adjustedPosition.x, groupWidth - 70));
-            adjustedPosition.y = Math.max(40, Math.min(adjustedPosition.y, groupHeight - 50));
             break;
           }
         }
         
-        // Si no encontramos un grupo donde soltar el nodo, hacerlo en el nivel superior
-        if (!foundGroup) {
-          parentNode = undefined;
-          adjustedPosition = position;
-        }
-        
-        // Crear ID único de nodo basado en el tipo
+        // Create unique node ID
         const timestamp = Date.now();
         const newNodeId = `${nodeData.type}-${timestamp}`;
         
-        // Crear un nuevo nodo con la posición calculada
+        // Create the node at the cursor position
         const newNode: Node = {
           id: newNodeId,
           type: nodeData.type,
@@ -210,18 +188,19 @@ const FlowEditorContent = ({
             label: nodeData.name,
             description: nodeData.description,
             provider: nodeData.provider,
-            isCollapsed: true // Iniciar colapsado por defecto
+            isCollapsed: true
           },
           draggable: true,
           selectable: true,
         };
         
-        // Añadir relación padre si es necesario
+        // Add parent relationship if needed
         if (parentNode) {
           newNode.parentNode = parentNode;
-          newNode.extent = 'parent'; // Asignamos específicamente 'parent' como tipo literal
+          newNode.extent = 'parent';
         }
         
+        // Add the node to the flow
         onNodesChange?.([{ type: 'add', item: newNode }]);
         setActiveDrag(null);
       } catch (error) {
@@ -229,7 +208,7 @@ const FlowEditorContent = ({
         setActiveDrag(null);
       }
     },
-    [reactFlowInstance, onNodesChange, activeDrag]
+    [reactFlowInstance, onNodesChange]
   );
   
   // Limpiar arrastre activo cuando termina el arrastre
