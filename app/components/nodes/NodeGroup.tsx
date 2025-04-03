@@ -2,7 +2,15 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Handle, Position, NodeProps, useReactFlow, Node } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
-import { PlusIcon, MinusIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, ViewfinderCircleIcon } from '@heroicons/react/24/outline';
+import { 
+  PlusIcon, 
+  MinusIcon, 
+  ArrowsPointingOutIcon, 
+  ArrowsPointingInIcon, 
+  ViewfinderCircleIcon,
+  ArrowTopRightOnSquareIcon // Nuevo ícono para "Abrir en nueva ventana"
+} from '@heroicons/react/24/outline';
+import { CustomNode, CustomEdge } from '../../utils/customTypes';
 
 interface NodeGroupProps extends NodeProps {
   data: {
@@ -709,6 +717,91 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     }
   }, [id, reactFlowInstance, isMinimized]);
 
+  // Nueva función para abrir grupo en modal interno
+  const openInNewWindow = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // Evitar que el click llegue al nodo y lo seleccione
+    
+    // Obtener solo los nodos hijos de este grupo (importante: verificar parentNode === id)
+    const groupChildren = reactFlowInstance.getNodes().filter(node => node.parentNode === id);
+    
+    if (groupChildren.length === 0) {
+      console.warn('No hay nodos para mostrar en este grupo');
+      return;
+    }
+    
+    // Crear copias profundas de los nodos para evitar referencias al estado original
+    // y usar nuevos IDs para evitar conflictos
+    const processedNodes = groupChildren.map(node => {
+      // Generar un nuevo ID que sea realmente único para evitar colisiones
+      const newNodeId = `modal_${node.id}_${Date.now()}`;
+      
+      return {
+        ...JSON.parse(JSON.stringify(node)), // Crear una copia profunda para eliminar referencias
+        id: newNodeId,
+        _originalId: node.id, // Guardamos el ID original como referencia
+        // Eliminar totalmente las referencias al grupo padre para mostrarlo aislado
+        parentNode: undefined,
+        extent: undefined,
+        // Forzar visibilidad
+        hidden: false,
+        style: {
+          ...(node.style || {}),
+          // Eliminar cualquier estilo heredado del grupo
+          border: 'none',
+          outline: 'none',
+          display: 'block',
+          visibility: 'visible',
+          opacity: 1
+        },
+        data: {
+          ...(node.data || {}),
+          hidden: false,
+          _groupId: id // Guardar referencia al grupo original
+        }
+      } as CustomNode;
+    });
+    
+    // Get existing connections between these nodes only
+    const allEdges = reactFlowInstance.getEdges();
+    const childNodeIds = groupChildren.map(node => node.id);
+    
+    // Filtrar conexiones internas del grupo y actualizar los IDs de origen y destino
+    const internalEdges = allEdges
+      .filter(edge => 
+        childNodeIds.includes(edge.source) && childNodeIds.includes(edge.target)
+      )
+      .map(edge => {
+        // Obtener los nodos de origen y destino para encontrar sus nuevos IDs
+        const sourceNode = processedNodes.find(n => n._originalId === edge.source);
+        const targetNode = processedNodes.find(n => n._originalId === edge.target);
+        
+        if (!sourceNode || !targetNode) return null;
+        
+        return {
+          ...JSON.parse(JSON.stringify(edge)), // Crear una copia profunda
+          id: `modal_${edge.id}_${Date.now()}`,
+          source: sourceNode.id,
+          target: targetNode.id,
+          _originalSource: edge.source,
+          _originalTarget: edge.target
+        } as CustomEdge;
+      })
+      .filter(Boolean) as CustomEdge[]; // Eliminar posibles nulls
+    
+    // Disparar evento para abrir modal
+    const openGroupEvent = new CustomEvent('openGroupInView', {
+      detail: {
+        groupId: id,
+        groupLabel: data.label || 'Grupo',
+        nodes: processedNodes,
+        edges: internalEdges,
+        provider: data.provider
+      }
+    });
+    
+    document.dispatchEvent(openGroupEvent);
+  }, [id, reactFlowInstance, data.label, data.provider]);
+
   // Si está minimizado, mostrar solo un icono compacto
   if (isMinimized) {
     return (
@@ -821,6 +914,15 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
           title={isFocused ? "Ver todos" : "Enfocar en este grupo"}
         >
           <ViewfinderCircleIcon className="w-4 h-4" />
+        </button>
+
+        {/* NUEVO: Botón para abrir en nueva ventana */}
+        <button
+          onClick={openInNewWindow}
+          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
+          title="Abrir grupo en nueva ventana"
+        >
+          <ArrowTopRightOnSquareIcon className="w-4 h-4" />
         </button>
         
         {/* Opción de añadir nodo (solo visible si no está colapsado) */}

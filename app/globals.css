@@ -859,6 +859,30 @@ div[data-type="group"]:hover .group-controls {
 .group-controls .control-button:nth-child(2) { transition-delay: 0.1s; }
 .group-controls .control-button:nth-child(3) { transition-delay: 0.15s; }
 .group-controls .control-button:nth-child(4) { transition-delay: 0.2s; }
+.group-controls .control-button:nth-child(5) { transition-delay: 0.25s; } /* Para el nuevo botón */
+
+/* Estilo específico para el botón de abrir en ventana */
+.open-in-window-button {
+  color: #4f46e5;
+}
+.open-in-window-button:hover {
+  background-color: #ede9fe !important;
+  border-color: #c7d2fe !important;
+}
+
+/* Mejoras para la vista del grupo en pantalla completa */
+.group-view-container {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: white;
+}
+
+/* Aplicar delay en cascada para un efecto más elegante */
+.group-controls .control-button:nth-child(1) { transition-delay: 0.05s; }
+.group-controls .control-button:nth-child(2) { transition-delay: 0.1s; }
+.group-controls .control-button:nth-child(3) { transition-delay: 0.15s; }
+.group-controls .control-button:nth-child(4) { transition-delay: 0.2s; }
 
 /* Mejorar visibilidad y estilo de los controles */
 .node-controls-container {
@@ -867,4 +891,23 @@ div[data-type="group"]:hover .group-controls {
   padding: 3px;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   z-index: 999;
+}
+
+/* Estilos para el modal de vista de grupo */
+.group-view-modal {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.group-view-modal-content {
+  animation: scaleIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }

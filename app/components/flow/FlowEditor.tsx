@@ -27,6 +27,7 @@ import {
   FolderPlusIcon, 
   FolderMinusIcon 
 } from '@heroicons/react/24/outline';
+import GroupFlowEditor from './GroupFlowEditor';
 
 interface ResourceCategory {
   name: string;
@@ -1113,13 +1114,133 @@ const FlowEditorContent = ({
     console.log("IDs:", selectedNodes.map(n => n.id).join(", "));
   }, [selectedNodes]);
 
+  // Añadir estado para modal del grupo con valores iniciales más completos
+  const [groupViewModal, setGroupViewModal] = useState<{
+    isOpen: boolean;
+    groupId: string | null;
+    nodes: Node[];
+    edges: Edge[];
+    groupLabel: string;
+    provider: 'aws' | 'gcp' | 'azure' | 'generic';
+    nodeChanges: boolean; // Flag para rastrear si se hicieron cambios
+  }>({
+    isOpen: false,
+    groupId: null,
+    nodes: [],
+    edges: [],
+    groupLabel: 'Grupo',
+    provider: 'generic',
+    nodeChanges: false
+  });
+
+  // Añadir listener para eventos de abrir grupo
+  useEffect(() => {
+    const handleOpenGroup = (event: CustomEvent) => {
+      const { groupId, groupLabel, nodes: groupNodes, edges: groupEdges, provider } = event.detail;
+      
+      if (groupId) {
+        // Asegurarse de que los nodos que se muestran no tengan parentNode
+        // Esto es crucial para verlos como si estuvieran en su propio stage
+        const isolatedNodes = groupNodes.map((node: Node) => ({
+          ...node,
+          // Eliminar cualquier referencia al grupo padre
+          parentNode: undefined,
+          extent: undefined,
+          // Asegurar que no haya estilo de grupo
+          style: {
+            ...(node.style || {}),
+            border: 'none',
+            outline: 'none',
+            // Asegurar que los nodos son visibles
+            display: '',
+            visibility: 'visible',
+            opacity: 1
+          },
+          data: {
+            ...(node.data || {}),
+            hidden: false
+          }
+        }));
+        
+        setGroupViewModal({
+          isOpen: true,
+          groupId,
+          groupLabel: groupLabel || 'Grupo',
+          nodes: isolatedNodes || [],
+          edges: groupEdges || [],
+          provider: provider || 'generic',
+          nodeChanges: false
+        });
+      }
+    };
+    
+    // Registrar el listener
+    document.addEventListener('openGroupInView', handleOpenGroup as EventListener);
+    
+    return () => {
+      document.removeEventListener('openGroupInView', handleOpenGroup as EventListener);
+    };
+  }, []);
+
+  // Añadir listener para eventos de actualización del grupo
+  useEffect(() => {
+    const handleGroupUpdate = (event: CustomEvent) => {
+      const { groupId, nodes: updatedNodes, edges: updatedEdges } = event.detail;
+      
+      if (groupId && updatedNodes) {
+        // Actualizar los nodos del grupo en el editor principal
+        reactFlowInstance.setNodes(currentNodes => {
+          // Filtrar los nodos que no pertenecen a este grupo
+          const nodesNotInGroup = currentNodes.filter(node => node.parentNode !== groupId);
+          
+          // Procesar los nodos actualizados para que mantengan la referencia al grupo padre
+          const processedNodes = updatedNodes.map((node: Node) => ({
+            ...JSON.parse(JSON.stringify(node)), // Crear copia profunda para evitar referencias compartidas
+            // Restaurar relación con el grupo padre
+            parentNode: groupId,
+            extent: 'parent' as const
+          }));
+          
+          // Devolver la combinación de ambos conjuntos con copia fresca
+          return [...nodesNotInGroup, ...processedNodes];
+        });
+        
+        // Actualizar las conexiones si se proporcionaron
+        if (updatedEdges) {
+          // Procesamos las edges para asegurarnos que mantengan las conexiones correctas
+          reactFlowInstance.setEdges(currentEdges => {
+            // Eliminar conexiones que involucran nodos del grupo
+            const groupNodeIds = updatedNodes.map((node: Node) => node.id);
+            const edgesNotInGroup = currentEdges.filter(
+              edge => !(groupNodeIds.includes(edge.source) || groupNodeIds.includes(edge.target))
+            );
+            
+            // Crear copias profundas de las nuevas conexiones
+            const deepCopiedEdges = updatedEdges.map((edge: Edge) => 
+              JSON.parse(JSON.stringify(edge))
+            );
+            
+            // Agregar las conexiones actualizadas del grupo
+            return [...edgesNotInGroup, ...deepCopiedEdges];
+          });
+        }
+      }
+    };
+    
+    // Registrar el listener
+    document.addEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
+    
+    return () => {
+      document.removeEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
+    };
+  }, [reactFlowInstance]);
+
   return (
     <div className="w-full h-full flex relative">
       {/* Sidebar */}
       <div className={`transition-all duration-300 bg-slate-50 dark:bg-slate-900 border-r border-gray-200 dark:border-gray-700 ${sidebarOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
         <div className="p-4">
           <h3 className="text-lg font-semibold mb-4">Componentes</h3>
-          
           {resourceCategories.map((category, index) => (
             <div key={index} className="mb-4">
               <div 
@@ -1129,7 +1250,6 @@ const FlowEditorContent = ({
                 <span className="font-medium">{category.name}</span>
                 <span>{collapsedCategories[category.name] ? '▶' : '▼'}</span>
               </div>
-              
               {!collapsedCategories[category.name] && (
                 <div className="space-y-2 pl-2">
                   {category.items.map((item, itemIndex) => (
@@ -1150,7 +1270,6 @@ const FlowEditorContent = ({
           ))}
         </div>
       </div>
-      
       {/* Flow editor */}
       <div className="flex-1 relative" ref={reactFlowWrapper}>
         <ReactFlow
@@ -1184,7 +1303,6 @@ const FlowEditorContent = ({
               stroke: '#555'
             }
           }}
-          // Configuración óptima para la selección de nodos
           selectionMode={SelectionMode.Partial}
           selectionOnDrag={activeTool === 'lasso'}
           selectNodesOnDrag={activeTool === 'select'}
@@ -1192,8 +1310,6 @@ const FlowEditorContent = ({
           onSelectionStart={activeTool === 'lasso' ? onSelectionStart : undefined}
           selectionKeyCode={['Shift']}
           multiSelectionKeyCode={['Shift']}
-          
-          // Make sure nodes are selectable and draggable
           elementsSelectable={true}
           nodesConnectable={true}
           nodesDraggable={activeTool === 'select'}
@@ -1220,7 +1336,6 @@ const FlowEditorContent = ({
               Guardar
             </button>
           </Panel>
-          
           {/* Tools panel with enhanced selection tool */}
           <Panel position="top-left" className="flex flex-col gap-2 p-2 bg-white/80 dark:bg-gray-800/80 rounded-md shadow">
             <button 
@@ -1263,17 +1378,15 @@ const FlowEditorContent = ({
               <FolderMinusIcon className="w-5 h-5" />
             </button>
           </Panel>
-
           {/* Selected nodes count indicator */}
           {selectedNodes.length > 0 && (
             <Panel position="bottom-left" className="bg-white/80 dark:bg-gray-800/80 rounded-md shadow p-2">
               {selectedNodes.length} {selectedNodes.length === 1 ? 'nodo' : 'nodos'} seleccionado{selectedNodes.length > 1 ? 's' : ''}
             </Panel>
           )}
-
           <Controls />
           <MiniMap 
-            nodeColor={(node) => {
+            nodeColor={(node: Node) => {
               switch (node.data?.provider) {
                 case 'aws': return '#f97316';
                 case 'gcp': return '#3b82f6';
@@ -1284,14 +1397,13 @@ const FlowEditorContent = ({
             className="bg-white/80 dark:bg-gray-800/80"
           />
           <Background gap={12} size={1} />
-          
           {/* Context Menu - Fixed positioning with enhanced options */}
           {contextMenu.visible && (
             <div 
               className="fixed z-[1000] bg-white dark:bg-gray-800 shadow-lg rounded-md border border-gray-200 dark:border-gray-700 p-1"
               style={{ 
-                top: `${contextMenu.y}px`, 
                 left: `${contextMenu.x}px`,
+                top: `${contextMenu.y}px`,
                 minWidth: '160px',
                 transform: 'translate(0, 0)',
                 maxHeight: '300px',
@@ -1300,7 +1412,6 @@ const FlowEditorContent = ({
             >
               {(() => {
                 const currentNode = contextMenu.nodeId ? reactFlowInstance.getNode(contextMenu.nodeId) : null;
-                
                 return (
                   <>
                     {contextMenu.nodeType === 'group' && (
@@ -1329,7 +1440,6 @@ const FlowEditorContent = ({
                         >
                           Añadir nuevo nodo
                         </button>
-                        
                         {/* Add selected nodes to this group */}
                         {selectedNodes.length > 0 && selectedNodes.some(n => n.id !== contextMenu.nodeId) && (
                           <button 
@@ -1347,7 +1457,6 @@ const FlowEditorContent = ({
                         </button>
                       </div>
                     )}
-                    
                     {contextMenu.nodeType && contextMenu.nodeType !== 'group' && (
                       <div className="flex flex-col">
                         <button 
@@ -1368,7 +1477,6 @@ const FlowEditorContent = ({
                         >
                           {currentNode?.data?.isCollapsed ? 'Expandir' : 'Colapsar'}
                         </button>
-                        
                         {/* Add option to remove from group if node is inside a group */}
                         {currentNode?.parentNode && (
                           <button 
@@ -1380,7 +1488,6 @@ const FlowEditorContent = ({
                         )}
                       </div>
                     )}
-                    
                     {/* Common actions for all nodes */}
                     <button 
                       className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-red-600 dark:text-red-400"
@@ -1393,15 +1500,15 @@ const FlowEditorContent = ({
               })()}
             </div>
           )}
-
-          {/* Menú flotante para nodos seleccionados */}
+          {/* Fix the menu floating button for selected nodes */}
           {selectionMenu.visible && selectedNodes.length > 1 && (
             <div 
               ref={selectionMenuRef}
               className="quick-group-button"
               onClick={createGroupWithSelectedNodes}
               style={{ 
-                left: `${selectionMenu.x}px`, 
+                position: 'fixed',
+                left: `${selectionMenu.x}px`,
                 top: `${selectionMenu.y}px`,
                 zIndex: 9999, // Ensure it's always on top
               }}
@@ -1411,7 +1518,6 @@ const FlowEditorContent = ({
             </div>
           )}
         </ReactFlow>
-
         {/* Selection tool indicator */}
         {activeTool === 'lasso' && (
           <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg z-50 flex items-center gap-2 border border-white">
@@ -1421,7 +1527,6 @@ const FlowEditorContent = ({
             Modo selección múltiple - Haz clic en un nodo o dibuja un área para seleccionar varios
           </div>
         )}
-        
         {/* Editor para renombrar grupos */}
         {editingGroup && (
           <div className="fixed z-[1001] top-0 left-0 w-full h-full flex items-center justify-center bg-black/30">
@@ -1455,6 +1560,50 @@ const FlowEditorContent = ({
                 >
                   Guardar
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {groupViewModal.isOpen && (
+          <div className="fixed inset-0 bg-black/50 z-[1001] flex items-center justify-center p-4 group-view-modal">
+            <div className="bg-white dark:bg-gray-800 rounded-lg w-[90vw] h-[80vh] flex flex-col shadow-xl group-view-modal-content">
+              <div className="p-4 border-b flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold">
+                    {groupViewModal.groupLabel}
+                  </h2>
+                  {(() => {
+                    const provider = groupViewModal.provider;
+                    switch (provider) {
+                      case 'aws':
+                        return <span className="inline-block w-3 h-3 rounded-full bg-orange-500"></span>;
+                      case 'gcp':
+                        return <span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span>;
+                      case 'azure':
+                        return <span className="inline-block w-3 h-3 rounded-full bg-blue-400"></span>;
+                      default:
+                        return <span className="inline-block w-3 h-3 rounded-full bg-gray-500"></span>;
+                    }
+                  })()}
+                </div>
+                <button 
+                  onClick={() => setGroupViewModal({ isOpen: false, groupId: null, nodes: [], edges: [], groupLabel: 'Grupo', provider: 'generic', nodeChanges: false })}
+                  className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                  title="Cerrar vista"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 p-2">
+                <GroupFlowEditor
+                  groupId={groupViewModal.groupId || ''}
+                  initialNodes={groupViewModal.nodes}
+                  initialEdges={groupViewModal.edges}
+                  nodeTypes={nodeTypes}
+                  onClose={() => setGroupViewModal({ isOpen: false, groupId: null, nodes: [], edges: [], groupLabel: 'Grupo', provider: 'generic', nodeChanges: false })}
+                />
               </div>
             </div>
           </div>
