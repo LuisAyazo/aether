@@ -92,9 +92,25 @@ export default function GroupView() {
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
-          fitView
-          minZoom={0.2}
+          onInit={(instance) => {
+            // Set initial zoom immediately after initialization
+            instance.setViewport({ x: 0, y: 0, zoom: 0.6 });
+          }}
+          fitView={false} // Disable fitView to ensure our zoom settings work
+          fitViewOptions={{ padding: 0.3 }}
+          minZoom={0.1}
           maxZoom={2}
+          defaultViewport={{ x: 0, y: 0, zoom: 0.6 }}
+          // Enable panning and zooming
+          panOnScroll={true}
+          panOnDrag={true}
+          zoomOnScroll={true}
+          zoomOnPinch={true}
+          zoomOnDoubleClick={true}
+          // Ensure nodes are draggable
+          nodesDraggable={true}
+          elementsSelectable={true}
+          nodesConnectable={true}
         >
           <Background gap={12} size={1} />
           <Controls />

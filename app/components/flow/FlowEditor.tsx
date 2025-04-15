@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useEffect } from 'react';
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, { 
   Background, 
   Controls,
@@ -17,7 +17,10 @@ import ReactFlow, {
   addEdge,
   NodeMouseHandler,
   SelectionMode,
-  useOnSelectionChange
+  useOnSelectionChange,
+  Position, 
+  ConnectionMode, // Add this import
+  ReactFlowInstance, // Añadir esta importación
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -25,9 +28,11 @@ import {
   Square2StackIcon, 
   Square3Stack3DIcon,
   FolderPlusIcon, 
-  FolderMinusIcon 
+  FolderMinusIcon,
+  // Eliminamos la importación de StopIcon que se usaba para el botón de dibujar forma
 } from '@heroicons/react/24/outline';
 import GroupFlowEditor from './GroupFlowEditor';
+import React from 'react';
 
 interface ResourceCategory {
   name: string;
@@ -46,8 +51,8 @@ interface ResourceItem {
 interface ContextMenu {
   visible: boolean;
   x: number;
-  y: number;
-  nodeId: string | null;
+  y: number; // Fixed: changed from string | null to number
+  nodeId: string | null; // Fixed: added missing nodeId property
   nodeType: string | null;
   parentInfo?: {
     parentId: string;
@@ -55,7 +60,7 @@ interface ContextMenu {
   } | null;
 }
 
-// Add tool types
+// Add tool types - Eliminamos drawRectangle
 type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso';
 
 interface FlowEditorProps {
@@ -75,10 +80,11 @@ const FlowEditorContent = ({
   onNodesChange, 
   onEdgesChange, 
   onConnect,
-  nodeTypes,
+  nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
   resourceCategories = []
 }: FlowEditorProps) => {
+
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -137,14 +143,14 @@ const FlowEditorContent = ({
     y: 0
   });
 
-  // Track node selection changes and mostrar menú flotante
+  // Track node selection changes and manage selection menu visibility/position
   useOnSelectionChange({
     onChange: ({ nodes }) => {
-      setSelectedNodes(nodes);
+      setSelectedNodes(nodes); // Update the selected nodes state
       
-      // Mostrar menú flotante si hay múltiples nodos seleccionados
+      // Manage selection menu visibility and position directly here
       if (nodes.length > 1) {
-        // Calcular la posición para el menú (centrado respecto a los nodos seleccionados)
+        // Calculate the position for the menu (centered above selected nodes)
         let minX = Infinity;
         let minY = Infinity;
         let maxX = -Infinity;
@@ -160,28 +166,24 @@ const FlowEditorContent = ({
           maxY = Math.max(maxY, node.position.y + nodeHeight);
         });
         
-        // Convertir a coordenadas de pantalla
+        // Convert to screen coordinates
         const { x: vpX, y: vpY, zoom } = reactFlowInstance.getViewport();
         const flowBounds = reactFlowWrapper.current?.getBoundingClientRect();
         
         if (flowBounds) {
-          // Mostrar el botón de agrupación inmediatamente encima de los nodos seleccionados
+          // Position the button immediately above the selected nodes
           const centerX = flowBounds.left + ((minX + maxX) / 2 * zoom + vpX);
-          const topY = flowBounds.top + (minY * zoom + vpY) - 50; // 50px arriba del nodo más alto
+          const topY = flowBounds.top + (minY * zoom + vpY) - 50; // 50px above the highest node
           
-          console.log("Mostrando botón de agrupación en:", centerX, topY);
-          
-          // Ensure the button is visible and positioned correctly
-          setTimeout(() => {
-            setSelectionMenu({
-              visible: true,
-              x: centerX,
-              y: Math.max(topY, flowBounds.top + 50) // Ensure it's not too high
-            });
-          }, 0);
+          // Update the menu state: visible and positioned
+          setSelectionMenu({
+            visible: true,
+            x: centerX,
+            y: Math.max(topY, flowBounds.top + 10) // Ensure it's not too high
+          });
         }
       } else {
-        // Ocultar el menú si no hay múltiples nodos seleccionados
+        // Hide the menu if 1 or 0 nodes are selected
         setSelectionMenu(prev => ({...prev, visible: false}));
       }
     },
@@ -201,375 +203,74 @@ const FlowEditorContent = ({
     };
   }, []);
 
-  // Ajustar la vista al cargar los nodos
+  // Function to center nodes in the viewport
+  const centerNodesInViewport = useCallback(() => {
+    if (!reactFlowInstance || nodes.length === 0) return;
+    
+    // Get viewport dimensions
+    const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 800 };
+    
+    // Calculate nodes bounding box
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+    
+    nodes.forEach(node => {
+      if (!node.hidden) {
+        const nodeWidth = node.width || 150;
+        const nodeHeight = node.height || 80;
+        
+        minX = Math.min(minX, node.position.x);
+        minY = Math.min(minY, node.position.y);
+        maxX = Math.max(maxX, node.position.x + nodeWidth);
+        maxY = Math.max(maxY, node.position.y + nodeHeight);
+      }
+    });
+    
+    // Calculate center of nodes
+    const nodesWidth = maxX - minX;
+    const nodesHeight = maxY - minY;
+    const nodesCenterX = minX + nodesWidth / 2;
+    const nodesCenterY = minY + nodesHeight / 2;
+    
+    // Calculate viewport center
+    const viewportCenterX = width / 2;
+    const viewportCenterY = height / 2;
+    
+    // Calculate the translation needed to center nodes
+    const zoom = reactFlowInstance.getViewport().zoom || 1;
+    const translateX = viewportCenterX - nodesCenterX * zoom;
+    const translateY = viewportCenterY - nodesCenterY * zoom;
+    
+    // Set viewport to center nodes
+    reactFlowInstance.setViewport({ 
+      x: translateX, 
+      y: translateY, 
+      zoom 
+    });
+  }, [reactFlowInstance, nodes, reactFlowWrapper]);
+
+  // Effect to fit view once nodes are loaded and instance is ready
+  const fitView = useCallback(() => {
+    if (!reactFlowInstance) return;
+
+    setTimeout(() => {
+      reactFlowInstance.fitView({
+        padding: 0.2,
+        includeHiddenNodes: false,
+        duration: 800 // Animación más suave
+      });
+    }, 50);
+  }, [reactFlowInstance]);
+  
+  // Usar esta función mejorada en lugar de fitView directo
   useEffect(() => {
     if (reactFlowInstance && nodes.length > 0) {
-      setTimeout(() => {
-        reactFlowInstance.fitView({ padding: 0.2 });
-      }, 300);
+      // Esperar a que los componentes estén renderizados
+      fitView();
     }
-  }, []);
+  }, [reactFlowInstance, nodes, fitView]);
 
   // This function declaration is removed because it's already defined earlier in the code
-
-  // Declare handleToolClick with type signature first
-  const handleToolClick = useCallback<(tool: ToolType) => void>((tool) => {
-    setActiveTool(tool);
-    
-    if (tool === 'lasso') {
-      setSelectionActive(true);
-      
-      // Reset selections 
-      reactFlowInstance.setNodes(nodes =>
-        nodes.map(node => ({
-          ...node,
-          selected: false,
-          selectable: true
-        }))
-      );
-      
-      document.body.classList.add('lasso-selection-mode');
-    } else {
-      setSelectionActive(false);
-      document.body.classList.remove('lasso-selection-mode');
-    }
-    
-    switch(tool) {
-      case 'createGroup':
-        // For create group, create immediately and go back to select mode
-        createEmptyGroup();
-        setActiveTool('select');
-        break;
-      case 'group':
-        // Group selected nodes
-        groupSelectedNodes();
-        setActiveTool('select');
-        break;
-      case 'ungroup':
-        // Ungroup selected nodes
-        ungroupNodes();
-        setActiveTool('select');
-        break;
-      case 'select':
-      case 'lasso':
-      default:
-        // Just use the selection mode
-        break;
-    }
-  }, []);  // Start with empty dependencies
-
-  // Añadimos un nuevo efecto para manejar los atajos de teclado y la selección múltiple
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Shift+S para activar modo lasso
-      if (event.shiftKey && event.key === 's') {
-        handleToolClick('lasso');
-      }
-      // Escape para volver al modo de selección normal
-      if (event.key === 'Escape' && activeTool === 'lasso') {
-        handleToolClick('select');
-      }
-      
-      // Agregar soporte para selección múltiple con Shift
-      if (event.shiftKey) {
-        document.body.classList.add('multi-selection-mode');
-      }
-    };
-    
-    const handleKeyUp = (event: KeyboardEvent) => {
-      // Quitar modo de selección múltiple cuando se suelta la tecla Shift
-      if (event.key === 'Shift') {
-        document.body.classList.remove('multi-selection-mode');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      document.body.classList.remove('multi-selection-mode');
-    };
-  }, [activeTool, handleToolClick]);
-
-  // Función para verificar si un nodo está dentro de un grupo
-  const isInsideGroup = (position: { x: number, y: number }, group: Node) => {
-    const groupX = group.position.x;
-    const groupY = group.position.y;
-    const groupWidth = (group.style?.width as number) || 200;
-    const groupHeight = (group.style?.height as number) || 150;
-    
-    return (
-      position.x >= groupX && 
-      position.x <= groupX + groupWidth && 
-      position.y >= groupY && 
-      position.y <= groupY + groupHeight
-    );
-  };
-
-  const onDragStart = (event: React.DragEvent, nodeData: any) => {
-    event.dataTransfer.setData('application/reactflow', JSON.stringify(nodeData));
-    event.dataTransfer.effectAllowed = 'move';
-    
-    // Calcular el desplazamiento entre el cursor y el elemento arrastrado
-    const dragElement = event.currentTarget as HTMLDivElement;
-    const rect = dragElement.getBoundingClientRect();
-    const offsetX = event.clientX - rect.left;
-    const offsetY = event.clientY - rect.top;
-    
-    setActiveDrag({ 
-      item: nodeData, 
-      offset: { x: offsetX, y: offsetY } 
-    });
-  };
-
-  const onDragOver = useCallback((event: React.DragEvent) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, []);
-
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault();
-      const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!reactFlowBounds || !reactFlowInstance) return;
-
-      try {
-        const dataStr = event.dataTransfer.getData('application/reactflow');
-        const nodeData = JSON.parse(dataStr);
-        
-        // Get exact cursor position in flow coordinates
-        // Important: We need to calculate this correctly relative to the flow container
-        const position = reactFlowInstance.project({
-          x: event.clientX - reactFlowBounds.left,
-          y: event.clientY - reactFlowBounds.top
-        });
-        
-        // Check if we're dropping on a group
-        let parentNode: string | undefined = undefined;
-        let adjustedPosition = { ...position };
-        
-        // Check for groups that aren't minimized
-        const groups = reactFlowInstance.getNodes()
-          .filter(node => node.type === 'group' && !node.data?.isMinimized);
-        
-        for (const group of groups) {
-          if (isInsideGroup(position, group)) {
-            parentNode = group.id;
-            
-            // Calculate position relative to the parent
-            adjustedPosition = {
-              x: position.x - group.position.x,
-              y: position.y - group.position.y
-            };
-            break;
-          }
-        }
-        
-        // Create unique node ID
-        const timestamp = Date.now();
-        const newNodeId = `${nodeData.type}-${timestamp}`;
-        
-        // Create the node at the cursor position
-        const newNode: Node = {
-          id: newNodeId,
-          type: nodeData.type,
-          position: adjustedPosition,
-          data: { 
-            label: nodeData.name,
-            description: nodeData.description,
-            provider: nodeData.provider,
-            isCollapsed: true
-          },
-          draggable: true,
-          selectable: true,
-        };
-        
-        // Add parent relationship if needed
-        if (parentNode) {
-          newNode.parentNode = parentNode;
-          // Use the correct literal type
-          newNode.extent = 'parent' as const;
-        }
-        
-        // Add the node to the flow
-        onNodesChange?.([{ type: 'add', item: newNode }]);
-        setActiveDrag(null);
-      } catch (error) {
-        console.error('Error adding new node:', error);
-        setActiveDrag(null);
-      }
-    },
-    [reactFlowInstance, onNodesChange]
-  );
-  
-  // Limpiar arrastre activo cuando termina el arrastre
-  const onDragEnd = () => {
-    setActiveDrag(null);
-  };
-
-  // Función para verificar y actualizar la posición de los nodos cuando se mueven
-  const onNodeDragStop = useCallback((event: React.MouseEvent, node: Node) => {
-    if (node.parentNode) {
-      const parentNode = reactFlowInstance.getNode(node.parentNode);
-      if (parentNode) {
-        const parentWidth = (parentNode.style?.width as number) || 200;
-        const parentHeight = (parentNode.style?.height as number) || 150;
-        
-        const nodeWidth = 100; // Ancho aproximado del nodo
-        const nodeHeight = 50; // Alto aproximado del nodo
-        
-        // Ajustar posición si está fuera de límites
-        let needsAdjustment = false;
-        let newPos = { ...node.position };
-        
-        if (node.position.x < 10) {
-          newPos.x = 10;
-          needsAdjustment = true;
-        } else if (node.position.x > parentWidth - nodeWidth - 10) {
-          newPos.x = parentWidth - nodeWidth - 10;
-          needsAdjustment = true;
-        }
-        
-        if (node.position.y < 30) {
-          newPos.y = 30;
-          needsAdjustment = true;
-        } else if (node.position.y > parentHeight - nodeHeight - 10) {
-          newPos.y = parentHeight - nodeHeight - 10;
-          needsAdjustment = true;
-        }
-        
-        if (needsAdjustment) {
-          reactFlowInstance.setNodes(nds => 
-            nds.map(n => 
-              n.id === node.id ? { ...n, position: newPos } : n
-            )
-          );
-        }
-      }
-    }
-  }, [reactFlowInstance]);
-
-  const onSave = useCallback(() => {
-    if (reactFlowInstance) {
-      const flow = reactFlowInstance.toObject();
-      localStorage.setItem('savedFlow', JSON.stringify(flow));
-      alert('Diagrama guardado correctamente');
-    }
-  }, [reactFlowInstance]);
-
-  const toggleSidebar = () => setSidebarOpen(prev => !prev);
-
-  const toggleCategory = (categoryName: string) => {
-    setCollapsedCategories(prev => ({
-      ...prev,
-      [categoryName]: !prev[categoryName]
-    }));
-  };
-
-  // Handle right-click on nodes - improve context menu options
-  const onNodeContextMenu: NodeMouseHandler = useCallback((event, node) => {
-    // Prevent default context menu
-    event.preventDefault();
-    
-    // Get parent info if the node has a parent
-    const parentInfo = node.parentNode ? 
-      { parentId: node.parentNode, parentType: reactFlowInstance.getNode(node.parentNode)?.type } : 
-      null;
-    
-    // Show our custom context menu with correct position
-    setContextMenu({
-      visible: true,
-      x: event.clientX,
-      y: event.clientY,
-      nodeId: node.id,
-      nodeType: node.type ?? null,
-      parentInfo: parentInfo
-    });
-  }, [reactFlowInstance]);
-  
-  // Close context menu when clicking elsewhere
-  const onPaneClick = useCallback(() => {
-    setContextMenu(prev => ({...prev, visible: false}));
-  }, []);
-
-  // Handle context menu actions with enhanced functionality
-  const handleContextMenuAction = useCallback((action: string) => {
-    if (!contextMenu.nodeId) return;
-    
-    const node = reactFlowInstance.getNode(contextMenu.nodeId);
-    if (!node) return;
-    
-    // Nueva acción para renombrar grupo
-    if (action === 'renameGroup' && contextMenu.nodeType === 'group') {
-      startEditingGroupName(contextMenu.nodeId, node.data?.label || 'Group');
-      setContextMenu(prev => ({...prev, visible: false}));
-      return;
-    }
-    
-    // Handle node removal from group
-    if (action === 'removeFromGroup' && node.parentNode) {
-      // Get parent position for calculating absolute position
-      const parentNode = reactFlowInstance.getNode(node.parentNode);
-      if (parentNode) {
-        reactFlowInstance.setNodes(nodes => 
-          nodes.map(n => {
-            if (n.id === contextMenu.nodeId) {
-              return {
-                ...n,
-                parentNode: undefined,
-                extent: undefined,
-                position: {
-                  x: parentNode.position.x + n.position.x,
-                  y: parentNode.position.y + n.position.y
-                }
-              };
-            }
-            return n;
-          })
-        );
-      }
-      setContextMenu(prev => ({...prev, visible: false}));
-      return;
-    }
-    
-    // Handle specific actions for groups when we have selected nodes
-    if (action === 'addSelectedNodesToGroup' && contextMenu.nodeType === 'group') {
-      // Get IDs of all currently selected nodes that aren't the group itself
-      const nodesToAdd = selectedNodes
-        .filter(n => n.id !== contextMenu.nodeId)
-        .map(n => n.id);
-      
-      // Create a custom event to trigger adding these nodes to the group
-      const actionEvent = new CustomEvent('nodeAction', {
-        detail: {
-          action,
-          nodeId: contextMenu.nodeId,
-          nodeType: contextMenu.nodeType,
-          targetNodeIds: nodesToAdd
-        }
-      });
-      document.dispatchEvent(actionEvent);
-      
-      // Hide the context menu
-      setContextMenu(prev => ({...prev, visible: false}));
-      return;
-    }
-    
-    // Create a custom event to trigger the appropriate action
-    const actionEvent = new CustomEvent('nodeAction', {
-      detail: {
-        action,
-        nodeId: contextMenu.nodeId,
-        nodeType: contextMenu.nodeType
-      }
-    });
-    document.dispatchEvent(actionEvent);
-    
-    // Hide the context menu
-    setContextMenu(prev => ({...prev, visible: false}));
-  }, [contextMenu, reactFlowInstance, selectedNodes, startEditingGroupName]);
 
   // Function to create a new empty group
   const createEmptyGroup = useCallback((provider: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic') => {
@@ -577,8 +278,8 @@ const FlowEditorContent = ({
     const { x: vpX, y: vpY, zoom } = reactFlowInstance.getViewport();
     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 800 };
 
-    // Calculate center position in flow coordinates
-    const position = reactFlowInstance.project({
+    // Use screenToFlowPosition instead of project
+    const position = reactFlowInstance.screenToFlowPosition({
       x: width / 2,
       y: height / 2
     });
@@ -655,13 +356,17 @@ const FlowEditorContent = ({
     });
 
     // Add padding to group
-    minX -= 30;
-    minY -= 50; // Extra space for header
-    maxX += 30;
-    maxY += 30;
+    const paddingHorizontal = 50;
+    const paddingVerticalTop = 60; // Más espacio para el header
+    const paddingVerticalBottom = 40;
     
-    const width = maxX - minX;
-    const height = maxY - minY;
+    minX -= paddingHorizontal;
+    minY -= paddingVerticalTop; 
+    maxX += paddingHorizontal;
+    maxY += paddingVerticalBottom;
+    
+    const width = Math.max(250, maxX - minX); // Garantizar tamaño mínimo
+    const height = Math.max(180, maxY - minY);
     
     // Create group node
     const timestamp = Date.now();
@@ -708,10 +413,8 @@ const FlowEditorContent = ({
     reactFlowInstance.setNodes([...updatedNodes, newGroup]);
     
     // Clear selection after creating the group
-    setSelectedNodes([]);
-    
     return newGroupId;
-  }, [selectedNodes, reactFlowInstance, setSelectedNodes]);
+  }, [selectedNodes, reactFlowInstance]); // Removed setSelectedNodes dependency
   
   // Function to ungroup selected groups
   const ungroupNodes = useCallback(() => {
@@ -763,8 +466,6 @@ const FlowEditorContent = ({
           
           // Actualizar el flujo con los nodos modificados
           reactFlowInstance.setNodes(updatedNodes);
-          // Limpiar selección
-          setSelectedNodes([]);
           return;
         }
       }
@@ -814,21 +515,23 @@ const FlowEditorContent = ({
     
     // Update the flow with the new nodes
     reactFlowInstance.setNodes(updatedNodes);
-    
-    // Clear selection
-    setSelectedNodes([]);
-  }, [selectedNodes, reactFlowInstance, setSelectedNodes]);
-    
-  // Already moved above, keeping this comment to avoid duplicate function
+  }, [selectedNodes, reactFlowInstance]); // Removed setSelectedNodes dependency
 
   // Handle toolbar button clicks with precise selection behavior
-  Object.assign(handleToolClick, useCallback((tool: ToolType) => {
-    setActiveTool(tool);
+  const handleToolClick = useCallback((tool: ToolType) => {
+    if (tool === activeTool) return; // Don't update if it's already the active tool
     
+    // Reset states first
+    setSelectionActive(false);
+    // Eliminamos referencias a isDrawingRectangle y drawingRectangle
+    document.body.classList.remove('lasso-selection-mode');
+    // Eliminamos clase draw-rectangle-mode
+
+    // Process the tool
     if (tool === 'lasso') {
       setSelectionActive(true);
-      
-      // Reset selections 
+      document.body.classList.add('lasso-selection-mode');
+      // Reset selections
       reactFlowInstance.setNodes(nodes =>
         nodes.map(node => ({
           ...node,
@@ -836,36 +539,408 @@ const FlowEditorContent = ({
           selectable: true
         }))
       );
-      
-      document.body.classList.add('lasso-selection-mode');
-    } else {
-      setSelectionActive(false);
-      document.body.classList.remove('lasso-selection-mode');
     }
+    // Eliminamos condición de drawRectangle
+    
+    // Special immediate-action tools
+    let shouldSwitchBackToSelect = false;
     
     switch(tool) {
       case 'createGroup':
-        // For create group, create immediately and go back to select mode
         createEmptyGroup();
-        setActiveTool('select');
+        shouldSwitchBackToSelect = true;
         break;
       case 'group':
-        // Group selected nodes
         groupSelectedNodes();
-        setActiveTool('select');
+        shouldSwitchBackToSelect = true;
         break;
       case 'ungroup':
-        // Ungroup selected nodes
         ungroupNodes();
-        setActiveTool('select');
-        break;
-      case 'select':
-      case 'lasso':
-      default:
-        // Just use the selection mode
+        shouldSwitchBackToSelect = true;
         break;
     }
-  }, [createEmptyGroup, groupSelectedNodes, ungroupNodes, reactFlowInstance]));
+
+    // Set the active tool (to select if we did an immediate action)
+    setActiveTool(shouldSwitchBackToSelect ? 'select' : tool);
+  }, [activeTool, createEmptyGroup, groupSelectedNodes, ungroupNodes, reactFlowInstance]);
+
+  // Añadimos un nuevo efecto para manejar los atajos de teclado y la selección múltiple
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Shift+S para activar modo lasso
+      if (event.shiftKey && event.key === 's') {
+        handleToolClick('lasso');
+      }
+      // Escape para volver al modo de selección normal
+      if (event.key === 'Escape' && activeTool === 'lasso') {
+        handleToolClick('select');
+      }
+      
+      // Agregar soporte para selección múltiple con Shift
+      if (event.shiftKey) {
+        document.body.classList.add('multi-selection-mode');
+      }
+    };
+    
+    const handleKeyUp = (event: KeyboardEvent) => {
+      // Quitar modo de selección múltiple cuando se suelta la tecla Shift
+      if (event.key === 'Shift') {
+        document.body.classList.remove('multi-selection-mode');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      document.body.classList.remove('multi-selection-mode');
+    };
+  }, [activeTool, handleToolClick]);
+
+  // Función para verificar si un nodo está dentro de un grupo
+  const isInsideGroup = (position: { x: number, y: number }, group: Node) => {
+    const groupX = group.position.x;
+    const groupY = group.position.y;
+    const groupWidth = (group.style?.width as number) || 200;
+    const groupHeight = (group.style?.height as number) || 150;
+    
+    // Añadir un pequeño margen para evitar detección en el borde exacto
+    const margin = 5;
+    
+    return (
+      position.x >= groupX + margin && 
+      position.x <= groupX + groupWidth - margin && 
+      position.y >= groupY + margin && 
+      position.y <= groupY + groupHeight - margin
+    );
+  };
+
+  const onDragStart = (event: React.DragEvent, nodeData: any) => {
+    event.dataTransfer.setData('application/reactflow', JSON.stringify(nodeData));
+    event.dataTransfer.effectAllowed = 'move';
+    
+    // Calcular el desplazamiento entre el cursor y el elemento arrastrado
+    const dragElement = event.currentTarget as HTMLDivElement;
+    const rect = dragElement.getBoundingClientRect();
+    const offsetX = event.clientX - rect.left;
+    const offsetY = event.clientY - rect.top;
+    
+    setActiveDrag({ 
+      item: nodeData, 
+      offset: { x: offsetX, y: offsetY } 
+    });
+  };
+
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+      if (!reactFlowBounds || !reactFlowInstance) return;
+
+      try {
+        const dataStr = event.dataTransfer.getData('application/reactflow');
+        const nodeData = JSON.parse(dataStr);
+        
+        // Obtener posición con screenToFlowPosition
+        const position = reactFlowInstance.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY
+        });
+        
+        // Check if we're dropping on a group
+        let parentNode: string | undefined = undefined;
+        let adjustedPosition = { ...position };
+        
+        // Check for groups that aren't minimized
+        const groups = reactFlowInstance.getNodes()
+          .filter(node => node.type === 'group' && !node.data?.isMinimized);
+        
+        // Ordenar grupos por tamaño (más pequeño primero) para manejar grupos anidados correctamente
+        const sortedGroups = [...groups].sort((a, b) => {
+          const aSize = (a.style?.width as number || 200) * (a.style?.height as number || 150);
+          const bSize = (b.style?.width as number || 200) * (b.style?.height as number || 150);
+          return aSize - bSize; // Del más pequeño al más grande
+        });
+        
+        for (const group of sortedGroups) {
+          if (isInsideGroup(position, group)) {
+            parentNode = group.id;
+            
+            // Calculate position relative to the parent
+            adjustedPosition = {
+              x: position.x - group.position.x,
+              y: position.y - group.position.y
+            };
+            break;
+          }
+        }
+        
+        // Create unique node ID
+        const timestamp = Date.now();
+        const newNodeId = `${nodeData.type}-${timestamp}`;
+        
+        // Create the node at the cursor position
+        const newNode: Node = {
+          id: newNodeId,
+          type: nodeData.type,
+          position: adjustedPosition,
+          data: { 
+            label: nodeData.name,
+            description: nodeData.description,
+            provider: nodeData.provider,
+            isCollapsed: true
+          },
+          draggable: true,
+          selectable: true,
+        };
+        
+        // Add parent relationship if needed
+        if (parentNode) {
+          newNode.parentNode = parentNode;
+          newNode.extent = 'parent' as const;
+          
+          // Asegurar que no esté demasiado cerca del borde
+          adjustedPosition.x = Math.max(10, adjustedPosition.x);
+          adjustedPosition.y = Math.max(30, adjustedPosition.y); // Más espacio arriba para el encabezado
+        }
+        
+        // Add the node to the flow
+        onNodesChange?.([{ type: 'add', item: newNode }]);
+        setActiveDrag(null);
+      } catch (error) {
+        console.error('Error adding new node:', error);
+        setActiveDrag(null);
+      }
+    },
+    [reactFlowInstance, onNodesChange]
+  );
+  
+  // Limpiar arrastre activo cuando termina el arrastre
+  const onDragEnd = () => {
+    setActiveDrag(null);
+  };
+
+  // Función para verificar y actualizar la posición de los nodos cuando se mueven
+  const onNodeDragStop = useCallback((event: React.MouseEvent, node: Node) => {
+    if (!node.parentNode) return; // Si no está dentro de un grupo, no hacer nada
+    
+    const parentNode = reactFlowInstance.getNode(node.parentNode);
+    if (!parentNode) return;
+    
+    // Obtener dimensiones del grupo padre
+    const parentWidth = (parentNode.style?.width as number) || 200;
+    const parentHeight = (parentNode.style?.height as number) || 150;
+    
+    // Obtener dimensiones aproximadas del nodo
+    // Usar las dimensiones reales del nodo si están disponibles
+    const nodeWidth = node.width || 150;
+    const nodeHeight = node.height || 80;
+    
+    // Calcular límites seguros dentro del grupo padre (con margen)
+    const marginX = 10;
+    const marginY = 10;
+    const headerHeight = 30; // Espacio para el encabezado del grupo
+    
+    // Crear nuevas coordenadas limitadas
+    let newPos = { ...node.position };
+    let needsAdjustment = false;
+    
+    // Ajustar posición X si es necesario
+    if (newPos.x < marginX) {
+      newPos.x = marginX;
+      needsAdjustment = true;
+    } else if (newPos.x > parentWidth - nodeWidth - marginX) {
+      newPos.x = Math.max(marginX, parentWidth - nodeWidth - marginX);
+      needsAdjustment = true;
+    }
+    
+    // Ajustar posición Y si es necesario
+    if (newPos.y < headerHeight) {
+      newPos.y = headerHeight;
+      needsAdjustment = true;
+    } else if (newPos.y > parentHeight - nodeHeight - marginY) {
+      newPos.y = Math.max(headerHeight, parentHeight - nodeHeight - marginY);
+      needsAdjustment = true;
+    }
+    
+    // Aplicar ajustes si son necesarios
+    if (needsAdjustment) {
+      reactFlowInstance.setNodes(nds => 
+        nds.map(n => 
+          n.id === node.id ? { ...n, position: newPos } : n
+        )
+      );
+    }
+  }, [reactFlowInstance]);
+
+  const onSave = useCallback(() => {
+    if (reactFlowInstance) {
+      const flow = reactFlowInstance.toObject();
+      localStorage.setItem('savedFlow', JSON.stringify(flow));
+      alert('Diagrama guardado correctamente');
+    }
+  }, [reactFlowInstance]);
+
+  const toggleSidebar = () => setSidebarOpen(prev => !prev);
+
+  const toggleCategory = (categoryName: string) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [categoryName]: !prev[categoryName]
+    }));
+  };
+
+  // Handle right-click on nodes - improve context menu options
+  const onNodeContextMenu: NodeMouseHandler = useCallback((event, node) => {
+    // Prevent default context menu
+    event.preventDefault();
+    
+    console.log(`Context menu opened for node: ${node.id}, type: ${node.type}`); // Log para depuración
+    
+    // Get parent info if the node has a parent
+    const parentInfo = node.parentNode ? 
+      { parentId: node.parentNode, parentType: reactFlowInstance.getNode(node.parentNode)?.type } : 
+      null;
+    
+    // Show our custom context menu with correct position
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: node.id,
+      nodeType: node.type ?? null, // Asegúrate que node.type no sea undefined
+      parentInfo: parentInfo
+    });
+  }, [reactFlowInstance]);
+  
+  // Close context menu when clicking elsewhere
+  const onPaneClick = useCallback(() => {
+    setContextMenu(prev => ({...prev, visible: false}));
+  }, []);
+
+  // Handle context menu actions with enhanced functionality
+  const handleContextMenuAction = useCallback((action: string) => {
+    if (!contextMenu.nodeId) return;
+    
+    const node = reactFlowInstance.getNode(contextMenu.nodeId);
+    if (!node) return;
+
+    console.log(`Handling action "${action}" for node ${contextMenu.nodeId} (type: ${contextMenu.nodeType})`); // Log para depuración
+    
+    // Nueva acción para renombrar grupo
+    if (action === 'renameGroup' && contextMenu.nodeType === 'group') {
+      startEditingGroupName(contextMenu.nodeId, node.data?.label || 'Group');
+      setContextMenu(prev => ({...prev, visible: false}));
+      return;
+    }
+    
+    // Handle node removal from group
+    if (action === 'removeFromGroup' && node.parentNode) {
+      // Get parent position for calculating absolute position
+      const parentNode = reactFlowInstance.getNode(node.parentNode);
+      if (parentNode) {
+        reactFlowInstance.setNodes(nodes => 
+          nodes.map(n => {
+            if (n.id === contextMenu.nodeId) {
+              return {
+                ...n,
+                parentNode: undefined,
+                extent: undefined,
+                position: {
+                  x: parentNode.position.x + n.position.x,
+                  y: parentNode.position.y + n.position.y
+                }
+              };
+            }
+            return n;
+          })
+        );
+      }
+      setContextMenu(prev => ({...prev, visible: false}));
+      return;
+    }
+    
+    // Handle specific actions for groups when we have selected nodes
+    if (action === 'addSelectedNodesToGroup' && contextMenu.nodeType === 'group') {
+      // Get IDs of all currently selected nodes that aren't the group itself
+      const nodesToAdd = selectedNodes
+        .filter(n => n.id !== contextMenu.nodeId)
+        .map(n => n.id);
+      
+      // Create a custom event to trigger adding these nodes to the group
+      const actionEvent = new CustomEvent('nodeAction', {
+        detail: {
+          action,
+          nodeId: contextMenu.nodeId,
+          nodeType: contextMenu.nodeType,
+          targetNodeIds: nodesToAdd
+        }
+      });
+      document.dispatchEvent(actionEvent);
+      
+      // Hide the context menu
+      setContextMenu(prev => ({...prev, visible: false}));
+      return;
+    }
+
+    // Handle rectangle customization
+    if (contextMenu.nodeType === 'rectangle') {
+      console.log("Action is for a rectangle node."); // Log específico
+      if (action === 'changeBackgroundColor') {
+        const newColor = prompt('Introduce el nuevo color de fondo (ej: rgba(0,0,255,0.1) o #aabbcc):', node.data.backgroundColor);
+        if (newColor !== null) { // Check for null in case user cancels prompt
+          console.log("Changing background color to:", newColor); // Log
+          reactFlowInstance.setNodes(nds => 
+            nds.map(n => 
+              n.id === contextMenu.nodeId 
+                ? { ...n, data: { ...n.data, backgroundColor: newColor } } 
+                : n
+            )
+          );
+        }
+        setContextMenu(prev => ({...prev, visible: false}));
+        return;
+      }
+      if (action === 'changeBorder') {
+        const newBorder = prompt('Introduce el nuevo estilo de borde (ej: 2px dashed red):', node.data.border);
+        if (newBorder !== null) { // Check for null in case user cancels prompt
+          console.log("Changing border to:", newBorder); // Log
+          reactFlowInstance.setNodes(nds => 
+            nds.map(n => 
+              n.id === contextMenu.nodeId 
+                ? { ...n, data: { ...n.data, border: newBorder } } 
+                : n
+            )
+          );
+        }
+        setContextMenu(prev => ({...prev, visible: false}));
+        return;
+      }
+    }
+    
+    // Create a custom event to trigger the appropriate action (for other node types)
+    // Ensure this doesn't run if we handled rectangle actions above
+    if (contextMenu.nodeType !== 'rectangle' || (action !== 'changeBackgroundColor' && action !== 'changeBorder')) {
+       const actionEvent = new CustomEvent('nodeAction', {
+         detail: {
+           action,
+           nodeId: contextMenu.nodeId,
+           nodeType: contextMenu.nodeType
+         }
+       });
+       document.dispatchEvent(actionEvent);
+    }
+    
+    // Hide the context menu
+    setContextMenu(prev => ({...prev, visible: false}));
+  }, [contextMenu, reactFlowInstance, selectedNodes, startEditingGroupName]);
 
   // Handle deletion of nodes and groups properly
   const onNodesDelete = useCallback((nodesToDelete: Node[]) => {
@@ -983,19 +1058,13 @@ const FlowEditorContent = ({
         if (nodeElement) {
           const nodeId = nodeElement.getAttribute('data-id');
           if (nodeId) {
-            // Select just this node
+            // Select just this node using React Flow's internal mechanism
             reactFlowInstance.setNodes(nodes => 
               nodes.map(node => ({
                 ...node,
                 selected: node.id === nodeId
               }))
             );
-            
-            // Update our selectedNodes state manually
-            const selectedNode = reactFlowInstance.getNode(nodeId);
-            if (selectedNode) {
-              setSelectedNodes([selectedNode]);
-            }
           }
         }
         return;
@@ -1037,9 +1106,6 @@ const FlowEditorContent = ({
         }))
       );
       
-      // IMPORTANT FIX: Manually update selectedNodes state to force synchronization
-      setSelectedNodes(nodesToSelect);
-      
       // Show the selection menu if multiple nodes are selected
       if (nodesToSelect.length > 1) {
         // Position the menu above the selection area
@@ -1059,7 +1125,7 @@ const FlowEditorContent = ({
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     
-  }, [activeTool, reactFlowInstance, reactFlowWrapper, setSelectionMenu, setSelectedNodes]);
+  }, [activeTool, reactFlowInstance, reactFlowWrapper]); // Removed setSelectionMenu dependency
 
   // Función para crear un grupo con los nodos seleccionados
   const createGroupWithSelectedNodes = useCallback(() => {
@@ -1076,37 +1142,6 @@ const FlowEditorContent = ({
       console.warn("Se necesitan al menos 2 nodos para crear un grupo");
     }
   }, [selectedNodes, groupSelectedNodes, selectionMenu]);
-
-  // Ensure the selection menu is always visible when it should be
-  useEffect(() => {
-    if (selectedNodes.length > 1 && !selectionMenu.visible) {
-      // Calculate average position of selected nodes
-      let avgX = 0;
-      let avgY = Infinity; // Start with highest possible to find minimum
-      
-      selectedNodes.forEach(node => {
-        avgX += node.position.x;
-        avgY = Math.min(avgY, node.position.y);
-      });
-      
-      avgX = avgX / selectedNodes.length;
-      
-      // Convert to screen coordinates
-      const { x: vpX, y: vpY, zoom } = reactFlowInstance.getViewport();
-      const flowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-      
-      if (flowBounds) {
-        const screenX = flowBounds.left + (avgX * zoom + vpX);
-        const screenY = flowBounds.top + (avgY * zoom + vpY) - 50;
-        
-        setSelectionMenu({
-          visible: true,
-          x: screenX,
-          y: Math.max(screenY, flowBounds.top + 10)
-        });
-      }
-    }
-  }, [selectedNodes, selectionMenu.visible, reactFlowInstance, reactFlowWrapper]);
 
   // Nueva función para debug que nos muestra en consola cuando los nodos seleccionados cambian
   useEffect(() => {
@@ -1171,6 +1206,12 @@ const FlowEditorContent = ({
           provider: provider || 'generic',
           nodeChanges: false
         });
+        
+        // Center nodes in next tick after modal is opened
+        setTimeout(() => {
+          // Dispatch a custom event to tell GroupFlowEditor to center nodes
+          document.dispatchEvent(new CustomEvent('centerGroupNodes'));
+        }, 100);
       }
     };
     
@@ -1185,54 +1226,41 @@ const FlowEditorContent = ({
   // Añadir listener para eventos de actualización del grupo
   useEffect(() => {
     const handleGroupUpdate = (event: CustomEvent) => {
-      const { groupId, nodes: updatedNodes, edges: updatedEdges } = event.detail;
+      console.log("Received updateGroupNodes event:", event.detail); // Log event detail
+      const { groupId, nodes: updatedNodes, edges: updatedEdges, hasNewNodes } = event.detail;
       
+      // --- TEMPORARILY COMMENT OUT LOGIC TO CHECK FOR INFINITE LOOP ---
+      /* 
       if (groupId && updatedNodes) {
-        // Actualizar los nodos del grupo en el editor principal
-        reactFlowInstance.setNodes(currentNodes => {
-          // Filtrar los nodos que no pertenecen a este grupo
-          const nodesNotInGroup = currentNodes.filter(node => node.parentNode !== groupId);
-          
-          // Procesar los nodos actualizados para que mantengan la referencia al grupo padre
-          const processedNodes = updatedNodes.map((node: Node) => ({
-            ...JSON.parse(JSON.stringify(node)), // Crear copia profunda para evitar referencias compartidas
-            // Restaurar relación con el grupo padre
-            parentNode: groupId,
-            extent: 'parent' as const
-          }));
-          
-          // Devolver la combinación de ambos conjuntos con copia fresca
-          return [...nodesNotInGroup, ...processedNodes];
-        });
-        
-        // Actualizar las conexiones si se proporcionaron
-        if (updatedEdges) {
-          // Procesamos las edges para asegurarnos que mantengan las conexiones correctas
-          reactFlowInstance.setEdges(currentEdges => {
-            // Eliminar conexiones que involucran nodos del grupo
-            const groupNodeIds = updatedNodes.map((node: Node) => node.id);
-            const edgesNotInGroup = currentEdges.filter(
-              edge => !(groupNodeIds.includes(edge.source) || groupNodeIds.includes(edge.target))
-            );
-            
-            // Crear copias profundas de las nuevas conexiones
-            const deepCopiedEdges = updatedEdges.map((edge: Edge) => 
-              JSON.parse(JSON.stringify(edge))
-            );
-            
-            // Agregar las conexiones actualizadas del grupo
-            return [...edgesNotInGroup, ...deepCopiedEdges];
-          });
-        }
+        // ... (complex logic involving safeUpdatedNodes, setNodes, setEdges) ...
+        // ... (this entire block is commented out for debugging the loop) ...
       }
+      */
+      console.log("Skipping handleGroupUpdate logic for debugging infinite loop."); // Add log
     };
     
-    // Registrar el listener
     document.addEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
     
     return () => {
       document.removeEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
     };
+  }, [reactFlowInstance]); // Dependency array remains the same for now
+
+  // Crear un manejador específico para el reset de zoom
+  const handleResetView = useCallback(() => {
+    if (reactFlowInstance) {
+      // Primero reiniciamos el viewport a un estado neutral
+      reactFlowInstance.setViewport({ x: 0, y: 0, zoom: 1 });
+      
+      // Luego ajustamos la vista para ver todos los nodos
+      setTimeout(() => {
+        reactFlowInstance.fitView({
+          padding: 0.2,
+          includeHiddenNodes: false,
+          duration: 500
+        });
+      }, 50);
+    }
   }, [reactFlowInstance]);
 
   return (
@@ -1278,24 +1306,37 @@ const FlowEditorContent = ({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={(params) => {
-            // Conectar los nodos sin añadir propiedades no válidas
             if (onConnect) {
               onConnect(params);
             }
           }}
-          nodeTypes={nodeTypes}
+          nodeTypes={externalNodeTypes} // Pasamos directamente externalNodeTypes
           edgeTypes={edgeTypes}
           onDragOver={onDragOver}
           onDrop={onDrop}
           onNodeDragStop={onNodeDragStop}
           onNodeContextMenu={onNodeContextMenu}
           onPaneClick={onPaneClick}
+          // Eliminamos onMouseDown (antes onPaneMouseDown) 
           onNodesDelete={onNodesDelete}
-          fitView
+          onInit={(instance) => {
+            // No need for fitView here, handled by useEffect
+          }}
+          fitView={false}
+          fitViewOptions={{ 
+            padding: 0.3,
+            includeHiddenNodes: false
+          }}
           snapToGrid={true}
           snapGrid={[10, 10]}
-          minZoom={0.2}
+          minZoom={0.1}
           maxZoom={2}
+          defaultViewport={{ x: 0, y: 0, zoom: 0.8 }} // Ajustar valor inicial de zoom
+          panOnScroll={true}
+          panOnDrag={activeTool !== 'lasso'} // Eliminamos referencia a drawRectangle
+          zoomOnScroll={true}
+          zoomOnPinch={true}
+          zoomOnDoubleClick={true}
           defaultEdgeOptions={{ 
             animated: true,
             style: { 
@@ -1306,7 +1347,6 @@ const FlowEditorContent = ({
           selectionMode={SelectionMode.Partial}
           selectionOnDrag={activeTool === 'lasso'}
           selectNodesOnDrag={activeTool === 'select'}
-          panOnDrag={activeTool !== 'lasso'}
           onSelectionStart={activeTool === 'lasso' ? onSelectionStart : undefined}
           selectionKeyCode={['Shift']}
           multiSelectionKeyCode={['Shift']}
@@ -1319,6 +1359,7 @@ const FlowEditorContent = ({
             ${activeTool === 'lasso' ? 'lasso-active' : ''}
             ${selectionActive ? 'selection-active' : ''}
           `}
+          connectionMode={ConnectionMode.Loose} // Use ConnectionMode enum instead of string
         >
           {/* Top panel with save and sidebar toggle */}
           <Panel position="top-right" className="flex gap-2">
@@ -1377,14 +1418,20 @@ const FlowEditorContent = ({
             >
               <FolderMinusIcon className="w-5 h-5" />
             </button>
+            {/* Eliminamos el botón para dibujar rectángulos */}
           </Panel>
+          
           {/* Selected nodes count indicator */}
           {selectedNodes.length > 0 && (
             <Panel position="bottom-left" className="bg-white/80 dark:bg-gray-800/80 rounded-md shadow p-2">
               {selectedNodes.length} {selectedNodes.length === 1 ? 'nodo' : 'nodos'} seleccionado{selectedNodes.length > 1 ? 's' : ''}
             </Panel>
           )}
-          <Controls />
+          <Controls 
+            showInteractive={false} 
+            // Asignar manejador para el botón de fitView (reset)
+            onFitView={handleResetView}
+          />
           <MiniMap 
             nodeColor={(node: Node) => {
               switch (node.data?.provider) {
@@ -1412,6 +1459,7 @@ const FlowEditorContent = ({
             >
               {(() => {
                 const currentNode = contextMenu.nodeId ? reactFlowInstance.getNode(contextMenu.nodeId) : null;
+                console.log("Rendering context menu for nodeType:", contextMenu.nodeType);
                 return (
                   <>
                     {contextMenu.nodeType === 'group' && (
@@ -1488,6 +1536,8 @@ const FlowEditorContent = ({
                         )}
                       </div>
                     )}
+                    {/* Eliminamos las opciones específicas para nodos tipo rectangle */}
+                    
                     {/* Common actions for all nodes */}
                     <button 
                       className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-red-600 dark:text-red-400"
@@ -1500,6 +1550,7 @@ const FlowEditorContent = ({
               })()}
             </div>
           )}
+          
           {/* Fix the menu floating button for selected nodes */}
           {selectionMenu.visible && selectedNodes.length > 1 && (
             <div 
@@ -1518,6 +1569,7 @@ const FlowEditorContent = ({
             </div>
           )}
         </ReactFlow>
+        
         {/* Selection tool indicator */}
         {activeTool === 'lasso' && (
           <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-full shadow-lg z-50 flex items-center gap-2 border border-white">
@@ -1601,7 +1653,7 @@ const FlowEditorContent = ({
                   groupId={groupViewModal.groupId || ''}
                   initialNodes={groupViewModal.nodes}
                   initialEdges={groupViewModal.edges}
-                  nodeTypes={nodeTypes}
+                  nodeTypes={externalNodeTypes}
                   onClose={() => setGroupViewModal({ isOpen: false, groupId: null, nodes: [], edges: [], groupLabel: 'Grupo', provider: 'generic', nodeChanges: false })}
                 />
               </div>
@@ -1613,13 +1665,41 @@ const FlowEditorContent = ({
   );
 };
 
+// Componente de exportación
 export default function FlowEditor(props: FlowEditorProps) {
-  // Asegurarse de que la altura sea suficiente para visualizar correctamente
   return (
     <div className="w-full h-[700px] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       <ReactFlowProvider>
         <FlowEditorContent {...props} />
       </ReactFlowProvider>
+      <style jsx global>{`
+        /* Ensure group editor nodes are properly centered */
+        .group-view-modal .react-flow__viewport {
+          transition: transform 0.3s ease;
+        }
+        
+        /* Add styles for better node visibility */
+        .group-view-modal-content .react-flow__node {
+          transition: transform 0.3s ease, opacity 0.2s ease;
+        }
+
+        /* Eliminamos el estilo para el cursor en modo dibujo de rectángulo */
+        
+        /* Mejorar estilos para nodos en grupos */
+        .react-flow__node-group {
+          transition: transform 0.2s ease, width 0.3s ease, height 0.3s ease;
+        }
+        
+        /* Optimizar la transición durante el arrastre */
+        .react-flow__node {
+          transition: box-shadow 0.2s ease;
+        }
+        
+        .react-flow__node.dragging {
+          z-index: 10;
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+      `}</style>
     </div>
   );
 }
