@@ -1,4 +1,4 @@
-import { useCallback, useState, useRef, useEffect, useMemo } from 'react';
+import { useCallback, useState, useRef, useEffect, useMemo, JSX } from 'react';
 import ReactFlow, { 
   Background, 
   Controls,
@@ -19,8 +19,9 @@ import ReactFlow, {
   SelectionMode,
   useOnSelectionChange,
   Position, 
-  ConnectionMode, // Add this import
-  ReactFlowInstance, // Añadir esta importación
+  ConnectionMode,
+  ReactFlowInstance,
+  NodeChange, // Add this import for the type
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -83,7 +84,7 @@ const FlowEditorContent = ({
   nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
   resourceCategories = []
-}: FlowEditorProps) => {
+}: FlowEditorProps): JSX.Element => {  // Changed from React.ReactNode to JSX.Element
 
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -311,9 +312,106 @@ const FlowEditorContent = ({
     return newGroupId;
   }, [reactFlowInstance, onNodesChange, reactFlowWrapper]);
 
-  // Function to group selected nodes
+  // Función para calcular el tamaño apropiado para nodos dentro de un grupo
+  const calculateNodeSize = useCallback((groupId: string) => {
+    const group = reactFlowInstance.getNode(groupId);
+    if (!group) return { width: 150, height: 80 }; // Tamaño por defecto
+    
+    const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === groupId);
+    const nodeCount = childNodes.length;
+    
+    if (nodeCount === 0) return { width: 150, height: 80 };
+    
+    // Obtener dimensiones del grupo
+    const groupWidth = (group.style?.width as number) || 300;
+    const groupHeight = (group.style?.height as number) || 200;
+    
+    // Calcular espacio disponible (considerando márgenes)
+    const availableWidth = groupWidth - 60; // 30px de margen en cada lado
+    const availableHeight = groupHeight - 80; // 40px arriba (para header) y 40px abajo
+    
+    // Calcular número óptimo de nodos por fila basado en proporción del grupo
+    const aspect = availableWidth / availableHeight;
+    const rowCount = Math.max(1, Math.round(Math.sqrt(nodeCount / aspect)));
+    const colCount = Math.ceil(nodeCount / rowCount);
+    
+    // Calcular tamaños con margen entre nodos
+    const nodeMargin = 20;
+    let nodeWidth = Math.min(150, (availableWidth / colCount) - nodeMargin);
+    let nodeHeight = Math.min(80, (availableHeight / rowCount) - nodeMargin);
+    
+    // Asegurar tamaño mínimo
+    nodeWidth = Math.max(80, nodeWidth);
+    nodeHeight = Math.max(60, nodeHeight);
+    
+    return { width: nodeWidth, height: nodeHeight };
+  }, [reactFlowInstance]);
+
+  // Función para aplicar posiciones óptimas a nodos dentro de un grupo
+  const optimizeNodesInGroup = useCallback((groupId: string) => {
+    const group = reactFlowInstance.getNode(groupId);
+    if (!group) return;
+    
+    const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === groupId);
+    if (childNodes.length === 0) return;
+    
+    const groupWidth = (group.style?.width as number) || 300;
+    const groupHeight = (group.style?.height as number) || 200;
+    
+    const { width: nodeWidth, height: nodeHeight } = calculateNodeSize(groupId);
+    
+    // Calcular la mejor distribución en filas y columnas
+    const nodeCount = childNodes.length;
+    const aspect = groupWidth / groupHeight;
+    const rowCount = Math.max(1, Math.round(Math.sqrt(nodeCount / aspect)));
+    const colCount = Math.ceil(nodeCount / rowCount);
+    
+    // Definir márgenes y espaciado
+    const horizontalMargin = 30;
+    const verticalMargin = 40; // Más espacio arriba para el header
+    const horizontalSpacing = (groupWidth - (2 * horizontalMargin) - (nodeWidth * colCount)) / Math.max(1, colCount - 1);
+    const verticalSpacing = (groupHeight - (2 * verticalMargin) - (nodeHeight * rowCount)) / Math.max(1, rowCount - 1);
+    
+    // Organizar nodos en una cuadrícula
+    const updatedNodes = reactFlowInstance.getNodes().map(node => {
+      if (node.parentNode !== groupId) return node;
+      
+      // Encontrar el índice del nodo entre los hijos
+      const nodeIndex = childNodes.findIndex(n => n.id === node.id);
+      if (nodeIndex === -1) return node;
+      
+      // Calcular la posición en la cuadrícula
+      const row = Math.floor(nodeIndex / colCount);
+      const col = nodeIndex % colCount;
+      
+      // Calcular la posición exacta
+      const xPos = horizontalMargin + col * (nodeWidth + horizontalSpacing);
+      const yPos = verticalMargin + row * (nodeHeight + verticalSpacing);
+      
+      // Actualizar el nodo con la nueva posición y tamaño
+      return {
+        ...node,
+        position: { x: xPos, y: yPos },
+        style: {
+          ...node.style,
+          width: nodeWidth,
+          height: nodeHeight
+        }
+      };
+    });
+    
+    // Actualizar los nodos
+    reactFlowInstance.setNodes(updatedNodes);
+  }, [reactFlowInstance, calculateNodeSize]);
+
+  // Modificamos groupSelectedNodes para optimizar los nodos dentro del grupo
   const groupSelectedNodes = useCallback(() => {
     console.log("Agrupando nodos seleccionados:", selectedNodes.length);
+    if (selectedNodes.length < 2) {
+      console.warn("Se necesitan al menos 2 nodos para agrupar");
+      return;
+    }
+
     // Verificar que tenemos al menos 2 nodos para agrupar
     if (selectedNodes.length < 2) {
       console.warn("Se necesitan al menos 2 nodos para agrupar");
@@ -412,10 +510,13 @@ const FlowEditorContent = ({
     console.log(`Actualizando flujo con ${updatedNodes.length} nodos + grupo nuevo`);
     reactFlowInstance.setNodes([...updatedNodes, newGroup]);
     
+    // Optimizar la posición de los nodos dentro del grupo
+    setTimeout(() => optimizeNodesInGroup(newGroupId), 50);
+    
     // Clear selection after creating the group
     return newGroupId;
-  }, [selectedNodes, reactFlowInstance]); // Removed setSelectedNodes dependency
-  
+  }, [selectedNodes, reactFlowInstance, optimizeNodesInGroup]);
+
   // Function to ungroup selected groups
   const ungroupNodes = useCallback(() => {
     console.log("Desagrupando nodos seleccionados");
@@ -714,12 +815,17 @@ const FlowEditorContent = ({
         // Add the node to the flow
         onNodesChange?.([{ type: 'add', item: newNode }]);
         setActiveDrag(null);
+        
+        // Si se añadió a un grupo, optimizar layout
+        if (parentNode) {
+          setTimeout(() => optimizeNodesInGroup(parentNode), 50);
+        }
       } catch (error) {
         console.error('Error adding new node:', error);
         setActiveDrag(null);
       }
     },
-    [reactFlowInstance, onNodesChange]
+    [reactFlowInstance, onNodesChange, optimizeNodesInGroup]
   );
   
   // Limpiar arrastre activo cuando termina el arrastre
@@ -938,9 +1044,16 @@ const FlowEditorContent = ({
        document.dispatchEvent(actionEvent);
     }
     
+    // Nueva acción para optimizar el layout de un grupo
+    if (action === 'optimizeGroupLayout' && contextMenu.nodeType === 'group') {
+      optimizeNodesInGroup(contextMenu.nodeId!);
+      setContextMenu(prev => ({...prev, visible: false}));
+      return;
+    }
+    
     // Hide the context menu
     setContextMenu(prev => ({...prev, visible: false}));
-  }, [contextMenu, reactFlowInstance, selectedNodes, startEditingGroupName]);
+  }, [contextMenu, reactFlowInstance, selectedNodes, startEditingGroupName, optimizeNodesInGroup]);
 
   // Handle deletion of nodes and groups properly
   const onNodesDelete = useCallback((nodesToDelete: Node[]) => {
@@ -1262,6 +1375,36 @@ const FlowEditorContent = ({
       }, 50);
     }
   }, [reactFlowInstance]);
+  // Renombrar esta función para evitar conflictos con la prop onNodesChange
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    // Primero llamamos al handler original
+    if (onNodesChange) {
+      onNodesChange(changes);
+    }
+
+    // Buscamos cambios que impliquen añadir un nodo a un grupo
+    changes.forEach(change => {
+      if (change.type === 'select' && change.selected === true) {
+        const node = reactFlowInstance.getNode(change.id);
+        if (node && node.parentNode) {
+          // Si un nodo dentro de un grupo se selecciona, verificamos su posición
+          setTimeout(() => {
+            const parentNode = reactFlowInstance.getNode(node.parentNode!);
+            if (parentNode) {
+              // Si hay muchos nodos en el grupo, optimizamos el espacio
+              const childNodes = reactFlowInstance.getNodes().filter(n => 
+                n.parentNode === parentNode.id
+              );
+              
+              if (childNodes.length >= 4) {
+                optimizeNodesInGroup(parentNode.id);
+              }
+            }
+          }, 0);
+        }
+      }
+    });
+  }, [reactFlowInstance, optimizeNodesInGroup, onNodesChange]); // Usar la prop directamente aquí
 
   return (
     <div className="w-full h-full flex relative">
@@ -1303,7 +1446,7 @@ const FlowEditorContent = ({
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          onNodesChange={onNodesChange}
+          onNodesChange={handleNodesChange} // Usar nuestra función personalizada aquí
           onEdgesChange={onEdgesChange}
           onConnect={(params) => {
             if (onConnect) {
@@ -1502,6 +1645,13 @@ const FlowEditorContent = ({
                           onClick={() => handleContextMenuAction('renameGroup')}
                         >
                           Renombrar grupo
+                        </button>
+                        {/* Añadir botón para optimizar el layout */}
+                        <button 
+                          className="text-left px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
+                          onClick={() => handleContextMenuAction('optimizeGroupLayout')}
+                        >
+                          Organizar nodos
                         </button>
                       </div>
                     )}
