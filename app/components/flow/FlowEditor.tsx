@@ -312,95 +312,112 @@ const FlowEditorContent = ({
     return newGroupId;
   }, [reactFlowInstance, onNodesChange, reactFlowWrapper]);
 
-  // Función para calcular el tamaño apropiado para nodos dentro de un grupo
+  // Mejorar el cálculo para que los nodos nunca sobresalgan, no se solapen y siempre estén dentro del grupo, incluso tras refrescar
   const calculateNodeSize = useCallback((groupId: string) => {
     const group = reactFlowInstance.getNode(groupId);
-    if (!group) return { width: 150, height: 80 }; // Tamaño por defecto
-    
+    if (!group) return { width: 150, height: 80, cols: 1, rows: 1, spacing: 16, headerHeight: 40, horizontalMargin: 20, verticalMargin: 20, minNodeMargin: 16 };
+  
     const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === groupId);
     const nodeCount = childNodes.length;
-    
-    if (nodeCount === 0) return { width: 150, height: 80 };
-    
-    // Obtener dimensiones del grupo
+    if (nodeCount === 0) return { width: 150, height: 80, cols: 1, rows: 1, spacing: 16, headerHeight: 40, horizontalMargin: 20, verticalMargin: 20, minNodeMargin: 16 };
+  
+    // Margins and header
+    const headerHeight = 40;
+    const minNodeMargin = 16;
+    const horizontalMargin = 20;
+    const verticalMargin = 20;
+    const spacing = 16;
     const groupWidth = (group.style?.width as number) || 300;
     const groupHeight = (group.style?.height as number) || 200;
-    
-    // Calcular espacio disponible (considerando márgenes)
-    const availableWidth = groupWidth - 60; // 30px de margen en cada lado
-    const availableHeight = groupHeight - 80; // 40px arriba (para header) y 40px abajo
-    
-    // Calcular número óptimo de nodos por fila basado en proporción del grupo
-    const aspect = availableWidth / availableHeight;
-    const rowCount = Math.max(1, Math.round(Math.sqrt(nodeCount / aspect)));
-    const colCount = Math.ceil(nodeCount / rowCount);
-    
-    // Calcular tamaños con margen entre nodos
-    const nodeMargin = 20;
-    let nodeWidth = Math.min(150, (availableWidth / colCount) - nodeMargin);
-    let nodeHeight = Math.min(80, (availableHeight / rowCount) - nodeMargin);
-    
-    // Asegurar tamaño mínimo
-    nodeWidth = Math.max(80, nodeWidth);
-    nodeHeight = Math.max(60, nodeHeight);
-    
-    return { width: nodeWidth, height: nodeHeight };
+  
+    // Available area for nodes (dejar margen para bordes y separación)
+    const availableWidth = groupWidth - 2 * horizontalMargin;
+    const availableHeight = groupHeight - headerHeight - 2 * verticalMargin;
+  
+    // Buscar la mejor cuadrícula (más cuadrada posible, sin solapamiento)
+    let best = { rows: 1, cols: nodeCount, nodeW: 0, nodeH: 0, area: 0 };
+    for (let cols = 1; cols <= nodeCount; cols++) {
+      const rows = Math.ceil(nodeCount / cols);
+      const totalSpacingX = (cols - 1) * spacing;
+      const totalSpacingY = (rows - 1) * spacing;
+      const nodeW = Math.floor((availableWidth - totalSpacingX) / cols);
+      const nodeH = Math.floor((availableHeight - totalSpacingY) / rows);
+      // Asegura que los nodos no se solapen ni sean demasiado pequeños
+      if (nodeW < 40 || nodeH < 32) continue;
+      // Además, asegura que todos los nodos caben en el área disponible
+      if (cols * nodeW + totalSpacingX > availableWidth + 1) continue;
+      if (rows * nodeH + totalSpacingY > availableHeight + 1) continue;
+      const area = nodeW * nodeH;
+      if (area > best.area) best = { rows, cols, nodeW, nodeH, area };
+    }
+    // Fallback si nada es válido
+    if (best.nodeW === 0 || best.nodeH === 0) {
+      best.nodeW = Math.max(40, Math.floor(availableWidth / nodeCount));
+      best.nodeH = Math.max(32, Math.floor(availableHeight));
+      best.rows = 1;
+      best.cols = nodeCount;
+    }
+  
+    return {
+      width: best.nodeW,
+      height: best.nodeH,
+      cols: best.cols,
+      rows: best.rows,
+      spacing,
+      headerHeight,
+      horizontalMargin,
+      verticalMargin,
+      minNodeMargin
+    };
   }, [reactFlowInstance]);
-
-  // Función para aplicar posiciones óptimas a nodos dentro de un grupo
+  
   const optimizeNodesInGroup = useCallback((groupId: string) => {
     const group = reactFlowInstance.getNode(groupId);
     if (!group) return;
-    
+  
     const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === groupId);
     if (childNodes.length === 0) return;
-    
-    const groupWidth = (group.style?.width as number) || 300;
-    const groupHeight = (group.style?.height as number) || 200;
-    
-    const { width: nodeWidth, height: nodeHeight } = calculateNodeSize(groupId);
-    
-    // Calcular la mejor distribución en filas y columnas
-    const nodeCount = childNodes.length;
-    const aspect = groupWidth / groupHeight;
-    const rowCount = Math.max(1, Math.round(Math.sqrt(nodeCount / aspect)));
-    const colCount = Math.ceil(nodeCount / rowCount);
-    
-    // Definir márgenes y espaciado
-    const horizontalMargin = 30;
-    const verticalMargin = 40; // Más espacio arriba para el header
-    const horizontalSpacing = (groupWidth - (2 * horizontalMargin) - (nodeWidth * colCount)) / Math.max(1, colCount - 1);
-    const verticalSpacing = (groupHeight - (2 * verticalMargin) - (nodeHeight * rowCount)) / Math.max(1, rowCount - 1);
-    
-    // Organizar nodos en una cuadrícula
+  
+    const {
+      width: nodeWidth,
+      height: nodeHeight,
+      cols,
+      spacing,
+      headerHeight,
+      horizontalMargin,
+      verticalMargin
+    } = calculateNodeSize(groupId);
+  
+    // Reordenar nodos por id para que el layout sea determinista y consistente tras refrescar
+    const sortedChildNodes = [...childNodes].sort((a, b) => a.id.localeCompare(b.id));
+  
+    // Posicionar nodos en la cuadrícula, sin solapamiento y sin tocar bordes
     const updatedNodes = reactFlowInstance.getNodes().map(node => {
       if (node.parentNode !== groupId) return node;
-      
-      // Encontrar el índice del nodo entre los hijos
-      const nodeIndex = childNodes.findIndex(n => n.id === node.id);
-      if (nodeIndex === -1) return node;
-      
-      // Calcular la posición en la cuadrícula
-      const row = Math.floor(nodeIndex / colCount);
-      const col = nodeIndex % colCount;
-      
-      // Calcular la posición exacta
-      const xPos = horizontalMargin + col * (nodeWidth + horizontalSpacing);
-      const yPos = verticalMargin + row * (nodeHeight + verticalSpacing);
-      
-      // Actualizar el nodo con la nueva posición y tamaño
+      const idx = sortedChildNodes.findIndex(n => n.id === node.id);
+      const row = Math.floor(idx / cols);
+      const col = idx % cols;
+      // Calcular posición para que haya separación entre nodos y bordes
+      const x = horizontalMargin + col * (nodeWidth + spacing);
+      const y = headerHeight + verticalMargin + row * (nodeHeight + spacing);
+  
       return {
         ...node,
-        position: { x: xPos, y: yPos },
+        position: { x, y },
         style: {
           ...node.style,
           width: nodeWidth,
-          height: nodeHeight
+          height: nodeHeight,
+          overflow: 'visible',
+          whiteSpace: 'normal'
+        },
+        data: {
+          ...node.data,
+          isSmall: false
         }
       };
     });
-    
-    // Actualizar los nodos
+  
     reactFlowInstance.setNodes(updatedNodes);
   }, [reactFlowInstance, calculateNodeSize]);
 
@@ -1849,6 +1866,22 @@ export default function FlowEditor(props: FlowEditorProps) {
           z-index: 10;
           box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
         }
+
+        /* ...existing code... */
+        .react-flow__node .node-label {
+          white-space: normal !important;
+          overflow: visible !important;
+          text-overflow: unset !important;
+          word-break: break-word !important;
+          font-size: 13px !important;
+          line-height: 1.3 !important;
+          padding: 2px 4px !important;
+          text-align: center !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          display: block !important;
+        }
+        /* ...existing code... */
       `}</style>
     </div>
   );
