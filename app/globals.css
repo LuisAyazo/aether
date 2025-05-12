@@ -657,6 +657,17 @@ button.bg-blue-600 {
   z-index: 10 !important;
 }
 
+/* Permitir que el fondo de .area-background tenga prioridad */
+.react-flow__node[data-area="true"] .area-background {
+  background-color: unset !important;
+}
+.area-background {
+  background-color: var(--area-bg, inherit) !important;
+  width: 100%;
+  height: 100%;
+  pointer-events: all !important;
+}
+
 /* Permitir que el selector personalizado sea más visible */
 .custom-selection-overlay {
   position: fixed;
@@ -910,4 +921,30 @@ div[data-type="group"]:hover .group-controls {
 @keyframes scaleIn {
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+/* Estilos específicos para áreas de fondo */
+.react-flow__node[data-area="true"] {
+  background-color: transparent; /* Inicialmente transparente */
+  overflow: visible !important; 
+  z-index: 0 !important; /* Colocarlo debajo de otros elementos pero encima del canvas */
+}
+
+/* Asegurar que el contenido dentro del área tenga el fondo correcto */
+.area-background {
+  background-color: inherit !important; /* Hereda el color de fondo establecido en el estilo inline */
+  width: 100%;
+  height: 100%;
+  pointer-events: all !important;
+}
+
+/* Asegurar que las áreas no sean afectadas por otras reglas CSS que eliminan fondos */
+.react-flow__node[data-area="true"] > div {
+  background-color: inherit !important;
+  border-color: inherit !important;
+}
+
+/* Destacar áreas seleccionadas */
+.react-flow__node[data-area="true"].selected {
+  z-index: 1 !important; /* Un poco más alto cuando se selecciona, pero aún por debajo de otros nodos */
 }

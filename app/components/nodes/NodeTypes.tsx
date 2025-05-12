@@ -1,4 +1,5 @@
 import NodeGroup from './NodeGroup';
+import AreaBackground from './AreaBackground';
 
 // Para los otros tipos de nodos, vamos a crear componentes simples directamente aquí
 // Podemos mover estos a archivos independientes más adelante
@@ -128,7 +129,8 @@ const nodeTypes = {
   rds: RDSNode,
   compute: ComputeNode,
   generic: GenericNode,
-  group: NodeGroup
+  group: NodeGroup,
+  areaBackground: AreaBackground
 };
 
 export default nodeTypes;

@@ -30,6 +30,8 @@ import {
   Square3Stack3DIcon,
   FolderPlusIcon, 
   FolderMinusIcon,
+  ArrowsRightLeftIcon,
+  SwatchIcon
   // Eliminamos la importación de StopIcon que se usaba para el botón de dibujar forma
 } from '@heroicons/react/24/outline';
 import GroupFlowEditor from './GroupFlowEditor';
@@ -62,7 +64,7 @@ interface ContextMenu {
 }
 
 // Add tool types - Eliminamos drawRectangle
-type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso';
+type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea';
 
 interface FlowEditorProps {
   nodes: Node[];
@@ -1423,6 +1425,669 @@ const FlowEditorContent = ({
     });
   }, [reactFlowInstance, optimizeNodesInGroup, onNodesChange]); // Usar la prop directamente aquí
 
+  // Estado para la herramienta de conexión entre nodos
+  const [connectionTool, setConnectionTool] = useState<{
+    isActive: boolean;
+    sourceNodeId: string | null;
+  }>({
+    isActive: false,
+    sourceNodeId: null
+  });
+  
+  // Manejador para cuando se activa la herramienta de flecha de conexión
+  useEffect(() => {
+    if (activeTool === 'connectNodes') {
+      // Activar el modo de conexión
+      setConnectionTool({
+        isActive: true,
+        sourceNodeId: null
+      });
+      
+      // Cambiar el cursor para indicar que estamos en modo conexión
+      document.body.classList.add('connection-mode');
+      
+      // Hacemos los nodos seleccionables para poder elegir origen y destino
+      reactFlowInstance.setNodes(nodes =>
+        nodes.map(node => ({
+          ...node,
+          selectable: true
+        }))
+      );
+    } else {
+      // Desactivar el modo de conexión cuando se cambia a otra herramienta
+      setConnectionTool({
+        isActive: false,
+        sourceNodeId: null
+      });
+      document.body.classList.remove('connection-mode');
+    }
+  }, [activeTool, reactFlowInstance]);
+
+  // Estado para la herramienta de dibujo de área
+  const [areaTool, setAreaTool] = useState<{
+    isDrawing: boolean;
+    startPos: { x: number; y: number } | null;
+    areaSize: { width: number; height: number } | null;
+    backgroundColor: string;
+    borderColor: string;
+    borderStyle: string;
+  }>({
+    isDrawing: false,
+    startPos: null,
+    areaSize: null,
+    backgroundColor: 'rgba(135, 206, 250, 0.2)', // Color por defecto
+    borderColor: '#3b82f6',
+    borderStyle: '2px solid'
+  });
+  
+  // Manejador para cuando se activa la herramienta de dibujo de área
+  useEffect(() => {
+    if (activeTool !== 'drawArea') return;
+    
+    // Cambiar el cursor para indicar que estamos en modo dibujo
+    document.body.classList.add('draw-area-mode');
+    
+    let isDrawing = false;
+    let startPos: { x: number; y: number } | null = null;
+    
+    // Colores predefinidos para la paleta
+    const predefinedColors = [
+      { bg: 'rgba(59, 130, 246, 0.15)', border: '#3b82f6', name: 'Azul' },
+      { bg: 'rgba(16, 185, 129, 0.15)', border: '#10b981', name: 'Verde' },
+      { bg: 'rgba(249, 115, 22, 0.15)', border: '#f97316', name: 'Naranja' },
+      { bg: 'rgba(236, 72, 153, 0.15)', border: '#ec4899', name: 'Rosa' },
+      { bg: 'rgba(139, 92, 246, 0.15)', border: '#8b5cf6', name: 'Púrpura' },
+      { bg: 'rgba(249, 168, 212, 0.15)', border: '#f9a8d4', name: 'Rosa claro' },
+      { bg: 'rgba(251, 191, 36, 0.15)', border: '#fbbf24', name: 'Ámbar' },
+      { bg: 'rgba(156, 163, 175, 0.15)', border: '#9ca3af', name: 'Gris' }
+    ];
+    
+    // Desactivar cualquier evento de arrastre estándar de ReactFlow mientras estamos en modo dibujo
+    const disableDragging = () => {
+      document.body.classList.add('drawing-mode-active');
+    };
+    
+    const enableDragging = () => {
+      document.body.classList.remove('drawing-mode-active');
+    };
+    
+    // Llamar a la función para deshabilitar el arrastre al activar el modo dibujo
+    disableDragging();
+    
+    const handleMouseDown = (event: MouseEvent) => {
+      // Verificar que es el botón izquierdo y que se está presionando Shift
+      if (event.button !== 0 || !event.shiftKey) return;
+      
+      // Verificar que el clic sea en el canvas y no en un nodo u otro elemento interactivo
+      const target = event.target as HTMLElement;
+      if (!target.closest('.react-flow__pane')) return;
+      
+      // Prevenir comportamiento por defecto para evitar el arrastre
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Eliminar cualquier área temporal anterior
+      reactFlowInstance.setNodes(nodes => 
+        nodes.filter(node => node.id !== 'temp-area')
+      );
+      
+      // Obtener la posición inicial en coordenadas del flujo
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      });
+      
+      // Iniciar el dibujo
+      isDrawing = true;
+      startPos = position;
+      
+      // Color por defecto para el área (azul claro)
+      const defaultBgColor = 'rgba(59, 130, 246, 0.15)';
+      const defaultBorderColor = '#3b82f6';
+      
+      // Crear un nodo temporal para mostrar el área mientras se dibuja
+      const tempNode: Node = {
+        id: 'temp-area',
+        type: 'areaBackground',  // Usar nuestro nuevo tipo dedicado para áreas
+        position,
+        data: {
+          label: 'Nueva área',
+          isTemp: true,
+          backgroundColor: 'rgba(59, 130, 246, 0.15)',
+          borderColor: '#3b82f6'
+        },
+        style: {
+          width: 1,
+          height: 1,
+          zIndex: -1,
+          pointerEvents: 'none' as const
+        },
+        selectable: false,
+        draggable: false,
+        className: 'temp-drawing-node'
+      };
+      
+      reactFlowInstance.setNodes(nodes => [...nodes, tempNode]);
+      
+      // Capturar el ratón para asegurar que detectamos el movimiento incluso fuera del canvas
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    };
+    
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!isDrawing || !startPos) return;
+      
+      // Prevenir comportamiento por defecto
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Obtener la posición actual en coordenadas del flujo
+      const currentPos = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      });
+      
+      // Calcular tamaño del área
+      const width = Math.abs(currentPos.x - startPos.x);
+      const height = Math.abs(currentPos.y - startPos.y);
+      
+      // Calcular posición ajustada si el arrastre es hacia la izquierda o arriba
+      const x = Math.min(startPos.x, currentPos.x);
+      const y = Math.min(startPos.y, currentPos.y);
+      
+      // Actualizar el nodo temporal
+      reactFlowInstance.setNodes(nodes => 
+        nodes.map(node => {
+          if (node.id === 'temp-area') {
+            return {
+              ...node,
+              position: { x, y },
+              style: {
+                ...node.style,
+                width: Math.max(50, width), // Asegurar un ancho mínimo
+                height: Math.max(50, height) // Asegurar un alto mínimo
+              }
+            };
+          }
+          return node;
+        })
+      );
+    };
+    
+    const handleMouseUp = (event: MouseEvent) => {
+      if (!isDrawing || !startPos) {
+        // Limpiar los event listeners incluso si no estamos dibujando
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        return;
+      }
+      
+      // Prevenir comportamiento por defecto
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Obtener el nodo temporal
+      const tempNode = reactFlowInstance.getNode('temp-area');
+      
+      // Limpiar los event listeners
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      
+      // Eliminar el nodo temporal
+      reactFlowInstance.setNodes(nodes => 
+        nodes.filter(node => node.id !== 'temp-area')
+      );
+      
+      if (!tempNode) {
+        isDrawing = false;
+        startPos = null;
+        return;
+      }
+      
+      // Verificar que el área tenga un tamaño mínimo
+      const width = tempNode.style?.width as number || 0;
+      const height = tempNode.style?.height as number || 0;
+      
+      if (width < 50 || height < 50) {
+        console.log("Área demasiado pequeña, ignorando");
+        isDrawing = false;
+        startPos = null;
+        return;
+      }
+      
+      // Crear el área final
+      const timestamp = Date.now();
+      const areaId = `area-${timestamp}`;
+      
+      // Crear diálogo modal para seleccionar color
+      const modalOverlay = document.createElement('div');
+      modalOverlay.style.position = 'fixed';
+      modalOverlay.style.top = '0';
+      modalOverlay.style.left = '0';
+      modalOverlay.style.width = '100%';
+      modalOverlay.style.height = '100%';
+      modalOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+      modalOverlay.style.zIndex = '9999';
+      modalOverlay.style.display = 'flex';
+      modalOverlay.style.alignItems = 'center';
+      modalOverlay.style.justifyContent = 'center';
+      
+      const modalContent = document.createElement('div');
+      modalContent.style.background = 'white';
+      modalContent.style.padding = '20px';
+      modalContent.style.borderRadius = '10px';
+      modalContent.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+      modalContent.style.width = '400px';
+      modalContent.style.maxWidth = '90%';
+      
+      const modalHeader = document.createElement('div');
+      modalHeader.style.marginBottom = '15px';
+      
+      const modalTitle = document.createElement('h3');
+      modalTitle.textContent = 'Personalizar área';
+      modalTitle.style.fontSize = '18px';
+      modalTitle.style.fontWeight = 'bold';
+      modalTitle.style.margin = '0 0 5px 0';
+      
+      const modalInstructions = document.createElement('p');
+      modalInstructions.textContent = 'Selecciona un color y agrega un nombre para el área';
+      modalInstructions.style.margin = '0';
+      modalInstructions.style.fontSize = '14px';
+      modalInstructions.style.color = '#666';
+      
+      modalHeader.appendChild(modalTitle);
+      modalHeader.appendChild(modalInstructions);
+      modalContent.appendChild(modalHeader);
+      
+      // Campo para nombre
+      const nameLabel = document.createElement('label');
+      nameLabel.textContent = 'Nombre:';
+      nameLabel.style.display = 'block';
+      nameLabel.style.marginBottom = '5px';
+      nameLabel.style.fontWeight = '500';
+      
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = 'Nueva área';
+      nameInput.style.width = '100%';
+      nameInput.style.padding = '8px';
+      nameInput.style.borderRadius = '4px';
+      nameInput.style.border = '1px solid #ccc';
+      nameInput.style.marginBottom = '15px';
+      
+      modalContent.appendChild(nameLabel);
+      modalContent.appendChild(nameInput);
+      
+      // Paleta de colores
+      const colorLabel = document.createElement('label');
+      colorLabel.textContent = 'Color:';
+      colorLabel.style.display = 'block';
+      colorLabel.style.marginBottom = '10px';
+      colorLabel.style.fontWeight = '500';
+      modalContent.appendChild(colorLabel);
+      
+      const colorGrid = document.createElement('div');
+      colorGrid.style.display = 'grid';
+      colorGrid.style.gridTemplateColumns = 'repeat(4, 1fr)';
+      colorGrid.style.gap = '10px';
+      colorGrid.style.marginBottom = '20px';
+      
+      let selectedColor = predefinedColors[0];
+      
+      predefinedColors.forEach(color => {
+        const colorItem = document.createElement('div');
+        colorItem.style.width = '100%';
+        colorItem.style.height = '40px';
+        colorItem.style.backgroundColor = color.bg;
+        colorItem.style.border = `2px solid ${color.border}`;
+        colorItem.style.borderRadius = '4px';
+        colorItem.style.cursor = 'pointer';
+        colorItem.style.transition = 'transform 0.1s';
+        colorItem.title = color.name;
+        
+        // Añadir borde para el color seleccionado por defecto
+        if (color === predefinedColors[0]) {
+          colorItem.style.outline = '3px solid #3b82f6';
+        }
+        
+        colorItem.addEventListener('click', () => {
+          // Quitar selección anterior
+          document.querySelectorAll('.color-item-selected').forEach(el => {
+            (el as HTMLElement).style.outline = 'none';
+            el.classList.remove('color-item-selected');
+          });
+          
+          // Aplicar selección
+          colorItem.style.outline = `3px solid ${color.border}`;
+          colorItem.classList.add('color-item-selected');
+          selectedColor = color;
+        });
+        
+        colorGrid.appendChild(colorItem);
+      });
+      
+      modalContent.appendChild(colorGrid);
+      
+      // Botones
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.display = 'flex';
+      buttonContainer.style.justifyContent = 'flex-end';
+      buttonContainer.style.gap = '10px';
+      
+      const cancelButton = document.createElement('button');
+      cancelButton.textContent = 'Cancelar';
+      cancelButton.style.padding = '8px 16px';
+      cancelButton.style.border = '1px solid #ddd';
+      cancelButton.style.borderRadius = '4px';
+      cancelButton.style.backgroundColor = '#f9f9f9';
+      cancelButton.style.cursor = 'pointer';
+      
+      const confirmButton = document.createElement('button');
+      confirmButton.textContent = 'Guardar';
+      confirmButton.style.padding = '8px 16px';
+      confirmButton.style.border = 'none';
+      confirmButton.style.borderRadius = '4px';
+      confirmButton.style.backgroundColor = '#3b82f6';
+      confirmButton.style.color = 'white';
+      confirmButton.style.cursor = 'pointer';
+      
+      buttonContainer.appendChild(cancelButton);
+      buttonContainer.appendChild(confirmButton);
+      modalContent.appendChild(buttonContainer);
+      
+      modalOverlay.appendChild(modalContent);
+      document.body.appendChild(modalOverlay);
+      
+      // Enfocar automáticamente el campo de texto
+      setTimeout(() => nameInput.focus(), 100);
+      
+      // Manejar botones
+      cancelButton.addEventListener('click', () => {
+        document.body.removeChild(modalOverlay);
+        isDrawing = false;
+        startPos = null;
+      });
+      
+      confirmButton.addEventListener('click', () => {
+        const areaName = nameInput.value.trim() || 'Nueva área';
+        const backgroundColor = selectedColor.bg;
+        const borderColor = selectedColor.border;
+        
+        // Crear el nodo de área con los datos seleccionados - CORREGIDO
+        const areaNode: Node = {
+          id: areaId,
+          type: 'areaBackground',  // CORRECCIÓN: Usar el tipo correcto registrado en nodeTypes
+          position: tempNode.position,
+          data: {
+            label: areaName,
+            isArea: true,
+            backgroundColor,
+            borderColor,
+            border: `2px solid ${borderColor}`  // Añadido para que AreaBackground lo reciba correctamente
+          },
+          style: {
+            width,
+            height,
+            zIndex: -1,  // Forzar que esté por debajo de otros elementos
+            pointerEvents: 'all'  // Permitir interacción con el área
+          },
+          draggable: true,
+          selectable: true
+        };
+        
+        // Añadir el nodo de área al flujo
+        onNodesChange?.([{ type: 'add', item: areaNode }]);
+        
+        // Eliminar el diálogo
+        document.body.removeChild(modalOverlay);
+        
+        // Resetear estado
+        isDrawing = false;
+        startPos = null;
+        
+        // Volver al modo selección
+        setTimeout(() => {
+          handleToolClick('select');
+        }, 100);
+      });
+    };
+    
+    // Agregar listeners para los eventos del ratón directamente a la ventana
+    window.addEventListener('mousedown', handleMouseDown);
+    
+    // Limpieza al desmontar o cambiar de herramienta
+    return () => {
+      window.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      
+      // Eliminar cualquier nodo temporal
+      reactFlowInstance.setNodes(nodes => 
+        nodes.filter(node => node.id !== 'temp-area')
+      );
+      
+      // Volver a habilitar el arrastre del canvas
+      enableDragging();
+      
+      // Quitar la clase de modo dibujo
+      document.body.classList.remove('draw-area-mode');
+    };
+  }, [activeTool, reactFlowInstance, onNodesChange, handleToolClick]);
+
+  // Manejador para el clic en nodos cuando la herramienta de conexión está activa
+  useEffect(() => {
+    if (activeTool !== 'connectNodes' || !connectionTool.isActive) return;
+
+    const handleNodeClick = (event: MouseEvent) => {
+      const target = event.target as Element;
+      const nodeElement = target.closest('.react-flow__node');
+      
+      if (!nodeElement) return;
+      
+      const nodeId = nodeElement.getAttribute('data-id');
+      if (!nodeId) return;
+      
+      // Si no tenemos un nodo origen seleccionado, éste será el origen
+      if (!connectionTool.sourceNodeId) {
+        // Cambiar el estilo del nodo seleccionado para indicar que es el origen
+        reactFlowInstance.setNodes(nodes => 
+          nodes.map(node => ({
+            ...node,
+            data: {
+              ...node.data,
+              isConnectionSource: node.id === nodeId
+            },
+            style: {
+              ...node.style,
+              outline: node.id === nodeId ? '2px solid #f97316' : undefined,
+              zIndex: node.id === nodeId ? 1000 : node.style?.zIndex
+            }
+          }))
+        );
+        
+        // Actualizar el estado
+        setConnectionTool({
+          ...connectionTool,
+          sourceNodeId: nodeId
+        });
+      } else {
+        // Ya tenemos un nodo origen, éste será el destino
+        // Evitar autoconexión
+        if (nodeId === connectionTool.sourceNodeId) {
+          return; // No hacemos nada si intenta conectar el mismo nodo
+        }
+        
+        // Mostrar un diálogo para seleccionar el estilo de línea
+        const edgeStyleOptions = [
+          { name: 'Línea sólida', value: 'solid', stroke: 'solid', animation: false },
+          { name: 'Línea punteada', value: 'dashed', stroke: 'dashed', animation: false },
+          { name: 'Línea con puntos', value: 'dotted', stroke: 'dotted', animation: false },
+          { name: 'Línea animada', value: 'animated', stroke: 'solid', animation: true }
+        ];
+        
+        // Crear un elemento DOM para el diálogo de selección
+        const styleDialog = document.createElement('div');
+        styleDialog.style.position = 'fixed';
+        styleDialog.style.left = '50%';
+        styleDialog.style.top = '50%';
+        styleDialog.style.transform = 'translate(-50%, -50%)';
+        styleDialog.style.background = 'white';
+        styleDialog.style.padding = '20px';
+        styleDialog.style.borderRadius = '8px';
+        styleDialog.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        styleDialog.style.zIndex = '10000';
+        styleDialog.style.minWidth = '250px';
+        
+        // Título
+        const title = document.createElement('h3');
+        title.textContent = 'Seleccionar estilo de línea';
+        title.style.margin = '0 0 15px 0';
+        title.style.fontWeight = 'bold';
+        styleDialog.appendChild(title);
+        
+        // Crear opciones
+        edgeStyleOptions.forEach(option => {
+          const optionElement = document.createElement('div');
+          optionElement.style.padding = '8px 12px';
+          optionElement.style.marginBottom = '4px';
+          optionElement.style.cursor = 'pointer';
+          optionElement.style.borderRadius = '4px';
+          optionElement.style.display = 'flex';
+          optionElement.style.alignItems = 'center';
+          optionElement.onmouseover = () => {
+            optionElement.style.backgroundColor = '#f3f4f6';
+          };
+          optionElement.onmouseout = () => {
+            optionElement.style.backgroundColor = 'transparent';
+          };
+          
+          // Previsualización de la línea
+          const linePreview = document.createElement('div');
+          linePreview.style.width = '40px';
+          linePreview.style.height = '2px';
+          linePreview.style.backgroundColor = '#f97316';
+          linePreview.style.marginRight = '10px';
+          
+          if (option.stroke === 'dashed') {
+            linePreview.style.borderTop = '2px dashed #f97316';
+            linePreview.style.backgroundColor = 'transparent';
+          } else if (option.stroke === 'dotted') {
+            linePreview.style.borderTop = '2px dotted #f97316';
+            linePreview.style.backgroundColor = 'transparent';
+          }
+          
+          optionElement.appendChild(linePreview);
+          
+          const optionText = document.createElement('span');
+          optionText.textContent = option.name;
+          optionElement.appendChild(optionText);
+          
+          optionElement.onclick = () => {
+            // Eliminar el diálogo
+            document.body.removeChild(styleDialog);
+            
+            // Crear la conexión con el estilo seleccionado
+            if (onConnect) {
+              // Crear objeto de conexión
+              const connection: Connection = {
+                source: connectionTool.sourceNodeId!,
+                target: nodeId,
+                sourceHandle: null,
+                targetHandle: null
+              };
+              
+              // Aplicar estilos según la opción seleccionada
+              const edgeParams = {
+                animated: option.animation,
+                style: { 
+                  strokeWidth: 2,
+                  stroke: '#f97316',
+                  strokeDasharray: option.stroke === 'dashed' ? '5 5' : option.stroke === 'dotted' ? '2 2' : undefined
+                },
+                markerEnd: {
+                  type: 'arrowclosed',
+                  color: '#f97316',
+                  width: 15,
+                  height: 15
+                }
+              };
+              
+              // Usar la función de conexión reactflow con parámetros adicionales
+              const edge = {
+                ...connection,
+                ...edgeParams
+              };
+              
+              onConnect(connection);
+              
+              // Modificar el último edge añadido para aplicar los estilos
+              setTimeout(() => {
+                reactFlowInstance.setEdges((edges) => {
+                  return edges.map((e, index) => {
+                    // Verificar si es el edge recién añadido (último elemento)
+                    if (index === edges.length - 1 && 
+                        e.source === connectionTool.sourceNodeId &&
+                        e.target === nodeId) {
+                      return {
+                        ...e,
+                        animated: option.animation,
+                        style: {
+                          ...e.style,
+                          strokeWidth: 2,
+                          stroke: '#f97316',
+                          strokeDasharray: option.stroke === 'dashed' ? '5 5' : option.stroke === 'dotted' ? '2 2' : undefined
+                        },
+                        markerEnd: {
+                          type: 'arrowclosed',
+                          color: '#f97316',
+                          width: 15,
+                          height: 15
+                        }
+                      } as Edge;
+                    }
+                    return e;
+                  });
+                });
+              }, 50);
+            }
+            
+            // Resetear el estado del nodo origen
+            reactFlowInstance.setNodes(nodes => 
+              nodes.map(node => ({
+                ...node,
+                data: {
+                  ...node.data,
+                  isConnectionSource: false
+                },
+                style: {
+                  ...node.style,
+                  outline: undefined,
+                  zIndex: node.style?.zIndex === 1000 && node.id === connectionTool.sourceNodeId 
+                    ? undefined 
+                    : node.style?.zIndex
+                }
+              }))
+            );
+            
+            // Volver automáticamente al modo selección
+            handleToolClick('select');
+          };
+          
+          styleDialog.appendChild(optionElement);
+        });
+        
+        document.body.appendChild(styleDialog);
+      }
+    };
+    
+    // Agregar listener para los clics en nodos
+    document.addEventListener('click', handleNodeClick);
+    
+    return () => {
+      document.removeEventListener('click', handleNodeClick);
+    };
+  }, [activeTool, connectionTool, reactFlowInstance, onConnect, handleToolClick]);
+
   return (
     <div className="w-full h-full flex relative">
       {/* Sidebar */}
@@ -1541,14 +2206,14 @@ const FlowEditorContent = ({
           <Panel position="top-left" className="flex flex-col gap-2 p-2 bg-white/80 dark:bg-gray-800/80 rounded-md shadow">
             <button 
               onClick={() => handleToolClick('select')}
-              className={`p-2 rounded-md ${activeTool === 'select' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+              className={`p-2 rounded-md ${activeTool === 'select' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
               title="Seleccionar (click)"
             >
               <CursorArrowRaysIcon className="w-5 h-5" />
             </button>
             <button 
               onClick={() => handleToolClick('lasso')}
-              className={`p-2 rounded-md ${activeTool === 'lasso' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+              className={`p-2 rounded-md ${activeTool === 'lasso' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
               title="Selección múltiple (área)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1557,14 +2222,14 @@ const FlowEditorContent = ({
             </button>
             <button 
               onClick={() => handleToolClick('createGroup')}
-              className={`p-2 rounded-md ${activeTool === 'createGroup' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+              className={`p-2 rounded-md ${activeTool === 'createGroup' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
               title="Crear grupo vacío"
             >
               <Square2StackIcon className="w-5 h-5" />
             </button>
             <button 
               onClick={() => handleToolClick('group')}
-              className={`p-2 rounded-md ${activeTool === 'group' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'} ${selectedNodes.length < 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`p-2 rounded-md ${activeTool === 'group' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'} ${selectedNodes.length < 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
               title="Agrupar nodos seleccionados"
               disabled={selectedNodes.length < 1}
             >
@@ -1572,13 +2237,21 @@ const FlowEditorContent = ({
             </button>
             <button 
               onClick={() => handleToolClick('ungroup')}
-              className={`p-2 rounded-md ${activeTool === 'ungroup' ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'} ${!selectedNodes.some(n => n.type === 'group') ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`p-2 rounded-md ${activeTool === 'ungroup' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'} ${!selectedNodes.some(n => n.type === 'group') ? 'opacity-50 cursor-not-allowed' : ''}`}
               title="Desagrupar nodos"
               disabled={!selectedNodes.some(n => n.type === 'group')}
             >
               <FolderMinusIcon className="w-5 h-5" />
             </button>
-            {/* Eliminamos el botón para dibujar rectángulos */}
+            {/* Nueva herramienta para crear conexiones entre nodos */}
+            <button 
+              onClick={() => handleToolClick('connectNodes')}
+              className={`p-2 rounded-md ${activeTool === 'connectNodes' ? 'bg-orange-500 text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+              title="Conectar nodos (flechas)"
+            >
+              <ArrowsRightLeftIcon className="w-5 h-5" />
+            </button>
+            {/* Eliminado el botón de área visual */}
           </Panel>
           
           {/* Selected nodes count indicator */}
@@ -1850,7 +2523,15 @@ export default function FlowEditor(props: FlowEditorProps) {
           transition: transform 0.3s ease, opacity 0.2s ease;
         }
 
-        /* Eliminamos el estilo para el cursor en modo dibujo de rectángulo */
+        /* Estilo para el cursor en modo dibujo de área */
+        .draw-area-mode .react-flow__pane {
+          cursor: crosshair !important;
+        }
+        
+        /* Estilo para el cursor en modo conexión */
+        .connection-mode .react-flow__pane {
+          cursor: pointer !important;
+        }
         
         /* Mejorar estilos para nodos en grupos */
         .react-flow__node-group {
