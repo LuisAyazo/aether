@@ -22,6 +22,7 @@ import ReactFlow, {
   ConnectionMode,
   ReactFlowInstance,
   NodeChange, // Add this import for the type
+  Viewport,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -36,6 +37,7 @@ import {
 } from '@heroicons/react/24/outline';
 import GroupFlowEditor from './GroupFlowEditor';
 import React from 'react';
+import { Diagram } from '@/app/services/diagramService';
 
 interface ResourceCategory {
   name: string;
@@ -67,26 +69,47 @@ interface ContextMenu {
 type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea';
 
 interface FlowEditorProps {
-  nodes: Node[];
-  edges: Edge[];
+  // Props existentes
+  nodes?: Node[];
+  edges?: Edge[];
   onNodesChange?: OnNodesChange;
   onEdgesChange?: OnEdgesChange;
   onConnect?: OnConnect;
   nodeTypes?: NodeTypes;
   edgeTypes?: EdgeTypes;
   resourceCategories?: ResourceCategory[];
+  
+  // Nuevas props para compatibilidad con la página de diagrama
+  initialNodes?: Node[];
+  initialEdges?: Edge[];
+  initialViewport?: Viewport;
+  onSave?: (diagramData: any) => void;
+  
+  // Props que se pasan desde la página de diagrama
+  companyId?: string;
+  environmentId?: string;
+  diagramId?: string;
+  initialDiagram?: Diagram;
 }
 
 const FlowEditorContent = ({ 
-  nodes, 
-  edges, 
+  nodes: propNodes, 
+  edges: propEdges, 
+  initialNodes = [], 
+  initialEdges = [],
+  initialViewport,
   onNodesChange, 
   onEdgesChange, 
   onConnect,
+  onSave,
   nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
   resourceCategories = []
 }: FlowEditorProps): JSX.Element => {  // Changed from React.ReactNode to JSX.Element
+
+  // Usar los nodos iniciales o los proporcionados directamente
+  const [nodes, setNodes] = useState<Node[]>(propNodes || initialNodes);
+  const [edges, setEdges] = useState<Edge[]>(propEdges || initialEdges);
 
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -106,6 +129,38 @@ const FlowEditorContent = ({
     nodeId: null,
     nodeType: null
   });
+
+  // Actualizar nodos y bordes cuando cambian las props
+  useEffect(() => {
+    if (propNodes) setNodes(propNodes);
+    else if (initialNodes.length > 0) setNodes(initialNodes);
+  }, [propNodes, initialNodes]);
+
+  useEffect(() => {
+    if (propEdges) setEdges(propEdges);
+    else if (initialEdges.length > 0) setEdges(initialEdges);
+  }, [propEdges, initialEdges]);
+
+  // Aplicar viewport inicial si está disponible
+  useEffect(() => {
+    if (initialViewport && reactFlowInstance) {
+      setTimeout(() => {
+        reactFlowInstance.setViewport(initialViewport);
+      }, 100);
+    }
+  }, [initialViewport, reactFlowInstance]);
+
+  // Guardar automáticamente los cambios cuando cambian los nodos o bordes
+  useEffect(() => {
+    if (onSave && reactFlowInstance) {
+      const saveTimeout = setTimeout(() => {
+        const flow = reactFlowInstance.toObject();
+        onSave(flow);
+      }, 1000); // Esperar 1 segundo antes de guardar para evitar guardar demasiado frecuentemente
+
+      return () => clearTimeout(saveTimeout);
+    }
+  }, [nodes, edges, onSave, reactFlowInstance]);
 
   // Añadir estado para edición de nombre de grupo
   const [editingGroup, setEditingGroup] = useState<{
@@ -902,14 +957,6 @@ const FlowEditorContent = ({
           n.id === node.id ? { ...n, position: newPos } : n
         )
       );
-    }
-  }, [reactFlowInstance]);
-
-  const onSave = useCallback(() => {
-    if (reactFlowInstance) {
-      const flow = reactFlowInstance.toObject();
-      localStorage.setItem('savedFlow', JSON.stringify(flow));
-      alert('Diagrama guardado correctamente');
     }
   }, [reactFlowInstance]);
 
@@ -2507,8 +2554,11 @@ const FlowEditorContent = ({
 
 // Componente de exportación
 export default function FlowEditor(props: FlowEditorProps) {
+  const { initialDiagram } = props;
+  
+  // Envolver ReactFlowProvider alrededor del contenido con las props adecuadas
   return (
-    <div className="w-full h-[700px] border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div className="w-full h-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
       <ReactFlowProvider>
         <FlowEditorContent {...props} />
       </ReactFlowProvider>
@@ -2548,7 +2598,7 @@ export default function FlowEditor(props: FlowEditorProps) {
           box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
         }
 
-        /* ...existing code... */
+        /* Mejorar la visibilidad de las etiquetas de los nodos */
         .react-flow__node .node-label {
           white-space: normal !important;
           overflow: visible !important;
@@ -2562,7 +2612,11 @@ export default function FlowEditor(props: FlowEditorProps) {
           max-width: 100% !important;
           display: block !important;
         }
-        /* ...existing code... */
+        
+        /* Asegurar que el sidebar se muestre correctamente */
+        .w-64 {
+          width: 16rem !important;
+        }
       `}</style>
     </div>
   );
