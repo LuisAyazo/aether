@@ -38,6 +38,7 @@ import {
 import GroupFlowEditor from './GroupFlowEditor';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
+import { CustomNode, CustomEdge } from '@/app/utils/customTypes';
 
 interface ResourceCategory {
   name: string;
@@ -397,6 +398,17 @@ const FlowEditorContent = ({
 
     // Add the group to the flow
     onNodesChange?.([{ type: 'add', item: newGroup }]);
+    
+    // Notify about node addition - for node optimization systems
+    setTimeout(() => {
+      const event = new CustomEvent('nodesChanged', {
+        detail: { 
+          action: 'nodeAdded',
+          nodeIds: [newGroupId]
+        }
+      });
+      document.dispatchEvent(event);
+    }, 100);
     
     return newGroupId;
   }, [reactFlowInstance, onNodesChange, reactFlowWrapper]);
@@ -940,29 +952,80 @@ const FlowEditorContent = ({
   };
 
   // Función para verificar y actualizar la posición de los nodos cuando se mueven
-  const onNodeDragStop = useCallback((event: React.MouseEvent, node: Node) => {
-    if (!node.parentNode) return; // Si no está dentro de un grupo, no hacer nada
+  const onNodeDragStop = useCallback<NodeMouseHandler>((event: React.MouseEvent, node: Node) => {
+    const nodePos = node.position;
+    const nodeAbsolutePos = node.parentNode 
+      ? { 
+          x: nodePos.x + reactFlowInstance.getNode(node.parentNode)!.position.x,
+          y: nodePos.y + reactFlowInstance.getNode(node.parentNode)!.position.y 
+        }
+      : nodePos;
     
-    const parentNode = reactFlowInstance.getNode(node.parentNode);
-    if (!parentNode) return;
+    // Check if node was dragged onto a group (only if it's not already in a group or dragged to a different group)
+    const groups = reactFlowInstance.getNodes()
+      .filter(n => n.type === 'group' && !n.data?.isMinimized && n.id !== node.parentNode);
     
-    // Obtener dimensiones del grupo padre
-    const parentWidth = (parentNode.style?.width as number) || 200;
-    const parentHeight = (parentNode.style?.height as number) || 150;
+    // Sort groups by size (smallest first) to handle nested groups correctly
+    const sortedGroups = [...groups].sort((a, b) => {
+      const aSize = (a.style?.width as number || 200) * (a.style?.height as number || 150);
+      const bSize = (b.style?.width as number || 200) * (b.style?.height as number || 150);
+      return aSize - bSize; 
+    });
     
-    // Obtener dimensiones aproximadas del nodo
-    // Usar las dimensiones reales del nodo si están disponibles
-    const nodeWidth = node.width || 150;
-    const nodeHeight = node.height || 80;
+    // Check if node is dragged over a group
+    for (const group of sortedGroups) {
+      const isInside = isInsideGroup(nodeAbsolutePos, group);
+      
+      if (isInside) {
+        // Calculate position relative to the new parent
+        const relativePos = {
+          x: nodeAbsolutePos.x - group.position.x,
+          y: nodeAbsolutePos.y - group.position.y
+        };
+        
+        // Add node to the group
+        reactFlowInstance.setNodes(nodes => 
+          nodes.map(n => {
+            if (n.id === node.id) {
+              return {
+                ...n,
+                parentNode: group.id,
+                extent: 'parent',
+                position: relativePos
+              };
+            }
+            return n;
+          })
+        );
+        
+        // Optimize the group layout after a short delay
+        setTimeout(() => optimizeNodesInGroup(group.id), 50);
+        return;
+      }
+    }
     
-    // Calcular límites seguros dentro del grupo padre (con margen)
-    const marginX = 10;
-    const marginY = 10;
-    const headerHeight = 30; // Espacio para el encabezado del grupo
-    
-    // Crear nuevas coordenadas limitadas
-    let newPos = { ...node.position };
-    let needsAdjustment = false;
+    // If node already belongs to a group, handle boundaries
+    if (node.parentNode) {
+      const parentNode = reactFlowInstance.getNode(node.parentNode);
+      if (!parentNode) return;
+      
+      // Obtener dimensiones del grupo padre
+      const parentWidth = (parentNode.style?.width as number) || 200;
+      const parentHeight = (parentNode.style?.height as number) || 150;
+      
+      // Obtener dimensiones aproximadas del nodo
+      // Usar las dimensiones reales del nodo si están disponibles
+      const nodeWidth = node.width || 150;
+      const nodeHeight = node.height || 80;
+      
+      // Calcular límites seguros dentro del grupo padre (con margen)
+      const marginX = 10;
+      const marginY = 10;
+      const headerHeight = 30; // Espacio para el encabezado del grupo
+      
+      // Crear nuevas coordenadas limitadas
+      let newPos = { ...node.position };
+      let needsAdjustment = false;
     
     // Ajustar posición X si es necesario
     if (newPos.x < marginX) {
@@ -990,7 +1053,8 @@ const FlowEditorContent = ({
         )
       );
     }
-  }, [reactFlowInstance]);
+    }
+  }, [reactFlowInstance, optimizeNodesInGroup]);
 
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
@@ -1434,6 +1498,9 @@ const FlowEditorContent = ({
     };
   }, []);
 
+  // The optimizeNodesInGroup function is already defined earlier in the component
+  // Removed duplicate declaration to fix "Cannot redeclare block-scoped variable" error
+
   // Create a ref at component level to track recent updates and prevent infinite loops
   const updateTimeRef = useRef<number>(0);
   
@@ -1520,14 +1587,8 @@ const FlowEditorContent = ({
           setTimeout(() => {
             const parentNode = reactFlowInstance.getNode(node.parentNode!);
             if (parentNode) {
-              // Si hay muchos nodos en el grupo, optimizamos el espacio
-              const childNodes = reactFlowInstance.getNodes().filter(n => 
-                n.parentNode === parentNode.id
-              );
-              
-              if (childNodes.length >= 4) {
-                optimizeNodesInGroup(parentNode.id);
-              }
+              // Add your code here that was missing in the original
+              optimizeNodesInGroup(node.parentNode!);
             }
           }, 0);
         }
@@ -2601,8 +2662,8 @@ const FlowEditorContent = ({
               <div className="flex-1 p-2">
                 <GroupFlowEditor
                   groupId={groupViewModal.groupId || ''}
-                  initialNodes={groupViewModal.nodes}
-                  initialEdges={groupViewModal.edges}
+                  initialNodes={groupViewModal.nodes as unknown as CustomNode[]}
+                  initialEdges={groupViewModal.edges as unknown as CustomEdge[]}
                   nodeTypes={memoizedNodeTypes}
                   onClose={() => setGroupViewModal({ isOpen: false, groupId: null, nodes: [], edges: [], groupLabel: 'Grupo', provider: 'generic', nodeChanges: false })}
                 />

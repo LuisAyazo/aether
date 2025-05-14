@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Handle, Position, NodeProps, useReactFlow, Node } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
@@ -8,9 +8,12 @@ import {
   ArrowsPointingOutIcon, 
   ArrowsPointingInIcon, 
   ViewfinderCircleIcon,
-  ArrowTopRightOnSquareIcon // Nuevo ícono para "Abrir en nueva ventana"
+  ArrowTopRightOnSquareIcon, // Nuevo ícono para "Abrir en nueva ventana"
+  // Removed ArrowsExpandIcon - it doesn't exist in the Heroicons library
+  ArrowsPointingOutIcon as ResizeIcon // Icono para redimensionamiento de nodos
 } from '@heroicons/react/24/outline';
 import { CustomNode, CustomEdge } from '../../utils/customTypes';
+import { debounce } from 'lodash'; // Add this import if not already present
 
 interface NodeGroupProps extends NodeProps {
   data: {
@@ -18,6 +21,9 @@ interface NodeGroupProps extends NodeProps {
     provider: 'aws' | 'gcp' | 'azure' | 'generic';
     isCollapsed?: boolean;
     isMinimized?: boolean;
+    // Nuevos campos para manejo de nodos
+    preserveLayout?: boolean;
+    nodePositions?: Record<string, any>;
   };
 }
 
@@ -34,6 +40,8 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   const [childNodes, setChildNodes] = useState<Node[]>([]);
   // Almacenar las dimensiones originales al minimizar
   const [originalDimensions, setOriginalDimensions] = useState<{width?: number, height?: number}>({});
+  // Nuevo estado para mantener nodos redimensionables
+  const [resizableNodes, setResizableNodes] = useState<Set<string>>(new Set());
   const reactFlowInstance = useReactFlow();
   const groupRef = useRef<HTMLDivElement>(null);
   // Add state for title editing
@@ -80,12 +88,343 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     }
   }, [reactFlowInstance, id]);
 
+  // Cálculo mejorado del diseño óptimo de nodos con manejo de tamaños personalizados
+  const calculateOptimalNodeLayout = useCallback(() => {
+    try {
+      // Obtener las dimensiones actuales del grupo
+      const groupNode = reactFlowInstance.getNode(id);
+      if (!groupNode) return null;
+
+      const children = getChildNodes();
+      const nodeCount = children.length;
+      if (nodeCount === 0) return null;
+
+      const groupWidth = (groupNode.style?.width as number) || 300;
+      const groupHeight = (groupNode.style?.height as number) || 200;
+
+      // Márgenes y encabezado mejorados para un padding adecuado
+      const headerHeight = 40; // Espacio para elementos del encabezado
+      const horizontalMargin = 28; // Padding lateral aumentado
+      const verticalMargin = 28; // Padding superior/inferior aumentado
+      const spacing = 24; // Mayor espaciado entre nodos
+
+      // Área disponible para los nodos
+      const availableWidth = groupWidth - 2 * horizontalMargin;
+      const availableHeight = groupHeight - headerHeight - 2 * verticalMargin;
+      
+      // Verificar si hay nodos con tamaños personalizados establecidos por el usuario
+      const hasCustomSizes = children.some(node => 
+        node.data?.userResized || 
+        resizableNodes.has(node.id) ||
+        (node.style && (node.style.width || node.style.height))
+      );
+
+      // Obtener posiciones persistentes si existen
+      const persistedPositions = groupNode.data?.nodePositions || {};
+      
+      // Usar diferentes estrategias dependiendo de si hay nodos con tamaños personalizados
+      let best = { rows: 1, cols: nodeCount, nodeW: 0, nodeH: 0, area: 0 };
+      
+      // Obtener información sobre tamaños de los nodos existentes
+      const existingLayout = children.reduce((acc, node: Node) => {
+        const nodeWidth = (node.style?.width as number) || 0;
+        const nodeHeight = (node.style?.height as number) || 0;
+        
+        if (nodeWidth > 0 && nodeHeight > 0) {
+          acc.totalWidth += nodeWidth;
+          acc.totalHeight += nodeHeight;
+          acc.count += 1;
+          acc.hasCustomSizes = acc.hasCustomSizes || resizableNodes.has(node.id) || !!node.data?.userResized;
+        }
+        return acc;
+      }, { totalWidth: 0, totalHeight: 0, count: 0, hasCustomSizes: false });
+      
+      // Calcular relación de aspecto objetivo basada en los nodos existentes
+      const targetAspectRatio = existingLayout.count > 0
+        ? (existingLayout.totalWidth / existingLayout.count) / (existingLayout.totalHeight / existingLayout.count)
+        : 1.6; // Relación de aspecto predeterminada si no hay layout existente
+        
+      // Si hay nodos con posiciones personalizadas, intentamos preservarlas
+      const shouldPreserveLayout = existingLayout.hasCustomSizes || 
+                                  groupNode.data?.preserveLayout ||
+                                  Object.keys(persistedPositions).length > 0;
+
+      for (let cols = 1; cols <= nodeCount; cols++) {
+        const rows = Math.ceil(nodeCount / cols);
+        const totalSpacingX = (cols - 1) * spacing;
+        const totalSpacingY = (rows - 1) * spacing;
+        
+        // Calculate node dimensions based on available space
+        const nodeW = Math.floor((availableWidth - totalSpacingX) / cols);
+        const nodeH = Math.floor((availableHeight - totalSpacingY) / rows);
+        
+        // Calculate current aspect ratio of this layout
+        const currentAspectRatio = nodeW / nodeH;
+        
+        // Ensure nodes aren't too small and fit within available space
+        if (nodeW < 50 || nodeH < 40) continue; // Increased minimum sizes
+        if (cols * nodeW + totalSpacingX > availableWidth + 1) continue;
+        if (rows * nodeH + totalSpacingY > availableHeight + 1) continue;
+        
+        // Calculate area and aspect ratio similarity score
+        const area = nodeW * nodeH;
+        const aspectRatioScore = 1 / Math.abs(currentAspectRatio - targetAspectRatio);
+        
+        // Consider both area and aspect ratio in scoring
+        const score = area * aspectRatioScore;
+        
+        if (score > (best.area * (best.area > 0 ? 1 : 0))) {
+          best = { 
+            rows, 
+            cols, 
+            nodeW, 
+            nodeH, 
+            area: score
+          };
+        }
+      }
+      
+      // Mejorado: fallback si no se encuentra una configuración válida
+      if (best.nodeW === 0 || best.nodeH === 0) {
+        best.nodeW = Math.max(60, Math.floor((availableWidth - (nodeCount - 1) * spacing) / nodeCount));
+        best.nodeH = Math.max(50, Math.floor(availableHeight / 2));
+        best.rows = nodeCount > 2 ? 2 : 1;
+        best.cols = Math.ceil(nodeCount / best.rows);
+      }
+      
+      // Recopilar información sobre tamaños personalizados
+      const nodeSizes = new Map();
+      children.forEach(node => {
+        // Si el nodo es redimensionable, usar sus dimensiones actuales
+        if (resizableNodes.has(node.id) || node.data?.userResized) {
+          nodeSizes.set(node.id, {
+            width: (node.style?.width as number) || best.nodeW,
+            height: (node.style?.height as number) || best.nodeH
+          });
+        } else {
+          // Para nodos no personalizados, usar el tamaño estándar calculado
+          nodeSizes.set(node.id, {
+            width: best.nodeW,
+            height: best.nodeH
+          });
+        }
+      });
+      
+      return {
+        width: best.nodeW,
+        height: best.nodeH,
+        cols: best.cols,
+        rows: best.rows,
+        spacing,
+        headerHeight,
+        horizontalMargin,
+        verticalMargin,
+        preserveLayout: shouldPreserveLayout,
+        nodeSizes
+      };
+    } catch (error) {
+      console.error("Error calculating optimal node layout:", error);
+      return null;
+    }
+  }, [reactFlowInstance, id, getChildNodes, resizableNodes]);
+
+  // Optimización mejorada de nodos con manejo de tamaño y posición
+  const optimizeChildNodes = useCallback(() => {
+    try {
+      const layout = calculateOptimalNodeLayout();
+      if (!layout) return;
+      
+      const { 
+        width: nodeWidth, 
+        height: nodeHeight, 
+        cols, 
+        spacing, 
+        headerHeight, 
+        horizontalMargin, 
+        verticalMargin,
+        preserveLayout,
+        nodeSizes
+      } = layout;
+      
+      const children = getChildNodes();
+      if (children.length === 0) return;
+
+      // Obtener el nodo de grupo actual para verificar dimensiones
+      const groupNode = reactFlowInstance.getNode(id);
+      if (!groupNode) return;
+      
+      // Persistir las posiciones en los datos del grupo
+      const nodePositions: Record<string, any> = {...(groupNode.data?.nodePositions || {})};
+      
+      // Store the current positions to try to maintain relative positioning when resizing
+      const currentPositions = new Map();
+      children.forEach((node: Node) => {
+        currentPositions.set(node.id, { ...node.position });
+      });
+      
+      // Sort nodes by ID for consistent layout
+      const sortedNodes = [...children].sort((a, b) => a.id.localeCompare(b.id));
+      
+      // Calculate bounding box of current positions
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      if (currentPositions.size > 0) {
+        children.forEach(node => {
+          const pos = currentPositions.get(node.id);
+          const width = (node.style?.width as number) || nodeWidth;
+          const height = (node.style?.height as number) || nodeHeight;
+          
+          minX = Math.min(minX, pos.x);
+          minY = Math.min(minY, pos.y);
+          maxX = Math.max(maxX, pos.x + width);
+          maxY = Math.max(maxY, pos.y + height);
+        });
+      }
+      
+      // Determine if we should preserve current positions or use a grid layout
+      const hasValidPositions = minX !== Infinity && minY !== Infinity;
+      const currentWidth = hasValidPositions ? (maxX - minX + spacing) : 0;
+      const currentHeight = hasValidPositions ? (maxY - minY + spacing) : 0;
+      
+      const availableWidth = (groupNode.style?.width as number) - 2 * horizontalMargin;
+      const availableHeight = (groupNode.style?.height as number) - headerHeight - 2 * verticalMargin;
+      
+      // Use existing positioning if there's sufficient space and nodes aren't repositioned by outside events
+      const preservePositions = 
+        hasValidPositions && 
+        currentWidth <= availableWidth && 
+        currentHeight <= availableHeight &&
+        (groupNode.data.preserveLayout === true || sortedNodes.length <= 5);
+        
+      // Actualizar posiciones y dimensiones de los nodos
+      reactFlowInstance.setNodes(nodes => 
+        nodes.map(node => {
+          if (node.parentNode !== id) return node;
+          
+          // Obtener dimensiones para este nodo (personalizadas o predeterminadas)
+          const nodeSize = nodeSizes?.get(node.id) || { width: nodeWidth, height: nodeHeight };
+          const width = nodeSize.width;
+          const height = nodeSize.height;
+          
+          // Si este nodo tiene una posición personalizada o es redimensionable
+          const isCustomNode = resizableNodes.has(node.id) || node.data?.userResized;
+          
+          if ((preserveLayout || isCustomNode) && currentPositions.has(node.id)) {
+            // Preservar posiciones existentes con coordenadas normalizadas
+            const currentPos = currentPositions.get(node.id);
+            
+            // Almacenar la posición para persistencia
+            nodePositions[node.id] = {
+              position: { ...currentPos },
+              size: { width, height },
+              userResized: isCustomNode
+            };
+            
+            // Asegurar que el nodo no se salga de los límites del grupo
+            const x = Math.max(horizontalMargin, Math.min(
+              currentPos.x, 
+              availableWidth - width + horizontalMargin
+            ));
+            
+            const y = Math.max(headerHeight + verticalMargin, Math.min(
+              currentPos.y, 
+              availableHeight + headerHeight
+            ));
+            
+            return {
+              ...node,
+              position: { x, y },
+              style: {
+                ...node.style,
+                width,
+                height,
+                overflow: 'visible',
+                whiteSpace: 'normal'
+              },
+              data: {
+                ...node.data,
+                userResized: isCustomNode
+              }
+            };
+          } else {
+            // Usar diseño de cuadrícula para nodos nuevos o reposicionados
+            const idx = sortedNodes.findIndex(n => n.id === node.id);
+            const row = Math.floor(idx / cols);
+            const col = idx % cols;
+            
+            // Calcular posición con márgenes y espaciado
+            const x = horizontalMargin + col * (nodeWidth + spacing);
+            const y = headerHeight + verticalMargin + row * (nodeHeight + spacing);
+            
+            // Almacenar la posición para persistencia
+            nodePositions[node.id] = {
+              position: { x, y },
+              size: { width, height },
+              userResized: isCustomNode
+            };
+            
+            return {
+              ...node,
+              position: { x, y },
+              style: {
+                ...node.style,
+                width,
+                height,
+                overflow: 'visible',
+                whiteSpace: 'normal'
+              },
+              data: {
+                ...node.data,
+                userResized: isCustomNode
+              }
+            };
+          }
+        })
+      );
+      
+      // Guardar posiciones de nodos y marcar el grupo como optimizado
+      reactFlowInstance.setNodes(nodes => 
+        nodes.map(node => {
+          if (node.id !== id) return node;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              preserveLayout: true,
+              nodePositions: nodePositions
+            }
+          };
+        })
+      );
+      
+      // Disparar evento para notificar que los nodos han sido optimizados
+      document.dispatchEvent(new CustomEvent('nodesOptimized', { 
+        detail: { 
+          groupId: id,
+          nodePositions: nodePositions 
+        } 
+      }));
+    } catch (error) {
+      console.error("Error optimizing child nodes:", error);
+    }
+  }, [reactFlowInstance, id, getChildNodes, calculateOptimalNodeLayout]);
+
+  // Debounced version of optimize function to avoid excessive calculations
+  const debouncedOptimizeChildNodes = useCallback(
+    debounce(() => optimizeChildNodes(), 100),
+    [optimizeChildNodes]
+  );
+
   // Actualizar la lista de nodos hijo cuando cambia el grupo
   useEffect(() => {
     const updateChildNodes = () => {
       try {
         const currentChildNodes = getChildNodes();
         setChildNodes(currentChildNodes);
+        
+        // Trigger adaptive sizing when child nodes change
+        if (currentChildNodes.length > 0 && !isCollapsed && !isMinimized) {
+          debouncedOptimizeChildNodes();
+        }
       } catch (error) {
         console.error("Error al actualizar nodos hijos:", error);
       }
@@ -103,22 +442,28 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     return () => {
       document.removeEventListener('nodesChanged', onNodesChange as EventListener);
     };
-  }, [getChildNodes]);
+  }, [getChildNodes, debouncedOptimizeChildNodes, isCollapsed, isMinimized]);
 
-  // Actualiza la visibilidad de los nodos hijo - versión corregida
+  // Updates child node visibility with improved positioning for modal view
   const updateChildNodesVisibility = useCallback((forceHide = false) => {
     try {
       reactFlowInstance.setNodes(nds => 
         nds.map(n => {
           if (n.parentNode === id) {
-            // Ocultar nodos si el grupo está minimizado o colapsado o si se fuerza la ocultación
+            // Hide nodes if group is minimized or collapsed or if forced
             const shouldHide = forceHide || isMinimized || isCollapsed;
             
             if (shouldHide) {
-              // Guardar el estado original antes de ocultar el nodo
-              const originalState = n.data.originalState || { ...n.data };
+              // Save original state before hiding node to preserve all properties
+              // This ensures we can restore the exact same position and styling later
+              const originalState = n.data.originalState || { 
+                ...n.data,
+                originalPosition: { ...n.position },
+                originalStyle: { ...n.style },
+                originalClassName: n.className
+              };
               
-              // Aplicar visibilidad oculta
+              // Apply hidden visibility with complete hiding
               return { 
                 ...n, 
                 hidden: true,
@@ -136,35 +481,64 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
                 }
               };
             } else {
-              // Restaurar nodos - recuperar el estado original completo
+              // Restore nodes - recover complete original state
               const parentNode = reactFlowInstance.getNode(id);
               if (!parentNode) return n;
               
+              // Get parent dimensions for constraints
               const parentWidth = (parentNode.style?.width as number) || 200;
               const parentHeight = (parentNode.style?.height as number) || 150;
               
-              // Dimensiones aproximadas para considerar límites
-              const nodeWidth = 100; 
-              const nodeHeight = 60;
+              // Apply proper padding values
+              const horizontalMargin = 28;
+              const verticalMargin = 28;
+              const headerHeight = 40;
               
-              // Ajustar posición para mantener dentro de los límites del grupo
-              const newX = Math.max(30, Math.min(n.position.x, parentWidth - nodeWidth - 10));
-              const newY = Math.max(40, Math.min(n.position.y, parentHeight - nodeHeight - 10));
+              // Node dimensions - either from original state or defaults
+              const originalStyle = n.data.originalState?.originalStyle || n.style;
+              const nodeWidth = (originalStyle?.width as number) || 100; 
+              const nodeHeight = (originalStyle?.height as number) || 60;
               
-              // Recuperar estado original si existe
+              // Preserve original position when restoring from hidden state
+              // This ensures modal view matches regular view
+              let position = { ...n.position };
+              
+              // If we have stored original position, use that instead
+              if (n.data.originalState?.originalPosition) {
+                position = { ...n.data.originalState.originalPosition };
+              }
+              
+              // Ensure position is within valid bounds
+              const newX = Math.max(
+                horizontalMargin, 
+                Math.min(position.x, parentWidth - nodeWidth - horizontalMargin)
+              );
+              
+              const newY = Math.max(
+                headerHeight + verticalMargin, 
+                Math.min(position.y, parentHeight - nodeHeight - verticalMargin)
+              );
+              
+              // Recover original data without hidden marker
               const originalData = n.data.originalState || n.data;
-              delete originalData.hidden; // Eliminar marcador de oculto
+              const cleanData = { ...originalData };
+              delete cleanData.hidden;
+              delete cleanData.originalState;
               
               return {
                 ...n,
                 hidden: false,
-                className: (n.className || '').replace('hidden', '').trim(),
+                className: n.data.originalState?.originalClassName || (n.className || '').replace('hidden', '').trim(),
                 position: { x: newX, y: newY },
                 style: {
-                  ...n.style,
+                  ...originalStyle,
+                  width: nodeWidth,
+                  height: nodeHeight,
                   display: '',
                   visibility: 'visible',
-                  opacity: 1
+                  opacity: 1,
+                  overflow: 'visible',
+                  whiteSpace: 'normal'
                 },
                 data: {
                   ...originalData,
@@ -183,7 +557,17 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
         setTimeout(() => {
           const edges = reactFlowInstance.getEdges();
           reactFlowInstance.setEdges([...edges]);
-        }, 10);
+          
+          // Optimize node layout whenever nodes are shown (not being hidden)
+          if (!forceHide) {
+            // Get current child nodes to check if we need to optimize
+            const currentChildren = getChildNodes();
+            if (currentChildren.length > 0) {
+              console.log(`Optimizing ${currentChildren.length} nodes in group ${id}`);
+              debouncedOptimizeChildNodes();
+            }
+          }
+        }, 100); // Increased timeout to ensure nodes are fully rendered
       }
       
       // Notificar cambio
@@ -192,7 +576,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     } catch (error) {
       console.error("Error al actualizar visibilidad de nodos:", error);
     }
-  }, [reactFlowInstance, id, isMinimized, isCollapsed]);
+  }, [reactFlowInstance, id, isMinimized, isCollapsed, debouncedOptimizeChildNodes]);
 
   // Efecto para sincronizar el estado inicial con manejo de errores
   useEffect(() => {
@@ -209,21 +593,320 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     }
   }, [isMinimized, isCollapsed, updateChildNodesVisibility]);
 
-  // Handler para cuando el nodo del grupo cambia de tamaño
-  const onResize = useCallback((event: any, params: any) => {
-    // Cuando el grupo cambia de tamaño, ajustar los nodos hijos
-    setTimeout(() => {
-      try {
-        updateChildNodesVisibility();
-      } catch (error) {
-        console.error("Error en onResize:", error);
+  // Handler for when the group node resizes with improved node positioning
+  const onResize = useCallback((event: any, params: { width: number; height: number }) => {
+    // When the group changes size, store the new dimensions and properly position child nodes
+    try {
+      const node = reactFlowInstance.getNode(id);
+      if (!node) return;
+      
+      // Get current child nodes and their positions
+      const childNodes = getChildNodes();
+      const childNodePositions = new Map();
+      
+      // Record current positions of all child nodes before resize
+      childNodes.forEach((childNode: Node) => {
+        childNodePositions.set(childNode.id, { 
+          ...childNode.position,
+          width: childNode.style?.width as number || 100,
+          height: childNode.style?.height as number || 60
+        });
+      });
+      
+      // Record previous dimensions and new dimensions
+      const prevWidth = node.style?.width as number || 200;
+      const prevHeight = node.style?.height as number || 150;
+      const newWidth = params.width;
+      const newHeight = params.height;
+      
+      // Calculate scale factors if significant change
+      const widthChanged = Math.abs(prevWidth - newWidth) > 5;
+      const heightChanged = Math.abs(prevHeight - newHeight) > 5;
+      const widthRatio = prevWidth > 0 ? newWidth / prevWidth : 1;
+      const heightRatio = prevHeight > 0 ? newHeight / prevHeight : 1;
+      
+      // Significant resize detected - reposition nodes proportionally
+      if ((widthChanged || heightChanged) && childNodes.length > 0) {
+        // Calculate padding and safe area
+        const horizontalMargin = 28; 
+        const verticalMargin = 28;
+        const headerHeight = 40;
+        
+        // First update the group dimensions
+        reactFlowInstance.setNodes(nodes => 
+          nodes.map(n => {
+            if (n.id === id) {
+              return {
+                ...n,
+                style: {
+                  ...n.style,
+                  width: newWidth,
+                  height: newHeight
+                },
+                // Store that we want to preserve layout for this resize
+                data: {
+                  ...n.data,
+                  preserveLayout: true
+                }
+              };
+            }
+            return n;
+          })
+        );
+        
+        // Adjust child nodes to maintain relative positions
+        if (childNodePositions.size > 0) {
+          reactFlowInstance.setNodes(nodes => 
+            nodes.map(n => {
+              // Skip non-child nodes
+              if (n.parentNode !== id) return n;
+              
+              // Get the saved position data
+              const savedPos = childNodePositions.get(n.id);
+              if (!savedPos) return n;
+              
+              // Calculate new position maintaining relative position
+              // Apply padding constraints to keep nodes from touching borders
+              const newX = Math.max(
+                horizontalMargin, 
+                Math.min(
+                  savedPos.x * widthRatio,
+                  newWidth - (savedPos.width || 100) - horizontalMargin
+                )
+              );
+              
+              const newY = Math.max(
+                headerHeight + verticalMargin, 
+                Math.min(
+                  savedPos.y * heightRatio, 
+                  newHeight - (savedPos.height || 60) - verticalMargin
+                )
+              );
+              
+              return {
+                ...n,
+                position: { x: newX, y: newY }
+              };
+            })
+          );
+        }
+        
+        // Trigger optimized layout after a brief delay to let React Flow settle
+        // This ensures everything is properly positioned even after manual adjustments
+        setTimeout(() => {
+          debouncedOptimizeChildNodes();
+        }, 50);
       }
-    }, 50);
-  }, [updateChildNodesVisibility]);
+      
+      // Create and dispatch a custom event for the resize
+      const resizeEvent = new CustomEvent('groupResized', {
+        detail: { 
+          groupId: id, 
+          width: params.width, 
+          height: params.height,
+          previousWidth: prevWidth,
+          previousHeight: prevHeight
+        }
+      });
+      document.dispatchEvent(resizeEvent);
+    } catch (error) {
+      console.error("Error in onResize:", error);
+    }
+  }, [reactFlowInstance, id, getChildNodes, debouncedOptimizeChildNodes]);
+
+  // Listen for group resize events and other node changes
+  useEffect(() => {
+    const handleGroupResize = (event: CustomEvent) => {
+      // Only react if this is for our group
+      if (event.detail.groupId === id) {
+        // We don't need to do anything here because onResize already handles optimization
+      }
+    };
+    
+    // Handle node changes that may require optimization of layout
+    const handleNodeChanges = (event: CustomEvent) => {
+      // Check for events specific to this group
+      if (event.detail && event.detail.groupId === id) {
+        // If this is a move, add, or delete event, optimize after a delay
+        const needsOptimization = 
+          event.detail.action === 'nodeAdded' || 
+          event.detail.action === 'nodeMoved' ||
+          event.detail.action === 'addNodesToGroup';
+          
+        if (needsOptimization && !isCollapsed && !isMinimized) {
+          debouncedOptimizeChildNodes();
+        }
+      } else {
+        // For general events, check if any of our child nodes changed
+        // This ensures we catch all node changes within the group
+        const childNodeIds = getChildNodes().map(node => node.id);
+        
+        if (
+          childNodeIds.length > 0 && 
+          !isCollapsed && 
+          !isMinimized && 
+          event.detail && 
+          event.detail.nodeIds && 
+          event.detail.nodeIds.some((nodeId: string) => childNodeIds.includes(nodeId))
+        ) {
+          debouncedOptimizeChildNodes();
+        }
+      }
+    };
+    
+    // Register event listeners
+    document.addEventListener('groupResized', handleGroupResize as EventListener);
+    document.addEventListener('nodesChanged', handleNodeChanges as EventListener);
+    
+    return () => {
+      // Clean up event listeners
+      document.removeEventListener('groupResized', handleGroupResize as EventListener);
+      document.removeEventListener('nodesChanged', handleNodeChanges as EventListener);
+    };
+  }, [id, getChildNodes, isCollapsed, isMinimized, debouncedOptimizeChildNodes]);
+
+  // Listen for any node changes (internal/external) to trigger optimizations
+  useEffect(() => {
+    // Handle node changes that may require optimization of layout
+    const handleNodeChanges = (event: CustomEvent) => {
+      try {
+        // Skip optimization if group is collapsed or minimized
+        if (isCollapsed || isMinimized) return;
+        
+        // Only optimize if we have child nodes
+        const currentChildNodes = getChildNodes();
+        if (currentChildNodes.length === 0) return;
+
+        // Check for events specific to this group
+        if (event.detail && event.detail.groupId === id) {
+          // If this is a move, add, or delete event, optimize after a delay
+          const needsOptimization = 
+            event.detail.action === 'nodeAdded' || 
+            event.detail.action === 'nodeMoved' ||
+            event.detail.action === 'addNodesToGroup';
+            
+          if (needsOptimization) {
+            debouncedOptimizeChildNodes();
+          }
+        } else if (event.detail && event.detail.nodeIds) {
+          // For general events, check if any of our child nodes changed
+          const childNodeIds = currentChildNodes.map(node => node.id);
+          
+          // TypeScript-safe check if any of our children are in the affected nodes
+          const nodeIds = event.detail.nodeIds as string[];
+          if (nodeIds.some(nodeId => childNodeIds.includes(nodeId))) {
+            debouncedOptimizeChildNodes();
+          }
+        }
+      } catch (error) {
+        console.error("Error handling node changes:", error);
+      }
+    };
+    
+    // Register event listener
+    document.addEventListener('nodesChanged', handleNodeChanges as EventListener);
+    
+    return () => {
+      // Clean up event listener
+      document.removeEventListener('nodesChanged', handleNodeChanges as EventListener);
+    };
+  }, [id, getChildNodes, isCollapsed, isMinimized, debouncedOptimizeChildNodes]);
+  
+  // Nuevo efecto para manejar eventos de redimensionamiento de nodos individuales
+  useEffect(() => {
+    const handleNodeResize = (event: CustomEvent) => {
+      try {
+        // Solo procesar si es para un nodo hijo de este grupo
+        if (!event.detail || event.detail.groupId !== id) return;
+        
+        const currentChildNodes = getChildNodes();
+        const targetNodeId = event.detail.nodeId;
+        
+        // Verificar si el nodo es parte de este grupo
+        const isOurChild = currentChildNodes.some(node => node.id === targetNodeId);
+        if (!isOurChild) return;
+        
+        // Añadir el nodo al conjunto de nodos redimensionables si no está ya
+        if (!resizableNodes.has(targetNodeId)) {
+          const newResizableNodes = new Set(resizableNodes);
+          newResizableNodes.add(targetNodeId);
+          setResizableNodes(newResizableNodes);
+        }
+        
+        // Optimizar la posición de los nodos para acomodar el cambio
+        setTimeout(() => {
+          debouncedOptimizeChildNodes();
+        }, 50);
+      } catch (error) {
+        console.error("Error al manejar evento de redimensionamiento:", error);
+      }
+    };
+    
+    // Registrar listener
+    document.addEventListener('nodeResized', handleNodeResize as EventListener);
+    
+    return () => {
+      document.removeEventListener('nodeResized', handleNodeResize as EventListener);
+    };
+  }, [id, getChildNodes, resizableNodes, debouncedOptimizeChildNodes]);
+  
+  // Cargar posiciones y estados guardados de los nodos al inicializar el grupo
+  useEffect(() => {
+    try {
+      const groupNode = reactFlowInstance.getNode(id);
+      if (!groupNode || !groupNode.data?.nodePositions) return;
+      
+      // Recuperar información de nodos almacenada en el grupo
+      const savedNodePositions = groupNode.data.nodePositions;
+      if (!savedNodePositions || Object.keys(savedNodePositions).length === 0) return;
+      
+      // Cargar información de nodos redimensionables desde los datos guardados
+      const resizableNodeIds = new Set<string>();
+      
+      // Actualizar nodos con las posiciones y tamaños guardados
+      reactFlowInstance.setNodes(nodes => 
+        nodes.map(node => {
+          // Solo procesar nodos hijos de este grupo
+          if (node.parentNode !== id) return node;
+          
+          const savedNodeData = savedNodePositions[node.id];
+          if (!savedNodeData) return node;
+          
+          // Si este nodo era redimensionable, guardarlo en el conjunto
+          if (savedNodeData.userResized) {
+            resizableNodeIds.add(node.id);
+          }
+          
+          return {
+            ...node,
+            position: savedNodeData.position || node.position,
+            style: {
+              ...node.style,
+              width: savedNodeData.size?.width || node.style?.width || 100,
+              height: savedNodeData.size?.height || node.style?.height || 50
+            },
+            data: {
+              ...node.data,
+              userResized: savedNodeData.userResized || false
+            }
+          };
+        })
+      );
+      
+      // Actualizar el estado de nodos redimensionables
+      if (resizableNodeIds.size > 0) {
+        setResizableNodes(resizableNodeIds);
+      }
+      
+    } catch (error) {
+      console.error("Error cargando posiciones guardadas:", error);
+    }
+  }, [id, reactFlowInstance]);
 
   const toggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation(); // Evitar que el click llegue al nodo y lo seleccione
-    setIsCollapsed(!isCollapsed);
+    const newCollapsedState = !isCollapsed;
+    setIsCollapsed(newCollapsedState);
     
     try {
       // Guardar estado en data
@@ -234,7 +917,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
               ...node,
               data: {
                 ...node.data,
-                isCollapsed: !isCollapsed
+                isCollapsed: newCollapsedState
               }
             };
           }
@@ -245,6 +928,14 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
       // Actualizar visibilidad de nodos hijos
       setTimeout(() => {
         updateChildNodesVisibility();
+        
+        // If we're expanding the group (not collapsing it), optimize node layout
+        if (!newCollapsedState && !isMinimized) {
+          // Use a slightly longer timeout to ensure visibility update completes first
+          setTimeout(() => {
+            debouncedOptimizeChildNodes();
+          }, 100);
+        }
       }, 50);
     } catch (error) {
       console.error("Error en toggleCollapse:", error);
@@ -409,6 +1100,9 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             setTimeout(() => {
               const edges = reactFlowInstance.getEdges();
               reactFlowInstance.setEdges([...edges]);
+              
+              // After restoring nodes and edges, optimize the layout
+              debouncedOptimizeChildNodes();
             }, 50);
           }, 100); // Incrementar tiempo para asegurar que el grupo ya se redimensionó
         }
@@ -499,14 +1193,10 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     const groupWidth = (groupNode.style?.width as number) || 200;
     const groupHeight = (groupNode.style?.height as number) || 150;
     
-    // Calcular posición dentro del grupo (asegurar márgenes)
-    const currentChildren = getChildNodes();
-    const xOffset = 30 + (currentChildren.length % 3) * 60;
-    const yOffset = 50 + Math.floor(currentChildren.length / 3) * 50;
-    
-    // Asegurar que esté dentro de los límites del grupo
-    const xPos = Math.min(xOffset, groupWidth - 70);
-    const yPos = Math.min(yOffset, groupHeight - 50);
+    // Calcular posición dentro del grupo (posición temporal, será optimizada después)
+    // Posición inicial centrada
+    const xPos = groupWidth / 2 - 50;
+    const yPos = groupHeight / 2 - 25;
     
     // Crear el nuevo nodo
     const newNode: Node = {
@@ -514,7 +1204,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
       type: nodeType,
       position: { x: xPos, y: yPos },
       data: { 
-        label: `Service ${currentChildren.length + 1}`,
+        label: `Service ${getChildNodes().length + 1}`,
         description: 'New service',
         provider: data.provider,
         isCollapsed: true
@@ -533,6 +1223,12 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
       setTimeout(() => {
         updateChildNodesVisibility();
       }, 50);
+    } else {
+      // Si el grupo está expandido, optimizar la posición de todos los nodos
+      // Use a slightly longer timeout to ensure the node is fully added
+      setTimeout(() => {
+        debouncedOptimizeChildNodes();
+      }, 100);
     }
   };
 
@@ -599,6 +1295,60 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     }
   }, [saveTitleEdit, data.label]);
 
+  // Function to add multiple existing nodes to this group - fixed version
+  const addNodesToGroup = useCallback((nodeIds: string[]) => {
+    if (isMinimized) return;
+    
+    try {
+      // Get the group node for position calculation
+      const groupNode = reactFlowInstance.getNode(id);
+      if (!groupNode) return;
+      
+      const groupWidth = (groupNode.style?.width as number) || 200;
+      const groupHeight = (groupNode.style?.height as number) || 150;
+      
+      // Set all nodes to have the same initial position (center)
+      // We'll let the optimizer arrange them properly afterward
+      const centerX = groupWidth / 2 - 50;
+      const centerY = groupHeight / 2 - 25;
+      
+      // Update all specified nodes to belong to this group
+      reactFlowInstance.setNodes(nodes => 
+        nodes.map(node => {
+          if (nodeIds.includes(node.id)) {
+            return {
+              ...node,
+              parentNode: id,
+              extent: 'parent' as const,
+              position: { x: centerX, y: centerY },
+              selected: false
+            };
+          }
+          return node;
+        })
+      );
+      
+      // Force a redraw of edges
+      setTimeout(() => {
+        const edges = reactFlowInstance.getEdges();
+        reactFlowInstance.setEdges([...edges]);
+        
+        // Run the adaptive sizing to optimally arrange the newly added nodes
+        if (!isCollapsed) {
+          debouncedOptimizeChildNodes();
+        }
+      }, 100);
+      
+      // Trigger a nodesChanged event to update any listeners
+      const event = new CustomEvent('nodesChanged', {
+        detail: { groupId: id, action: 'addNodesToGroup', nodeIds }
+      });
+      document.dispatchEvent(event);
+    } catch (error) {
+      console.error("Error adding nodes to group:", error);
+    }
+  }, [reactFlowInstance, id, isMinimized, isCollapsed, debouncedOptimizeChildNodes]);
+
   // Add event listener for context menu actions
   useEffect(() => {
     const handleNodeAction = (event: CustomEvent) => {
@@ -642,80 +1392,19 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     return () => {
       document.removeEventListener('nodeAction', handleNodeAction as EventListener);
     };
-  }, [id, toggleCollapse, toggleMinimize, toggleFocus, addNodeToGroup, reactFlowInstance]);
-
-  // Function to add multiple existing nodes to this group - fixed version
-  const addNodesToGroup = useCallback((nodeIds: string[]) => {
-    if (isMinimized) return;
+  }, [id, toggleCollapse, toggleMinimize, toggleFocus, addNodeToGroup, reactFlowInstance, addNodesToGroup]);
+  
+  // Get internal edges function
+  const getInternalEdges = useCallback(() => {
+    // Get all current edges
+    const allEdges = reactFlowInstance.getEdges();
     
-    try {
-      // Get the group node for position calculation
-      const groupNode = reactFlowInstance.getNode(id);
-      if (!groupNode) return;
-      
-      const groupWidth = (groupNode.style?.width as number) || 200;
-      const groupHeight = (groupNode.style?.height as number) || 150;
-      
-      console.log(`Adding nodes to group: ${id}`, nodeIds);
-      console.log("Group dimensions:", groupWidth, groupHeight);
-      
-      // Spread nodes inside the group
-      let positionMap = new Map<string, {x: number, y: number}>();
-      
-      // Calculate relative positions - use a grid layout
-      const margin = 20;
-      const cols = 3; // Max 3 nodes per row
-      let row = 0;
-      let col = 0;
-      
-      nodeIds.forEach(nodeId => {
-        const node = reactFlowInstance.getNode(nodeId);
-        if (!node) return;
-        
-        // Calculate position in grid
-        const x = margin + (col * ((groupWidth - margin*2) / cols));
-        const y = margin + 30 + (row * 60); // Add extra space for header
-        
-        positionMap.set(nodeId, {x, y});
-        
-        // Update grid position
-        col++;
-        if (col >= cols) {
-          col = 0;
-          row++;
-        }
-      });
-      
-      // Update all specified nodes to belong to this group
-      reactFlowInstance.setNodes(nodes => 
-        nodes.map(node => {
-          if (nodeIds.includes(node.id)) {
-            // Use calculated grid position
-            const position = positionMap.get(node.id) || { x: 50, y: 50 };
-            
-            console.log(`Setting node ${node.id} position:`, position);
-            
-            return {
-              ...node,
-              parentNode: id,
-              extent: 'parent' as const,
-              position: position,
-              selected: false
-            };
-          }
-          return node;
-        })
-      );
-      
-      // Force a redraw of edges
-      setTimeout(() => {
-        const edges = reactFlowInstance.getEdges();
-        reactFlowInstance.setEdges([...edges]);
-      }, 50);
-    } catch (error) {
-      console.error("Error adding nodes to group:", error);
-    }
-  }, [id, reactFlowInstance, isMinimized]);
+    // Return edges that have both source and target nodes in this group
+    const childNodeIds = getChildNodes().map(node => node.id);
+    return allEdges.filter(edge => 
+      childNodeIds.includes(edge.source) && childNodeIds.includes(edge.target)
+    );
+  }, [reactFlowInstance, getChildNodes]);
 
   // Nueva función para abrir grupo en modal interno
   const openInNewWindow = useCallback((e: React.MouseEvent) => {
@@ -802,6 +1491,113 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     document.dispatchEvent(openGroupEvent);
   }, [id, reactFlowInstance, data.label, data.provider]);
 
+  // Nueva función para habilitar/deshabilitar el redimensionamiento de nodos individuales
+  const toggleNodeResize = useCallback((nodeId: string) => {
+    try {
+      // Si el nodo ya es redimensionable, quitar la propiedad
+      if (resizableNodes.has(nodeId)) {
+        const newResizableNodes = new Set(resizableNodes);
+        newResizableNodes.delete(nodeId);
+        setResizableNodes(newResizableNodes);
+        
+        // Desactivar redimensionamiento en el nodo
+        reactFlowInstance.setNodes(nodes => 
+          nodes.map(node => {
+            if (node.id === nodeId) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  userResized: false
+                }
+              };
+            }
+            return node;
+          })
+        );
+      } else {
+        // Si el nodo no es redimensionable, añadirlo al conjunto
+        const newResizableNodes = new Set(resizableNodes);
+        newResizableNodes.add(nodeId);
+        setResizableNodes(newResizableNodes);
+        
+        // Activar redimensionamiento en el nodo
+        reactFlowInstance.setNodes(nodes => 
+          nodes.map(node => {
+            if (node.id === nodeId) {
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  userResized: true
+                }
+              };
+            }
+            return node;
+          })
+        );
+      }
+      
+      // Optimizar el diseño después de cambiar el estado de redimensionamiento
+      setTimeout(() => {
+        debouncedOptimizeChildNodes();
+      }, 50);
+      
+    } catch (error) {
+      console.error("Error al cambiar modo de redimensionamiento:", error);
+    }
+  }, [reactFlowInstance, resizableNodes, debouncedOptimizeChildNodes]);
+
+  // Manejador para el redimensionamiento de nodos individuales
+  const handleChildNodeResize = useCallback((nodeId: string, newWidth: number, newHeight: number) => {
+    try {
+      // Aplicar nuevas dimensiones al nodo
+      reactFlowInstance.setNodes(nodes => 
+        nodes.map(node => {
+          if (node.id === nodeId) {
+            return {
+              ...node,
+              style: {
+                ...node.style,
+                width: newWidth,
+                height: newHeight
+              },
+              data: {
+                ...node.data,
+                userResized: true
+              }
+            };
+          }
+          return node;
+        })
+      );
+      
+      // Asegurarse de que este nodo esté marcado como redimensionable
+      if (!resizableNodes.has(nodeId)) {
+        const newResizableNodes = new Set(resizableNodes);
+        newResizableNodes.add(nodeId);
+        setResizableNodes(newResizableNodes);
+      }
+      
+      // Disparar evento de cambio para actualizar el estado
+      const event = new CustomEvent('nodeResized', {
+        detail: { 
+          nodeId, 
+          groupId: id,
+          width: newWidth,
+          height: newHeight
+        }
+      });
+      document.dispatchEvent(event);
+      
+      // Optimizar el diseño para acomodar el cambio
+      debouncedOptimizeChildNodes();
+      
+    } catch (error) {
+      console.error("Error al redimensionar nodo hijo:", error);
+    }
+  }, [reactFlowInstance, id, resizableNodes, debouncedOptimizeChildNodes]);
+
   // Si está minimizado, mostrar solo un icono compacto
   if (isMinimized) {
     return (
@@ -831,30 +1627,51 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
           keepAspectRatio={true} // Mantener proporción 1:1 para forma circular
         />
         
-        {/* Botón de maximizar más visible y claro */}
-        <button
-          onClick={toggleMinimize}
-          className="absolute inset-0 w-full h-full cursor-pointer flex items-center justify-center"
-          title="Expandir grupo"
+        {/* Título del grupo - versión minimizada */}
+        <div 
+          className="absolute -top-6 left-0 transform text-xs font-bold bg-white/90 px-2 py-0.5 rounded-t-md shadow-sm z-50"
+          style={{ 
+            borderBottom: `2px solid ${getBorderColor()}`,
+            minWidth: '80px',
+            textAlign: 'center'
+          }}
+          title={data.label}
         >
-          <div className="flex flex-col items-center justify-center gap-1 w-full h-full">
-            {/* Iniciales del grupo con hint visual */}
-            <div 
-              className="text-xs font-bold text-center bg-white/90 rounded-full w-7 h-7 flex items-center justify-center z-10 group-tooltip"
-              title={data.label}
-              data-tooltip={data.label}
-            >
-              {data.label ? data.label.substring(0, 2).toUpperCase() : 'G'}
-            </div>
-            
-            {/* Botón de maximizar más visible y distintivo */}
-            <div className="absolute inset-0 flex items-center justify-center bg-black/5 hover:bg-black/20 rounded-full transition-all duration-200">
-              <div className="bg-white/90 p-1.5 rounded-full flex items-center justify-center shadow-md border border-gray-300">
-                <ArrowsPointingOutIcon className="w-5 h-5 text-gray-700" />
-              </div>
-            </div>
-          </div>
-        </button>
+          {data.label || 'Group'}
+        </div>
+        
+        {/* Controles del grupo - Movidos completamente fuera del grupo para versión minimizada */}
+        <div className="absolute -top-6 right-0 z-20 bg-white/90 dark:bg-gray-200/90 p-0.5 rounded-t-md shadow-sm border border-gray-200 flex gap-1"
+          style={{
+            borderBottom: `2px solid ${getBorderColor()}`
+          }}
+        >
+          {/* Botón de maximizar */}
+          <button
+            onClick={toggleMinimize}
+            className="text-gray-700 p-0.5 rounded-md hover:bg-gray-100 control-button"
+            title="Expandir grupo"
+          >
+            <ArrowsPointingOutIcon className="w-3 h-3" />
+          </button>
+          
+          {/* Opción de enfocar */}
+          <button
+            onClick={toggleFocus}
+            className="text-gray-700 p-0.5 rounded-md hover:bg-gray-100 control-button"
+            title={isFocused ? "Ver todos" : "Enfocar en este grupo"}
+          >
+            <ViewfinderCircleIcon className="w-3 h-3" />
+          </button>
+        </div>
+        
+        {/* Iniciales del grupo o indicador visual en el centro del nodo */}
+        <div 
+          className="text-xs font-bold text-center bg-white/90 rounded-full w-7 h-7 flex items-center justify-center z-10"
+          title={data.label}
+        >
+          {data.label ? data.label.substring(0, 2).toUpperCase() : 'G'}
+        </div>
         
         {/* Handles de conexión */}
         <Handle type="source" position={Position.Right} className="w-2 h-2" />
@@ -887,65 +1704,19 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
         onResize={onResize}
       />
 
-      {/* Controles del grupo - Posicionados fuera del grupo */}
-      <div className="group-controls" style={{ top: '-28px', left: '0', position: 'absolute' }}>
-        {/* Botón para minimizar */}
-        <button
-          onClick={toggleMinimize}
-          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
-          title="Minimizar grupo"
-        >
-          <ArrowsPointingInIcon className="w-4 h-4" />
-        </button>
-        
-        {/* Opción de colapsar/expandir nodos */}
-        <button
-          onClick={toggleCollapse}
-          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
-          title={isCollapsed ? "Expandir nodos" : "Colapsar nodos"}
-        >
-          {isCollapsed ? <PlusIcon className="w-4 h-4" /> : <MinusIcon className="w-4 h-4" />}
-        </button>
-        
-        {/* Opción de enfocar */}
-        <button
-          onClick={toggleFocus}
-          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
-          title={isFocused ? "Ver todos" : "Enfocar en este grupo"}
-        >
-          <ViewfinderCircleIcon className="w-4 h-4" />
-        </button>
-
-        {/* NUEVO: Botón para abrir en nueva ventana */}
-        <button
-          onClick={openInNewWindow}
-          className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
-          title="Abrir grupo en nueva ventana"
-        >
-          <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-        </button>
-        
-        {/* Opción de añadir nodo (solo visible si no está colapsado) */}
-        {!isCollapsed && (
-          <button
-            onClick={addNodeToGroup}
-            className="bg-white/95 text-gray-700 p-1 rounded-md shadow hover:bg-gray-100 border border-gray-200 z-20 control-button"
-            title="Añadir nuevo servicio"
-          >
-            <PlusIcon className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-
-      {/* Título del grupo - mejorado para edición */}
+      {/* Título del grupo - movido afuera */}
       <div 
-        className="text-md font-bold mb-2 w-full bg-white/80 dark:bg-gray-800/80 p-1 rounded cursor-pointer z-50 relative group-header editable-title"
+        className="text-md font-bold absolute z-50 left-0 -top-10 min-w-[150px] bg-white/90 dark:bg-gray-800/90 p-1 px-3 rounded-t-md cursor-pointer group-header editable-title shadow-sm"
         onClick={(e) => {
           e.stopPropagation();
           e.preventDefault();
           startTitleEdit(e);
         }}
         title="Haz clic para editar el nombre del grupo"
+        style={{ 
+          borderBottom: `3px solid ${getBorderColor()}`,
+          transform: 'translateX(-1px)'
+        }}
       >
         {isEditingTitle ? (
           <input
@@ -966,8 +1737,62 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
         )}
       </div>
 
-      {/* Contador de servicios */}
-      <div className={`text-xs ${isCollapsed ? 'block' : 'hidden'} bg-white/80 dark:bg-gray-700/80 px-2 py-1 rounded-md`}>
+      {/* Controles del grupo - Movidos completamente fuera del grupo */}
+      <div className="group-controls-container absolute -top-10 right-0 z-20 bg-white/90 dark:bg-gray-200/90 p-1 rounded-t-md shadow-sm border border-gray-200 flex flex-wrap gap-1 max-w-[180px]"
+        style={{
+          borderBottom: `3px solid ${getBorderColor()}`
+        }}
+      >
+        {/* Botón para minimizar */}
+        <button
+          onClick={toggleMinimize}
+          className="text-gray-700 p-1 rounded-md hover:bg-gray-100 control-button"
+          title="Minimizar grupo"
+        >
+          <ArrowsPointingInIcon className="w-4 h-4" />
+        </button>
+        
+        {/* Opción de colapsar/expandir nodos */}
+        <button
+          onClick={toggleCollapse}
+          className="text-gray-700 p-1 rounded-md hover:bg-gray-100 control-button"
+          title={isCollapsed ? "Expandir nodos" : "Colapsar nodos"}
+        >
+          {isCollapsed ? <PlusIcon className="w-4 h-4" /> : <MinusIcon className="w-4 h-4" />}
+        </button>
+        
+        {/* Opción de enfocar */}
+        <button
+          onClick={toggleFocus}
+          className="text-gray-700 p-1 rounded-md hover:bg-gray-100 control-button"
+          title={isFocused ? "Ver todos" : "Enfocar en este grupo"}
+        >
+          <ViewfinderCircleIcon className="w-4 h-4" />
+        </button>
+
+        {/* NUEVO: Botón para abrir en nueva ventana */}
+        <button
+          onClick={openInNewWindow}
+          className="text-gray-700 p-1 rounded-md hover:bg-gray-100 control-button"
+          title="Abrir grupo en nueva ventana"
+        >
+          <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+        </button>
+        
+        {/* Opción de añadir nodo (solo visible si no está colapsado) */}
+        {!isCollapsed && (
+          <button
+            onClick={addNodeToGroup}
+            className="text-gray-700 p-1 rounded-md hover:bg-gray-100 control-button"
+            title="Añadir nuevo servicio"
+          >
+            <PlusIcon className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Contador de servicios - Ahora como una insignia en la parte inferior derecha */}
+      <div className={`text-xs absolute bottom-2 right-2 ${isCollapsed ? 'block' : 'hidden'} bg-white/90 dark:bg-gray-200/90 px-2 py-0.5 rounded-full shadow-sm border border-gray-200 text-gray-700 font-semibold`}>
         {childNodes.length} {childNodes.length === 1 ? 'servicio' : 'servicios'}
       </div>
 

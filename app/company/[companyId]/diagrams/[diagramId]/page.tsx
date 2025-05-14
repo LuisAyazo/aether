@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
-import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram } from '../../../../services/diagramService';
+import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, Viewport } from '../../../../services/diagramService';
 import { Button, Select, Typography, notification, Modal, Input, Spin } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { 
@@ -17,7 +17,8 @@ import {
   Connection, 
   OnNodesChange,
   OnEdgesChange,
-  OnConnect
+  OnConnect,
+  ReactFlowInstance
 } from 'reactflow';
 // Importar nodeTypes desde el archivo centralizado
 import nodeTypes from '../../../../components/nodes/NodeTypes';
@@ -88,6 +89,8 @@ const resourceCategories = [
     ]
   }
 ];
+
+// This interface was replaced with the import from diagramService.ts
 
 export default function DiagramPage() {
   const params = useParams();
@@ -370,6 +373,12 @@ export default function DiagramPage() {
 
   // Track the previous URL params to avoid unnecessary URL updates
   const prevUrlRef = useRef({ envId: '', diagramId: '' });
+  
+  // Reference for reactFlowInstance - corrected
+  const reactFlowInstance = useRef<any>(null);
+  
+  // Reference for tracking update times to prevent rapid consecutive updates
+  const updateTimeRef = useRef<number>(0);
   
   // Función para actualizar la URL con nombres amigables
   const updateUrlWithNames = (environmentId: string, diagramId: string, envName: string, diagramName: string) => {
@@ -736,6 +745,57 @@ export default function DiagramPage() {
     }
   }, [loading, environments.length, selectedEnvironment]);
   
+  // Añadir listener para eventos de actualización del grupo
+  useEffect(() => {
+    const debounceTimeMs = 1000; // Wait 1 second between updates to prevent loops
+    const updateTimeRef = { current: 0 }; // Local reference for debouncing
+    
+    const handleGroupUpdate = (event: CustomEvent) => {
+      console.log("Received updateGroupNodes event:", event.detail);
+      const { groupId, nodes: updatedNodes, edges: updatedEdges, hasNewNodes } = event.detail;
+      
+      // Prevent multiple rapid updates (debounce)
+      const currentTime = Date.now();
+      if (currentTime - updateTimeRef.current < debounceTimeMs) {
+        console.log("Debouncing group update - too soon after last update");
+        return;
+      }
+      
+      // Update the timestamp
+      updateTimeRef.current = currentTime;
+      
+      if (groupId && updatedNodes) {
+        // Create a "safe" copy of the nodes with new references to avoid mutation issues
+        const safeUpdatedNodes = updatedNodes.map((n: any) => ({...n}));
+        
+        // Directly update our state instead of using reactFlowInstance
+        setNodes(currentNodes => {
+          const nodesWithoutGroup = currentNodes.filter(n => n.id !== groupId);
+          return [...nodesWithoutGroup, ...safeUpdatedNodes];
+        });
+        
+        if (updatedEdges && updatedEdges.length > 0) {
+          setEdges(currentEdges => {
+            // Keep edges that don't connect to the updated nodes
+            const edgesToKeep = currentEdges.filter(edge => {
+              // Keep edges that don't involve nodes in this group
+              return !updatedNodes.some((n: any) => n.id === edge.source || n.id === edge.target);
+            });
+            
+            // Add the updated edges
+            return [...edgesToKeep, ...updatedEdges];
+          });
+        }
+      }
+    };
+    
+    document.addEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
+    
+    return () => {
+      document.removeEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
+    };
+  }, []);
+
   // We'll show the initial loading only for the first render
   if (loadingType === 'initial') {
     return (
@@ -811,7 +871,12 @@ export default function DiagramPage() {
               companyId={companyId as string} 
               environmentId={selectedEnvironment}
               diagramId={previousDiagram.id} 
-              initialDiagram={previousDiagram}
+              initialDiagram={{
+                ...previousDiagram,
+                // Add missing fields required by FlowEditor
+                created_at: previousDiagram.created_at || new Date().toISOString(),
+                updated_at: previousDiagram.updated_at || new Date().toISOString(),
+              }}
               nodeTypes={memoizedNodeTypes}
               resourceCategories={resourceCategories}
               nodes={previousDiagram.nodes || []}
@@ -847,7 +912,38 @@ export default function DiagramPage() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onSave={(flowData) => {
-                // Conservar el nombre y descripción originales del diagrama
+                // Procesar los metadatos de grupos y posiciones de nodos
+                const groupNodes = flowData.nodes.filter((node: any) => node.type === 'group');
+                const nodeGroups: Record<string, any> = {};
+                const nodePositions: Record<string, Record<string, any>> = {};
+
+                // Construir estructura de grupos
+                groupNodes.forEach((groupNode: any) => {
+                  const childNodes = flowData.nodes.filter((node: any) => node.parentNode === groupNode.id);
+                  nodeGroups[groupNode.id] = {
+                    nodeIds: childNodes.map((node: any) => node.id),
+                    dimensions: {
+                      width: groupNode.style?.width || 300,
+                      height: groupNode.style?.height || 200
+                    },
+                    provider: groupNode.data?.provider || 'generic',
+                    label: groupNode.data?.label || 'Group'
+                  };
+
+                  // Guardar posiciones relativas de los nodos dentro de este grupo
+                  nodePositions[groupNode.id] = {};
+                  childNodes.forEach((childNode: any) => {
+                    nodePositions[groupNode.id][childNode.id] = {
+                      relativePosition: { ...childNode.position },
+                      dimensions: {
+                        width: childNode.style?.width || childNode.width || 100,
+                        height: childNode.style?.height || childNode.height || 50
+                      }
+                    };
+                  });
+                });
+                
+                // Conservar el nombre y descripción originales del diagrama y guardar los cambios
                 updateDiagram(
                   companyId as string,
                   selectedEnvironment as string,
@@ -857,10 +953,18 @@ export default function DiagramPage() {
                     description: currentDiagram.description,
                     nodes: flowData.nodes,
                     edges: flowData.edges,
-                    viewport: flowData.viewport
+                    viewport: flowData.viewport,
+                    nodeGroups,
+                    nodePositions
                   }
-                ).catch(error => {
-                  console.error("Error guardando diagrama:", error);
+                ).then((updated) => {
+                  console.log("Diagrama guardado exitosamente:", updated);
+                  notification.success({
+                    message: "Guardado",
+                    description: "Diagrama actualizado exitosamente."
+                  });
+                }).catch(error => {
+                  console.error("Error al guardar diagrama:", error);
                   notification.error({
                     message: "Error",
                     description: "No se pudo guardar el diagrama. Por favor, inténtelo de nuevo."

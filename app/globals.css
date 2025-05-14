@@ -948,3 +948,56 @@ div[data-type="group"]:hover .group-controls {
 .react-flow__node[data-area="true"].selected {
   z-index: 1 !important; /* Un poco más alto cuando se selecciona, pero aún por debajo de otros nodos */
 }
+
+/* Styles for resizable nodes */
+.resizable-node {
+  position: relative;
+}
+
+/* Add pulse animation for resizable nodes */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+/* Make resize handles more visible for resizable nodes */
+[data-resizable="true"] .react-flow__resize-control.handle {
+  background-color: #3b82f6;
+  border-color: white;
+  opacity: 0.8;
+}
+
+/* Add visual styling indicator for resizable mode */
+[data-resizable="true"] {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  border-style: dashed !important;
+  border-color: #3b82f6 !important;
+}
+
+/* Ensure resize toggle button is visible */
+.resize-toggle-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.2s ease;
+}
+
+/* Estilos para el modal de vista de grupo */
+.group-view-modal {
+  animation: fadeIn 0.2s ease-out;
+}

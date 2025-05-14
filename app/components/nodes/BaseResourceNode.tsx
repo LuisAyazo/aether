@@ -2,6 +2,7 @@ import { useCallback, useState, useEffect } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
+import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 
 interface BaseResourceNodeProps extends NodeProps {
   data: {
@@ -11,6 +12,8 @@ interface BaseResourceNodeProps extends NodeProps {
     description?: string;
     isCollapsed?: boolean;
     parentNode?: string;
+    userResized?: boolean; // New property to track if user manually resized this node
+    resizable?: boolean; // New property to enable/disable resizing
   };
 }
 
@@ -18,6 +21,7 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
   const [isCollapsed, setIsCollapsed] = useState(data.isCollapsed !== false);
   const [isFocused, setIsFocused] = useState(false);
   const [isListView, setIsListView] = useState(false);
+  const [isResizable, setIsResizable] = useState(data.resizable !== false && data.userResized === true);
   const reactFlowInstance = useReactFlow();
   
   // Color mapping based on cloud provider
@@ -33,6 +37,11 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
         return 'border-gray-300 bg-white dark:bg-gray-800';
     }
   }, [data.provider]);
+  
+  // Update resizable state when data changes
+  useEffect(() => {
+    setIsResizable(data.resizable !== false && data.userResized === true);
+  }, [data.resizable, data.userResized]);
   
   // Efecto para verificar si el nodo está dentro de los límites del grupo padre
   useEffect(() => {
@@ -105,6 +114,58 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
       })
     );
   };
+  
+  // New function to toggle resizable mode
+  const toggleResizable = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent click from reaching the node
+    const newResizableState = !isResizable;
+    setIsResizable(newResizableState);
+    
+    // Update the node data and trigger an event for the parent group
+    reactFlowInstance.setNodes(nds => 
+      nds.map(n => {
+        if (n.id === id) {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              resizable: newResizableState,
+              userResized: newResizableState
+            }
+          };
+        }
+        return n;
+      })
+    );
+    
+    // Dispatch event for the parent group to handle resizing
+    if (data.parentNode) {
+      const event = new CustomEvent('nodeResized', {
+        detail: { 
+          nodeId: id, 
+          groupId: data.parentNode,
+          resizable: newResizableState
+        }
+      });
+      document.dispatchEvent(event);
+    }
+  };
+  
+  // Handle node resize event
+  const onResize = useCallback((_: any, { width, height }: { width: number; height: number }) => {
+    // Dispatch event for size change
+    if (data.parentNode) {
+      const event = new CustomEvent('nodeResized', {
+        detail: { 
+          nodeId: id, 
+          groupId: data.parentNode,
+          width, 
+          height 
+        }
+      });
+      document.dispatchEvent(event);
+    }
+  }, [id, data.parentNode]);
   
   const toggleFocus = (e: React.MouseEvent) => {
     e.stopPropagation(); // Evitar que el click llegue al nodo y lo seleccione
@@ -197,6 +258,9 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
           case 'toggleCollapse':
             toggleCollapse({ stopPropagation: () => {} } as React.MouseEvent);
             break;
+          case 'toggleResizable': // Handle new resizable toggle action
+            toggleResizable({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
           case 'deleteNode':
             reactFlowInstance.setNodes(nodes => 
               nodes.filter(node => node.id !== id)
@@ -211,7 +275,7 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
     return () => {
       document.removeEventListener('nodeAction', handleNodeAction as EventListener);
     };
-  }, [id, toggleListView, toggleFocus, toggleCollapse, reactFlowInstance]);
+  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance]);
 
   // Si estamos en vista de lista (modo compacto)
   if (isListView) {
@@ -220,6 +284,7 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
         className="list-node-item shadow-sm"
         data-provider={data.provider}
         data-id={id}
+        data-resizable={isResizable}
       >
         {data.icon && (
           <div className="flex-shrink-0 w-4 h-4">
@@ -246,26 +311,48 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
   return (
     <div
       data-id={id}
+      data-resizable={isResizable}
       className={`
         rounded-md border-2 ${getProviderColor()} shadow-sm transition-all duration-300
         ${isCollapsed ? 'min-w-[100px] min-h-[50px] p-2' : 'min-w-[150px] min-h-[80px] p-3'}
         ${isFocused ? 'focused' : ''}
         ${selected ? 'ring-2 ring-primary' : ''}
+        ${isResizable ? 'resizable-node' : ''}
         relative group
       `}
       data-provider={data.provider}
       style={{
-        boxShadow: selected ? '0 0 0 2px var(--primary)' : 'none'
+        boxShadow: selected ? '0 0 0 2px var(--primary)' : 'none',
+        // Add dashed border and subtle animation effect when resizable is active
+        ...(isResizable ? {
+          borderStyle: 'dashed',
+          animation: 'pulse 2s infinite ease-in-out'
+        } : {})
       }}
     >
-      {/* NodeResizer para permitir redimensionar el nodo */}
+      {/* NodeResizer appears when node is selected or resizable is active */}
       <NodeResizer 
         minWidth={isCollapsed ? 100 : 150} 
         minHeight={isCollapsed ? 50 : 80} 
-        isVisible={selected} 
-        lineClassName="border-primary"
-        handleClassName="h-3 w-3 bg-white border-2 border-primary rounded z-20"
+        isVisible={selected || isResizable} 
+        onResize={onResize}
+        lineClassName={`border-primary ${isResizable ? 'opacity-100' : ''}`}
+        handleClassName={`h-3 w-3 bg-white border-2 border-primary rounded z-20 ${isResizable ? 'bg-blue-500' : ''}`}
       />
+      
+      {/* Resize toggle button - only show when selected */}
+      {selected && data.parentNode && (
+        <button
+          onClick={toggleResizable}
+          className={`absolute -top-2 -right-2 p-1 rounded-full z-30 
+            ${isResizable 
+              ? 'bg-blue-500 text-white hover:bg-blue-600' 
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+          title={isResizable ? "Disable resizing" : "Enable resizing"}
+        >
+          <ArrowsPointingOutIcon className="w-3 h-3" />
+        </button>
+      )}
       
       <div className="flex items-center gap-1 overflow-hidden">
         {data.icon && (

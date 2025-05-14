@@ -19,6 +19,18 @@ export interface Node {
     y: number;
   };
   dragging?: boolean;
+  parentNode?: string;
+  style?: any;
+  // Nuevos campos para el manejo mejorado de grupos
+  originalPosition?: {
+    x: number;
+    y: number;
+  };
+  relativeDimensions?: {
+    width: number;
+    height: number;
+  };
+  resizable?: boolean;
 }
 
 export interface Edge {
@@ -50,6 +62,17 @@ export interface Diagram {
   viewport?: Viewport;
   created_at: string;
   updated_at: string;
+  // Nuevos campos para manejar relaciones y metadatos
+  nodeGroups?: Record<string, {
+    nodeIds: string[];
+    dimensions?: { width: number; height: number };
+    provider?: string;
+    label?: string;
+  }>;
+  nodePositions?: Record<string, Record<string, { 
+    relativePosition: { x: number, y: number },
+    dimensions?: { width: number, height: number } 
+  }>>;
 }
 
 export interface Environment {
@@ -311,10 +334,75 @@ export const createDiagram = async (companyId: string, environmentId: string, di
   }
 };
 
-export const updateDiagram = async (companyId: string, environmentId: string, diagramId: string, diagramData: { name: string; description?: string; nodes: Node[]; edges: Edge[]; viewport?: Viewport }): Promise<Diagram> => {
+export const updateDiagram = async (companyId: string, environmentId: string, diagramId: string, diagramData: { 
+  name: string; 
+  description?: string; 
+  nodes: Node[]; 
+  edges: Edge[]; 
+  viewport?: Viewport;
+  nodeGroups?: Record<string, any>;
+  nodePositions?: Record<string, any>;
+}): Promise<Diagram> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
+
+  // Procesar los datos para guardar metadatos de grupos y posiciones relativas
+  const processedData = {
+    ...diagramData,
+    nodeGroups: diagramData.nodeGroups || {},
+    nodePositions: diagramData.nodePositions || {}
+  };
+  
+  // Para cada nodo en un grupo, calcular y guardar posiciones relativas si no existen
+  if (!processedData.nodePositions) {
+    processedData.nodePositions = {};
+  }
+
+  // Agrupar los nodos por su grupo padre
+  const nodesByGroup: Record<string, Node[]> = {};
+  diagramData.nodes.forEach(node => {
+    if (node.parentNode) {
+      if (!nodesByGroup[node.parentNode]) {
+        nodesByGroup[node.parentNode] = [];
+      }
+      nodesByGroup[node.parentNode].push(node);
+    }
+  });
+
+  // Para cada grupo, guardar sus datos y las posiciones relativas de sus nodos
+  Object.entries(nodesByGroup).forEach(([groupId, groupNodes]) => {
+    // Encontrar el nodo de grupo
+    const groupNode = diagramData.nodes.find(n => n.id === groupId);
+    if (!groupNode) return;
+
+    if (!processedData.nodeGroups[groupId]) {
+      processedData.nodeGroups[groupId] = {
+        nodeIds: groupNodes.map(n => n.id),
+        dimensions: {
+          width: groupNode.width || 300,
+          height: groupNode.height || 200
+        },
+        provider: groupNode.data?.provider || 'generic',
+        label: groupNode.data?.label || 'Group'
+      };
+    }
+
+    // Para cada nodo del grupo, guardar su posición relativa
+    if (!processedData.nodePositions[groupId]) {
+      processedData.nodePositions[groupId] = {};
+    }
+
+    groupNodes.forEach(node => {
+      processedData.nodePositions[groupId][node.id] = {
+        relativePosition: { ...node.position },
+        dimensions: {
+          width: node.width || 100,
+          height: node.height || 50
+        }
+      };
+    });
+  });
 
   const token = localStorage.getItem('token');
   
@@ -326,7 +414,7 @@ export const updateDiagram = async (companyId: string, environmentId: string, di
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(diagramData)
+      body: JSON.stringify(processedData)
     });
 
     if (response.status === 404) {
