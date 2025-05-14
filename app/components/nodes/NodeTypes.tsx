@@ -1,5 +1,11 @@
 import NodeGroup from './NodeGroup';
 import AreaBackground from './AreaBackground';
+import { 
+  ComputeEngineNode, 
+  CloudStorageNode, 
+  CloudFunctionsNode,
+  CloudSQLNode 
+} from './GcpNodes';
 
 // Para los otros tipos de nodos, vamos a crear componentes simples directamente aquí
 // Podemos mover estos a archivos independientes más adelante
@@ -123,11 +129,19 @@ const GenericNode = memo(({ data, selected }: NodeProps) => (
 
 // Define todos los tipos de nodos que usamos en la aplicación
 const nodeTypes = {
+  // AWS nodes
   ec2: EC2Node,
   lambda: LambdaNode,
   s3: S3Node,
   rds: RDSNode,
-  compute: ComputeNode,
+  
+  // GCP nodes
+  compute: ComputeEngineNode,
+  storage: CloudStorageNode, 
+  sql: CloudSQLNode,     
+  functions: CloudFunctionsNode,
+  
+  // Generic nodes
   generic: GenericNode,
   group: NodeGroup,
   areaBackground: AreaBackground

@@ -106,6 +106,9 @@ const FlowEditorContent = ({
   edgeTypes,
   resourceCategories = []
 }: FlowEditorProps): JSX.Element => {  // Changed from React.ReactNode to JSX.Element
+  
+  // Properly memoize the nodeTypes to avoid recreation on each render
+  const memoizedNodeTypes = useMemo(() => externalNodeTypes, [externalNodeTypes]);
 
   // Usar los nodos iniciales o los proporcionados directamente
   const [nodes, setNodes] = useState<Node[]>(propNodes || initialNodes);
@@ -150,16 +153,45 @@ const FlowEditorContent = ({
     }
   }, [initialViewport, reactFlowInstance]);
 
+  // Track if we need to save changes
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previousNodesRef = useRef<string>('');
+  const previousEdgesRef = useRef<string>('');
+  
   // Guardar automáticamente los cambios cuando cambian los nodos o bordes
   useEffect(() => {
-    if (onSave && reactFlowInstance) {
-      const saveTimeout = setTimeout(() => {
+    // Only save when there's an actual change to avoid unnecessary backend calls
+    const currentNodesJSON = JSON.stringify(nodes);
+    const currentEdgesJSON = JSON.stringify(edges);
+    
+    if (onSave && reactFlowInstance && 
+        (currentNodesJSON !== previousNodesRef.current || 
+         currentEdgesJSON !== previousEdgesRef.current)) {
+      
+      // Update our previous state tracking
+      previousNodesRef.current = currentNodesJSON;
+      previousEdgesRef.current = currentEdgesJSON;
+      
+      // Clear previous timeout if it exists
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      
+      // Set up a new timeout
+      saveTimeoutRef.current = setTimeout(() => {
         const flow = reactFlowInstance.toObject();
         onSave(flow);
-      }, 1000); // Esperar 1 segundo antes de guardar para evitar guardar demasiado frecuentemente
-
-      return () => clearTimeout(saveTimeout);
+        saveTimeoutRef.current = null;
+      }, 1000); // Debounce for 1 second
     }
+    
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
   }, [nodes, edges, onSave, reactFlowInstance]);
 
   // Añadir estado para edición de nombre de grupo
@@ -374,7 +406,7 @@ const FlowEditorContent = ({
     const group = reactFlowInstance.getNode(groupId);
     if (!group) return { width: 150, height: 80, cols: 1, rows: 1, spacing: 16, headerHeight: 40, horizontalMargin: 20, verticalMargin: 20, minNodeMargin: 16 };
   
-    const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === groupId);
+    const childNodes = reactFlowInstance.getNodes().filter((n: Node) => n.parentNode === groupId);
     const nodeCount = childNodes.length;
     if (nodeCount === 0) return { width: 150, height: 80, cols: 1, rows: 1, spacing: 16, headerHeight: 40, horizontalMargin: 20, verticalMargin: 20, minNodeMargin: 16 };
   
@@ -432,7 +464,7 @@ const FlowEditorContent = ({
     const group = reactFlowInstance.getNode(groupId);
     if (!group) return;
   
-    const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === groupId);
+    const childNodes = reactFlowInstance.getNodes().filter((n: Node) => n.parentNode === groupId);
     if (childNodes.length === 0) return;
   
     const {
@@ -451,7 +483,7 @@ const FlowEditorContent = ({
     // Posicionar nodos en la cuadrícula, sin solapamiento y sin tocar bordes
     const updatedNodes = reactFlowInstance.getNodes().map(node => {
       if (node.parentNode !== groupId) return node;
-      const idx = sortedChildNodes.findIndex(n => n.id === node.id);
+      const idx = sortedChildNodes.findIndex((n: Node) => n.id === node.id);
       const row = Math.floor(idx / cols);
       const col = idx % cols;
       // Calcular posición para que haya separación entre nodos y bordes
@@ -620,7 +652,7 @@ const FlowEditorContent = ({
             if (node.parentNode && parentGroupIds.includes(node.parentNode)) {
               // Este nodo pertenece a un grupo que estamos eliminando
               // Buscar el grupo padre para obtener su posición
-              const parentGroup = allNodes.find(n => n.id === node.parentNode);
+              const parentGroup = allNodes.find((n: Node) => n.id === node.parentNode);
               
               if (parentGroup) {
                 console.log(`Moviendo nodo ${node.id} fuera del grupo ${node.parentNode}`);
@@ -661,7 +693,7 @@ const FlowEditorContent = ({
       // If this is a child node of a group being ungrouped
       if (node.parentNode && groupsToUngroup.includes(node.parentNode)) {
         // Find the parent group
-        const parentGroup = allNodes.find(n => n.id === node.parentNode);
+        const parentGroup = allNodes.find((n: Node) => n.id === node.parentNode);
         
         if (parentGroup) {
           // Calculate absolute position
@@ -953,7 +985,7 @@ const FlowEditorContent = ({
     // Aplicar ajustes si son necesarios
     if (needsAdjustment) {
       reactFlowInstance.setNodes(nds => 
-        nds.map(n => 
+        nds.map((n: Node) => 
           n.id === node.id ? { ...n, position: newPos } : n
         )
       );
@@ -1019,7 +1051,7 @@ const FlowEditorContent = ({
       const parentNode = reactFlowInstance.getNode(node.parentNode);
       if (parentNode) {
         reactFlowInstance.setNodes(nodes => 
-          nodes.map(n => {
+          nodes.map((n: Node) => {
             if (n.id === contextMenu.nodeId) {
               return {
                 ...n,
@@ -1043,8 +1075,8 @@ const FlowEditorContent = ({
     if (action === 'addSelectedNodesToGroup' && contextMenu.nodeType === 'group') {
       // Get IDs of all currently selected nodes that aren't the group itself
       const nodesToAdd = selectedNodes
-        .filter(n => n.id !== contextMenu.nodeId)
-        .map(n => n.id);
+        .filter((n: Node) => n.id !== contextMenu.nodeId)
+        .map((n: Node) => n.id);
       
       // Create a custom event to trigger adding these nodes to the group
       const actionEvent = new CustomEvent('nodeAction', {
@@ -1070,7 +1102,7 @@ const FlowEditorContent = ({
         if (newColor !== null) { // Check for null in case user cancels prompt
           console.log("Changing background color to:", newColor); // Log
           reactFlowInstance.setNodes(nds => 
-            nds.map(n => 
+            nds.map((n: Node) => 
               n.id === contextMenu.nodeId 
                 ? { ...n, data: { ...n.data, backgroundColor: newColor } } 
                 : n
@@ -1085,7 +1117,7 @@ const FlowEditorContent = ({
         if (newBorder !== null) { // Check for null in case user cancels prompt
           console.log("Changing border to:", newBorder); // Log
           reactFlowInstance.setNodes(nds => 
-            nds.map(n => 
+            nds.map((n: Node) => 
               n.id === contextMenu.nodeId 
                 ? { ...n, data: { ...n.data, border: newBorder } } 
                 : n
@@ -1146,7 +1178,7 @@ const FlowEditorContent = ({
         return currentNodes.map(node => {
           if (node.parentNode && groupsToDelete.includes(node.parentNode)) {
             // Get parent position
-            const parent = currentNodes.find(n => n.id === node.parentNode);
+            const parent = currentNodes.find((n: Node) => n.id === node.parentNode);
             if (parent) {
               // Make absolute position
               return {
@@ -1402,20 +1434,51 @@ const FlowEditorContent = ({
     };
   }, []);
 
+  // Create a ref at component level to track recent updates and prevent infinite loops
+  const updateTimeRef = useRef<number>(0);
+  
   // Añadir listener para eventos de actualización del grupo
   useEffect(() => {
+    const debounceTimeMs = 1000; // Wait 1 second between updates to prevent loops
+    
     const handleGroupUpdate = (event: CustomEvent) => {
-      console.log("Received updateGroupNodes event:", event.detail); // Log event detail
+      console.log("Received updateGroupNodes event:", event.detail);
       const { groupId, nodes: updatedNodes, edges: updatedEdges, hasNewNodes } = event.detail;
       
-      // --- TEMPORARILY COMMENT OUT LOGIC TO CHECK FOR INFINITE LOOP ---
-      /* 
-      if (groupId && updatedNodes) {
-        // ... (complex logic involving safeUpdatedNodes, setNodes, setEdges) ...
-        // ... (this entire block is commented out for debugging the loop) ...
+      // Prevent multiple rapid updates (debounce)
+      const currentTime = Date.now();
+      if (currentTime - updateTimeRef.current < debounceTimeMs) {
+        console.log("Debouncing group update - too soon after last update");
+        return;
       }
-      */
-      console.log("Skipping handleGroupUpdate logic for debugging infinite loop."); // Add log
+      
+      // Update the timestamp
+      updateTimeRef.current = currentTime;
+      
+      if (groupId && updatedNodes && reactFlowInstance) {
+        // Create a "safe" copy of the nodes with new references to avoid mutation issues
+        const safeUpdatedNodes = updatedNodes.map((n: Node) => ({...n}));
+        
+        // Batch the state updates to minimize renders
+        reactFlowInstance.setNodes(currentNodes => {
+          const nodesWithoutGroup = currentNodes.filter((n: Node) => n.id !== groupId);
+          return [...nodesWithoutGroup, ...safeUpdatedNodes];
+        });
+        
+        if (updatedEdges && updatedEdges.length > 0) {
+          reactFlowInstance.setEdges(currentEdges => {
+            // Keep edges that don't connect to the updated nodes
+            const edgesToKeep = currentEdges.filter(edge => {
+              const isSourceInUpdated = safeUpdatedNodes.some((n: Node) => n.id === edge.source);
+              const isTargetInUpdated = safeUpdatedNodes.some((n: Node) => n.id === edge.target);
+              return !(isSourceInUpdated || isTargetInUpdated);
+            });
+            
+            // Add the updated edges
+            return [...edgesToKeep, ...updatedEdges];
+          });
+        }
+      }
     };
     
     document.addEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
@@ -1423,7 +1486,7 @@ const FlowEditorContent = ({
     return () => {
       document.removeEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
     };
-  }, [reactFlowInstance]); // Dependency array remains the same for now
+  }, [reactFlowInstance]);
 
   // Crear un manejador específico para el reset de zoom
   const handleResetView = useCallback(() => {
@@ -2182,7 +2245,7 @@ const FlowEditorContent = ({
               onConnect(params);
             }
           }}
-          nodeTypes={externalNodeTypes} // Pasamos directamente externalNodeTypes
+          nodeTypes={memoizedNodeTypes} // Use memoized nodeTypes
           edgeTypes={edgeTypes}
           onDragOver={onDragOver}
           onDrop={onDrop}
@@ -2540,7 +2603,7 @@ const FlowEditorContent = ({
                   groupId={groupViewModal.groupId || ''}
                   initialNodes={groupViewModal.nodes}
                   initialEdges={groupViewModal.edges}
-                  nodeTypes={externalNodeTypes}
+                  nodeTypes={memoizedNodeTypes}
                   onClose={() => setGroupViewModal({ isOpen: false, groupId: null, nodes: [], edges: [], groupLabel: 'Grupo', provider: 'generic', nodeChanges: false })}
                 />
               </div>
@@ -2556,12 +2619,61 @@ const FlowEditorContent = ({
 export default function FlowEditor(props: FlowEditorProps) {
   const { initialDiagram } = props;
   
+  // Track the diagram ID to prevent unnecessary re-renders
+  const prevDiagramIdRef = useRef<string | null>(null);
+  const [key, setKey] = useState(1);
+  const [fadeState, setFadeState] = useState<'in' | 'out'>('in');
+  const [transitioning, setTransitioning] = useState(false);
+  
+  // Only force re-render when the diagram ID changes
+  useEffect(() => {
+    if (initialDiagram?.id && prevDiagramIdRef.current !== initialDiagram.id) {
+      // Instead of immediately re-rendering, we'll fade out, then swap the key, then fade in
+      if (prevDiagramIdRef.current) {
+        console.log(`Diagram ID changed: ${initialDiagram.id}, transitioning FlowEditor`);
+        setTransitioning(true);
+        setFadeState('out');
+        
+        // After fade out, update the key and prepare for fade in
+        setTimeout(() => {
+          prevDiagramIdRef.current = initialDiagram.id;
+          setKey(prev => prev + 1);
+          
+          // Short pause with new diagram loaded but still invisible
+          setTimeout(() => {
+            setFadeState('in');
+            
+            // Mark transition as complete after fade in
+            setTimeout(() => {
+              setTransitioning(false);
+            }, 300);
+          }, 50);
+        }, 150);
+      } else {
+        // First load, no need for fancy transition
+        prevDiagramIdRef.current = initialDiagram.id;
+        setKey(prev => prev + 1);
+      }
+    }
+  }, [initialDiagram?.id]);
+  
+  // Memorizar nodeTypes para evitar recrearlo en cada renderizado
+  const memoizedNodeTypes = useMemo(() => props.nodeTypes || {}, [props.nodeTypes]);
+  
   // Envolver ReactFlowProvider alrededor del contenido con las props adecuadas
   return (
-    <div className="w-full h-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+    <div 
+      className={`w-full h-full border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden transition-opacity duration-300 ${
+        fadeState === 'in' ? 'opacity-100' : 'opacity-0'
+      }`}
+      key={key} // Use the key to force re-render only when diagram ID changes
+    >
       <ReactFlowProvider>
-        <FlowEditorContent {...props} />
+        <FlowEditorContent {...props} nodeTypes={memoizedNodeTypes} />
       </ReactFlowProvider>
+      {transitioning && (
+        <div className="absolute inset-0 bg-transparent pointer-events-none" />
+      )}
       <style jsx global>{`
         /* Ensure group editor nodes are properly centered */
         .group-view-modal .react-flow__viewport {

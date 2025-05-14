@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background, 
   Controls,
@@ -49,6 +49,9 @@ function GroupEditor({
   // Use useReactFlow hook instead of state for the instance
   const reactFlowInstance = useReactFlow(); 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  
+  // Memoize nodeTypes to prevent recreation on each render
+  const memoizedNodeTypes = useMemo(() => nodeTypes, [nodeTypes]);
 
   // Handler para conectar nodos
   const onConnect: OnConnect = useCallback(
@@ -296,7 +299,7 @@ function GroupEditor({
           //   // Set initial zoom immediately after initialization
           //   instance.setViewport({ x: 0, y: 0, zoom: 0.5 }); 
           // }}
-          nodeTypes={nodeTypes}
+          nodeTypes={memoizedNodeTypes}
           fitView={false} // Keep fitView false to allow manual control
           fitViewOptions={{ 
               padding: 0.3, // Consistent padding
@@ -373,6 +376,8 @@ export default function GroupFlowEditor({
   nodeTypes,
   onClose
 }: GroupFlowEditorProps) {
+  // Memoize nodeTypes to prevent recreation on each render
+  const memoizedNodeTypes = useMemo(() => nodeTypes, [nodeTypes]);
   // Guardar los cambios del grupo
   const handleSave = useCallback((nodes: Node[], edges: Edge[]) => {
     if (!nodes || !groupId) return;
@@ -484,7 +489,7 @@ export default function GroupFlowEditor({
         groupId={groupId}
         initialNodes={initialNodes}
         initialEdges={initialEdges}
-        nodeTypes={nodeTypes}
+        nodeTypes={memoizedNodeTypes}
         onSave={handleSave}
       />
     </ReactFlowProvider>

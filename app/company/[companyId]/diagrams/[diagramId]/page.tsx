@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, useTransition } from 'react';
+import ReactDOM from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
+import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram } from '../../../../services/diagramService';
 import { Button, Select, Typography, notification, Modal, Input, Spin } from 'antd';
@@ -17,42 +19,17 @@ import {
   OnEdgesChange,
   OnConnect
 } from 'reactflow';
-// Importaciones adicionales para los tipos de nodos
-import { 
-  EC2Node, 
-  S3BucketNode, 
-  LambdaFunctionNode,
-  RDSInstanceNode 
-} from '../../../../components/nodes/AwsNodes';
-import {
-  ComputeEngineNode,
-  CloudStorageNode,
-  CloudFunctionsNode,
-  CloudSQLNode
-} from '../../../../components/nodes/GcpNodes';
-import NodeGroup from '../../../../components/nodes/NodeGroup';
-import AreaBackground from '../../../../components/nodes/AreaBackground';
+// Importar nodeTypes desde el archivo centralizado
+import nodeTypes from '../../../../components/nodes/NodeTypes';
+
+// Cache for environments and diagrams
+const environmentCache = new Map<string, Environment[]>();
+const diagramCache = new Map<string, Diagram[]>();
+const singleDiagramCache = new Map<string, Diagram>();
 
 const { Title } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
-
-// Definir los tipos de nodos
-const nodeTypes = {
-  // AWS Nodes
-  ec2: EC2Node,
-  s3: S3BucketNode,
-  lambda: LambdaFunctionNode,
-  rds: RDSInstanceNode,
-  // GCP Nodes
-  compute: ComputeEngineNode,
-  storage: CloudStorageNode,
-  function: CloudFunctionsNode, // Corregido de CloudFunctionNode a CloudFunctionsNode
-  sql: CloudSQLNode,
-  // Group and Background
-  group: NodeGroup,
-  areaBackground: AreaBackground
-};
 
 // Categorías de recursos para el panel lateral
 const resourceCategories = [
@@ -123,10 +100,17 @@ export default function DiagramPage() {
   const [selectedDiagram, setSelectedDiagram] = useState<string | null>(diagramId as string);
   const [currentDiagram, setCurrentDiagram] = useState<Diagram | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isPending, startTransition] = useTransition();
   
   // Estados para los nodos y conexiones del diagrama actual
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
+  
+  // Keep the previous diagram for smooth transitions
+  const [previousDiagram, setPreviousDiagram] = useState<Diagram | null>(null);
+  
+  // Memoize nodeTypes to prevent recreating on each render
+  const memoizedNodeTypes = useMemo(() => nodeTypes, []);
   
   // Manejadores para cambios en nodos y conexiones
   const onNodesChange: OnNodesChange = useCallback(
@@ -165,10 +149,97 @@ export default function DiagramPage() {
   const [newDiagramName, setNewDiagramName] = useState<string>('');
   const [newDiagramDescription, setNewDiagramDescription] = useState<string>('');
 
+  // Track if component is mounted to prevent state updates after unmount
+  const isMounted = useRef(true);
+  
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+  
+  // Create a stable reference for the current diagram data to prevent flickering
+  const stableDataRef = useRef<{
+    diagram: Diagram | null;
+    nodes: Node[];
+    edges: Edge[];
+  }>({
+    diagram: null,
+    nodes: [],
+    edges: []
+  });
+
+  // Function to batch state updates and reduce cascading rerenders
+  const batchStateUpdates = useCallback((updates: {
+    diagram?: Diagram | null;
+    nodes?: Node[];
+    edges?: Edge[];
+  }) => {
+    // We'll use React's batching ability with our own order of operations
+    if (!isMounted.current) return;
+    
+    // First update our stable reference to keep the data consistent
+    if (updates.diagram !== undefined) {
+      stableDataRef.current.diagram = updates.diagram;
+    }
+    if (updates.nodes) {
+      stableDataRef.current.nodes = updates.nodes;
+    }
+    if (updates.edges) {
+      stableDataRef.current.edges = updates.edges;
+    }
+    
+    // Save the previous diagram before updating to the new one
+    if (updates.diagram !== undefined && currentDiagram) {
+      setPreviousDiagram(currentDiagram);
+    }
+    
+    // Use React 18's useTransition for lower priority updates
+    startTransition(() => {
+      if (updates.nodes) {
+        setNodes(updates.nodes);
+      }
+      if (updates.edges) {
+        setEdges(updates.edges);
+      }
+    });
+    
+    // But use flush sync for the diagram change as it's higher priority
+    ReactDOM.flushSync(() => {
+      if (updates.diagram !== undefined) {
+        setCurrentDiagram(updates.diagram);
+      }
+    });
+  }, [currentDiagram]);
+  
   useEffect(() => {
     const loadEnvironments = async () => {
       try {
-        const environmentsData = await getEnvironments(companyId as string);
+        // Set loading state first
+        setLoading(true);
+        
+        // Pre-fetch everything in parallel to speed up initial load
+        const fetchEnvironmentsPromise = (async () => {
+          // Check cache first for environments
+          const cacheKey = `env-${companyId}`;
+          
+          if (environmentCache.has(cacheKey)) {
+            console.log('Using cached environments data');
+            return environmentCache.get(cacheKey) || [];
+          } else {
+            const data = await getEnvironments(companyId as string);
+            // Store in cache
+            environmentCache.set(cacheKey, data);
+            console.log('Fetched and cached environments data');
+            return data;
+          }
+        })();
+        
+        // Wait for environments to be available before proceeding
+        const environmentsData = await fetchEnvironmentsPromise;
+        
+        if (!isMounted.current) return;
+        
+        // Update environments immediately to show something to the user
         setEnvironments(environmentsData);
 
         // Si hay ambientes disponibles
@@ -176,7 +247,7 @@ export default function DiagramPage() {
           // Verificar si hay un environmentId en la URL
           const urlParams = new URLSearchParams(window.location.search);
           const urlEnvironmentId = urlParams.get('environmentId');
-          const urlDiagramId = urlParams.get('id') || diagramId; // Usar el ID de diagrama de la query param o de la ruta
+          const urlDiagramId = urlParams.get('id') || diagramId as string; // Usar el ID de diagrama de la query param o de la ruta
           
           // Buscar el ambiente en la lista de ambientes
           const targetEnvironment = urlEnvironmentId 
@@ -184,51 +255,106 @@ export default function DiagramPage() {
             : environmentsData[0];
           
           if (targetEnvironment) {
+            // Update the environment selection immediately
             setSelectedEnvironment(targetEnvironment.id);
             
-            // Cargar los diagramas del ambiente seleccionado
-            const diagramsData = await getDiagramsByEnvironment(companyId as string, targetEnvironment.id);
+            // Pre-fetch diagrams list and specific diagram in parallel
+            const fetchDiagramsPromise = (async () => {
+              // Check cache for diagrams
+              const diagramsCacheKey = `diagrams-${companyId}-${targetEnvironment.id}`;
+              
+              if (diagramCache.has(diagramsCacheKey)) {
+                console.log('Using cached diagrams data');
+                return diagramCache.get(diagramsCacheKey) || [];
+              } else {
+                // Cargar los diagramas del ambiente seleccionado
+                const data = await getDiagramsByEnvironment(companyId as string, targetEnvironment.id);
+                // Store in cache
+                diagramCache.set(diagramsCacheKey, data);
+                console.log('Fetched and cached diagrams data');
+                return data;
+              }
+            })();
+            
+            // Wait for diagrams to load
+            const diagramsData = await fetchDiagramsPromise;
+            
+            if (!isMounted.current) return;
+            // Update diagrams list
             setDiagrams(diagramsData);
 
-            // Verificar si tenemos un diagrama válido
+            // Determine which diagram to load
             const hasDiagramId = urlDiagramId && diagramsData.some(d => d.id === urlDiagramId);
+            const targetDiagramId = hasDiagramId ? urlDiagramId : 
+                                   (diagramsData.length > 0 ? diagramsData[0].id : null);
             
-            if (hasDiagramId) {
-              setSelectedDiagram(urlDiagramId as string);
-              // Cargar el diagrama específico
-              console.log(`Cargando diagrama específico: ${urlDiagramId} en ambiente ${targetEnvironment.id}`);
-              const diagramData = await getDiagram(companyId as string, targetEnvironment.id, urlDiagramId as string);
-              setCurrentDiagram(diagramData);
-              setNodes(diagramData.nodes || []);
-              setEdges(diagramData.edges || []);
+            if (targetDiagramId) {
+              // Update the selection immediately
+              setSelectedDiagram(targetDiagramId);
               
-              // Actualizar la URL con nombres amigables
+              // Fetch the specific diagram
+              const fetchDiagramPromise = (async () => {
+                // Check cache for specific diagram
+                const singleDiagramCacheKey = `diagram-${companyId}-${targetEnvironment.id}-${targetDiagramId}`;
+                
+                if (singleDiagramCache.has(singleDiagramCacheKey)) {
+                  console.log('Using cached diagram data');
+                  return singleDiagramCache.get(singleDiagramCacheKey) || null;
+                } else {
+                  // Cargar el diagrama específico
+                  console.log(`Cargando diagrama específico: ${targetDiagramId} en ambiente ${targetEnvironment.id}`);
+                  const data = await getDiagram(companyId as string, targetEnvironment.id, targetDiagramId);
+                  // Store in cache
+                  singleDiagramCache.set(singleDiagramCacheKey, data);
+                  console.log('Fetched and cached specific diagram data');
+                  return data;
+                }
+              })();
+              
+              // Wait for diagram data to load
+              const diagramData = await fetchDiagramPromise;
+              
+              if (!isMounted.current || !diagramData) {
+                setLoading(false);
+                return;
+              }
+              
+              // Update the URL before we update the diagram data
+              // This ensures the URL is ready when the diagram loads
               const envName = targetEnvironment.name;
               const diagramName = diagramData.name;
-              updateUrlWithNames(targetEnvironment.id, urlDiagramId as string, envName, diagramName);
-            } else if (diagramsData.length > 0) {
-              // Si no hay un diagrama específico o no es válido, usar el primero disponible
-              console.log('No se encontró un diagrama específico, usando el primero disponible');
-              const firstDiagram = diagramsData[0];
-              setSelectedDiagram(firstDiagram.id);
-              setCurrentDiagram(firstDiagram);
-              setNodes(firstDiagram.nodes || []);
-              setEdges(firstDiagram.edges || []);
+              updateUrlWithNames(targetEnvironment.id, targetDiagramId, envName, diagramName);
               
-              // Actualizar la URL con nombres amigables
-              const envName = targetEnvironment.name;
-              updateUrlWithNames(targetEnvironment.id, firstDiagram.id, envName, firstDiagram.name);
+              // Use batch state updates to minimize rerenders
+              // This ensures all updates happen atomically
+              batchStateUpdates({
+                diagram: diagramData,
+                nodes: diagramData.nodes || [],
+                edges: diagramData.edges || []
+              });
+              
+              // Turn off loading with a small delay to ensure render is complete
+              setTimeout(() => {
+                if (isMounted.current) {
+                  setLoading(false);
+                }
+              }, 300);
             } else {
               console.log('No hay diagramas disponibles para este ambiente');
               setSelectedDiagram(null);
               setCurrentDiagram(null);
               setNodes([]);
               setEdges([]);
+              
+              // Turn off loading since we have no diagrams
+              setLoading(false);
             }
+          } else {
+            setLoading(false);
           }
+        } else {
+          setLoading(false);
         }
-
-        setLoading(false);
       } catch (error) {
         console.error("Error cargando datos:", error);
         notification.error({
@@ -242,6 +368,9 @@ export default function DiagramPage() {
     loadEnvironments();
   }, [companyId, diagramId, router]);
 
+  // Track the previous URL params to avoid unnecessary URL updates
+  const prevUrlRef = useRef({ envId: '', diagramId: '' });
+  
   // Función para actualizar la URL con nombres amigables
   const updateUrlWithNames = (environmentId: string, diagramId: string, envName: string, diagramName: string) => {
     const sanitizedEnvName = envName
@@ -254,11 +383,28 @@ export default function DiagramPage() {
       .replace(/[^\w\s-]/g, '')
       .replace(/\s+/g, '-');
     
-    // Actualizar la URL para incluir IDs y nombres amigables
-    router.replace(
-      `/company/${companyId}/diagrams/${diagramId}?environmentId=${environmentId}&env=${sanitizedEnvName}&diagram=${sanitizedDiagramName}`, 
-      { scroll: false }
-    );
+    // Verificar si los IDs actuales ya coinciden para evitar recargas innecesarias
+    const urlParams = new URLSearchParams(window.location.search);
+    const currentEnvId = urlParams.get('environmentId');
+    const currentDiagramId = params.diagramId as string;
+    
+    // Solo actualizar la URL si realmente cambió algo Y no ha sido actualizado antes
+    if ((currentEnvId !== environmentId || currentDiagramId !== diagramId) && 
+        (prevUrlRef.current.envId !== environmentId || prevUrlRef.current.diagramId !== diagramId)) {
+      
+      console.log(`Updating URL: env ${currentEnvId} -> ${environmentId}, diagram ${currentDiagramId} -> ${diagramId}`);
+      
+      // Update our reference to what we're changing to
+      prevUrlRef.current = { envId: environmentId, diagramId };
+      
+      // Actualizar la URL para incluir IDs y nombres amigables
+      router.replace(
+        `/company/${companyId}/diagrams/${diagramId}?environmentId=${environmentId}&env=${sanitizedEnvName}&diagram=${sanitizedDiagramName}`, 
+        { scroll: false }
+      );
+    } else {
+      console.log('Skipping URL update - no change or already updated');
+    }
   };
 
   // Efecto para sincronizar los estados locales cuando cambia el diagrama actual
@@ -269,9 +415,25 @@ export default function DiagramPage() {
     }
   }, [currentDiagram]);
 
+  // Define constants for consistent transition timings
+  const TRANSITION_DURATION = 500; // ms
+  const MIN_LOADING_DURATION = 300; // ms
+  
   const handleEnvironmentChange = async (environmentId: string) => {
+    // Keep track of the currently displayed diagram before switching environments
+    if (currentDiagram) {
+      setPreviousDiagram(currentDiagram);
+    }
+    
+    // Record start time to ensure minimum loading duration for smooth transitions
+    const startTime = Date.now();
+    
+    // First, set loading state
     setLoading(true);
+    
+    // Set environment ID immediately
     setSelectedEnvironment(environmentId);
+    
     try {
       // Encontrar el ambiente seleccionado para obtener su nombre
       const selectedEnv = environments.find(env => env.id === environmentId);
@@ -279,37 +441,80 @@ export default function DiagramPage() {
         throw new Error('Ambiente no encontrado');
       }
       
-      const diagramsData = await getDiagramsByEnvironment(companyId as string, environmentId);
-      setDiagrams(diagramsData);
+      // Check cache for diagrams
+      let diagramsData: Diagram[] = [];
+      const diagramsCacheKey = `diagrams-${companyId}-${environmentId}`;
+      
+      if (diagramCache.has(diagramsCacheKey)) {
+        console.log('Using cached diagrams data for environment change');
+        diagramsData = diagramCache.get(diagramsCacheKey) || [];
+      } else {
+        diagramsData = await getDiagramsByEnvironment(companyId as string, environmentId);
+        // Store in cache
+        diagramCache.set(diagramsCacheKey, diagramsData);
+        console.log('Fetched and cached diagrams data for environment change');
+      }
+      
+      // Update diagrams list inside a transition to prevent UI jank
+      startTransition(() => {
+        setDiagrams(diagramsData);
+      });
 
       if (diagramsData.length > 0) {
         // Seleccionamos el primer diagrama del nuevo ambiente
         const firstDiagram = diagramsData[0];
-        setSelectedDiagram(firstDiagram.id);
-        setCurrentDiagram(firstDiagram);
         
-        // También actualizamos los nodos y bordes
-        setNodes(firstDiagram.nodes || []);
-        setEdges(firstDiagram.edges || []);
+        // Set the diagram ID immediately to update the UI
+        setSelectedDiagram(firstDiagram.id);
         
         // Actualizar la URL con nombres amigables
         updateUrlWithNames(environmentId, firstDiagram.id, selectedEnv.name, firstDiagram.name);
-      } else {
-        setSelectedDiagram(null);
-        setCurrentDiagram(null);
-        setNodes([]);
-        setEdges([]);
         
-        // Si no hay diagramas, actualizar la URL solo con el ambiente
-        const sanitizedEnvName = selectedEnv.name
-          .toLowerCase()
-          .replace(/[^\w\s-]/g, '')
-          .replace(/\s+/g, '-');
+        // Then batch update the state for diagram, nodes, and edges
+        batchStateUpdates({
+          diagram: firstDiagram,
+          nodes: firstDiagram.nodes || [],
+          edges: firstDiagram.edges || []
+        });
+        
+        // Calculate remaining time to ensure minimum loading duration
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, MIN_LOADING_DURATION - elapsedTime);
+        
+        // Ensure minimum loading time for smooth transition
+        setTimeout(() => {
+          if (isMounted.current) {
+            setLoading(false);
+          }
+        }, remainingTime);
+      } else {
+        // Calculate remaining time to ensure minimum loading duration
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, MIN_LOADING_DURATION - elapsedTime);
+        
+        // Update states with a delay to ensure smooth transition
+        setTimeout(() => {
+          if (!isMounted.current) return;
           
-        router.replace(
-          `/company/${companyId}/diagrams?environmentId=${environmentId}&env=${sanitizedEnvName}`,
-          { scroll: false }
-        );
+          setSelectedDiagram(null);
+          setCurrentDiagram(null);
+          setNodes([]);
+          setEdges([]);
+          
+          // Si no hay diagramas, actualizar la URL solo con el ambiente
+          const sanitizedEnvName = selectedEnv.name
+            .toLowerCase()
+            .replace(/[^\w\s-]/g, '')
+            .replace(/\s+/g, '-');
+            
+          router.replace(
+            `/company/${companyId}/diagrams?environmentId=${environmentId}&env=${sanitizedEnvName}`,
+            { scroll: false }
+          );
+          
+          // Turn off loading state
+          setLoading(false);
+        }, remainingTime);
       }
     } catch (error) {
       console.error("Error cargando diagramas:", error);
@@ -317,13 +522,26 @@ export default function DiagramPage() {
         message: "Error",
         description: "No se pudieron cargar los diagramas. Por favor, inténtelo de nuevo más tarde."
       });
+      // Make sure to turn off loading state on error
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleDiagramChange = async (diagramId: string) => {
+    // Keep track of the currently displayed diagram before switching
+    if (currentDiagram) {
+      setPreviousDiagram(currentDiagram);
+    }
+    
+    // Record start time to ensure minimum loading duration for smooth transitions
+    const startTime = Date.now();
+    
+    // First, set loading state - we're transitioning between diagrams
     setLoading(true);
+    
+    // Set diagram ID immediately
     setSelectedDiagram(diagramId);
+    
     try {
       if (selectedEnvironment) {
         // Encontrar el ambiente seleccionado para obtener su nombre
@@ -332,13 +550,49 @@ export default function DiagramPage() {
           throw new Error('Ambiente no encontrado');
         }
         
-        const diagramData = await getDiagram(companyId as string, selectedEnvironment, diagramId);
-        setCurrentDiagram(diagramData);
-        setNodes(diagramData.nodes || []);
-        setEdges(diagramData.edges || []);
+        // Check cache for specific diagram
+        let diagramData: Diagram | null = null;
+        const singleDiagramCacheKey = `diagram-${companyId}-${selectedEnvironment}-${diagramId}`;
+        
+        if (singleDiagramCache.has(singleDiagramCacheKey)) {
+          console.log('Using cached diagram data for diagram change');
+          diagramData = singleDiagramCache.get(singleDiagramCacheKey) || null;
+        } else {
+          console.log(`Cargando diagrama específico: ${diagramId} en ambiente ${selectedEnvironment}`);
+          diagramData = await getDiagram(companyId as string, selectedEnvironment, diagramId);
+          // Store in cache
+          singleDiagramCache.set(singleDiagramCacheKey, diagramData);
+          console.log('Fetched and cached specific diagram data for diagram change');
+        }
+        
+        if (!diagramData || !isMounted.current) {
+          setLoading(false);
+          return;
+        }
         
         // Actualizar la URL con nombres amigables
         updateUrlWithNames(selectedEnvironment, diagramId, selectedEnv.name, diagramData.name);
+        
+        // Use our batch update function to minimize rerenders
+        // This ensures all state updates happen together
+        batchStateUpdates({
+          diagram: diagramData,
+          nodes: diagramData.nodes || [],
+          edges: diagramData.edges || []
+        });
+        
+        // Calculate remaining time to ensure minimum loading duration
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, MIN_LOADING_DURATION - elapsedTime);
+        
+        // Ensure minimum loading time for smooth transition
+        setTimeout(() => {
+          if (isMounted.current) {
+            setLoading(false);
+          }
+        }, remainingTime);
+      } else {
+        setLoading(false);
       }
     } catch (error) {
       console.error("Error cargando diagrama:", error);
@@ -346,8 +600,9 @@ export default function DiagramPage() {
         message: "Error",
         description: "No se pudo cargar el diagrama. Por favor, inténtelo de nuevo más tarde."
       });
+      // Make sure to turn off loading state on error
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCreateEnvironment = async () => {
@@ -463,7 +718,26 @@ export default function DiagramPage() {
     setLoading(false);
   };
 
-  if (loading) {
+  // Track which type of loading is happening - initial or transition
+  const [loadingType, setLoadingType] = useState<'initial' | 'transition' | null>(
+    (environments.length === 0 || !selectedEnvironment) ? 'initial' : null
+  );
+  
+  // Update loadingType based on overall loading state
+  useEffect(() => {
+    if (loading) {
+      if (environments.length === 0 || !selectedEnvironment) {
+        setLoadingType('initial');
+      } else {
+        setLoadingType('transition');
+      }
+    } else {
+      setLoadingType(null);
+    }
+  }, [loading, environments.length, selectedEnvironment]);
+  
+  // We'll show the initial loading only for the first render
+  if (loadingType === 'initial') {
     return (
       <div className="flex justify-center items-center h-screen">
         <Spin size="large">
@@ -528,53 +802,84 @@ export default function DiagramPage() {
         </div>
       </div>
 
-      {currentDiagram ? (
-        <div className="h-[calc(100vh-200px)]"> {/* Altura ajustada para dejar espacio para el header */}
-          <FlowEditor 
-            companyId={companyId as string} 
-            environmentId={selectedEnvironment as string}
-            diagramId={selectedDiagram as string} 
-            initialDiagram={currentDiagram}
-            nodeTypes={nodeTypes}
-            resourceCategories={resourceCategories}
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onSave={(flowData) => {
-              // Conservar el nombre y descripción originales del diagrama
-              updateDiagram(
-                companyId as string,
-                selectedEnvironment as string,
-                selectedDiagram as string,
-                {
-                  name: currentDiagram.name,
-                  description: currentDiagram.description,
-                  nodes: flowData.nodes,
-                  edges: flowData.edges,
-                  viewport: flowData.viewport
-                }
-              ).catch(error => {
-                console.error("Error guardando diagrama:", error);
-                notification.error({
-                  message: "Error",
-                  description: "No se pudo guardar el diagrama. Por favor, inténtelo de nuevo."
+      {/* Enhanced diagram display with advanced transition handling */}
+      <div className="relative h-[calc(100vh-200px)]">
+        {/* Create a phantom layer for the previous diagram */}
+        {loadingType === 'transition' && previousDiagram && selectedEnvironment && (
+          <div className="phantom-diagram">
+            <FlowEditor 
+              companyId={companyId as string} 
+              environmentId={selectedEnvironment}
+              diagramId={previousDiagram.id} 
+              initialDiagram={previousDiagram}
+              nodeTypes={memoizedNodeTypes}
+              resourceCategories={resourceCategories}
+              nodes={previousDiagram.nodes || []}
+              edges={previousDiagram.edges || []}
+              onNodesChange={() => {}}
+              onEdgesChange={() => {}}
+              onConnect={() => {}}
+            />
+          </div>
+        )}
+        
+        {/* Loading overlay that appears during transitions */}
+        <div className={`loading-overlay ${loadingType === 'transition' ? '' : 'hidden'}`}>
+          <Spin size="large" className="loading-spinner">
+            <div className="p-5">Cargando diagrama...</div>
+          </Spin>
+        </div>
+        
+        {/* Current diagram container with improved transitions */}
+        <div className={`diagram-container ${loadingType === 'transition' ? 'loading' : 'ready'} h-full`}>
+          {currentDiagram ? (
+            <FlowEditor 
+              key={`diagram-${currentDiagram.id}`} // Improved key for better reconciliation
+              companyId={companyId as string} 
+              environmentId={selectedEnvironment as string}
+              diagramId={selectedDiagram as string} 
+              initialDiagram={currentDiagram}
+              nodeTypes={memoizedNodeTypes}
+              resourceCategories={resourceCategories}
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onSave={(flowData) => {
+                // Conservar el nombre y descripción originales del diagrama
+                updateDiagram(
+                  companyId as string,
+                  selectedEnvironment as string,
+                  selectedDiagram as string,
+                  {
+                    name: currentDiagram.name,
+                    description: currentDiagram.description,
+                    nodes: flowData.nodes,
+                    edges: flowData.edges,
+                    viewport: flowData.viewport
+                  }
+                ).catch(error => {
+                  console.error("Error guardando diagrama:", error);
+                  notification.error({
+                    message: "Error",
+                    description: "No se pudo guardar el diagrama. Por favor, inténtelo de nuevo."
+                  });
                 });
-              });
-            }}
-          />
+              }}
+            />
+          ) : !loading ? (
+            <div className="text-center p-10 border-2 border-dashed border-gray-300 rounded-md">
+              <p className="text-lg text-gray-500">
+                {!selectedEnvironment 
+                  ? "Seleccione o cree un ambiente para empezar"
+                  : "No hay diagramas disponibles en este ambiente. Cree uno nuevo para empezar."
+                }
+              </p>
+            </div>
+          ) : null}
         </div>
-      ) : (
-        <div className="text-center p-10 border-2 border-dashed border-gray-300 rounded-md">
-          <p className="text-lg text-gray-500">
-            {!selectedEnvironment 
-              ? "Seleccione o cree un ambiente para empezar"
-              : "No hay diagramas disponibles en este ambiente. Cree uno nuevo para empezar."
-            }
-          </p>
-        </div>
-      )}
+      </div>
 
       {/* Modal para crear nuevo ambiente */}
       <Modal

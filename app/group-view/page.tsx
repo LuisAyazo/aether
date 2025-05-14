@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -31,6 +31,9 @@ export default function GroupView() {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const router = useRouter();
+  
+  // Memoize nodeTypes to prevent recreating on each render
+  const memoizedNodeTypes = useMemo(() => nodeTypes, []);
 
   // Cargar datos del grupo desde sessionStorage
   useEffect(() => {
@@ -91,7 +94,7 @@ export default function GroupView() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
-          nodeTypes={nodeTypes}
+          nodeTypes={memoizedNodeTypes}
           onInit={(instance) => {
             // Set initial zoom immediately after initialization
             instance.setViewport({ x: 0, y: 0, zoom: 0.6 });

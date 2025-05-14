@@ -1,5 +1,5 @@
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { 
   addEdge, 
   applyEdgeChanges, 
@@ -206,6 +206,9 @@ export default function GcpExample() {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   
+  // Memoize nodeTypes to prevent recreating on each render
+  const memoizedNodeTypes = useMemo(() => nodeTypes, []);
+  
   // Manejadores para cambios en nodos y conexiones
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -236,7 +239,7 @@ export default function GcpExample() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        nodeTypes={nodeTypes}
+        nodeTypes={memoizedNodeTypes}
         resourceCategories={resourceCategories}
       />
     </div>
