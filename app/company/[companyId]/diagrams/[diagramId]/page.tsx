@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, Viewport } from '../../../../services/diagramService';
-import { Button, Select, Typography, notification, Modal, Input, Spin } from 'antd';
+import { Button, Select, Typography, Modal, Input, Spin, App } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { 
   addEdge, 
@@ -93,6 +93,7 @@ const resourceCategories = [
 // This interface was replaced with the import from diagramService.ts
 
 export default function DiagramPage() {
+  const { notification } = App.useApp();
   const params = useParams();
   const router = useRouter();
   const { companyId, diagramId } = params;
