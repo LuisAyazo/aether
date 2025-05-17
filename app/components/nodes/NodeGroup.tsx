@@ -326,9 +326,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             </span>
           </button>
           
-          <div 
-            className="absolute invisible group-hover:visible bg-transparent text-white px-2 py-1 rounded text-sm -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap z-50"
-          >
+          <div className="tooltip">
             {labelText}
           </div>
         </div>

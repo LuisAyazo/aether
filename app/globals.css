@@ -92,31 +92,12 @@ body {
   transition: all 0.3s ease !important;
 }
 
-/* Estilos para nodos minimizados */
-.react-flow__node[data-minimized="true"],
-.react-flow__node-group[data-minimized="true"] {
-  width: 40px !important;
-  height: 40px !important;
-  overflow: visible !important;
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  pointer-events: none !important;
-}
-
-.react-flow__node[data-minimized="true"] > div,
-.react-flow__node-group[data-minimized="true"] > div {
-  pointer-events: all !important;
-}
-
 /* Estilos específicos para grupos minimizados */
 .minimized-group {
   z-index: 5 !important;
   border-radius: 50% !important;
   overflow: visible !important;
   background: rgba(255, 255, 255, 0.05) !important;
-  pointer-events: all !important;
 }
 
 /* Prevenir bordes de selección en grupos minimizados */
@@ -1357,4 +1338,31 @@ button.bg-blue-600 {
   outline: none !important;
   box-shadow: none !important;
   border: none !important;
+}
+
+/* Estilos para el tooltip en grupos minimizados */
+.minimized-group {
+  position: relative;
+}
+
+.minimized-group .tooltip {
+  position: absolute !important;
+  top: -30px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  background: rgba(0, 0, 0, 0.8) !important;
+  color: white !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  white-space: nowrap !important;
+  opacity: 0 !important;
+  transition: opacity 0.2s ease !important;
+  z-index: 1000 !important;
+  pointer-events: none !important;
+}
+
+.minimized-group:hover .tooltip {
+  opacity: 1 !important;
+  visibility: visible !important;
 }
