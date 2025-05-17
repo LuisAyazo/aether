@@ -40,6 +40,7 @@ import GroupFlowEditor from './GroupFlowEditor';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
 import { CustomNode, CustomEdge } from '@/app/utils/customTypes';
+import { throttle } from 'lodash';
 
 interface ResourceCategory {
   name: string;
@@ -161,40 +162,135 @@ const FlowEditorContent = ({
   // Componente para el botón de eliminar en la línea
   const EdgeDeleteButton = useCallback(({ edge }: { edge: Edge }) => {
     const [position, setPosition] = useState({ x: 0, y: 0 });
+    const positionRef = useRef({ x: 0, y: 0 });
     
-    useEffect(() => {
+    const updatePosition = useCallback(() => {
       const edgeElement = document.querySelector(`[data-testid="rf__edge-${edge.id}"] path`);
       if (!edgeElement || !(edgeElement instanceof SVGPathElement)) return;
 
+      // Obtener el punto medio del path
       const pathLength = edgeElement.getTotalLength();
       const midPoint = edgeElement.getPointAtLength(pathLength / 2);
-      
-      // Convertir las coordenadas SVG a coordenadas de la ventana
-      const svgElement = edgeElement.closest('svg');
-      if (!svgElement) return;
-      
+
+      // Obtener el SVG root
+      const svgElement = edgeElement.closest('.react-flow__edges');
+      if (!svgElement || !(svgElement instanceof SVGSVGElement)) return;
+
+      // Crear un punto SVG
       const point = svgElement.createSVGPoint();
       point.x = midPoint.x;
       point.y = midPoint.y;
-      
-      // Transformar el punto usando la matriz de transformación del SVG
+
+      // Obtener la matriz de transformación
       const ctm = svgElement.getScreenCTM();
       if (!ctm) return;
-      
+
+      // Transformar el punto a coordenadas de pantalla
       const screenPoint = point.matrixTransform(ctm);
+
+      // Ajustar por el scroll de la página
+      const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+      const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+
+      // Calcular la posición final
+      const finalX = screenPoint.x + scrollX;
+      const finalY = screenPoint.y + scrollY;
+
+      // Solo actualizar si la posición ha cambiado significativamente
+      const dx = Math.abs(finalX - positionRef.current.x);
+      const dy = Math.abs(finalY - positionRef.current.y);
       
-      setPosition({
-        x: screenPoint.x,
-        y: screenPoint.y
-      });
+      if (dx > 0.5 || dy > 0.5) {  // Reducido el umbral para mayor precisión
+        positionRef.current = { x: finalX, y: finalY };
+        setPosition({ x: finalX, y: finalY });
+      }
     }, [edge.id]);
+
+    useEffect(() => {
+      let animationFrameId: number;
+      let isUpdating = false;
+
+      const handleTransform = () => {
+        if (!isUpdating) {
+          isUpdating = true;
+          if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+          }
+          animationFrameId = requestAnimationFrame(() => {
+            updatePosition();
+            isUpdating = false;
+          });
+        }
+      };
+
+      // Actualización inicial
+      updatePosition();
+      
+      // Observer para cambios en el path
+      const observer = new MutationObserver(handleTransform);
+      const edgeElement = document.querySelector(`[data-testid="rf__edge-${edge.id}"]`);
+      if (edgeElement) {
+        observer.observe(edgeElement, {
+          attributes: true,
+          childList: true,
+          subtree: true,
+          attributeFilter: ['d', 'transform']  // Solo observar cambios relevantes
+        });
+      }
+
+      // Event listeners con throttling
+      const throttledTransform = throttle(handleTransform, 16);  // ~60fps
+      window.addEventListener('resize', throttledTransform);
+      document.addEventListener('reactflow.transform', throttledTransform);
+      document.addEventListener('reactflow.nodedrag', throttledTransform);
+
+      return () => {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
+        observer.disconnect();
+        window.removeEventListener('resize', throttledTransform);
+        document.removeEventListener('reactflow.transform', throttledTransform);
+        document.removeEventListener('reactflow.nodedrag', throttledTransform);
+      };
+    }, [edge.id, updatePosition]);
+
+    // Función de throttle para limitar la frecuencia de actualizaciones
+    function throttle(func: Function, limit: number) {
+      let inThrottle: boolean;
+      return function(this: any, ...args: any[]) {
+        if (!inThrottle) {
+          func.apply(this, args);
+          inThrottle = true;
+          setTimeout(() => inThrottle = false, limit);
+        }
+      };
+    }
 
     return (
       <div
         className="edge-delete-button"
         style={{
-          left: position.x,
-          top: position.y
+          position: 'fixed',
+          transform: 'translate(-50%, -50%)',
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          width: '16px',
+          height: '16px',
+          backgroundColor: 'white',
+          border: '1.5px solid #ff4d4d',
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          fontSize: '14px',
+          lineHeight: 1,
+          color: '#ff4d4d',
+          zIndex: 1000,
+          pointerEvents: 'all',
+          userSelect: 'none',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.2)'  // Añadido sombra suave
         }}
         onClick={(e) => {
           e.stopPropagation();
