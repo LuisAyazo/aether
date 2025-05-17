@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, Viewport } from '../../../../services/diagramService';
-import { Button, Select, Typography, Modal, Input, Spin, App } from 'antd';
+import { Button, Select, Typography, Modal, Input, Spin, App, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { 
   addEdge, 
@@ -93,7 +93,6 @@ const resourceCategories = [
 // This interface was replaced with the import from diagramService.ts
 
 export default function DiagramPage() {
-  const { notification } = App.useApp();
   const params = useParams();
   const router = useRouter();
   const { companyId, diagramId } = params;
@@ -361,10 +360,8 @@ export default function DiagramPage() {
         }
       } catch (error) {
         console.error("Error cargando datos:", error);
-        notification.error({
-          message: "Error",
-          description: "No se pudieron cargar los datos. Por favor, inténtelo de nuevo más tarde."
-        });
+        // Use message directly instead of messageApi
+        message.error("No se pudieron cargar los datos. Por favor, inténtelo de nuevo más tarde.");
         setLoading(false);
       }
     };
@@ -375,8 +372,8 @@ export default function DiagramPage() {
   // Track the previous URL params to avoid unnecessary URL updates
   const prevUrlRef = useRef({ envId: '', diagramId: '' });
   
-  // Reference for reactFlowInstance - corrected
-  const reactFlowInstance = useRef<any>(null);
+  // Reference for reactFlowInstance - corrected with proper typing
+  const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
   
   // Reference for tracking update times to prevent rapid consecutive updates
   const updateTimeRef = useRef<number>(0);
@@ -528,11 +525,7 @@ export default function DiagramPage() {
       }
     } catch (error) {
       console.error("Error cargando diagramas:", error);
-      notification.error({
-        message: "Error",
-        description: "No se pudieron cargar los diagramas. Por favor, inténtelo de nuevo más tarde."
-      });
-      // Make sure to turn off loading state on error
+      message.error("No se pudieron cargar los diagramas. Por favor, inténtelo de nuevo más tarde.");
       setLoading(false);
     }
   };
@@ -606,21 +599,14 @@ export default function DiagramPage() {
       }
     } catch (error) {
       console.error("Error cargando diagrama:", error);
-      notification.error({
-        message: "Error",
-        description: "No se pudo cargar el diagrama. Por favor, inténtelo de nuevo más tarde."
-      });
-      // Make sure to turn off loading state on error
+      message.error("No se pudo cargar el diagrama. Por favor, inténtelo de nuevo más tarde.");
       setLoading(false);
     }
   };
 
   const handleCreateEnvironment = async () => {
     if (!newEnvironmentName.trim()) {
-      notification.error({
-        message: "Error",
-        description: "El nombre del ambiente es obligatorio"
-      });
+      message.error("El nombre del ambiente es obligatorio");
       return;
     }
 
@@ -632,10 +618,7 @@ export default function DiagramPage() {
       };
 
       await createEnvironment(companyId as string, environmentData);
-      notification.success({
-        message: "Éxito",
-        description: "Ambiente creado correctamente"
-      });
+      message.success("Ambiente creado correctamente");
 
       // Recargar ambientes
       const environmentsData = await getEnvironments(companyId as string);
@@ -656,28 +639,19 @@ export default function DiagramPage() {
       setNewEnvironmentDescription('');
     } catch (error) {
       console.error("Error creando ambiente:", error);
-      notification.error({
-        message: "Error",
-        description: "No se pudo crear el ambiente. Por favor, inténtelo de nuevo más tarde."
-      });
+      message.error("No se pudo crear el ambiente. Por favor, inténtelo de nuevo más tarde.");
     }
     setLoading(false);
   };
 
   const handleCreateDiagram = async () => {
     if (!selectedEnvironment) {
-      notification.error({
-        message: "Error",
-        description: "Debe seleccionar un ambiente primero"
-      });
+      message.error("Debe seleccionar un ambiente primero");
       return;
     }
 
     if (!newDiagramName.trim()) {
-      notification.error({
-        message: "Error",
-        description: "El nombre del diagrama es obligatorio"
-      });
+      message.error("El nombre del diagrama es obligatorio");
       return;
     }
 
@@ -692,10 +666,7 @@ export default function DiagramPage() {
       };
 
       const newDiagram = await createDiagram(companyId as string, selectedEnvironment, diagramData);
-      notification.success({
-        message: "Éxito",
-        description: "Diagrama creado correctamente"
-      });
+      message.success("Diagrama creado correctamente");
 
       // Recargar diagramas
       const diagramsData = await getDiagramsByEnvironment(companyId as string, selectedEnvironment);
@@ -720,10 +691,7 @@ export default function DiagramPage() {
       setNewDiagramDescription('');
     } catch (error) {
       console.error("Error creando diagrama:", error);
-      notification.error({
-        message: "Error",
-        description: "No se pudo crear el diagrama. Por favor, inténtelo de nuevo más tarde."
-      });
+      message.error("No se pudo crear el diagrama. Por favor, inténtelo de nuevo más tarde.");
     }
     setLoading(false);
   };
@@ -960,16 +928,11 @@ export default function DiagramPage() {
                   }
                 ).then((updated) => {
                   console.log("Diagrama guardado exitosamente:", updated);
-                  notification.success({
-                    message: "Guardado",
-                    description: "Diagrama actualizado exitosamente."
-                  });
+                  // Use message directly
+                  message.success("Diagrama actualizado exitosamente.");
                 }).catch(error => {
                   console.error("Error al guardar diagrama:", error);
-                  notification.error({
-                    message: "Error",
-                    description: "No se pudo guardar el diagrama. Por favor, inténtelo de nuevo."
-                  });
+                  message.error("No se pudo guardar el diagrama. Por favor, inténtelo de nuevo.");
                 });
               }}
             />

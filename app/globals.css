@@ -70,63 +70,184 @@ body {
 
 /* ReactFlow personalizaciones */
 .react-flow__node {
+  z-index: 1;
   transition: all 0.3s ease;
-  /* Eliminar cualquier sombra o fondo por defecto */
-  box-shadow: none !important;
-  background-color: transparent !important;
-  pointer-events: all !important; 
-  cursor: pointer !important;
 }
 
-/* Fijar específicamente el fondo transparente para nodos-grupo */
-.react-flow__node-group {
-  background-color: transparent !important;
+/* Estilos para contenedores de nodos de grupo */
+.minimized-group-container,
+.group-node-container {
   background: transparent !important;
-  box-shadow: none !important;
-  background: none !important;
   border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   padding: 0 !important;
-  margin: 0 !important;
+  overflow: visible !important;
 }
 
-div[data-id].react-flow__node {
-  background-color: transparent !important;
+/* Estilos específicos para grupos */
+.group-node {
+  z-index: 1 !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Estilos para nodos minimizados */
+.react-flow__node[data-minimized="true"],
+.react-flow__node-group[data-minimized="true"] {
+  width: 40px !important;
+  height: 40px !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+}
+
+.react-flow__node[data-minimized="true"] > div,
+.react-flow__node-group[data-minimized="true"] > div {
+  pointer-events: all !important;
+}
+
+/* Estilos específicos para grupos minimizados */
+.minimized-group {
+  z-index: 5 !important;
+  border-radius: 50% !important;
+  overflow: visible !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  pointer-events: all !important;
+}
+
+/* Prevenir bordes de selección en grupos minimizados */
+.react-flow__node.selected .minimized-group,
+.react-flow__node-group.selected .minimized-group,
+.minimized-group.selected,
+.minimized-group.selected > div,
+.minimized-group.selected button,
+.react-flow__node.selected .minimized-group > div,
+.react-flow__node-group.selected {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: inherit !important;
+}
+
+/* Asegurar que el contenedor del grupo minimizado no tenga borde de selección */
+.react-flow__node-group.selected[data-minimized="true"],
+.react-flow__node-group.selected[data-minimized="true"] > div {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.minimized-group button {
+  background: transparent !important;
+}
+
+/* Eliminar recuadros y bordes no deseados */
+.react-flow__node {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.react-flow__node-group {
+  background: transparent !important;
+  outline: none !important;
   box-shadow: none !important;
   border: none !important;
 }
 
-.react-flow__node > div[data-type="group"] {
-  background-color: rgba(255, 192, 203, 0.1) !important;
+/* Asegurar que no haya bordes de selección en ningún nivel */
+.react-flow__node-group.selected,
+.react-flow__node-group.selected > div,
+.react-flow__node.selected,
+.react-flow__node.selected > div {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: inherit !important;
 }
 
+/* Mantener el fondo del label visible */
+.group-node .label {
+  background: white !important;
+}
+
+/* Mejorar visibilidad de edges */
+.react-flow__edge {
+  z-index: 0;
+  pointer-events: all;
+}
+
+.react-flow__edge.selected {
+  z-index: 2;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3;
+}
+
+/* Asegurar que los nodos permanezcan visibles */
+.react-flow__node {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.react-flow__node[data-hidden="true"] {
+  display: none !important;
+}
+
+/* Mejorar handles de conexión */
+.react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  border: 2px solid white !important;
+  background-color: currentColor !important;
+  z-index: 3 !important;
+}
+
+/* Estilos para nodos seleccionados */
 .react-flow__node.selected {
   z-index: 10 !important;
+}
+
+/* Eliminar completamente el NodeResizer y bordes de selección no deseados */
+.react-flow__node .react-flow__resize-control,
+.react-flow__node .react-flow__resize-rotation {
+  display: none !important;
+}
+
+.react-flow__node {
+  outline: none !important;
   box-shadow: none !important;
+}
+
+/* Eliminar el borde de selección por defecto */
+.react-flow__node.selected {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Mantener solo el borde principal del grupo */
+.group-node > div:first-child,
+.minimized-group > div:first-child {
+  border: 2px solid currentColor !important;
+}
+
+/* Eliminar cualquier borde interno */
+.group-node > div > div,
+.minimized-group > div > div {
   border: none !important;
-  outline: 3px solid #4f46e5 !important;
-  outline-offset: 2px !important;
 }
 
-/* Asegurar que los controles de los nodos siempre sean visibles */
-.node-controls-container:not(.group-controls) {
-  opacity: 1;
-  visibility: visible;
-  z-index: 10;
-}
-
-.node-controls {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-/* Asegurar que los nodos hijos permanezcan dentro de los límites del grupo */
-.react-flow__node[data-parent-node] {
-  max-width: calc(100% - 20px) !important;
-  max-height: calc(100% - 50px) !important; /* Considerando el espacio para la cabecera */
-}
-
-/* Mejora para la visualización en modo oscuro */
-.dark .react-flow__node {
-  color-scheme: dark;
+/* Asegurar que el contenido del grupo sea transparente */
+.react-flow__node-group .react-flow__node-group__content {
+  background: transparent !important;
 }
 
 /* Efectos para el modo de foco - mejorado sin opacidad en contenedor */
@@ -153,77 +274,6 @@ div[data-id].react-flow__node {
   background-color: rgba(255, 255, 255, 0.95) !important;
   color: #4285F4 !important;
   border: 1px solid rgba(66, 133, 244, 0.3) !important;
-}
-
-/* Estilos especiales para grupos - mantener la transparencia pero eliminar sombras incorrectas */
-.react-flow__node[data-type="group"] {
-  background-color: transparent !important;
-  overflow: visible !important; /* Crucial to allow elements outside the group bounds */
-  z-index: 5 !important;
-}
-
-/* Corrección para nodos seleccionados - borde negro delgado */
-.react-flow__node.selected {
-  outline: 1px solid rgba(0, 0, 0, 0.5) !important;
-  box-shadow: 0 0 2px 0px rgba(0, 0, 0, 0.2) !important;
-}
-
-/* Eliminar el borde azul fuerte cuando se selecciona */
-.react-flow__node.selected .ring-2,
-.react-flow__node.selected .ring-primary {
-  box-shadow: none !important;
-  outline: none !important;
-  border-color: transparent !important;
-}
-
-/* Corregir el borde azul para el enfoque también */
-.react-flow__node:focus,
-.react-flow__node:focus-within {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* Corrección de redimensionamiento para eliminar sombras incorrectas pero mantener visibilidad */
-.react-flow__resize-control {
-  z-index: 20 !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  background-color: white !important;
-  border: 1px solid rgba(0, 0, 0, 0.3) !important;
-}
-
-.react-flow__resize-control.handle {
-  width: 6px !important;
-  height: 6px !important;
-  border: 1px solid rgba(0, 0, 0, 0.3);
-  background: white;
-}
-
-/* Eliminar box-shadows incorrectos solo para selectores específicos que tenían problemas */
-.react-flow__node .ring-2 {
-  box-shadow: none !important;
-}
-
-/* Asegurar que los nodos hijos ocultos realmente estén ocultos */
-.react-flow__node.hidden,
-.react-flow__node[data-hidden="true"],
-.react-flow__node[hidden] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* Mejorar handles de conexión */
-.react-flow__handle {
-  z-index: 10;
-  background-color: var(--primary) !important;
-}
-
-/* Animación suave para transiciones */
-.react-flow__node, 
-.react-flow__edge {
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 /* Estilos especiales para nodos en listas */
@@ -775,133 +825,139 @@ button.bg-blue-600 {
 
 /* Estilo para los controles de grupo con animación */
 .group-controls {
-  opacity: 0 !important; /* Prioridad máxima para ocultar */
-  transform: translateY(5px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  pointer-events: none !important;
-  visibility: hidden !important; /* Forzar ocultar */
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: all !important;
+  z-index: 1000 !important;
+}
+
+/* Asegurar que los nodos y edges sean siempre visibles a menos que se especifique lo contrario */
+.react-flow__node:not([data-hidden="true"]),
+.react-flow__edge:not([data-hidden="true"]) {
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* Mejorar la visibilidad de los edges */
+.react-flow__edge {
+  z-index: 5;
+  pointer-events: all;
+}
+
+.react-flow__edge.selected {
+  z-index: 6;
+}
+
+/* Asegurar que los handles sean siempre visibles */
+.react-flow__handle {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 10;
+}
+
+/* Mejorar la visibilidad de los nodos minimizados */
+.react-flow__node[data-minimized="true"] {
+  z-index: 20;
+}
+
+/* Mejorar la conexión de edges con grupos minimizados */
+.react-flow__node[data-minimized="true"] .react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  min-width: 8px !important;
+  min-height: 8px !important;
+  border-radius: 50% !important;
+  background-color: #4f46e5 !important;
+  border: 2px solid white !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.react-flow__node[data-minimized="true"] .react-flow__handle-left {
+  left: -4px !important;
+}
+
+.react-flow__node[data-minimized="true"] .react-flow__handle-right {
+  right: -4px !important;
+}
+
+/* Mejorar la visibilidad de los edges */
+.react-flow__edge {
+  pointer-events: all !important;
+  z-index: 1000 !important;
+}
+
+.react-flow__edge.selected {
+  z-index: 1001 !important;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3 !important;
+}
+
+/* Asegurar que los nodos permanezcan visibles */
+.react-flow__node {
+  pointer-events: all !important;
+  user-select: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.react-flow__node[data-hidden="true"] {
+  display: none !important;
+}
+
+/* Styles for resizable nodes */
+.resizable-node {
+  position: relative;
+}
+
+/* Add pulse animation for resizable nodes */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+/* Make resize handles more visible for resizable nodes */
+[data-resizable="true"] .react-flow__resize-control.handle {
+  background-color: #3b82f6;
+  border-color: white;
+  opacity: 0.8;
+}
+
+/* Add visual styling indicator for resizable mode */
+[data-resizable="true"] {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  border-style: dashed !important;
+  border-color: #3b82f6 !important;
+}
+
+/* Ensure resize toggle button is visible */
+.resize-toggle-btn {
   position: absolute;
-  top: -28px !important; /* Force position outside group */
-  left: 0;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
   display: flex;
-  gap: 1px;
-  z-index: 1000;
-}
-
-/* Solo mostrar al hacer hover en el contenedor principal */
-div[data-type="group"]:hover .group-controls {
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: translateY(0);
-  pointer-events: all !important;
-}
-
-/* También mostrar cuando el grupo está seleccionado */
-.react-flow__node.selected .group-controls {
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: translateY(0);
-  pointer-events: all !important;
-}
-
-/* Hacer que todos los botones de control sean visibles */
-.control-button {
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* Animar aparición de controles para un efecto más suave */
-.react-flow__node-group .control-button {
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.react-flow__node-group:hover .control-button {
-  transform: scale(1);
-}
-
-/* Mejorar visibilidad de los botones de control */
-.node-controls-container {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 3px;
-}
-
-/* Estilo para los controles de grupo con animación - versión mejorada */
-.group-controls {
-  opacity: 0;
-  transform: translateY(5px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  pointer-events: none !important;
-  visibility: hidden;
-}
-
-/* Mostrar controles solo cuando se hace hover sobre el grupo */
-.node-group:hover .group-controls {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: all !important;
-  visibility: visible;
-}
-
-/* También mostrar controles cuando el grupo está seleccionado */
-.react-flow__node.selected .group-controls {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: all !important;
-  visibility: visible;
-}
-
-/* Botones de control con efecto de aparición suave */
-.group-controls .control-button {
-  opacity: 0;
-  transform: scale(0.9);
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-/* Animar los botones de control cuando aparecen */
-.node-group:hover .group-controls .control-button,
-.react-flow__node.selected .group-controls .control-button {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* Aplicar delay en cascada para un efecto más elegante */
-.group-controls .control-button:nth-child(1) { transition-delay: 0.05s; }
-.group-controls .control-button:nth-child(2) { transition-delay: 0.1s; }
-.group-controls .control-button:nth-child(3) { transition-delay: 0.15s; }
-.group-controls .control-button:nth-child(4) { transition-delay: 0.2s; }
-.group-controls .control-button:nth-child(5) { transition-delay: 0.25s; } /* Para el nuevo botón */
-
-/* Estilo específico para el botón de abrir en ventana */
-.open-in-window-button {
-  color: #4f46e5;
-}
-.open-in-window-button:hover {
-  background-color: #ede9fe !important;
-  border-color: #c7d2fe !important;
-}
-
-/* Mejoras para la vista del grupo en pantalla completa */
-.group-view-container {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: white;
-}
-
-/* Aplicar delay en cascada para un efecto más elegante */
-.group-controls .control-button:nth-child(1) { transition-delay: 0.05s; }
-.group-controls .control-button:nth-child(2) { transition-delay: 0.1s; }
-.group-controls .control-button:nth-child(3) { transition-delay: 0.15s; }
-.group-controls .control-button:nth-child(4) { transition-delay: 0.2s; }
-
-/* Mejorar visibilidad y estilo de los controles */
-.node-controls-container {
-  background-color: rgba(255, 255, 255, 0.5);
-  border-radius: 4px;
-  padding: 3px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.2s ease;
 }
 
 /* Estilos para el modal de vista de grupo */
@@ -1000,4 +1056,305 @@ div[data-type="group"]:hover .group-controls {
 /* Estilos para el modal de vista de grupo */
 .group-view-modal {
   animation: fadeIn 0.2s ease-out;
+}
+
+/* Asegurar que los nodos y edges sean siempre visibles a menos que se especifique lo contrario */
+.react-flow__node:not([data-hidden="true"]),
+.react-flow__edge:not([data-hidden="true"]) {
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* Mejorar la visibilidad de los edges */
+.react-flow__edge {
+  z-index: 5;
+  pointer-events: all;
+}
+
+.react-flow__edge.selected {
+  z-index: 6;
+}
+
+/* Asegurar que los handles sean siempre visibles */
+.react-flow__handle {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 10;
+}
+
+/* Mejorar la visibilidad de los nodos minimizados */
+.react-flow__node[data-minimized="true"] {
+  z-index: 20;
+}
+
+/* Mejorar la conexión de edges con grupos minimizados */
+.react-flow__node[data-minimized="true"] .react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  min-width: 8px !important;
+  min-height: 8px !important;
+  border-radius: 50% !important;
+  background-color: #4f46e5 !important;
+  border: 2px solid white !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.react-flow__node[data-minimized="true"] .react-flow__handle-left {
+  left: -4px !important;
+}
+
+.react-flow__node[data-minimized="true"] .react-flow__handle-right {
+  right: -4px !important;
+}
+
+/* Mejorar la visibilidad de los edges */
+.react-flow__edge {
+  pointer-events: all !important;
+  z-index: 1000 !important;
+}
+
+.react-flow__edge.selected {
+  z-index: 1001 !important;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3 !important;
+}
+
+/* Asegurar que los nodos permanezcan visibles */
+.react-flow__node {
+  pointer-events: all !important;
+  user-select: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.react-flow__node[data-hidden="true"] {
+  display: none !important;
+}
+
+/* Styles for resizable nodes */
+.resizable-node {
+  position: relative;
+}
+
+/* Add pulse animation for resizable nodes */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+/* Make resize handles more visible for resizable nodes */
+[data-resizable="true"] .react-flow__resize-control.handle {
+  background-color: #3b82f6;
+  border-color: white;
+  opacity: 0.8;
+}
+
+/* Add visual styling indicator for resizable mode */
+[data-resizable="true"] {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  border-style: dashed !important;
+  border-color: #3b82f6 !important;
+}
+
+/* Ensure resize toggle button is visible */
+.resize-toggle-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.2s ease;
+}
+
+/* Estilos para el modal de vista de grupo */
+.group-view-modal {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Asegurar que los nodos y edges sean siempre visibles a menos que se especifique lo contrario */
+.react-flow__node:not([data-hidden="true"]),
+.react-flow__edge:not([data-hidden="true"]) {
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* Mejorar la visibilidad de los edges */
+.react-flow__edge {
+  z-index: 5;
+  pointer-events: all;
+}
+
+.react-flow__edge.selected {
+  z-index: 6;
+}
+
+/* Asegurar que los handles sean siempre visibles */
+.react-flow__handle {
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 10;
+}
+
+/* Mejorar la visibilidad de los nodos minimizados */
+.react-flow__node[data-minimized="true"] {
+  z-index: 20;
+}
+
+/* Mejorar la conexión de edges con grupos minimizados */
+.react-flow__node[data-minimized="true"] .react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  min-width: 8px !important;
+  min-height: 8px !important;
+  border-radius: 50% !important;
+  background-color: #4f46e5 !important;
+  border: 2px solid white !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.react-flow__node[data-minimized="true"] .react-flow__handle-left {
+  left: -4px !important;
+}
+
+.react-flow__node[data-minimized="true"] .react-flow__handle-right {
+  right: -4px !important;
+}
+
+/* Mejorar la visibilidad de los edges */
+.react-flow__edge {
+  pointer-events: all !important;
+  z-index: 1000 !important;
+}
+
+.react-flow__edge.selected {
+  z-index: 1001 !important;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3 !important;
+}
+
+/* Asegurar que los nodos permanezcan visibles */
+.react-flow__node {
+  pointer-events: all !important;
+  user-select: none !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.react-flow__node[data-hidden="true"] {
+  display: none !important;
+}
+
+/* Eliminar TODOS los bordes de selección */
+.react-flow__node,
+.react-flow__node-group,
+.react-flow__node.selected,
+.react-flow__node-group.selected,
+.react-flow__node.selected > div,
+.react-flow__node-group.selected > div,
+.react-flow__node-group.selected > *,
+.react-flow__node-group.selected > * > *,
+.react-flow__node.selected > * > *,
+.react-flow__node-group::before,
+.react-flow__node-group::after,
+.react-flow__node::before,
+.react-flow__node::after,
+.react-flow__node *,
+.react-flow__node-group *,
+.react-flow__nodesselection,
+.react-flow__nodesselection-rect,
+.react-flow__selection,
+.react-flow__selection-rect {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: inherit !important;
+}
+
+/* Forzar transparencia en elementos de selección */
+.react-flow__selection,
+.react-flow__selection-rect,
+.react-flow__nodesselection,
+.react-flow__nodesselection-rect,
+.react-flow__selection-box {
+  background-color: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Asegurar que los nodos minimizados no tengan bordes no deseados */
+.minimized-group,
+.minimized-group > *,
+.minimized-group > * > *,
+.react-flow__node.selected .minimized-group,
+.react-flow__node-group.selected .minimized-group,
+.react-flow__node[data-minimized="true"],
+.react-flow__node-group[data-minimized="true"],
+.react-flow__node.selected[data-minimized="true"],
+.react-flow__node-group.selected[data-minimized="true"] {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Mantener solo el borde específico del proveedor */
+.minimized-group {
+  border-style: solid !important;
+  border-width: 2px !important;
+}
+
+/* Eliminar CUALQUIER selección de React Flow */
+.react-flow__node.selected,
+.react-flow__node-group.selected,
+.react-flow__node.selected > div,
+.react-flow__node-group.selected > div,
+.react-flow__node.selected .minimized-group,
+.react-flow__node-group.selected .minimized-group {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: inherit !important;
+  background-color: inherit !important;
+}
+
+/* Sobrescribir cualquier estilo inline de React Flow */
+[class*="react-flow__node"] {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Asegurar que no haya bordes en modo selección */
+.selection-mode .react-flow__node,
+.selection-mode .react-flow__node-group,
+.selection-mode .react-flow__selection,
+.selection-mode .react-flow__selection-rect {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
