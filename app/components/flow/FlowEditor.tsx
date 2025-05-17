@@ -23,6 +23,7 @@ import ReactFlow, {
   ReactFlowInstance,
   NodeChange, // Add this import for the type
   Viewport,
+  BackgroundVariant
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -133,6 +134,77 @@ const FlowEditorContent = ({
     nodeId: null,
     nodeType: null
   });
+
+  // Añadir estado para el edge seleccionado
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+
+  // Manejador para el clic en una línea
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    event.stopPropagation();
+    console.log('Edge clicked:', edge);
+    setSelectedEdge(edge);
+  }, []);
+
+  // Manejador para eliminar una línea
+  const onEdgeDelete = useCallback((edge: Edge) => {
+    console.log('Deleting edge:', edge);
+    onEdgesChange?.([{ id: edge.id, type: 'remove' }]);
+    setSelectedEdge(null);
+  }, [onEdgesChange]);
+
+  // Manejador unificado para el clic en el panel
+  const handlePaneClick = useCallback(() => {
+    setSelectedEdge(null);
+    setContextMenu(prev => ({...prev, visible: false}));
+  }, []);
+
+  // Componente para el botón de eliminar en la línea
+  const EdgeDeleteButton = useCallback(({ edge }: { edge: Edge }) => {
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    
+    useEffect(() => {
+      const edgeElement = document.querySelector(`[data-testid="rf__edge-${edge.id}"] path`);
+      if (!edgeElement || !(edgeElement instanceof SVGPathElement)) return;
+
+      const pathLength = edgeElement.getTotalLength();
+      const midPoint = edgeElement.getPointAtLength(pathLength / 2);
+      
+      // Convertir las coordenadas SVG a coordenadas de la ventana
+      const svgElement = edgeElement.closest('svg');
+      if (!svgElement) return;
+      
+      const point = svgElement.createSVGPoint();
+      point.x = midPoint.x;
+      point.y = midPoint.y;
+      
+      // Transformar el punto usando la matriz de transformación del SVG
+      const ctm = svgElement.getScreenCTM();
+      if (!ctm) return;
+      
+      const screenPoint = point.matrixTransform(ctm);
+      
+      setPosition({
+        x: screenPoint.x,
+        y: screenPoint.y
+      });
+    }, [edge.id]);
+
+    return (
+      <div
+        className="edge-delete-button"
+        style={{
+          left: position.x,
+          top: position.y
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdgeDelete(edge);
+        }}
+      >
+        ×
+      </div>
+    );
+  }, [onEdgeDelete]);
 
   // Actualizar nodos y bordes cuando cambian las props
   useEffect(() => {
@@ -734,7 +806,7 @@ const FlowEditorContent = ({
     
     // Update the flow with the new nodes
     reactFlowInstance.setNodes(updatedNodes);
-  }, [selectedNodes, reactFlowInstance]); // Removed setSelectedNodes dependency
+  }, [selectedNodes, reactFlowInstance]);
 
   // Handle toolbar button clicks with precise selection behavior
   const handleToolClick = useCallback((tool: ToolType) => {
@@ -1594,7 +1666,7 @@ const FlowEditorContent = ({
         }
       }
     });
-  }, [reactFlowInstance, optimizeNodesInGroup, onNodesChange]); // Usar la prop directamente aquí
+  }, [reactFlowInstance, optimizeNodesInGroup, onNodesChange]);
 
   // Estado para la herramienta de conexión entre nodos
   const [connectionTool, setConnectionTool] = useState<{
@@ -2312,7 +2384,8 @@ const FlowEditorContent = ({
           onDrop={onDrop}
           onNodeDragStop={onNodeDragStop}
           onNodeContextMenu={onNodeContextMenu}
-          onPaneClick={onPaneClick}
+          onPaneClick={handlePaneClick}
+          onEdgeClick={onEdgeClick}
           // Eliminamos onMouseDown (antes onPaneMouseDown) 
           onNodesDelete={onNodesDelete}
           onInit={(instance) => {
@@ -2447,7 +2520,7 @@ const FlowEditorContent = ({
             }}
             className="bg-white/80 dark:bg-gray-800/80"
           />
-          <Background gap={12} size={1} />
+          <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
           {/* Context Menu - Fixed positioning with enhanced options */}
           {contextMenu.visible && (
             <div 
@@ -2579,6 +2652,9 @@ const FlowEditorContent = ({
               <FolderPlusIcon className="w-5 h-5" />
             </div>
           )}
+          
+          {/* Botón de eliminar para la línea seleccionada */}
+          {selectedEdge && <EdgeDeleteButton edge={selectedEdge} />}
         </ReactFlow>
         
         {/* Selection tool indicator */}

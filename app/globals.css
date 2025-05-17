@@ -1366,3 +1366,48 @@ button.bg-blue-600 {
   opacity: 1 !important;
   visibility: visible !important;
 }
+
+/* Estilos para las líneas de conexión */
+.react-flow__edge {
+  cursor: pointer;
+}
+
+.react-flow__edge.selected {
+  z-index: 1000;
+}
+
+.react-flow__edge-path {
+  stroke: #f97316;
+  stroke-width: 2;
+}
+
+/* Botón de eliminar en el centro de la línea */
+.edge-delete-button {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  border: 2px solid #f97316;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #f97316;
+  z-index: 1001;
+  font-size: 18px;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  pointer-events: all;
+}
+
+.edge-delete-button:hover {
+  background-color: #f97316;
+  color: white;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.react-flow__edge.selected .edge-delete-button {
+  opacity: 1;
+}
