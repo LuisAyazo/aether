@@ -49,6 +49,34 @@
   transition: opacity 0.3s ease-in-out;
 }
 
+/* Sidebar styles */
+.react-flow__sidebar {
+  z-index: 1000 !important;
+  position: relative;
+}
+
+.react-flow__sidebar .ant-collapse {
+  z-index: 1001 !important;
+}
+
+.react-flow__sidebar .ant-collapse-content {
+  z-index: 1002 !important;
+  position: relative;
+}
+
+.react-flow__sidebar .ant-collapse-item {
+  z-index: 1003 !important;
+  position: relative;
+}
+
+/* Ensure sidebar content is above other elements */
+.react-flow__sidebar .ant-collapse-content-box {
+  z-index: 1004 !important;
+  position: relative;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
 /* Refined transitions for ReactFlow elements */
 .react-flow__node {
   background: white;
@@ -135,4 +163,31 @@
 /* Ensure proper rendering during transitions */
 .react-flow__renderer {
   z-index: 20;
+}
+
+/* Ensure the sidebar panel is above other elements */
+.react-flow__sidebar-panel {
+  z-index: 1005 !important;
+  position: relative;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  overflow: visible !important;
+}
+
+/* Ensure the sidebar content is visible when expanded */
+.react-flow__sidebar-content {
+  z-index: 1006 !important;
+  position: relative;
+  overflow: visible !important;
+}
+
+/* Ensure the resource list is visible when expanded */
+.react-flow__resource-list {
+  z-index: 1007 !important;
+  position: relative;
+  overflow: visible !important;
+  background: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
 }

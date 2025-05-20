@@ -1645,17 +1645,17 @@ const FlowEditorContent = ({
             background: 'rgba(255,255,255,0.95)', 
             padding: '0', 
             borderRadius: '8px', 
-            maxHeight: '90vh', // Aumentado al 90% de la ventana
+            maxHeight: '90vh',
             height: 'auto',
-            overflow: 'hidden', 
+            overflow: 'visible',
             boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
             display: 'flex', 
             flexDirection: 'column',
-            position: 'absolute',
+            position: 'fixed', // Cambiado de 'absolute' a 'fixed'
             top: '50%',
             right: '20px',
             transform: 'translateY(-50%)',
-            zIndex: 10
+            zIndex: 9999 // Aumentado significativamente
           }}>
             <div style={{
               display: 'flex', 
@@ -1665,7 +1665,9 @@ const FlowEditorContent = ({
               borderBottom: '1px solid #eee', 
               flexShrink: 0,
               minHeight: '48px',
-              backgroundColor: 'white'
+              backgroundColor: 'white',
+              position: 'relative',
+              zIndex: 10000 // Aumentado significativamente
             }}>
                 <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Resources</h4>
                 <button 
@@ -1732,11 +1734,13 @@ const FlowEditorContent = ({
                   {!collapsedCategories[category.name] && (
                     <ul style={{
                       listStyleType: 'none', 
-                      padding: '2px 0', // Reducido el padding vertical
+                      padding: '2px 0',
                       margin: 0, 
                       backgroundColor: '#fdfdfd',
-                      maxHeight: 'none', // Eliminado el límite de altura para cada categoría
-                      overflowY: 'visible' // Cambiado a visible para mostrar todos los items
+                      maxHeight: 'none',
+                      overflowY: 'visible',
+                      position: 'relative',
+                      zIndex: 10001 // Aumentado significativamente
                     }}>
                       {category.items.map(item => (
                         <li
