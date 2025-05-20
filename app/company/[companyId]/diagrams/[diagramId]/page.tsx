@@ -5,8 +5,8 @@ import ReactDOM from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
-import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, Viewport } from '../../../../services/diagramService';
-import { Button, Select, Typography, Modal, Input, Spin, App, message } from 'antd';
+import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram } from '../../../../services/diagramService';
+import { Button, Select, Typography, Modal, Input, Spin, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { 
   addEdge, 
@@ -14,11 +14,11 @@ import {
   applyNodeChanges,
   Node, 
   Edge, 
-  Connection, 
+
   OnNodesChange,
   OnEdgesChange,
   OnConnect,
-  ReactFlowInstance
+  
 } from 'reactflow';
 // Importar nodeTypes desde el archivo centralizado
 import nodeTypes from '../../../../components/nodes/NodeTypes';
@@ -371,12 +371,7 @@ export default function DiagramPage() {
 
   // Track the previous URL params to avoid unnecessary URL updates
   const prevUrlRef = useRef({ envId: '', diagramId: '' });
-  
-  // Reference for reactFlowInstance - corrected with proper typing
-  const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
-  
-  // Reference for tracking update times to prevent rapid consecutive updates
-  const updateTimeRef = useRef<number>(0);
+
   
   // Función para actualizar la URL con nombres amigables
   const updateUrlWithNames = (environmentId: string, diagramId: string, envName: string, diagramName: string) => {
@@ -423,7 +418,6 @@ export default function DiagramPage() {
   }, [currentDiagram]);
 
   // Define constants for consistent transition timings
-  const TRANSITION_DURATION = 500; // ms
   const MIN_LOADING_DURATION = 300; // ms
   
   const handleEnvironmentChange = async (environmentId: string) => {
@@ -721,7 +715,7 @@ export default function DiagramPage() {
     
     const handleGroupUpdate = (event: CustomEvent) => {
       console.log("Received updateGroupNodes event:", event.detail);
-      const { groupId, nodes: updatedNodes, edges: updatedEdges, hasNewNodes } = event.detail;
+      const { groupId, nodes: updatedNodes, edges: updatedEdges } = event.detail;
       
       // Prevent multiple rapid updates (debounce)
       const currentTime = Date.now();
@@ -735,7 +729,7 @@ export default function DiagramPage() {
       
       if (groupId && updatedNodes) {
         // Create a "safe" copy of the nodes with new references to avoid mutation issues
-        const safeUpdatedNodes = updatedNodes.map((n: any) => ({...n}));
+          const safeUpdatedNodes = (updatedNodes as Node[]).map(n => ({...n}));
         
         // Directly update our state instead of using reactFlowInstance
         setNodes(currentNodes => {
@@ -748,7 +742,7 @@ export default function DiagramPage() {
             // Keep edges that don't connect to the updated nodes
             const edgesToKeep = currentEdges.filter(edge => {
               // Keep edges that don't involve nodes in this group
-              return !updatedNodes.some((n: any) => n.id === edge.source || n.id === edge.target);
+              return !(updatedNodes as Node[]).some((n: Node) => n.id === edge.source || n.id === edge.target);
             });
             
             // Add the updated edges

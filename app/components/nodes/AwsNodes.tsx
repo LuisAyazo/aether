@@ -49,7 +49,9 @@ export function EC2Node(props: AwsNodeProps) {
         ...props.data,
         provider: 'aws',
         icon: <EC2Icon />,
-        label: props.data.label || 'EC2 Instance'
+        label: props.data.label || 'EC2 Instance',
+        resizable: true,
+        userResized: false
       }}
     />
   );
@@ -63,7 +65,9 @@ export function S3BucketNode(props: AwsNodeProps) {
         ...props.data,
         provider: 'aws',
         icon: <S3Icon />,
-        label: props.data.label || 'S3 Bucket'
+        label: props.data.label || 'S3 Bucket',
+        resizable: true,
+        userResized: false
       }}
     />
   );
@@ -77,7 +81,9 @@ export function LambdaFunctionNode(props: AwsNodeProps) {
         ...props.data,
         provider: 'aws',
         icon: <LambdaIcon />,
-        label: props.data.label || 'Lambda Function'
+        label: props.data.label || 'Lambda Function',
+        resizable: true,
+        userResized: false
       }}
     />
   );
@@ -91,7 +97,9 @@ export function RDSInstanceNode(props: AwsNodeProps) {
         ...props.data,
         provider: 'aws',
         icon: <RDSIcon />,
-        label: props.data.label || 'RDS Instance'
+        label: props.data.label || 'RDS Instance',
+        resizable: true,
+        userResized: false
       }}
     />
   );

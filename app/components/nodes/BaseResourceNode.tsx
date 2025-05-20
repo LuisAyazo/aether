@@ -21,27 +21,47 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
   const [isCollapsed, setIsCollapsed] = useState(data.isCollapsed !== false);
   const [isFocused, setIsFocused] = useState(false);
   const [isListView, setIsListView] = useState(false);
-  const [isResizable, setIsResizable] = useState(data.resizable !== false && data.userResized === true);
+  const [isResizable, setIsResizable] = useState(data.resizable !== false);
   const reactFlowInstance = useReactFlow();
   
   // Color mapping based on cloud provider
   const getProviderColor = useCallback(() => {
     switch (data.provider) {
       case 'aws':
-        return 'border-orange-500 bg-orange-50 dark:bg-orange-900/20';
+        return {
+          border: 'border-orange-500',
+          bg: 'bg-orange-50 dark:bg-orange-900/20',
+          hover: 'hover:bg-orange-100 dark:hover:bg-orange-900/30',
+          text: 'text-orange-600'
+        };
       case 'gcp':
-        return 'border-blue-500 bg-blue-50 dark:bg-blue-900/20';
+        return {
+          border: 'border-blue-500',
+          bg: 'bg-blue-50 dark:bg-blue-900/20',
+          hover: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
+          text: 'text-blue-600'
+        };
       case 'azure':
-        return 'border-blue-400 bg-blue-50 dark:bg-blue-900/20';
+        return {
+          border: 'border-blue-400',
+          bg: 'bg-blue-50 dark:bg-blue-900/20',
+          hover: 'hover:bg-blue-100 dark:hover:bg-blue-900/30',
+          text: 'text-blue-400'
+        };
       default:
-        return 'border-gray-300 bg-white dark:bg-gray-800';
+        return {
+          border: 'border-gray-300',
+          bg: 'bg-white dark:bg-gray-800',
+          hover: 'hover:bg-gray-50 dark:hover:bg-gray-700',
+          text: 'text-gray-600'
+        };
     }
   }, [data.provider]);
   
   // Update resizable state when data changes
   useEffect(() => {
-    setIsResizable(data.resizable !== false && data.userResized === true);
-  }, [data.resizable, data.userResized]);
+    setIsResizable(data.resizable !== false);
+  }, [data.resizable]);
   
   // Efecto para verificar si el nodo está dentro de los límites del grupo padre
   useEffect(() => {
@@ -151,9 +171,66 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
     }
   };
   
-  // Handle node resize event
-  const onResize = useCallback((_: any, { width, height }: { width: number; height: number }) => {
-    // Dispatch event for size change
+  // Añadir handler para el clic
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Enhanced logging with more details
+    console.log('%cBaseResourceNode clicked', 'color: blue; font-weight: bold', {
+      id,
+      selected,
+      isResizable,
+      isCollapsed,
+      isFocused,
+      isListView,
+      data,
+      eventType: e.type,
+      target: e.currentTarget,
+      timestamp: new Date().toISOString(),
+      eventCoords: { x: e.clientX, y: e.clientY }
+    });
+  }, [id, selected, isResizable, isCollapsed, isFocused, isListView, data]);
+
+  // Add mouseDown handler for better event tracking
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('%cBaseResourceNode mouseDown', 'color: green; font-weight: bold', {
+      id,
+      selected,
+      timestamp: new Date().toISOString(),
+      eventCoords: { x: e.clientX, y: e.clientY }
+    });
+  }, [id, selected]);
+  
+  // Modificar onResize para incluir logging y mejor manejo
+  const onResize = useCallback((event: any, { width, height }: { width: number; height: number }) => {
+    console.log('%cBaseResourceNode resized', 'color: orange; font-weight: bold', {
+      id,
+      width,
+      height,
+      timestamp: new Date().toISOString()
+    });
+
+    // Actualizar el estado de redimensionamiento
+    reactFlowInstance.setNodes(nodes => 
+      nodes.map(node => {
+        if (node.id === id) {
+          return {
+            ...node,
+            style: { ...node.style, width, height },
+            data: {
+              ...node.data,
+              userResized: true,
+              resizable: true
+            }
+          };
+        }
+        return node;
+      })
+    );
+
+    // Si el nodo está en un grupo, notificar al grupo del cambio
     if (data.parentNode) {
       const event = new CustomEvent('nodeResized', {
         detail: { 
@@ -165,7 +242,7 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
       });
       document.dispatchEvent(event);
     }
-  }, [id, data.parentNode]);
+  }, [id, data.parentNode, reactFlowInstance]);
   
   const toggleFocus = (e: React.MouseEvent) => {
     e.stopPropagation(); // Evitar que el click llegue al nodo y lo seleccione
@@ -277,6 +354,22 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
     };
   }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance]);
 
+  const colors = getProviderColor();
+  const nodeClasses = [
+    'relative',
+    'border-2',
+    'rounded-lg',
+    'transition-all',
+    'duration-200',
+    'shadow-sm',
+    'hover:shadow-md',
+    colors.border,
+    colors.bg,
+    colors.hover,
+    selected ? 'shadow-md' : '',
+    isResizable ? 'resizable-node' : ''
+  ].filter(Boolean).join(' ');
+
   // Si estamos en vista de lista (modo compacto)
   if (isListView) {
     return (
@@ -285,6 +378,7 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
         data-provider={data.provider}
         data-id={id}
         data-resizable={isResizable}
+        onClick={handleClick}
       >
         {data.icon && (
           <div className="flex-shrink-0 w-4 h-4">
@@ -309,89 +403,41 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
   }
   
   return (
-    <div
-      data-id={id}
-      data-resizable={isResizable}
-      className={`
-        rounded-md border-2 ${getProviderColor()} shadow-sm transition-all duration-300
-        ${isCollapsed ? 'min-w-[100px] min-h-[50px] p-2' : 'min-w-[150px] min-h-[80px] p-3'}
-        ${isFocused ? 'focused' : ''}
-        ${selected ? 'ring-2 ring-primary' : ''}
-        ${isResizable ? 'resizable-node' : ''}
-        relative group
-      `}
-      data-provider={data.provider}
-      style={{
-        boxShadow: selected ? '0 0 0 2px var(--primary)' : 'none',
-        // Add dashed border and subtle animation effect when resizable is active
-        ...(isResizable ? {
-          borderStyle: 'dashed',
-          animation: 'pulse 2s infinite ease-in-out'
-        } : {})
-      }}
-    >
-      {/* NodeResizer appears when node is selected or resizable is active */}
-      <NodeResizer 
-        minWidth={isCollapsed ? 100 : 150} 
-        minHeight={isCollapsed ? 50 : 80} 
-        isVisible={selected || isResizable} 
-        onResize={onResize}
-        lineClassName={`border-primary ${isResizable ? 'opacity-100' : ''}`}
-        handleClassName={`h-3 w-3 bg-white border-2 border-primary rounded z-20 ${isResizable ? 'bg-blue-500' : ''}`}
-      />
-      
-      {/* Resize toggle button - only show when selected */}
-      {selected && data.parentNode && (
-        <button
-          onClick={toggleResizable}
-          className={`absolute -top-2 -right-2 p-1 rounded-full z-30 
-            ${isResizable 
-              ? 'bg-blue-500 text-white hover:bg-blue-600' 
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          title={isResizable ? "Disable resizing" : "Enable resizing"}
-        >
-          <ArrowsPointingOutIcon className="w-3 h-3" />
-        </button>
+    <>
+      {isResizable && (
+        <NodeResizer
+          isVisible={selected}
+          minWidth={100}
+          minHeight={50}
+          onResize={onResize}
+          handleClassName="resize-handle"
+          lineClassName="resize-line"
+        />
       )}
-      
-      <div className="flex items-center gap-1 overflow-hidden">
-        {data.icon && (
-          <div className={`flex items-center justify-center ${isCollapsed ? 'w-6 h-6 text-xs' : 'w-8 h-8'}`}>
-            {data.icon}
+      <div className={nodeClasses} style={{ minWidth: '100px', minHeight: '50px' }}>
+        <div className="p-3 h-full flex flex-col">
+          <div className="flex items-start gap-2">
+            {data.icon && (
+              <div className={`p-2 rounded-md ${colors.bg}`}>
+                {data.icon}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-medium truncate">{data.label}</h3>
+              {data.description && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                  {data.description}
+                </p>
+              )}
+              <div className={`text-xs mt-1 ${colors.bg} px-1.5 py-0.5 rounded-full w-fit ${colors.text}`}>
+                {data.provider.toUpperCase()}
+              </div>
+            </div>
           </div>
-        )}
-        <div className={`font-medium truncate ${isCollapsed ? 'text-xs' : 'text-sm'}`}>
-          {data.label}
         </div>
+        <Handle type="target" position={Position.Left} />
+        <Handle type="source" position={Position.Right} />
       </div>
-      
-      {!isCollapsed && data.description && (
-        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 max-h-20 overflow-y-auto">
-          {data.description}
-        </div>
-      )}
-      
-      {/* Input and output handles */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
-      />
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
-      />
-    </div>
+    </>
   );
 }

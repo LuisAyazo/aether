@@ -6,6 +6,8 @@ import {
   ArrowsPointingInIcon,
   ViewfinderCircleIcon,
 } from '@heroicons/react/24/outline';
+import { NodeResizer } from '@reactflow/node-resizer';
+import '@reactflow/node-resizer/dist/style.css';
 
 interface NodeGroupProps extends NodeProps {
   data: {
@@ -253,6 +255,51 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     }
   }, [reactFlowInstance, id]);
 
+  // Añadir handler para el clic del grupo
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Enhanced logging with more details
+    console.log('%cNodeGroup clicked', 'color: purple; font-weight: bold', {
+      id,
+      selected,
+      isMinimized,
+      isCollapsed,
+      isEditing,
+      timestamp: new Date().toISOString(),
+      eventCoords: { x: e.clientX, y: e.clientY }
+    });
+  }, [id, selected, isMinimized, isCollapsed, isEditing]);
+
+  // Enhanced resize handler
+  const handleResize = useCallback((event: any, { width, height }: { width: number; height: number }) => {
+    console.log('%cNodeGroup resized', 'color: orange; font-weight: bold', {
+      id,
+      width,
+      height,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Update node dimensions
+    reactFlowInstance.setNodes(nodes => 
+      nodes.map(node => {
+        if (node.id === id) {
+          return {
+            ...node,
+            style: { ...node.style, width, height }
+          };
+        }
+        return node;
+      })
+    );
+
+    // Update child nodes if needed
+    if (!isMinimized && !isCollapsed) {
+      updateChildNodesAndEdges(false);
+    }
+  }, [id, isMinimized, isCollapsed, reactFlowInstance, updateChildNodesAndEdges]);
+
   // Renderizar el menú contextual
   const renderContextMenu = () => {
     if (!showContextMenu || !contextMenuNodeId) return null;
@@ -363,106 +410,122 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
 
   // Renderizado normal (no minimizado)
   return (
-    <div 
-      className="group-node"
-      onContextMenu={handleContextMenu}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        border: `2px solid ${getBorderColor()}`,
-        borderRadius: '8px',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        padding: `${PADDING}px`,
-        cursor: 'pointer',
-        zIndex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        outline: 'none',
-        boxShadow: 'none',
-        transition: 'background-color 0.3s ease'
-      }}
-    >
-      <Handle 
-        type="target" 
-        position={Position.Left}
-        style={{
-          left: -4,
-          background: getBorderColor(),
-          border: '2px solid white',
-          zIndex: 3
-        }}
+    <>
+      <NodeResizer
+        isVisible={selected}
+        minWidth={200}
+        minHeight={150}
+        onResize={handleResize}
+        handleClassName="resize-handle"
+        lineClassName="resize-line"
       />
-      <Handle 
-        type="source" 
-        position={Position.Right}
+      <div
+        className="group-node"
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
         style={{
-          right: -4,
-          background: getBorderColor(),
-          border: '2px solid white',
-          zIndex: 3
+          position: 'absolute',
+          inset: 0,
+          border: `2px solid ${getBorderColor()}`,
+          borderRadius: '8px',
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          padding: `${PADDING}px`,
+          cursor: 'pointer',
+          zIndex: selected ? 2 : 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          justifyContent: 'flex-start',
+          outline: selected ? '2px solid #3b82f6' : 'none',
+          boxShadow: selected ? '0 0 0 4px rgba(59, 130, 246, 0.1)' : 'none',
+          transition: 'all 0.2s ease'
         }}
-      />
-
-      {selected && (
-        <div 
-          className="absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1 bg-white rounded-md shadow-md px-1.5 py-1 z-50"
-          style={{ border: `1px solid ${getBorderColor()}` }}
-        >
-          <button
-            onClick={handleMinimize} 
-            className="p-1 hover:bg-gray-100 rounded transition-colors" 
-            title="Minimizar"
-          >
-            <ArrowsPointingInIcon className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleCollapse} 
-            className="p-1 hover:bg-gray-100 rounded transition-colors" 
-            title={isCollapsed ? "Expandir" : "Colapsar"}
-          >
-            {isCollapsed ? <PlusIcon className="w-4 h-4" /> : <MinusIcon className="w-4 h-4" />}
-          </button>
-        </div>
-      )}
-
-      <div 
-        className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-white px-3 py-1 rounded-md shadow-sm cursor-text select-none"
-        style={{ 
-          border: `1px solid ${getBorderColor()}`,
-          zIndex: 10,
-          minWidth: '140px',
-          maxWidth: '200px'
-        }}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!isMinimized) {
-            setIsEditing(true);
-          }
-        }}
+        data-testid={`group-${id}`}
+        data-selected={selected}
+        data-minimized={isMinimized}
+        data-collapsed={isCollapsed}
       >
-        {isEditing ? (
-          <input
-            type="text"
-            value={labelText}
-            onChange={(e) => setLabelText(e.target.value)}
-            onBlur={() => setIsEditing(false)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setIsEditing(false);
-              }
-            }}
-            className="bg-transparent border-none p-0 text-center w-full outline-none text-sm"
-            autoFocus
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="block text-center text-sm truncate">
-            {labelText}
-          </span>
+        <Handle 
+          type="target" 
+          position={Position.Left}
+          style={{
+            left: -4,
+            background: getBorderColor(),
+            border: '2px solid white',
+            zIndex: 3
+          }}
+        />
+        <Handle 
+          type="source" 
+          position={Position.Right}
+          style={{
+            right: -4,
+            background: getBorderColor(),
+            border: '2px solid white',
+            zIndex: 3
+          }}
+        />
+
+        {selected && (
+          <div 
+            className="absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1 bg-white rounded-md shadow-md px-1.5 py-1 z-50"
+            style={{ border: `1px solid ${getBorderColor()}` }}
+          >
+            <button
+              onClick={handleMinimize} 
+              className="p-1 hover:bg-gray-100 rounded transition-colors" 
+              title="Minimizar"
+            >
+              <ArrowsPointingInIcon className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleCollapse} 
+              className="p-1 hover:bg-gray-100 rounded transition-colors" 
+              title={isCollapsed ? "Expandir" : "Colapsar"}
+            >
+              {isCollapsed ? <PlusIcon className="w-4 h-4" /> : <MinusIcon className="w-4 h-4" />}
+            </button>
+          </div>
         )}
+
+        <div 
+          className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-white px-3 py-1 rounded-md shadow-sm cursor-text select-none"
+          style={{ 
+            border: `1px solid ${getBorderColor()}`,
+            zIndex: 10,
+            minWidth: '140px',
+            maxWidth: '200px'
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isMinimized) {
+              setIsEditing(true);
+            }
+          }}
+        >
+          {isEditing ? (
+            <input
+              type="text"
+              value={labelText}
+              onChange={(e) => setLabelText(e.target.value)}
+              onBlur={() => setIsEditing(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setIsEditing(false);
+                }
+              }}
+              className="bg-transparent border-none p-0 text-center w-full outline-none text-sm"
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="block text-center text-sm truncate">
+              {labelText}
+            </span>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 } 

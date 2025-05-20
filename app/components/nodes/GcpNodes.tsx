@@ -49,7 +49,9 @@ export function ComputeEngineNode(props: GcpNodeProps) {
         ...props.data,
         provider: 'gcp',
         icon: <ComputeEngineIcon />,
-        label: props.data.label || 'Compute Engine'
+        label: props.data.label || 'Compute Engine',
+        resizable: true,
+        userResized: false
       }}
     />
   );
@@ -63,7 +65,9 @@ export function CloudStorageNode(props: GcpNodeProps) {
         ...props.data,
         provider: 'gcp',
         icon: <CloudStorageIcon />,
-        label: props.data.label || 'Cloud Storage'
+        label: props.data.label || 'Cloud Storage',
+        resizable: true,
+        userResized: false
       }}
     />
   );
@@ -77,7 +81,9 @@ export function CloudFunctionsNode(props: GcpNodeProps) {
         ...props.data,
         provider: 'gcp',
         icon: <CloudFunctionsIcon />,
-        label: props.data.label || 'Cloud Functions'
+        label: props.data.label || 'Cloud Functions',
+        resizable: true,
+        userResized: false
       }}
     />
   );

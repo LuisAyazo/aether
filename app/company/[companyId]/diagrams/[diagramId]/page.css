@@ -62,3 +62,46 @@
 .react-flow__renderer {
   z-index: 20;
 }
+
+/* Estilos para nodos y grupos redimensionables */
+.react-flow__node {
+  transition: width 0.3s ease, height 0.3s ease;
+}
+
+.group-node-container {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--group-color);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  cursor: pointer;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  box-shadow: none;
+  transition: all 0.3s ease;
+}
+
+.group-node-container.selected {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.group-node-container.collapsed {
+  padding: 10px;
+}
+
+/* Estilos para los controles de redimensionamiento */
+.react-flow__resize-control {
+  border-radius: 50%;
+  background-color: white;
+  border: 2px solid var(--primary);
+  width: 12px;
+  height: 12px;
+}
+
+.react-flow__resize-control.selected {
+  background-color: var(--primary);
+}

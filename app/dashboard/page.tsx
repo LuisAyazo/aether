@@ -129,7 +129,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {companies.map((company) => (
+            {companies.filter(company => company && company._id).map((company) => (
               <Link 
                 key={company._id} 
                 href={`/company/${company._id}`}
