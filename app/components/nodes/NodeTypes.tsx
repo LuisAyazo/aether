@@ -22,9 +22,12 @@ import {
 // Componente EC2
 const EC2Node = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-orange-500 bg-orange-50/50 dark:bg-orange-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-orange-500 shadow-lg' : ''}`}
+    className={`border-2 border-orange-500 bg-orange-50/50 dark:bg-orange-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-orange-500 !bg-orange-50/50 !ring-2 !ring-orange-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="aws"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(255, 153, 0, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-md">
@@ -44,9 +47,12 @@ const EC2Node = memo(({ data, selected }: NodeProps) => (
 // Componente Lambda
 const LambdaNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-orange-500 bg-orange-50/50 dark:bg-orange-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-orange-500 shadow-lg' : ''}`}
+    className={`border-2 border-orange-500 bg-orange-50/50 dark:bg-orange-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-orange-500 !bg-orange-50/50 !ring-2 !ring-orange-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="aws"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(255, 153, 0, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-md">
@@ -66,9 +72,12 @@ const LambdaNode = memo(({ data, selected }: NodeProps) => (
 // Componente S3
 const S3Node = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-orange-500 bg-orange-50/50 dark:bg-orange-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-orange-500 shadow-lg' : ''}`}
+    className={`border-2 border-orange-500 bg-orange-50/50 dark:bg-orange-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-orange-500 !bg-orange-50/50 !ring-2 !ring-orange-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="aws"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(255, 153, 0, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-md">
@@ -88,9 +97,12 @@ const S3Node = memo(({ data, selected }: NodeProps) => (
 // Componente RDS
 const RDSNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-orange-500 bg-orange-50/50 dark:bg-orange-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-orange-500 shadow-lg' : ''}`}
+    className={`border-2 border-orange-500 bg-orange-50/50 dark:bg-orange-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-orange-500 !bg-orange-50/50 !ring-2 !ring-orange-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="aws"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(255, 153, 0, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-md">
@@ -110,9 +122,12 @@ const RDSNode = memo(({ data, selected }: NodeProps) => (
 // Componente Compute
 const ComputeNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-500 !bg-blue-50/50 !ring-2 !ring-blue-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="gcp"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(66, 133, 244, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
@@ -132,9 +147,12 @@ const ComputeNode = memo(({ data, selected }: NodeProps) => (
 // Generic Node
 const GenericNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-gray-300 bg-gray-50/50 dark:bg-gray-800 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-gray-500 shadow-lg' : ''}`}
+    className={`border-2 border-gray-300 bg-gray-50/50 dark:bg-gray-800 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-gray-500 !bg-gray-50/50 !ring-2 !ring-gray-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="generic"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(102, 102, 102, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded-md">

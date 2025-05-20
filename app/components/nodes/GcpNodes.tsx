@@ -10,9 +10,12 @@ import {
 // Componente Compute Engine
 export const ComputeEngineNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-500 !bg-blue-50/50 !ring-2 !ring-blue-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="gcp"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(66, 133, 244, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
@@ -32,9 +35,12 @@ export const ComputeEngineNode = memo(({ data, selected }: NodeProps) => (
 // Componente Cloud Storage
 export const CloudStorageNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-500 !bg-blue-50/50 !ring-2 !ring-blue-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="gcp"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(66, 133, 244, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
@@ -54,9 +60,12 @@ export const CloudStorageNode = memo(({ data, selected }: NodeProps) => (
 // Componente Cloud Functions
 export const CloudFunctionsNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-500 !bg-blue-50/50 !ring-2 !ring-blue-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="gcp"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(66, 133, 244, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
@@ -76,9 +85,12 @@ export const CloudFunctionsNode = memo(({ data, selected }: NodeProps) => (
 // Componente Cloud SQL
 export const CloudSQLNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
-      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-500 !bg-blue-50/50 !ring-2 !ring-blue-500 !shadow-lg' : 'shadow-sm'}`}
     data-provider="gcp"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(66, 133, 244, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
   >
     <div className="flex items-start gap-2">
       <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
