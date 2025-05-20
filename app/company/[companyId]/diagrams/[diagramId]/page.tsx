@@ -12,16 +12,16 @@ import {
   addEdge, 
   applyEdgeChanges, 
   applyNodeChanges,
-  Node, 
-  Edge, 
   Connection, 
   OnNodesChange,
   OnEdgesChange,
   OnConnect,
   ReactFlowInstance
 } from 'reactflow';
+import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
 // Importar nodeTypes desde el archivo centralizado
 import nodeTypes from '../../../../components/nodes/NodeTypes';
+import { Node, Edge } from '../../../../services/diagramService';
 
 // Cache for environments and diagrams
 const environmentCache = new Map<string, Environment[]>();
@@ -32,65 +32,77 @@ const { Title } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
-// Categorías de recursos para el panel lateral
-const resourceCategories = [
+// Define interfaces for resource categories
+interface ResourceItem {
+  type: string;
+  name: string;
+  description: string;
+  provider: 'aws' | 'gcp' | 'generic' | 'azure';
+}
+
+interface ResourceCategory {
+  name: string;
+  provider: 'aws' | 'gcp' | 'generic' | 'azure';
+  items: ResourceItem[];
+}
+
+// Update resourceCategories to match the ResourceCategory interface
+const resourceCategories: ResourceCategory[] = [
   {
     name: 'AWS - Cómputo',
-    provider: 'aws' as const,
+    provider: 'aws',
     items: [
-      { type: 'ec2', name: 'EC2 Instance', description: 'Servidor virtual en la nube' },
-      { type: 'ec2', name: 'Load Balancer', description: 'Balanceador de carga' },
-      { type: 'group', name: 'Auto Scaling Group', description: 'Grupo de escalado automático' },
+      { type: 'ec2', name: 'EC2 Instance', description: 'Servidor virtual en la nube', provider: 'aws' },
+      { type: 'ec2', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'aws' },
+      { type: 'group', name: 'Auto Scaling Group', description: 'Grupo de escalado automático', provider: 'aws' },
     ]
   },
   {
     name: 'AWS - Almacenamiento',
-    provider: 'aws' as const,
+    provider: 'aws',
     items: [
-      { type: 's3', name: 'S3 Bucket', description: 'Almacenamiento de objetos' },
-      { type: 'rds', name: 'RDS Instance', description: 'Base de datos relacional' },
+      { type: 's3', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws' },
+      { type: 'rds', name: 'RDS Instance', description: 'Base de datos relacional', provider: 'aws' },
     ]
   },
   {
     name: 'AWS - Aplicación',
-    provider: 'aws' as const,
+    provider: 'aws',
     items: [
-      { type: 'lambda', name: 'Lambda Function', description: 'Función serverless' },
+      { type: 'lambda', name: 'Lambda Function', description: 'Función serverless', provider: 'aws' },
     ]
   },
   {
     name: 'GCP - Cómputo',
-    provider: 'gcp' as const,
+    provider: 'gcp',
     items: [
-      { type: 'compute', name: 'Compute Engine', description: 'Máquina virtual en la nube' },
-      { type: 'group', name: 'Instance Group', description: 'Grupo de instancias' },
+      { type: 'compute', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp' },
+      { type: 'group', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp' },
     ]
   },
   {
     name: 'GCP - Almacenamiento',
-    provider: 'gcp' as const,
+    provider: 'gcp',
     items: [
-      { type: 'storage', name: 'Cloud Storage', description: 'Almacenamiento de objetos' },
-      { type: 'sql', name: 'Cloud SQL', description: 'Base de datos gestionada' },
+      { type: 'storage', name: 'Cloud Storage', description: 'Almacenamiento de objetos', provider: 'gcp' },
+      { type: 'sql', name: 'Cloud SQL', description: 'Base de datos gestionada', provider: 'gcp' },
     ]
   },
   {
     name: 'GCP - Aplicación',
-    provider: 'gcp' as const,
+    provider: 'gcp',
     items: [
-      { type: 'function', name: 'Cloud Functions', description: 'Función serverless' },
+      { type: 'function', name: 'Cloud Functions', description: 'Función serverless', provider: 'gcp' },
     ]
   },
   {
     name: 'Grupos y Áreas',
-    provider: 'generic' as const,
+    provider: 'generic',
     items: [
-      { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos' },
+      { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos', provider: 'generic' },
     ]
   }
 ];
-
-// This interface was replaced with the import from diagramService.ts
 
 export default function DiagramPage() {
   const params = useParams();
@@ -106,8 +118,8 @@ export default function DiagramPage() {
   const [isPending, startTransition] = useTransition();
   
   // Estados para los nodos y conexiones del diagrama actual
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
+  const [nodes, setNodes] = useState<ReactFlowNode[]>([]);
+  const [edges, setEdges] = useState<ReactFlowEdge[]>([]);
   
   // Keep the previous diagram for smooth transitions
   const [previousDiagram, setPreviousDiagram] = useState<Diagram | null>(null);
@@ -171,42 +183,131 @@ export default function DiagramPage() {
     edges: []
   });
 
-  // Function to batch state updates and reduce cascading rerenders
+  // Function to convert between ReactFlow and our custom types
+  const convertToReactFlowNodes = (customNodes: Node[]): ReactFlowNode[] => {
+    return customNodes.map(node => ({
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      data: {
+        ...node.data,
+        provider: node.data?.provider || 'generic'
+      },
+      width: node.width || null,
+      height: node.height || null,
+      selected: node.selected || false,
+      positionAbsolute: node.positionAbsolute,
+      dragging: node.dragging || false,
+      parentNode: node.parentNode,
+      style: {
+        ...node.style,
+        border: '2px solid transparent',
+        borderRadius: '4px'
+      },
+      className: undefined,
+      sourcePosition: undefined,
+      targetPosition: undefined,
+      hidden: false,
+      draggable: true,
+      selectable: true,
+      connectable: true,
+      deletable: true,
+      zIndex: 0,
+      extent: undefined,
+      expandParent: false,
+      ariaLabel: undefined,
+      focusable: true,
+      resizing: false
+    }));
+  };
+
+  const convertToReactFlowEdges = (customEdges: Edge[]): ReactFlowEdge[] => {
+    return customEdges.map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: edge.type,
+      animated: edge.animated || false,
+      label: edge.label,
+      data: edge.data,
+      style: edge.style,
+      selected: edge.selected || false,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
+      className: undefined,
+      hidden: false,
+      deletable: true,
+      focusable: true,
+      updatable: true,
+      zIndex: 0
+    }));
+  };
+
+  const convertToCustomNodes = (reactFlowNodes: ReactFlowNode[]): Node[] => {
+    return reactFlowNodes.map(node => ({
+      id: node.id,
+      type: node.type || 'default',
+      position: node.position,
+      data: node.data,
+      width: node.width || undefined,
+      height: node.height || undefined,
+      selected: node.selected || false,
+      positionAbsolute: node.positionAbsolute,
+      dragging: node.dragging || false,
+      parentNode: node.parentNode,
+      style: node.style
+    }));
+  };
+
+  const convertToCustomEdges = (reactFlowEdges: ReactFlowEdge[]): Edge[] => {
+    return reactFlowEdges.map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: edge.type,
+      animated: edge.animated || false,
+      label: typeof edge.label === 'string' ? edge.label : undefined,
+      data: edge.data,
+      style: edge.style,
+      selected: edge.selected || false,
+      sourceHandle: edge.sourceHandle || undefined,
+      targetHandle: edge.targetHandle || undefined
+    }));
+  };
+
+  // Update the batchStateUpdates function to handle type conversions
   const batchStateUpdates = useCallback((updates: {
     diagram?: Diagram | null;
     nodes?: Node[];
     edges?: Edge[];
   }) => {
-    // We'll use React's batching ability with our own order of operations
     if (!isMounted.current) return;
     
-    // First update our stable reference to keep the data consistent
     if (updates.diagram !== undefined) {
       stableDataRef.current.diagram = updates.diagram;
     }
     if (updates.nodes) {
       stableDataRef.current.nodes = updates.nodes;
+      setNodes(convertToReactFlowNodes(updates.nodes));
     }
     if (updates.edges) {
       stableDataRef.current.edges = updates.edges;
+      setEdges(convertToReactFlowEdges(updates.edges));
     }
     
-    // Save the previous diagram before updating to the new one
     if (updates.diagram !== undefined && currentDiagram) {
       setPreviousDiagram(currentDiagram);
     }
     
-    // Use React 18's useTransition for lower priority updates
     startTransition(() => {
       if (updates.nodes) {
-        setNodes(updates.nodes);
+        setNodes(convertToReactFlowNodes(updates.nodes));
       }
       if (updates.edges) {
-        setEdges(updates.edges);
+        setEdges(convertToReactFlowEdges(updates.edges));
       }
     });
     
-    // But use flush sync for the diagram change as it's higher priority
     ReactDOM.flushSync(() => {
       if (updates.diagram !== undefined) {
         setCurrentDiagram(updates.diagram);
@@ -912,6 +1013,10 @@ export default function DiagramPage() {
                   });
                 });
                 
+                // Convertir los nodos y aristas de React Flow a nuestro formato personalizado
+                const customNodes = convertToCustomNodes(flowData.nodes);
+                const customEdges = convertToCustomEdges(flowData.edges);
+                
                 // Conservar el nombre y descripción originales del diagrama y guardar los cambios
                 updateDiagram(
                   companyId as string,
@@ -920,8 +1025,8 @@ export default function DiagramPage() {
                   {
                     name: currentDiagram.name,
                     description: currentDiagram.description,
-                    nodes: flowData.nodes,
-                    edges: flowData.edges,
+                    nodes: customNodes,
+                    edges: customEdges,
                     viewport: flowData.viewport,
                     nodeGroups,
                     nodePositions

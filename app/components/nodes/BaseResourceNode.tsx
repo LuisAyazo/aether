@@ -28,13 +28,13 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
   const getProviderColor = useCallback(() => {
     switch (data.provider) {
       case 'aws':
-        return 'border-orange-500 bg-orange-50 dark:bg-orange-900/20';
+        return 'border-orange-500 bg-orange-50/50';
       case 'gcp':
-        return 'border-blue-500 bg-blue-50 dark:bg-blue-900/20';
+        return 'border-blue-500 bg-blue-50/50';
       case 'azure':
-        return 'border-blue-400 bg-blue-50 dark:bg-blue-900/20';
+        return 'border-blue-400 bg-blue-50/50';
       default:
-        return 'border-gray-300 bg-white dark:bg-gray-800';
+        return 'border-gray-300 bg-gray-50/50';
     }
   }, [data.provider]);
   
@@ -312,6 +312,7 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
     <div
       data-id={id}
       data-resizable={isResizable}
+      data-provider={data.provider}
       className={`
         rounded-md border-2 ${getProviderColor()} shadow-sm transition-all duration-300
         ${isCollapsed ? 'min-w-[100px] min-h-[50px] p-2' : 'min-w-[150px] min-h-[80px] p-3'}
@@ -320,9 +321,8 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
         ${isResizable ? 'resizable-node' : ''}
         relative group
       `}
-      data-provider={data.provider}
       style={{
-        boxShadow: selected ? '0 0 0 2px var(--primary)' : 'none',
+        boxShadow: selected ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
         // Add dashed border and subtle animation effect when resizable is active
         ...(isResizable ? {
           borderStyle: 'dashed',

@@ -1,98 +1,96 @@
-import React from 'react';
-import { NodeProps } from 'reactflow';
-import BaseResourceNode from './BaseResourceNode';
+import { memo } from 'react';
+import { Handle, Position, NodeProps } from 'reactflow';
+import { 
+  ServerIcon, 
+  CloudIcon, 
+  CircleStackIcon, 
+  CodeBracketIcon
+} from '@heroicons/react/24/outline';
 
-// Iconos para GCP
-const ComputeEngineIcon = () => (
-  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="4" y="4" width="16" height="16" rx="2" stroke="#4285F4" strokeWidth="2"/>
-    <circle cx="12" cy="12" r="4" fill="#4285F4"/>
-  </svg>
-);
+// Componente Compute Engine
+export const ComputeEngineNode = memo(({ data, selected }: NodeProps) => (
+  <div 
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
+      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    data-provider="gcp"
+  >
+    <div className="flex items-start gap-2">
+      <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
+        <ServerIcon className="w-6 h-6 text-blue-600" />
+      </div>
+      <div>
+        <h3 className="text-sm font-medium">{data.label || 'Compute Engine'}</h3>
+        {data.description && <p className="text-xs text-gray-500">{data.description}</p>}
+        <div className="text-xs mt-1 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit text-blue-600">GCP</div>
+      </div>
+    </div>
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
+  </div>
+));
 
-const CloudStorageIcon = () => (
-  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M6 8L12 4L18 8V16L12 20L6 16V8Z" fill="#4285F4"/>
-    <path d="M12 12L18 8M12 12L6 8M12 12V20" stroke="white" strokeWidth="1.5"/>
-  </svg>
-);
+// Componente Cloud Storage
+export const CloudStorageNode = memo(({ data, selected }: NodeProps) => (
+  <div 
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
+      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    data-provider="gcp"
+  >
+    <div className="flex items-start gap-2">
+      <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
+        <CloudIcon className="w-6 h-6 text-blue-600" />
+      </div>
+      <div>
+        <h3 className="text-sm font-medium">{data.label || 'Cloud Storage'}</h3>
+        {data.description && <p className="text-xs text-gray-500">{data.description}</p>}
+        <div className="text-xs mt-1 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit text-blue-600">GCP</div>
+      </div>
+    </div>
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
+  </div>
+));
 
-const CloudFunctionsIcon = () => (
-  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M20 12V6L12 12H6V18H12L20 12Z" fill="#4285F4"/>
-    <path d="M4 12L8 8V16L4 12Z" fill="#4285F4"/>
-  </svg>
-);
+// Componente Cloud Functions
+export const CloudFunctionsNode = memo(({ data, selected }: NodeProps) => (
+  <div 
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
+      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    data-provider="gcp"
+  >
+    <div className="flex items-start gap-2">
+      <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
+        <CodeBracketIcon className="w-6 h-6 text-blue-600" />
+      </div>
+      <div>
+        <h3 className="text-sm font-medium">{data.label || 'Cloud Functions'}</h3>
+        {data.description && <p className="text-xs text-gray-500">{data.description}</p>}
+        <div className="text-xs mt-1 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit text-blue-600">GCP</div>
+      </div>
+    </div>
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
+  </div>
+));
 
-const CloudSQLIcon = () => (
-  <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="5" y="7" width="14" height="10" rx="2" fill="#4285F4"/>
-    <path d="M8 10H16V14H8V10Z" fill="white"/>
-    <path d="M10 12H14" stroke="#4285F4" strokeWidth="1.5"/>
-  </svg>
-);
-
-// Interfaces para los nodos específicos de GCP
-interface GcpNodeProps extends NodeProps {
-  data: {
-    label: string;
-    description?: string;
-    properties?: Record<string, any>;
-  };
-}
-
-export function ComputeEngineNode(props: GcpNodeProps) {
-  return (
-    <BaseResourceNode
-      {...props}
-      data={{
-        ...props.data,
-        provider: 'gcp',
-        icon: <ComputeEngineIcon />,
-        label: props.data.label || 'Compute Engine'
-      }}
-    />
-  );
-}
-
-export function CloudStorageNode(props: GcpNodeProps) {
-  return (
-    <BaseResourceNode
-      {...props}
-      data={{
-        ...props.data,
-        provider: 'gcp',
-        icon: <CloudStorageIcon />,
-        label: props.data.label || 'Cloud Storage'
-      }}
-    />
-  );
-}
-
-export function CloudFunctionsNode(props: GcpNodeProps) {
-  return (
-    <BaseResourceNode
-      {...props}
-      data={{
-        ...props.data,
-        provider: 'gcp',
-        icon: <CloudFunctionsIcon />,
-        label: props.data.label || 'Cloud Functions'
-      }}
-    />
-  );
-}
-
-export function CloudSQLNode(props: GcpNodeProps) {
-  return (
-    <BaseResourceNode
-      {...props}
-      data={{
-        ...props.data,
-        provider: 'gcp',
-        icon: <CloudSQLIcon />,
-        label: props.data.label || 'Cloud SQL'
-      }}
-    />
-  );
-}
+// Componente Cloud SQL
+export const CloudSQLNode = memo(({ data, selected }: NodeProps) => (
+  <div 
+    className={`border-2 border-blue-500 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg shadow-sm p-3 transition-all duration-300
+      ${selected ? 'ring-2 ring-blue-500 shadow-lg' : ''}`}
+    data-provider="gcp"
+  >
+    <div className="flex items-start gap-2">
+      <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
+        <CircleStackIcon className="w-6 h-6 text-blue-600" />
+      </div>
+      <div>
+        <h3 className="text-sm font-medium">{data.label || 'Cloud SQL'}</h3>
+        {data.description && <p className="text-xs text-gray-500">{data.description}</p>}
+        <div className="text-xs mt-1 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit text-blue-600">GCP</div>
+      </div>
+    </div>
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
+  </div>
+));

@@ -17,7 +17,8 @@ import ReactFlow, {
   useOnSelectionChange,
   ConnectionMode,
   Viewport,
-  BackgroundVariant
+  BackgroundVariant,
+  NodeChange // <-- Import NodeChange from reactflow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -521,53 +522,6 @@ const FlowEditorContent = ({
     return newGroupId;
   }, [reactFlowInstance, onNodesChange, reactFlowWrapper]);
 
-  // calculateNodeSize seems unused, can be commented out or removed if not needed.
-  /*
-  const calculateNodeSize = useCallback((groupId: string) => { 
-    const group = reactFlowInstance.getNode(groupId);
-    if (!group) return { width: 150, height: 80, cols: 1, rows: 1, spacing: 16, headerHeight: 40, horizontalMargin: 20, verticalMargin: 20, minNodeMargin: 16 };
-  
-    const childNodes = reactFlowInstance.getNodes().filter((n: Node) => n.parentNode === groupId);
-    const nodeCount = childNodes.length;
-    if (nodeCount === 0) return { width: 150, height: 80, cols: 1, rows: 1, spacing: 16, headerHeight: 40, horizontalMargin: 20, verticalMargin: 20, minNodeMargin: 16 };
-  
-    const headerHeight = 40;
-    const horizontalMargin = 20;
-    const verticalMargin = 20;
-    const spacing = 16;
-    const groupWidth = (group.style?.width as number) || 300;
-    const groupHeight = (group.style?.height as number) || 200;
-  
-    const availableWidth = groupWidth - 2 * horizontalMargin;
-    const availableHeight = groupHeight - headerHeight - 2 * verticalMargin;
-  
-    let best = { rows: 1, cols: nodeCount, nodeW: 0, nodeH: 0, area: 0 };
-    for (let cols = 1; cols <= nodeCount; cols++) {
-      const rows = Math.ceil(nodeCount / cols);
-      const totalSpacingX = (cols - 1) * spacing;
-      const totalSpacingY = (rows - 1) * spacing;
-      const nodeW = Math.floor((availableWidth - totalSpacingX) / cols);
-      const nodeH = Math.floor((availableHeight - totalSpacingY) / rows);
-      if (nodeW < 40 || nodeH < 32) continue;
-      if (cols * nodeW + totalSpacingX > availableWidth + 1) continue;
-      if (rows * nodeH + totalSpacingY > availableHeight + 1) continue;
-      const area = nodeW * nodeH;
-      if (area > best.area) best = { rows, cols, nodeW, nodeH, area };
-    }
-    if (best.nodeW === 0 || best.nodeH === 0) {
-      best.nodeW = Math.max(40, Math.floor(availableWidth / nodeCount));
-      best.nodeH = Math.max(32, Math.floor(availableHeight));
-      best.rows = 1;
-      best.cols = nodeCount;
-    }
-  
-    return {
-      width: best.nodeW, height: best.nodeH, cols: best.cols, rows: best.rows,
-      spacing, headerHeight, horizontalMargin, verticalMargin, minNodeMargin: 16 // minNodeMargin added back
-    };
-  }, [reactFlowInstance]);
-  */
-
   // 🔒 Critical code below – do not edit or delete
   const optimizeNodesInGroup = useCallback((groupId: string) => {
     const group = reactFlowInstance.getNode(groupId);
@@ -966,63 +920,31 @@ const FlowEditorContent = ({
     [reactFlowInstance, onNodesChange, optimizeNodesInGroup, isInsideGroup, setActiveDrag]
   );
 
-  // Importar los tipos necesarios para el manejador de nodos
-  // Define interfaces específicas para los cambios de nodos
-  interface NodePositionChange {
-    id: string;
-    type: 'position';
-    position?: { x: number; y: number };
-    positionAbsolute?: { x: number; y: number };
-    dragging?: boolean;
-  }
-
-  interface NodeChange {
-    type: string;
-    id?: string;
-    position?: { x: number; y: number };
-    positionAbsolute?: { x: number; y: number };
-    dragging?: boolean;
-    item?: Node;
-  }
-
   // Manejador personalizado para los cambios de nodos
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     if (!onNodesChange) return;
-    
-    // Implementar lógica personalizada para manejar el arrastre de nodos dentro de grupos
-    const dragChanges = changes.filter((change): change is NodePositionChange => 
-      change.type === 'position' && Boolean(change.dragging)
+    // Solo cambios de posición con id definido
+    const dragChanges = changes.filter(
+      (change): change is NodeChange & { id: string; position?: { x: number; y: number }; dragging: true } =>
+        change.type === 'position' && typeof change.id === 'string' && change.dragging === true
     );
-    
     if (dragChanges.length > 0) {
-      // Procesar cada cambio de posición individualmente
       dragChanges.forEach((change) => {
         const node = reactFlowInstance.getNode(change.id);
         if (node && node.parentNode) {
-          console.log(`Moviendo nodo ${node.id} dentro del grupo ${node.parentNode}`);
-          
           // Asegurarse que se mantenga dentro de los límites del grupo
           const parentNode = reactFlowInstance.getNode(node.parentNode);
           if (parentNode) {
-            // Forzar draggable true para asegurar el movimiento
             node.draggable = true;
-            
             const parentWidth = (parentNode.style?.width as number) || 300;
             const parentHeight = (parentNode.style?.height as number) || 200;
-            
-            // Establecer límites para la posición del nodo dentro del grupo
-            // con márgenes más pequeños para facilitar el movimiento
-            const minX = 5; // Margen izquierdo reducido
-            const minY = 25; // Margen superior (considerar el encabezado del grupo)
+            const minX = 5;
+            const minY = 25;
             const maxX = parentWidth - 10 - ((node.style?.width as number) || 150);
             const maxY = parentHeight - 10 - ((node.style?.height as number) || 40);
-            
-            // Ajustar la posición dentro de los límites si es necesario
             if (change.position) {
               change.position.x = Math.max(minX, Math.min(maxX, change.position.x));
               change.position.y = Math.max(minY, Math.min(maxY, change.position.y));
-              
-              // Asegurarse de que el cambio se aplique inmediatamente
               setTimeout(() => {
                 reactFlowInstance.setNodes(nodes =>
                   nodes.map(n =>
@@ -1035,8 +957,6 @@ const FlowEditorContent = ({
         }
       });
     }
-    
-    // Pasar los cambios modificados al manejador original
     onNodesChange(changes);
   }, [onNodesChange, reactFlowInstance]);
   

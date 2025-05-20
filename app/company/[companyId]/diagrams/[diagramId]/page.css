@@ -51,11 +51,66 @@
 
 /* Refined transitions for ReactFlow elements */
 .react-flow__node {
-  transition: transform 0.3s ease, opacity 0.2s ease, background-color 0.3s ease;
+  transition: transform 0.3s ease, opacity 0.2s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+  border: 2px solid transparent !important;
+  border-radius: 4px;
+  background-color: white !important;
 }
 
-.react-flow__edge {
-  transition: opacity 0.3s ease;
+/* Estilos para nodos según proveedor */
+.react-flow__node[data-provider="aws"] {
+  border-color: #FF9900 !important;
+  background-color: #FFF5E6 !important;
+}
+
+.react-flow__node[data-provider="gcp"] {
+  border-color: #4285F4 !important;
+  background-color: #E8F0FE !important;
+}
+
+.react-flow__node[data-provider="azure"] {
+  border-color: #0078D4 !important;
+  background-color: #E6F3FF !important;
+}
+
+.react-flow__node[data-provider="generic"] {
+  border-color: #666666 !important;
+  background-color: #F5F5F5 !important;
+}
+
+/* Estilos para nodos seleccionados */
+.react-flow__node.selected {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Estilos para nodos al hacer hover */
+.react-flow__node:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Asegurar que los bordes sean visibles incluso cuando el nodo está seleccionado */
+.react-flow__node.selected[data-provider="aws"] {
+  border-color: #FF9900 !important;
+  background-color: #FFF5E6 !important;
+  box-shadow: 0 4px 12px rgba(255, 153, 0, 0.2) !important;
+}
+
+.react-flow__node.selected[data-provider="gcp"] {
+  border-color: #4285F4 !important;
+  background-color: #E8F0FE !important;
+  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.2) !important;
+}
+
+.react-flow__node.selected[data-provider="azure"] {
+  border-color: #0078D4 !important;
+  background-color: #E6F3FF !important;
+  box-shadow: 0 4px 12px rgba(0, 120, 212, 0.2) !important;
+}
+
+.react-flow__node.selected[data-provider="generic"] {
+  border-color: #666666 !important;
+  background-color: #F5F5F5 !important;
+  box-shadow: 0 4px 12px rgba(102, 102, 102, 0.2) !important;
 }
 
 /* Ensure proper rendering during transitions */
