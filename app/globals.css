@@ -1346,25 +1346,40 @@ button.bg-blue-600 {
 }
 
 .minimized-group .tooltip {
-  position: absolute !important;
-  top: -30px !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  background: rgba(0, 0, 0, 0.8) !important;
-  color: white !important;
-  padding: 4px 8px !important;
-  border-radius: 4px !important;
-  font-size: 12px !important;
-  white-space: nowrap !important;
-  opacity: 0 !important;
-  transition: opacity 0.2s ease !important;
-  z-index: 1000 !important;
-  pointer-events: none !important;
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 1000;
 }
 
 .minimized-group:hover .tooltip {
-  opacity: 1 !important;
-  visibility: visible !important;
+  opacity: 1;
+  visibility: visible;
+  left: calc(100% + 15px);
+}
+
+/* Añadir flecha al tooltip */
+.minimized-group .tooltip::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-style: solid;
+  border-width: 6px 6px 6px 0;
+  border-color: transparent rgba(0, 0, 0, 0.8) transparent transparent;
 }
 
 /* Estilos para las líneas de conexión */
@@ -1410,4 +1425,115 @@ button.bg-blue-600 {
 
 .react-flow__edge.selected .edge-delete-button {
   opacity: 1;
+}
+
+/* Estilos para el grupo minimizado */
+.react-flow__node-group[data-minimized="true"] {
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  background: white !important;
+  border: 2px solid currentColor !important;
+  pointer-events: all !important;
+  overflow: visible !important;
+}
+
+/* Asegurar que el contenido del grupo minimizado no interfiera */
+.react-flow__node-group[data-minimized="true"] > div {
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+}
+
+.react-flow__node-group[data-minimized="true"] .group-content {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.react-flow__node-group[data-minimized="true"] .group-initials {
+  font-size: 20px !important;
+  font-weight: bold !important;
+  color: currentColor !important;
+  text-transform: uppercase !important;
+  user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Asegurar que los handles estén completamente deshabilitados */
+.react-flow__node-group[data-minimized="true"] .react-flow__handle {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* Ajustar el área de interacción para el tooltip */
+.minimized-group {
+  position: relative !important;
+  pointer-events: all !important;
+}
+
+.minimized-group .tooltip {
+  pointer-events: none !important;
+}
+
+/* Asegurar que otros nodos no interactúen con el grupo minimizado */
+.react-flow__node:not([data-minimized="true"]) {
+  z-index: 1 !important;
+}
+
+.react-flow__node-group[data-minimized="true"] {
+  z-index: 2 !important;
+}
+
+/* Estilos para nodos dentro de grupos */
+.react-flow__node-group .react-flow__node {
+  transition: all 0.3s ease-in-out !important;
+  position: relative !important;
+  margin: 8px 0 !important;
+  width: calc(100% - 40px) !important;
+  left: 20px !important;
+}
+
+/* Animación al agregar nodos al grupo */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.react-flow__node-group .react-flow__node {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Asegurar que los nodos dentro del grupo sean interactivos */
+.react-flow__node-group .react-flow__node {
+  pointer-events: all !important;
+  cursor: move !important;
+}
+
+/* Ajustar el espacio para el header del grupo */
+.react-flow__node-group {
+  padding-top: 40px !important;
+}
+
+/* Asegurar que los nodos no se salgan del grupo */
+.react-flow__node-group .react-flow__node {
+  max-width: calc(100% - 40px) !important;
+  overflow: hidden !important;
+}
+
+/* Mejorar la visibilidad durante el arrastre */
+.react-flow__node-group .react-flow__node.dragging {
+  z-index: 1000 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }

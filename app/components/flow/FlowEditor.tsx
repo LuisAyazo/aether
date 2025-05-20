@@ -647,48 +647,44 @@ const FlowEditorContent = ({
     const childNodes = reactFlowInstance.getNodes().filter((n: Node) => n.parentNode === groupId);
     if (childNodes.length === 0) return;
   
-    const {
-      width: nodeWidth,
-      height: nodeHeight,
-      cols,
-      spacing,
-      headerHeight,
-      horizontalMargin,
-      verticalMargin
-    } = calculateNodeSize(groupId);
-  
-    // Reordenar nodos por id para que el layout sea determinista y consistente tras refrescar
+    // Obtener dimensiones del grupo
+    const groupWidth = (group.style?.width as number) || 300;
+    const groupHeight = (group.style?.height as number) || 200;
+    
+    // Margenes y espaciado
+    const headerHeight = 40;
+    const verticalMargin = 20;
+    const horizontalMargin = 20;
+    const nodeSpacing = 8;
+    
+    // Área disponible para los nodos
+    const availableWidth = groupWidth - 2 * horizontalMargin;
+    
+    // Ordenar nodos por ID para mantener un orden consistente
     const sortedChildNodes = [...childNodes].sort((a, b) => a.id.localeCompare(b.id));
-  
-    // Posicionar nodos en la cuadrícula, sin solapamiento y sin tocar bordes
+    
+    // Posicionar nodos en formato lista vertical
     const updatedNodes = reactFlowInstance.getNodes().map(node => {
       if (node.parentNode !== groupId) return node;
+      
       const idx = sortedChildNodes.findIndex((n: Node) => n.id === node.id);
-      const row = Math.floor(idx / cols);
-      const col = idx % cols;
-      // Calcular posición para que haya separación entre nodos y bordes
-      const x = horizontalMargin + col * (nodeWidth + spacing);
-      const y = headerHeight + verticalMargin + row * (nodeHeight + spacing);
-  
+      const y = headerHeight + verticalMargin + idx * (40 + nodeSpacing); // Altura fija de 40px por nodo
+      
       return {
         ...node,
-        position: { x, y },
+        position: { x: horizontalMargin, y },
         style: {
           ...node.style,
-          width: nodeWidth,
-          height: nodeHeight,
-          overflow: 'visible',
-          whiteSpace: 'normal'
-        },
-        data: {
-          ...node.data,
-          isSmall: false
+          width: availableWidth,
+          height: 40,
+          transition: 'none'
         }
       };
     });
-  
+    
+    // Actualizar los nodos inmediatamente sin demora
     reactFlowInstance.setNodes(updatedNodes);
-  }, [reactFlowInstance, calculateNodeSize]);
+  }, [reactFlowInstance]);
 
   // Modificamos groupSelectedNodes para optimizar los nodos dentro del grupo
   const groupSelectedNodes = useCallback(() => {
@@ -1177,50 +1173,79 @@ const FlowEditorContent = ({
       const parentNode = reactFlowInstance.getNode(node.parentNode);
       if (!parentNode) return;
       
-      // Obtener dimensiones del grupo padre
+      // Get parent dimensions
       const parentWidth = (parentNode.style?.width as number) || 200;
       const parentHeight = (parentNode.style?.height as number) || 150;
       
-      // Obtener dimensiones aproximadas del nodo
-      // Usar las dimensiones reales del nodo si están disponibles
+      // Get node dimensions
       const nodeWidth = node.width || 150;
       const nodeHeight = node.height || 80;
       
-      // Calcular límites seguros dentro del grupo padre (con margen)
+      // Calculate safe boundaries within parent (with margin)
       const marginX = 10;
       const marginY = 10;
-      const headerHeight = 30; // Espacio para el encabezado del grupo
+      const headerHeight = 30; // Space for group header
       
-      // Crear nuevas coordenadas limitadas
+      // Create new bounded coordinates
       let newPos = { ...node.position };
       let needsAdjustment = false;
-    
-    // Ajustar posición X si es necesario
-    if (newPos.x < marginX) {
-      newPos.x = marginX;
-      needsAdjustment = true;
-    } else if (newPos.x > parentWidth - nodeWidth - marginX) {
-      newPos.x = Math.max(marginX, parentWidth - nodeWidth - marginX);
-      needsAdjustment = true;
+      
+      // Adjust X position if needed
+      if (newPos.x < marginX) {
+        newPos.x = marginX;
+        needsAdjustment = true;
+      } else if (newPos.x > parentWidth - nodeWidth - marginX) {
+        newPos.x = Math.max(marginX, parentWidth - nodeWidth - marginX);
+        needsAdjustment = true;
+      }
+      
+      // Adjust Y position if needed
+      if (newPos.y < headerHeight) {
+        newPos.y = headerHeight;
+        needsAdjustment = true;
+      } else if (newPos.y > parentHeight - nodeHeight - marginY) {
+        newPos.y = Math.max(headerHeight, parentHeight - nodeHeight - marginY);
+        needsAdjustment = true;
+      }
+      
+      // Apply adjustments if needed
+      if (needsAdjustment) {
+        reactFlowInstance.setNodes(nds => 
+          nds.map((n: Node) => 
+            n.id === node.id ? { ...n, position: newPos } : n
+          )
+        );
+      }
     }
-    
-    // Ajustar posición Y si es necesario
-    if (newPos.y < headerHeight) {
-      newPos.y = headerHeight;
-      needsAdjustment = true;
-    } else if (newPos.y > parentHeight - nodeHeight - marginY) {
-      newPos.y = Math.max(headerHeight, parentHeight - nodeHeight - marginY);
-      needsAdjustment = true;
-    }
-    
-    // Aplicar ajustes si son necesarios
-    if (needsAdjustment) {
-      reactFlowInstance.setNodes(nds => 
-        nds.map((n: Node) => 
-          n.id === node.id ? { ...n, position: newPos } : n
-        )
-      );
-    }
+
+    // Handle group resizing
+    if (node.type === 'group' && !node.data?.isMinimized) {
+      // Get the current node element
+      const nodeElement = document.querySelector(`[data-id="${node.id}"]`);
+      if (nodeElement) {
+        const newWidth = nodeElement.clientWidth;
+        const newHeight = nodeElement.clientHeight;
+
+        // Update the group size
+        reactFlowInstance.setNodes(nodes =>
+          nodes.map(n => {
+            if (n.id === node.id) {
+              return {
+                ...n,
+                style: {
+                  ...n.style,
+                  width: newWidth,
+                  height: newHeight
+                }
+              };
+            }
+            return n;
+          })
+        );
+
+        // Optimize the position of nodes within the group
+        setTimeout(() => optimizeNodesInGroup(node.id), 50);
+      }
     }
   }, [reactFlowInstance, optimizeNodesInGroup]);
 
