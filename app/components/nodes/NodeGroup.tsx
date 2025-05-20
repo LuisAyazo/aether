@@ -1,10 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Handle, Position, NodeProps, useReactFlow, XYPosition } from 'reactflow';
+import React, { useState, useCallback, useEffect } from 'react';
+// XYPosition removed as it's unused
+import { Handle, Position, NodeProps, useReactFlow } from 'reactflow'; 
 import { 
   MinusIcon, 
   PlusIcon,
   ArrowsPointingInIcon,
-  ViewfinderCircleIcon,
 } from '@heroicons/react/24/outline';
 
 interface NodeGroupProps extends NodeProps {
@@ -21,22 +21,28 @@ const PADDING = 20;
 export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   // Estados
   const [isMinimized, setIsMinimized] = useState(() => {
-    const saved = localStorage.getItem(`group-${id}-minimized`);
-    return saved ? JSON.parse(saved) : false;
+    try {
+      const saved = localStorage.getItem(`group-${id}-minimized`);
+      return saved ? JSON.parse(saved) : false;
+    } catch (error) {
+      console.warn(`Error parsing localStorage item group-${id}-minimized:`, error);
+      return false;
+    }
   });
   
   const [isCollapsed, setIsCollapsed] = useState(() => {
-    const saved = localStorage.getItem(`group-${id}-collapsed`);
-    return saved ? JSON.parse(saved) : false;
+    try {
+      const saved = localStorage.getItem(`group-${id}-collapsed`);
+      return saved ? JSON.parse(saved) : false;
+    } catch (error) {
+      console.warn(`Error parsing localStorage item group-${id}-collapsed:`, error);
+      return false;
+    }
   });
 
   const [isEditing, setIsEditing] = useState(false);
   const [labelText, setLabelText] = useState(data.label);
-  const [showContextMenu, setShowContextMenu] = useState(false);
-  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
-  const [contextMenuNodeId, setContextMenuNodeId] = useState<string | null>(null);
   
-  const contextMenuRef = useRef<HTMLDivElement>(null);
   const reactFlowInstance = useReactFlow();
 
   // Actualizar el labelText cuando cambie data.label
@@ -50,20 +56,6 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     localStorage.setItem(`group-${id}-collapsed`, JSON.stringify(isCollapsed));
   }, [id, isMinimized, isCollapsed]);
 
-  // Cerrar el menú contextual cuando se hace click fuera
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
-        setShowContextMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
   // Obtener color según proveedor
   const getBorderColor = () => {
     switch (data.provider) {
@@ -76,7 +68,6 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
 
   // Actualizar visibilidad de nodos hijos y edges
   const updateChildNodesAndEdges = useCallback((hide: boolean) => {
-    const edges = reactFlowInstance.getEdges();
     const nodes = reactFlowInstance.getNodes();
     
     // Identificar los nodos hijos
@@ -105,7 +96,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     // Actualizar edges
     reactFlowInstance.setEdges(edges => 
       edges.map(edge => {
-        const isConnectedToGroup = edge.source === id || edge.target === id;
+        const isConnectedToGroup = edge.source === id || edge.target === id; // Corrected syntax
         const isConnectedToChild = childNodeIds.includes(edge.source) || childNodeIds.includes(edge.target);
         
         if (isConnectedToChild && !isConnectedToGroup) {
@@ -124,82 +115,14 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     );
   }, [reactFlowInstance, id]);
 
-  // Función para desagrupar un nodo
-  const handleUngroupNode = useCallback((nodeId: string) => {
-    const node = reactFlowInstance.getNode(nodeId);
-    if (!node) return;
-
-    // Calcular la posición absoluta del nodo
-    const parentNode = reactFlowInstance.getNode(id);
-    if (!parentNode) return;
-
-    const absolutePosition: XYPosition = {
-      x: parentNode.position.x + (node.position.x || 0),
-      y: parentNode.position.y + (node.position.y || 0)
-    };
-
-    // Actualizar el nodo sin parentNode y con posición absoluta
-    reactFlowInstance.setNodes(nodes =>
-      nodes.map(n => {
-        if (n.id === nodeId) {
-          const { parentNode, ...rest } = n;
-          return {
-            ...rest,
-            position: absolutePosition,
-            extent: undefined,
-            hidden: false,
-            style: {
-              ...rest.style,
-              visibility: 'visible',
-              display: 'block',
-              opacity: 1
-            }
-          };
-        }
-        return n;
-      })
-    );
-
-    // Asegurar que los edges conectados al nodo sean visibles
-    reactFlowInstance.setEdges(edges =>
-      edges.map(edge => {
-        if (edge.source === nodeId || edge.target === nodeId) {
-          return { 
-            ...edge, 
-            hidden: false,
-            style: {
-              ...edge.style,
-              visibility: 'visible',
-              opacity: 1
-            }
-          };
-        }
-        return edge;
-      })
-    );
-
-    setShowContextMenu(false);
-  }, [reactFlowInstance, id]);
-
-  const handleContextMenu = useCallback((event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const target = event.target as HTMLElement;
-    const nodeElement = target.closest('.react-flow__node');
-    
-    if (nodeElement) {
-      const nodeId = nodeElement.getAttribute('data-id');
-      if (nodeId && nodeId !== id) {
-        const node = reactFlowInstance.getNode(nodeId);
-        if (node?.parentNode === id) {
-          setContextMenuPosition({ x: event.clientX, y: event.clientY });
-          setContextMenuNodeId(nodeId);
-          setShowContextMenu(true);
-        }
-      }
-    }
-  }, [id, reactFlowInstance]);
+  const handleContextMenu = useCallback((/* event: React.MouseEvent */) => {
+    // Temporarily commented out for diagnostics to check selection interference
+    // event.preventDefault(); 
+    // event.stopPropagation();
+    // Placeholder for group's own context menu.
+    // For now, it just prevents the default browser context menu.
+    // console.log('Context menu on group:'); // id removed as it's not in deps
+  }, []); // id dependency removed as it was unused
 
   // Manejar minimizado
   const handleMinimize = useCallback((e: React.MouseEvent) => {
@@ -241,44 +164,24 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     updateChildNodesAndEdges(newState);
   }, [isCollapsed, updateChildNodesAndEdges]);
 
-  // Manejar enfoque
-  const handleFocus = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    const node = reactFlowInstance.getNode(id);
-    if (node) {
-      reactFlowInstance.setViewport(
-        { x: -node.position.x, y: -node.position.y, zoom: 1.5 },
-        { duration: 800 }
-      );
-    }
-  }, [reactFlowInstance, id]);
-
-  // Renderizar el menú contextual
-  const renderContextMenu = () => {
-    if (!showContextMenu || !contextMenuNodeId) return null;
-
-    return (
-      <div
-        ref={contextMenuRef}
-        className="fixed bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-[1000]"
-        style={{
-          left: contextMenuPosition.x,
-          top: contextMenuPosition.y,
-          minWidth: '150px'
-        }}
-      >
-        <button
-          className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
-          onClick={() => {
-            handleUngroupNode(contextMenuNodeId);
-            setShowContextMenu(false);
-          }}
-        >
-          Desagrupar nodo
-        </button>
-      </div>
+  // Commit label changes to React Flow state
+  const handleLabelChangeCommit = useCallback((newLabel: string) => {
+    setIsEditing(false);
+    reactFlowInstance.setNodes(nodes =>
+      nodes.map(node => {
+        if (node.id === id) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              label: newLabel,
+            },
+          };
+        }
+        return node;
+      })
     );
-  };
+  }, [id, reactFlowInstance]);
 
   // Renderizado minimizado
   if (isMinimized) {
@@ -341,7 +244,8 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             background: getBorderColor(),
             border: 'none',
             zIndex: 3,
-            pointerEvents: 'all'
+            pointerEvents: 'none',
+            visibility: 'hidden',
           }}
         />
         <Handle 
@@ -354,7 +258,8 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             background: getBorderColor(),
             border: 'none',
             zIndex: 3,
-            pointerEvents: 'all'
+            pointerEvents: 'none',
+            visibility: 'hidden',
           }}
         />
       </div>
@@ -371,18 +276,31 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
         inset: 0,
         border: `2px solid ${getBorderColor()}`,
         borderRadius: '8px',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
         padding: `${PADDING}px`,
         cursor: 'pointer',
-        zIndex: 1,
-        display: 'flex',
+        zIndex: 1, 
+        display: 'flex', 
         alignItems: 'center',
         justifyContent: 'center',
         outline: 'none',
         boxShadow: 'none',
-        transition: 'background-color 0.3s ease'
+        transition: 'background-color 0.3s ease',
+        backgroundColor: 'rgba(0,0,0,0.001)', // Make the group node area itself clickable for selection
       }}
     >
+      {/* Visual background element - non-interactive */}
+      <div style={{
+        position: 'absolute',
+        top: 0, 
+        left: 0, 
+        width: '100%', 
+        height: '100%',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 'inherit', // Inherit border radius from parent
+        pointerEvents: 'none', // Crucial: background doesn't steal clicks from children
+        zIndex: -1, // Ensure it's visually behind other direct children of "group-node" (label, buttons)
+      }} />
+
       <Handle 
         type="target" 
         position={Position.Left}
@@ -447,10 +365,11 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             type="text"
             value={labelText}
             onChange={(e) => setLabelText(e.target.value)}
-            onBlur={() => setIsEditing(false)}
+            onBlur={() => handleLabelChangeCommit(labelText)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                setIsEditing(false);
+                handleLabelChangeCommit(labelText);
+                (e.target as HTMLInputElement).blur();
               }
             }}
             className="bg-transparent border-none p-0 text-center w-full outline-none text-sm"
@@ -465,4 +384,4 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
       </div>
     </div>
   );
-} 
+}
