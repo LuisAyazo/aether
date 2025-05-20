@@ -55,6 +55,9 @@ const resourceCategories: ResourceCategory[] = [
       { type: 'ec2', name: 'EC2 Instance', description: 'Servidor virtual en la nube', provider: 'aws' },
       { type: 'ec2', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'aws' },
       { type: 'group', name: 'Auto Scaling Group', description: 'Grupo de escalado automático', provider: 'aws' },
+      { type: 'ec2', name: 'Elastic Beanstalk', description: 'Plataforma como servicio', provider: 'aws' },
+      { type: 'ec2', name: 'ECS Container', description: 'Contenedor en ECS', provider: 'aws' },
+      { type: 'ec2', name: 'EKS Cluster', description: 'Cluster de Kubernetes', provider: 'aws' },
     ]
   },
   {
@@ -63,6 +66,10 @@ const resourceCategories: ResourceCategory[] = [
     items: [
       { type: 's3', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws' },
       { type: 'rds', name: 'RDS Instance', description: 'Base de datos relacional', provider: 'aws' },
+      { type: 'rds', name: 'DynamoDB', description: 'Base de datos NoSQL', provider: 'aws' },
+      { type: 'rds', name: 'ElastiCache', description: 'Caché en memoria', provider: 'aws' },
+      { type: 'rds', name: 'Redshift', description: 'Almacén de datos', provider: 'aws' },
+      { type: 's3', name: 'EFS', description: 'Sistema de archivos elástico', provider: 'aws' },
     ]
   },
   {
@@ -70,6 +77,11 @@ const resourceCategories: ResourceCategory[] = [
     provider: 'aws',
     items: [
       { type: 'lambda', name: 'Lambda Function', description: 'Función serverless', provider: 'aws' },
+      { type: 'lambda', name: 'API Gateway', description: 'API REST/WebSocket', provider: 'aws' },
+      { type: 'lambda', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws' },
+      { type: 'lambda', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws' },
+      { type: 'lambda', name: 'EventBridge', description: 'Orquestación de eventos', provider: 'aws' },
+      { type: 'lambda', name: 'Step Functions', description: 'Flujos de trabajo', provider: 'aws' },
     ]
   },
   {
@@ -78,6 +90,10 @@ const resourceCategories: ResourceCategory[] = [
     items: [
       { type: 'compute', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp' },
       { type: 'group', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp' },
+      { type: 'compute', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp' },
+      { type: 'compute', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp' },
+      { type: 'compute', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp' },
+      { type: 'compute', name: 'Cloud Functions', description: 'Funciones serverless', provider: 'gcp' },
     ]
   },
   {
@@ -86,6 +102,10 @@ const resourceCategories: ResourceCategory[] = [
     items: [
       { type: 'storage', name: 'Cloud Storage', description: 'Almacenamiento de objetos', provider: 'gcp' },
       { type: 'sql', name: 'Cloud SQL', description: 'Base de datos gestionada', provider: 'gcp' },
+      { type: 'sql', name: 'BigQuery', description: 'Almacén de datos', provider: 'gcp' },
+      { type: 'sql', name: 'Firestore', description: 'Base de datos NoSQL', provider: 'gcp' },
+      { type: 'sql', name: 'Memorystore', description: 'Caché en memoria', provider: 'gcp' },
+      { type: 'storage', name: 'Filestore', description: 'Sistema de archivos', provider: 'gcp' },
     ]
   },
   {
@@ -93,6 +113,47 @@ const resourceCategories: ResourceCategory[] = [
     provider: 'gcp',
     items: [
       { type: 'function', name: 'Cloud Functions', description: 'Función serverless', provider: 'gcp' },
+      { type: 'function', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp' },
+      { type: 'function', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp' },
+      { type: 'function', name: 'Cloud Tasks', description: 'Colas de tareas', provider: 'gcp' },
+      { type: 'function', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp' },
+      { type: 'function', name: 'Eventarc', description: 'Orquestación de eventos', provider: 'gcp' },
+    ]
+  },
+  {
+    name: 'Azure - Cómputo',
+    provider: 'azure',
+    items: [
+      { type: 'vm', name: 'Virtual Machine', description: 'Máquina virtual', provider: 'azure' },
+      { type: 'vm', name: 'VM Scale Set', description: 'Conjunto de escalado', provider: 'azure' },
+      { type: 'vm', name: 'AKS Cluster', description: 'Cluster de Kubernetes', provider: 'azure' },
+      { type: 'vm', name: 'App Service', description: 'Plataforma como servicio', provider: 'azure' },
+      { type: 'vm', name: 'Container Instances', description: 'Contenedores', provider: 'azure' },
+      { type: 'vm', name: 'Functions', description: 'Funciones serverless', provider: 'azure' },
+    ]
+  },
+  {
+    name: 'Azure - Almacenamiento',
+    provider: 'azure',
+    items: [
+      { type: 'blob', name: 'Blob Storage', description: 'Almacenamiento de objetos', provider: 'azure' },
+      { type: 'cosmos', name: 'Cosmos DB', description: 'Base de datos NoSQL', provider: 'azure' },
+      { type: 'cosmos', name: 'SQL Database', description: 'Base de datos relacional', provider: 'azure' },
+      { type: 'cosmos', name: 'Redis Cache', description: 'Caché en memoria', provider: 'azure' },
+      { type: 'cosmos', name: 'Synapse Analytics', description: 'Almacén de datos', provider: 'azure' },
+      { type: 'blob', name: 'File Storage', description: 'Sistema de archivos', provider: 'azure' },
+    ]
+  },
+  {
+    name: 'Azure - Aplicación',
+    provider: 'azure',
+    items: [
+      { type: 'function', name: 'Azure Functions', description: 'Función serverless', provider: 'azure' },
+      { type: 'function', name: 'API Management', description: 'API Gateway', provider: 'azure' },
+      { type: 'function', name: 'Service Bus', description: 'Mensajería', provider: 'azure' },
+      { type: 'function', name: 'Event Grid', description: 'Orquestación de eventos', provider: 'azure' },
+      { type: 'function', name: 'Logic Apps', description: 'Flujos de trabajo', provider: 'azure' },
+      { type: 'function', name: 'Event Hubs', description: 'Streaming de eventos', provider: 'azure' },
     ]
   },
   {
@@ -100,6 +161,8 @@ const resourceCategories: ResourceCategory[] = [
     provider: 'generic',
     items: [
       { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos', provider: 'generic' },
+      { type: 'group', name: 'Área', description: 'Definir un área del diagrama', provider: 'generic' },
+      { type: 'group', name: 'Subsistema', description: 'Agrupar componentes relacionados', provider: 'generic' },
     ]
   }
 ];

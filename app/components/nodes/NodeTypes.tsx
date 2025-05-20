@@ -18,6 +18,7 @@ import {
   CpuChipIcon,
   CodeBracketIcon
 } from '@heroicons/react/24/outline';
+import { CloudOutlined, DatabaseOutlined, ApiOutlined, AppstoreOutlined } from '@ant-design/icons';
 
 // Componente EC2
 const EC2Node = memo(({ data, selected }: NodeProps) => (
@@ -169,6 +170,119 @@ const GenericNode = memo(({ data, selected }: NodeProps) => (
   </div>
 ));
 
+// Azure Nodes
+const AzureVMNode = ({ data, selected, isConnectable }: any) => (
+  <div 
+    className={`p-3 rounded-lg border-2 border-blue-600 bg-blue-50/50 shadow-sm ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : ''}`}
+    data-provider="azure"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(0, 120, 215, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
+  >
+    <Handle
+      type="target"
+      position={Position.Top}
+      isConnectable={isConnectable}
+    />
+    <div className="flex items-center gap-2">
+      <CloudOutlined className="text-blue-600" />
+      <div>
+        <div className="font-medium">{data.label}</div>
+        <div className="text-xs text-gray-500">{data.description}</div>
+      </div>
+    </div>
+    <Handle
+      type="source"
+      position={Position.Bottom}
+      isConnectable={isConnectable}
+    />
+  </div>
+);
+
+const AzureBlobNode = ({ data, selected, isConnectable }: any) => (
+  <div 
+    className={`p-3 rounded-lg border-2 border-blue-600 bg-blue-50/50 shadow-sm ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : ''}`}
+    data-provider="azure"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(0, 120, 215, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
+  >
+    <Handle
+      type="target"
+      position={Position.Top}
+      isConnectable={isConnectable}
+    />
+    <div className="flex items-center gap-2">
+      <DatabaseOutlined className="text-blue-600" />
+      <div>
+        <div className="font-medium">{data.label}</div>
+        <div className="text-xs text-gray-500">{data.description}</div>
+      </div>
+    </div>
+    <Handle
+      type="source"
+      position={Position.Bottom}
+      isConnectable={isConnectable}
+    />
+  </div>
+);
+
+const AzureCosmosNode = ({ data, selected, isConnectable }: any) => (
+  <div 
+    className={`p-3 rounded-lg border-2 border-blue-600 bg-blue-50/50 shadow-sm ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : ''}`}
+    data-provider="azure"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(0, 120, 215, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
+  >
+    <Handle
+      type="target"
+      position={Position.Top}
+      isConnectable={isConnectable}
+    />
+    <div className="flex items-center gap-2">
+      <DatabaseOutlined className="text-blue-600" />
+      <div>
+        <div className="font-medium">{data.label}</div>
+        <div className="text-xs text-gray-500">{data.description}</div>
+      </div>
+    </div>
+    <Handle
+      type="source"
+      position={Position.Bottom}
+      isConnectable={isConnectable}
+    />
+  </div>
+);
+
+const AzureFunctionNode = ({ data, selected, isConnectable }: any) => (
+  <div 
+    className={`p-3 rounded-lg border-2 border-blue-600 bg-blue-50/50 shadow-sm ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : ''}`}
+    data-provider="azure"
+    style={{
+      boxShadow: selected ? '0 4px 12px rgba(0, 120, 215, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
+    }}
+  >
+    <Handle
+      type="target"
+      position={Position.Top}
+      isConnectable={isConnectable}
+    />
+    <div className="flex items-center gap-2">
+      <ApiOutlined className="text-blue-600" />
+      <div>
+        <div className="font-medium">{data.label}</div>
+        <div className="text-xs text-gray-500">{data.description}</div>
+      </div>
+    </div>
+    <Handle
+      type="source"
+      position={Position.Bottom}
+      isConnectable={isConnectable}
+    />
+  </div>
+);
+
 // Define todos los tipos de nodos que usamos en la aplicación
 const nodeTypes = {
   // AWS nodes
@@ -186,7 +300,13 @@ const nodeTypes = {
   // Generic nodes
   generic: GenericNode,
   group: NodeGroup,
-  areaBackground: AreaBackground
+  areaBackground: AreaBackground,
+  
+  // Azure nodes
+  vm: AzureVMNode,
+  blob: AzureBlobNode,
+  cosmos: AzureCosmosNode,
+  function: AzureFunctionNode,
 };
 
 export default nodeTypes;

@@ -1645,16 +1645,17 @@ const FlowEditorContent = ({
             background: 'rgba(255,255,255,0.95)', 
             padding: '0', 
             borderRadius: '8px', 
-            maxHeight: 'calc(100vh - 20px)', 
-            height: 'calc(100vh - 20px)',  // Altura mayor para cubrir más espacio vertical
+            maxHeight: '90vh', // Aumentado al 90% de la ventana
+            height: 'auto',
             overflow: 'hidden', 
             boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
             display: 'flex', 
             flexDirection: 'column',
-            position: 'absolute', // Asegurar posicionamiento absoluto
-            top: '10px',          // Mover más arriba
-            right: '10px',        // Mantener a la derecha con margen
-            zIndex: 10            // Asegurar que esté por encima de otros elementos
+            position: 'absolute',
+            top: '50%',
+            right: '20px',
+            transform: 'translateY(-50%)',
+            zIndex: 10
           }}>
             <div style={{
               display: 'flex', 
@@ -1663,8 +1664,8 @@ const FlowEditorContent = ({
               padding: '12px 16px', 
               borderBottom: '1px solid #eee', 
               flexShrink: 0,
-              minHeight: '48px',  // Altura fija para el encabezado
-              backgroundColor: 'white' // Fondo sólido para el encabezado
+              minHeight: '48px',
+              backgroundColor: 'white'
             }}>
                 <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Resources</h4>
                 <button 
@@ -1693,12 +1694,12 @@ const FlowEditorContent = ({
             <div style={{
               overflowY: 'auto', 
               overflowX: 'hidden',
-              flexGrow: 1, 
-              height: 'calc(100% - 48px)',  // Restar la altura del encabezado
-              maxHeight: 'calc(100% - 48px)', // Limitar la altura máxima
+              flexGrow: 1,
               display: 'flex',
               flexDirection: 'column',
-              backgroundColor: 'white' // Fondo sólido para el contenido
+              backgroundColor: 'white',
+              paddingBottom: '16px',
+              maxHeight: 'calc(90vh - 48px)' // Ajustado al 90% menos el encabezado
             }}>
               {resourceCategories.map(category => (
                 <div key={category.name} style={{borderBottom: '1px solid #f5f5f5'}}>
@@ -1707,7 +1708,7 @@ const FlowEditorContent = ({
                     style={{ 
                       cursor: 'pointer', 
                       margin: 0, 
-                      padding: '12px 16px',
+                      padding: '10px 16px', // Reducido el padding vertical
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
@@ -1729,14 +1730,21 @@ const FlowEditorContent = ({
                     <span style={{color: '#666'}}>{collapsedCategories[category.name] ? '▸' : '▾'}</span>
                   </h5>
                   {!collapsedCategories[category.name] && (
-                    <ul style={{listStyleType: 'none', padding: '4px 0', margin: 0, backgroundColor: '#fdfdfd'}}>
+                    <ul style={{
+                      listStyleType: 'none', 
+                      padding: '2px 0', // Reducido el padding vertical
+                      margin: 0, 
+                      backgroundColor: '#fdfdfd',
+                      maxHeight: 'none', // Eliminado el límite de altura para cada categoría
+                      overflowY: 'visible' // Cambiado a visible para mostrar todos los items
+                    }}>
                       {category.items.map(item => (
                         <li
                           key={category.name + '-' + item.type + '-' + item.name}
                           draggable
                           onDragStart={(e) => onDragStartSidebar(e, item)}
                           style={{ 
-                            padding: '8px 16px', 
+                            padding: '6px 16px', // Reducido el padding vertical
                             margin: '0', 
                             cursor: 'grab',
                             display: 'flex',
