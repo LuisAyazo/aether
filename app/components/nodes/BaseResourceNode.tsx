@@ -2,22 +2,49 @@ import { useCallback, useState, useEffect } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
-import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
+import { 
+  ArrowsPointingOutIcon, 
+  ArrowsPointingInIcon,
+  Cog6ToothIcon, 
+  Squares2X2Icon, 
+  ListBulletIcon, 
+  EyeSlashIcon, 
+  EyeIcon, 
+  TrashIcon 
+} from '@heroicons/react/24/outline';
+import { NodeData } from '../../utils/customTypes';
 
-interface BaseResourceNodeProps extends NodeProps {
-  data: {
-    label: string;
+// Add some CSS styles for double-click animation
+const doubleClickableStyles = `
+@keyframes pulseHint {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3); }
+  70% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+.node-double-clickable:hover {
+  animation: pulseHint 2s infinite;
+}
+`;
+
+// Insert the styles into the document head
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style');
+  styleElement.textContent = doubleClickableStyles;
+  document.head.appendChild(styleElement);
+}
+
+interface BaseResourceNodeProps extends NodeProps<NodeData> {
+  data: NodeData & {
     icon?: React.ReactNode;
-    provider: 'aws' | 'gcp' | 'azure' | 'generic';
-    description?: string;
     isCollapsed?: boolean;
     parentNode?: string;
-    userResized?: boolean; // New property to track if user manually resized this node
-    resizable?: boolean; // New property to enable/disable resizing
+    userResized?: boolean;
+    resizable?: boolean;
   };
 }
 
-export default function BaseResourceNode({ id, data, selected }: BaseResourceNodeProps) {
+const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected }) => {
   const [isCollapsed, setIsCollapsed] = useState(data.isCollapsed !== false);
   const [isFocused, setIsFocused] = useState(false);
   const [isListView, setIsListView] = useState(false);
@@ -28,13 +55,13 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
   const getProviderColor = useCallback(() => {
     switch (data.provider) {
       case 'aws':
-        return 'border-orange-500 bg-orange-50/50';
+        return 'border-orange-500 bg-orange-50';
       case 'gcp':
-        return 'border-blue-500 bg-blue-50/50';
+        return 'border-blue-500 bg-blue-50';
       case 'azure':
-        return 'border-blue-400 bg-blue-50/50';
+        return 'border-blue-400 bg-blue-50';
       default:
-        return 'border-gray-300 bg-gray-50/50';
+        return 'border-gray-300 bg-gray-50';
     }
   }, [data.provider]);
   
@@ -57,13 +84,14 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
         const nodeHeight = (currentNode.style?.height as number) || 50;
         
         let needsAdjustment = false;
-        let newPos = { ...currentNode.position };
+        const newPos = { ...currentNode.position };
         
         if (currentNode.position.x < 10) {
           newPos.x = 10;
           needsAdjustment = true;
         } else if (currentNode.position.x > parentWidth - nodeWidth - 10) {
           newPos.x = parentWidth - nodeWidth - 10;
+          needsAdjustment = true;
           needsAdjustment = true;
         }
         
@@ -152,7 +180,7 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
   };
   
   // Handle node resize event
-  const onResize = useCallback((_: any, { width, height }: { width: number; height: number }) => {
+  const onResize = useCallback((_: unknown, { width, height }: { width: number; height: number }) => {
     // Dispatch event for size change
     if (data.parentNode) {
       const event = new CustomEvent('nodeResized', {
@@ -178,45 +206,7 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
     });
     window.dispatchEvent(focusEvent);
     
-    if (newFocusedState) {
-      // Enfocar en este nodo
-      const node = reactFlowInstance.getNode(id);
-      if (node) {
-        const { width: viewportWidth, height: viewportHeight } = 
-          document.querySelector('.react-flow__viewport')?.getBoundingClientRect() || 
-          { width: 1000, height: 600 };
-        
-        const nodeWidth = (node.style?.width as number) || 100;
-        const nodeHeight = (node.style?.height as number) || 50;
-        
-        // Calcular zoom para que el nodo llene parte de la pantalla
-        const zoomX = (viewportWidth * 0.5) / nodeWidth;
-        const zoomY = (viewportHeight * 0.5) / nodeHeight;
-        const zoom = Math.min(zoomX, zoomY, 1.5);
-        
-        // Centrar el nodo en pantalla
-        const x = -node.position.x * zoom + (viewportWidth - nodeWidth * zoom) / 2;
-        const y = -node.position.y * zoom + (viewportHeight - nodeHeight * zoom) / 2;
-        
-        // Aplicar la nueva vista
-        reactFlowInstance.setViewport({ x, y, zoom }, { duration: 800 });
-        
-        // Añadir una clase al nodo para que se destaque durante el enfoque
-        const nodeElement = document.querySelector(`[data-id="${id}"]`);
-        if (nodeElement) {
-          nodeElement.classList.add('focused');
-        }
-      }
-    } else {
-      // Restablecer la vista
-      reactFlowInstance.fitView({ padding: 0.2, duration: 800 });
-      
-      // Quitar clase de nodo enfocado
-      const nodeElement = document.querySelector(`[data-id="${id}"]`);
-      if (nodeElement) {
-        nodeElement.classList.remove('focused');
-      }
-    }
+    // Removed auto-zoom logic that was previously here (commented out)
   };
   
   const toggleListView = (e: React.MouseEvent) => {
@@ -242,12 +232,54 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
     );
   };
 
-  // Add event listener for context menu actions
+  // Handle double-click to open IaC Template Panel
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('Double click detected on node:', id);
+    console.log('Node data:', data);
+    console.log('Event target:', e.target);
+    console.log('Event current target:', e.currentTarget);
+
+    // Ensure we have all required data
+    if (!data.label || !data.provider || !data.resourceType) {
+      console.error('Missing required data for IaC panel:', {
+        label: data.label,
+        provider: data.provider,
+        resourceType: data.resourceType
+      });
+      return;
+    }
+
+    // Dispatch custom event to open IaC panel
+    const event = new CustomEvent('openIaCPanel', {
+      detail: {
+        nodeId: id,
+        resourceData: {
+          label: data.label,
+          provider: data.provider,
+          resourceType: data.resourceType
+        }
+      }
+    });
+
+    console.log('About to dispatch IaC panel event:', event.detail);
+
+    // Dispatch the event both on window and document
+    window.dispatchEvent(event);
+    document.dispatchEvent(event);
+    
+    console.log('IaC panel event dispatched:', event.detail);
+  }, [id, data]);
+
+  // Add event listener for node actions
   useEffect(() => {
     const handleNodeAction = (event: CustomEvent) => {
-      const { action, nodeId } = event.detail;
+      const { action, nodeId: targetNodeId, ...actionData } = event.detail;
       
-      if (nodeId === id) {
+      if (targetNodeId === id) {
+        console.log('Node action received:', action, actionData);
         switch(action) {
           case 'toggleListView':
             toggleListView({ stopPropagation: () => {} } as React.MouseEvent);
@@ -258,8 +290,12 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
           case 'toggleCollapse':
             toggleCollapse({ stopPropagation: () => {} } as React.MouseEvent);
             break;
-          case 'toggleResizable': // Handle new resizable toggle action
+          case 'toggleResizable':
             toggleResizable({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'openIaCPanel':
+            console.log('Opening IaC panel from action');
+            handleDoubleClick({ stopPropagation: () => {}, preventDefault: () => {} } as React.MouseEvent);
             break;
           case 'deleteNode':
             reactFlowInstance.setNodes(nodes => 
@@ -275,7 +311,73 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
     return () => {
       document.removeEventListener('nodeAction', handleNodeAction as EventListener);
     };
-  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance]);
+  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance, handleDoubleClick]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const menuItems = [
+      {
+        label: 'Configuración',
+        icon: <Cog6ToothIcon className="w-4 h-4" />,
+        onClick: () => {
+          console.log('Opening IaC panel from context menu for node:', id);
+          const event = new CustomEvent('openIaCPanel', {
+            detail: {
+              nodeId: id,
+              resourceData: {
+                label: data.label,
+                provider: data.provider,
+                resourceType: data.resourceType
+              }
+            }
+          });
+          window.dispatchEvent(event);
+          document.dispatchEvent(event);
+        }
+      },
+      {
+        label: isListView ? 'Vista Normal' : 'Vista Lista',
+        icon: isListView ? <Squares2X2Icon className="w-4 h-4" /> : <ListBulletIcon className="w-4 h-4" />,
+        onClick: () => toggleListView({ stopPropagation: () => {} } as React.MouseEvent)
+      },
+      {
+        label: isFocused ? 'Quitar Foco' : 'Enfocar',
+        icon: isFocused ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />,
+        onClick: () => toggleFocus({ stopPropagation: () => {} } as React.MouseEvent)
+      },
+      {
+        label: isCollapsed ? 'Expandir' : 'Colapsar',
+        icon: isCollapsed ? <ArrowsPointingOutIcon className="w-4 h-4" /> : <ArrowsPointingInIcon className="w-4 h-4" />,
+        onClick: () => toggleCollapse({ stopPropagation: () => {} } as React.MouseEvent)
+      },
+      {
+        label: isResizable ? 'Desactivar Redimensionar' : 'Activar Redimensionar',
+        icon: <ArrowsPointingOutIcon className="w-4 h-4" />,
+        onClick: () => toggleResizable({ stopPropagation: () => {} } as React.MouseEvent)
+      },
+      {
+        label: 'Eliminar',
+        icon: <TrashIcon className="w-4 h-4" />,
+        onClick: () => {
+          const event = new CustomEvent('nodeAction', {
+            detail: { action: 'deleteNode', nodeId: id }
+          });
+          document.dispatchEvent(event);
+        }
+      }
+    ];
+
+    const event = new CustomEvent('showContextMenu', {
+      detail: {
+        x: e.clientX,
+        y: e.clientY,
+        items: menuItems
+      }
+    });
+    document.dispatchEvent(event);
+  }, [id, data, isListView, isFocused, isCollapsed, isResizable, toggleListView, toggleFocus, toggleCollapse, toggleResizable]);
 
   // Si estamos en vista de lista (modo compacto)
   if (isListView) {
@@ -284,7 +386,12 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
         className="list-node-item shadow-sm"
         data-provider={data.provider}
         data-id={id}
-        data-resizable={isResizable}
+        data-resource-type={data.resourceType}
+        style={{ 
+          position: 'relative',
+          zIndex: 1000,
+          pointerEvents: 'none'
+        }}
       >
         {data.icon && (
           <div className="flex-shrink-0 w-4 h-4">
@@ -293,7 +400,6 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
         )}
         <div className="flex-1 text-xs font-medium truncate">{data.label}</div>
         
-        {/* Input and output handles más pequeños para lista */}
         <Handle
           type="target"
           position={Position.Left}
@@ -311,87 +417,118 @@ export default function BaseResourceNode({ id, data, selected }: BaseResourceNod
   return (
     <div
       data-id={id}
-      data-resizable={isResizable}
       data-provider={data.provider}
+      data-resource-type={data.resourceType}
       className={`
-        rounded-md border-2 ${getProviderColor()} shadow-sm transition-all duration-300
-        ${isCollapsed ? 'min-w-[100px] min-h-[50px] p-2' : 'min-w-[150px] min-h-[80px] p-3'}
-        ${isFocused ? 'focused' : ''}
+        rounded-md border-2 ${getProviderColor()} shadow-sm
+        min-w-[150px] min-h-[80px] p-3
         ${selected ? 'ring-2 ring-primary' : ''}
-        ${isResizable ? 'resizable-node' : ''}
-        relative group
+        relative
       `}
       style={{
         boxShadow: selected ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
-        // Add dashed border and subtle animation effect when resizable is active
-        ...(isResizable ? {
-          borderStyle: 'dashed',
-          animation: 'pulse 2s infinite ease-in-out'
-        } : {})
+        position: 'relative',
+        zIndex: 1
       }}
     >
-      {/* NodeResizer appears when node is selected or resizable is active */}
-      <NodeResizer 
-        minWidth={isCollapsed ? 100 : 150} 
-        minHeight={isCollapsed ? 50 : 80} 
-        isVisible={selected || isResizable} 
-        onResize={onResize}
-        lineClassName={`border-primary ${isResizable ? 'opacity-100' : ''}`}
-        handleClassName={`h-3 w-3 bg-white border-2 border-primary rounded z-20 ${isResizable ? 'bg-blue-500' : ''}`}
-      />
-      
-      {/* Resize toggle button - only show when selected */}
-      {selected && data.parentNode && (
-        <button
-          onClick={toggleResizable}
-          className={`absolute -top-2 -right-2 p-1 rounded-full z-30 
-            ${isResizable 
-              ? 'bg-blue-500 text-white hover:bg-blue-600' 
-              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-          title={isResizable ? "Disable resizing" : "Enable resizing"}
-        >
-          <ArrowsPointingOutIcon className="w-3 h-3" />
-        </button>
-      )}
-      
       <div className="flex items-center gap-1 overflow-hidden">
         {data.icon && (
-          <div className={`flex items-center justify-center ${isCollapsed ? 'w-6 h-6 text-xs' : 'w-8 h-8'}`}>
+          <div className="flex items-center justify-center w-8 h-8">
             {data.icon}
           </div>
         )}
-        <div className={`font-medium truncate ${isCollapsed ? 'text-xs' : 'text-sm'}`}>
+        <div className="font-medium truncate text-sm">
           {data.label}
         </div>
       </div>
       
-      {!isCollapsed && data.description && (
+      {data.description && (
         <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 max-h-20 overflow-y-auto">
           {data.description}
         </div>
       )}
       
-      {/* Input and output handles */}
       <Handle
         type="target"
         position={Position.Top}
-        className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
+        style={{
+          width: '10px',
+          height: '10px',
+          background: '#000',
+          border: '2px solid white',
+          borderRadius: '50%',
+          top: -5,
+          zIndex: 2
+        }}
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
+        style={{
+          width: '10px',
+          height: '10px',
+          background: '#000',
+          border: '2px solid white',
+          borderRadius: '50%',
+          bottom: -5,
+          zIndex: 2
+        }}
       />
       <Handle
         type="target"
         position={Position.Left}
-        className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
+        style={{
+          width: '10px',
+          height: '10px',
+          background: '#000',
+          border: '2px solid white',
+          borderRadius: '50%',
+          left: -5,
+          zIndex: 2
+        }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
+        style={{
+          width: '10px',
+          height: '10px',
+          background: '#000',
+          border: '2px solid white',
+          borderRadius: '50%',
+          right: -5,
+          zIndex: 2
+        }}
       />
     </div>
   );
+};
+
+// Helper function to infer resource type from label if not explicitly provided
+function getResourceTypeFromLabel(label: string): string {
+  const labelLower = label.toLowerCase();
+  
+  // AWS resource types
+  if (labelLower.includes('ec2') || labelLower.includes('instance')) return 'ec2';
+  if (labelLower.includes('s3') || labelLower.includes('bucket')) return 's3';
+  if (labelLower.includes('lambda') || labelLower.includes('function')) return 'lambda';
+  if (labelLower.includes('rds') || labelLower.includes('database')) return 'rds';
+  if (labelLower.includes('vpc') || labelLower.includes('network')) return 'vpc';
+  
+  // GCP resource types
+  if (labelLower.includes('compute') || labelLower.includes('vm')) return 'compute';
+  if (labelLower.includes('storage')) return 'storage';
+  if (labelLower.includes('sql')) return 'sql';
+  if (labelLower.includes('cloud functions')) return 'function';
+  
+  // Azure resource types
+  if (labelLower.includes('virtual machine') || labelLower.includes('vm')) return 'vm';
+  if (labelLower.includes('storage account')) return 'storageaccount';
+  if (labelLower.includes('cosmos')) return 'cosmosdb';
+  if (labelLower.includes('functions')) return 'functions';
+  
+  // Default to generic resource type
+  return 'generic';
 }
+
+export default BaseResourceNode;

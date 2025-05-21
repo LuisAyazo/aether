@@ -1,6 +1,5 @@
 import { useCallback, useState, useRef, useEffect, useMemo, JSX } from 'react';
 import ReactFlow, { 
-  Background, 
   Controls,
   MiniMap, 
   ReactFlowProvider,
@@ -17,12 +16,15 @@ import ReactFlow, {
   useOnSelectionChange,
   ConnectionMode,
   Viewport,
-  BackgroundVariant,
   NodeChange,
   NodePositionChange,
   useNodesState,
   useEdgesState,
-  Position
+  Position,
+  Background,
+  BackgroundVariant,
+  Connection,
+  addEdge
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -36,6 +38,7 @@ import {
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
+import GlobalIaCTemplatePanel from '../ui/GlobalIaCTemplatePanel';
 
 interface ResourceCategory {
   name: string;
@@ -275,7 +278,8 @@ const FlowEditorContent = ({
     y: 0,
     nodeId: null,
     nodeType: null,
-    isPane: false, // Added to distinguish pane context menu
+    isPane: false,
+    parentInfo: null // Added parentInfo to the initial state for consistency
   });
 
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
@@ -297,40 +301,49 @@ const FlowEditorContent = ({
     setContextMenu(prev => ({...prev, visible: false}));
   }, []);
 
-  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
-    event.preventDefault();
-    
-    // Incluir información del grupo padre si existe
-    const parentInfo = node.parentNode ? {
-      parentId: node.parentNode,
-      parentType: reactFlowInstance.getNode(node.parentNode)?.type
-    } : null;
-    
-    console.log(`Menú contextual para nodo ${node.id}, tipo: ${node.type}, padre: ${parentInfo?.parentId || 'ninguno'}`);
-    
-    setContextMenu({
-      visible: true,
-      x: event.clientX,
-      y: event.clientY,
-      nodeId: node.id,
-      nodeType: node.type || 'default',
-      isPane: false,
-      parentInfo: parentInfo
-    });
-  }, [reactFlowInstance, setContextMenu]);
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node)=>{
+        event.preventDefault(); // This line prevents the default browser context menu.
+        const nodeData = node.data || {};
+        const resourceType = nodeData.resourceType || node.type;
+        const parentInfo = node.parentNode ? {
+            parentId: node.parentNode,
+            parentType: reactFlowInstance.getNode(node.parentNode)?.type
+        } : null;
+        
+        // This updates the state to show a custom context menu.
+        // The actual content of this menu depends on how the <CustomContextMenu /> (or similar) component
+        // is implemented and what options it renders based on the `contextMenu` state.
+        console.log(`Displaying custom context menu for node ${node.id}`);
+        setContextMenu({
+            visible: true,
+            x: event.clientX,
+            y: event.clientY,
+            nodeId: node.id,
+            nodeType: resourceType,
+            isPane: false,
+            parentInfo: parentInfo
+        });
+    }, [
+        reactFlowInstance,
+        // setContextMenu is stable and typically not needed in useCallback dependencies
+    ]);
 
-  const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
-    event.preventDefault();
-    // Example: Set a generic pane context menu or allow specific actions
-    setContextMenu({
-      visible: true,
-      x: event.clientX,
-      y: event.clientY,
-      nodeId: null, // No specific node
-      nodeType: null, // No specific node type
-      isPane: true,
-    });
-  }, [setContextMenu]);
+  const handlePaneContextMenu = useCallback((event: React.MouseEvent)=>{
+        event.preventDefault(); // Prevents default browser context menu on the pane.
+        // This updates the state to show a custom context menu for the pane.
+        console.log(`Displaying custom context menu for pane`);
+        setContextMenu({
+            visible: true,
+            x: event.clientX,
+            y: event.clientY,
+            nodeId: null,
+            nodeType: null,
+            isPane: true,
+            parentInfo: null
+        });
+    }, [
+        // setContextMenu is stable and typically not needed in useCallback dependencies
+    ]);
 
   // 🔒 Critical code below – do not edit or delete
   useEffect(() => {
@@ -1142,11 +1155,8 @@ const FlowEditorContent = ({
     <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
       <ReactFlow
         nodes={propNodes?.sort((a, b) => {
-          // Si a es un grupo, debe ir primero (por debajo)
           if (a.type === 'group') return -1;
-          // Si b es un grupo, debe ir primero (por debajo)
           if (b.type === 'group') return 1;
-          // Para otros nodos, mantener el orden original
           return 0;
         }).map(node => 
           node.id === highlightedGroupId ? 
@@ -1171,22 +1181,53 @@ const FlowEditorContent = ({
         onNodeContextMenu={handleNodeContextMenu}
         onPaneContextMenu={handlePaneContextMenu}
         fitView
-        attributionPosition="bottom-left"
-        selectionMode={selectionActive ? SelectionMode.Full : SelectionMode.Partial}
-        selectNodesOnDrag={!selectionActive}
-        connectionMode={ConnectionMode.Loose}
+        minZoom={0.1}
+        maxZoom={2}
+        elementsSelectable={true}
+        nodesDraggable={true}
+        nodesConnectable={true}
+        panOnDrag={true}
+        zoomOnScroll={true}
+        zoomOnDoubleClick={true}
+        preventScrolling={true}
+        style={{ width: '100%', height: '100%' }}
         onDrop={onDrop}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-        deleteKeyCode={['Backspace', 'Delete']}
-        multiSelectionKeyCode={['Control', 'Meta']} 
-        panOnDrag={true}
-        elementsSelectable={true}
-        nodesDraggable={true}
-        nodesConnectable={true}
+        deleteKeyCode={[]}
+        multiSelectionKeyCode={[]}
+        selectionKeyCode={[]}
+        selectionOnDrag={false}
+        selectionMode={SelectionMode.Full}
+        noDragClassName="nodrag"
+        noWheelClassName="nowheel"
+        noPanClassName="nopan"
+        onNodeDoubleClick={(_event, node) => {
+          // Solo abrir el panel si no es un grupo
+          if (node.type !== 'group') {
+            const customEvent = new CustomEvent('openIaCPanel', {
+              detail: {
+                nodeId: node.id,
+                resourceData: {
+                  label: node.data.label,
+                  provider: node.data.provider,
+                  resourceType: node.data.resourceType
+                }
+              }
+            });
+            window.dispatchEvent(customEvent);
+            document.dispatchEvent(customEvent);
+          }
+        }}
       >
-        <Background color="#ccc" variant={BackgroundVariant.Dots} />
+        <Background 
+          variant={BackgroundVariant.Lines} 
+          gap={50} 
+          size={2}
+          color="#ff0000"
+          style={{ opacity: 0.8 }}
+        />
         <Controls />
         <MiniMap />
         {contextMenu.visible && (
@@ -1207,7 +1248,14 @@ const FlowEditorContent = ({
                 <>
                   <p style={{margin: '0 0 2px 0', fontSize: '13px', fontWeight: 'bold'}}>{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.label || 'Node'}</p>
                   <p style={{margin: 0, fontSize: '11px', color: '#777'}}>ID: {contextMenu.nodeId}</p>
-                  <p style={{margin: 0, fontSize: '11px', color: '#777'}}>Type: {contextMenu.nodeType}</p>
+                  <p style={{margin: 0, fontSize: '11px', color: '#777'}}>
+                    Type: {contextMenu.nodeType} 
+                    {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-xs">
+                        {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider.toUpperCase()}
+                      </span>
+                    )}
+                  </p>
                 </>
               )}
               {contextMenu.isPane && (
@@ -1531,6 +1579,37 @@ const FlowEditorContent = ({
                       )}
                       <button 
                         onClick={() => {
+                          const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                          if (node) {
+                            const event = new CustomEvent('openIaCPanel', {
+                              detail: {
+                                nodeId: node.id,
+                                resourceData: {
+                                  label: node.data.label,
+                                  provider: node.data.provider,
+                                  resourceType: node.data.resourceType
+                                }
+                              }
+                            });
+                            window.dispatchEvent(event);
+                            document.dispatchEvent(event);
+                          }
+                          setContextMenu(prev => ({...prev, visible: false}));
+                        }}
+                        style={{ 
+                          display: 'block', width: '100%', textAlign: 'left', 
+                          padding: '10px 12px', cursor: 'pointer', 
+                          border: 'none', borderBottom: '1px solid #eee',
+                          background: 'white', fontSize: '13px',
+                          color: '#333', transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                      >
+                        ⚙️ Configuración
+                      </button>
+                      <button 
+                        onClick={() => {
                           if (contextMenu.nodeId) {
                             onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
                           }
@@ -1827,7 +1906,7 @@ const FlowEditorContent = ({
         {sidebarOpen && (
           <Panel position="top-right" style={{ 
             width: '280px', 
-            background: 'rgba(255,255,255,0.95)', 
+            background: 'rgba(255,255,255,0.85)', 
             padding: '0', 
             borderRadius: '8px', 
             maxHeight: '90vh',
@@ -1836,23 +1915,40 @@ const FlowEditorContent = ({
             boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
             display: 'flex', 
             flexDirection: 'column',
-            position: 'fixed', // Cambiado de 'absolute' a 'fixed'
+            position: 'fixed',
             top: '50%',
             right: '20px',
             transform: 'translateY(-50%)',
-            zIndex: 9999 // Aumentado significativamente
+            zIndex: 9999,
+            animation: 'slideIn 0.3s ease-out',
+            backdropFilter: 'blur(8px)'
           }}>
+            <style>
+              {`
+                @keyframes slideIn {
+                  0% {
+                    transform: translate(100%, -50%);
+                    opacity: 0;
+                  }
+                  100% {
+                    transform: translate(0, -50%);
+                    opacity: 1;
+                  }
+                }
+              `}
+            </style>
             <div style={{
               display: 'flex', 
               justifyContent: 'space-between', 
               alignItems: 'center', 
               padding: '12px 16px', 
-              borderBottom: '1px solid #eee', 
+              borderBottom: '1px solid rgba(238, 238, 238, 0.8)', 
               flexShrink: 0,
               minHeight: '48px',
-              backgroundColor: 'white',
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
               position: 'relative',
-              zIndex: 10000 // Aumentado significativamente
+              zIndex: 10000,
+              backdropFilter: 'blur(8px)'
             }}>
                 <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Resources</h4>
                 <button 
@@ -1884,11 +1980,12 @@ const FlowEditorContent = ({
               flexGrow: 1,
               display: 'flex',
               flexDirection: 'column',
-              backgroundColor: 'white',
+              backgroundColor: 'rgba(255, 255, 255, 0.85)',
               paddingBottom: '16px',
-              maxHeight: 'calc(90vh - 48px)', // Ajustado al 90% menos el encabezado
+              maxHeight: 'calc(90vh - 48px)',
               scrollbarWidth: 'thin',
-              scrollbarColor: '#ccc #f1f1f1'
+              scrollbarColor: '#ccc #f1f1f1',
+              backdropFilter: 'blur(8px)'
             }}>
               {resourceCategories.map(category => (
                 <div key={category.name} style={{borderBottom: '1px solid #f5f5f5'}}>
@@ -1971,7 +2068,9 @@ const FlowEditor = (props: FlowEditorProps): JSX.Element => {
   // onNodesChange and onEdgesChange should update these props in the parent component (e.g., DiagramPage)
   return (
     <ReactFlowProvider>
-      <FlowEditorContent {...props} />
+      <div className="relative w-full h-full">
+        <FlowEditorContent {...props} />
+      </div>
     </ReactFlowProvider>
   );
 };

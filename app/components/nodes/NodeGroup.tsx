@@ -5,6 +5,7 @@ import {
   MinusIcon, 
   ArrowsPointingInIcon,
 } from '@heroicons/react/24/outline';
+import IaCTemplatePanel from '../ui/IaCTemplatePanel';
 
 interface NodeGroupProps extends NodeProps {
   data: {
@@ -12,6 +13,7 @@ interface NodeGroupProps extends NodeProps {
     provider: 'aws' | 'gcp' | 'azure' | 'generic';
     isMinimized?: boolean;
     isCollapsed?: boolean;
+    resourceType?: string;
   };
 }
 
@@ -24,6 +26,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   const [isCollapsed, setIsCollapsed] = useState(data.isCollapsed || false);
   const [isEditing, setIsEditing] = useState(false);
   const [labelText, setLabelText] = useState(data.label);
+  const [showIaCPanel, setShowIaCPanel] = useState(false);
   
   const reactFlowInstance = useReactFlow();
 
@@ -180,7 +183,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
       })
     );
   }, [id, reactFlowInstance]);
-
+  
   // Renderizado minimizado
   if (isMinimized) {
     const initials = labelText
@@ -407,6 +410,34 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
           </div>
         )}
       </div>
+
+      {showIaCPanel && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '300px',
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          zIndex: 2000,
+          padding: '16px',
+          marginTop: '8px',
+          pointerEvents: 'all'
+        }}>
+          <IaCTemplatePanel 
+            isOpen={true}
+            resourceData={{
+              label: labelText,
+              provider: data.provider,
+              resourceType: data.resourceType || 'generic'
+            }}
+            onClose={() => setShowIaCPanel(false)}
+            nodeId={id}
+          />
+        </div>
+      )}
     </div>
   );
 }

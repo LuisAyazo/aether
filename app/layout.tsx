@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Navigation from "./components/Navigation";
 import "./globals.css";
 import AntdReact19Patch from "./components/AntdReact19Patch";
+import GlobalIaCTemplatePanelWrapper from "./components/ui/GlobalIaCTemplatePanelWrapper";
+import IaCPanelDebugger from "./components/ui/IaCPanelDebugger";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,11 +33,12 @@ export default function RootLayout({
       >
         <AntdReact19Patch />
         <Navigation />
-       
-          <div className="content">
-            {children}
-          </div>
-
+        <GlobalIaCTemplatePanelWrapper />
+        <IaCPanelDebugger />
+          
+        <div className="content">
+          {children}
+        </div>
       </body>
     </html>
   );

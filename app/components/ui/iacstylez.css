@@ -1,0 +1,144 @@
+.iac-panel-portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.iac-panel-portal * {
+  pointer-events: auto;
+}
+
+/* Mejoras visuales para el panel */
+.side-panel-overlay {
+  backdrop-filter: blur(2px);
+}
+
+/* Estilos para el panel de IaC */
+.iac-panel {
+  background-color: #1a1a1a;
+  color: #ffffff;
+}
+
+/* Estilos para los bloques de código */
+.code-block {
+  background-color: #1e1e1e;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Estilos para las pestañas */
+.code-tabs {
+  border-bottom: 1px solid #2d2d2d;
+}
+
+.code-tab {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #9ca3af;
+  transition: all 0.2s ease-in-out;
+}
+
+.code-tab:hover {
+  color: #d1d5db;
+}
+
+.code-tab.active {
+  color: #3b82f6;
+  border-bottom: 2px solid #3b82f6;
+}
+
+/* Estilos para los parámetros personalizados */
+.custom-params {
+  background-color: #2d2d2d;
+  border-radius: 0.375rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.custom-param-input {
+  background-color: #1a1a1a;
+  border: 1px solid #4b5563;
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+  color: #ffffff;
+  width: 100%;
+}
+
+.custom-param-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Estilos para el botón de regenerar código */
+.regenerate-button {
+  background-color: #3b82f6;
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.regenerate-button:hover {
+  background-color: #2563eb;
+}
+
+/* Estilos para el botón de copiar */
+.copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.5rem;
+  background-color: #2d2d2d;
+  border-radius: 0.375rem;
+  color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.code-block:hover .copy-button {
+  opacity: 1;
+}
+
+.copy-button:hover {
+  background-color: #4b5563;
+}
+
+/* Estilos para el mensaje de éxito al copiar */
+.copy-success {
+  color: #10b981;
+}
+
+/* Estilos para el mensaje de error */
+.error-message {
+  color: #ef4444;
+  padding: 1rem;
+  background-color: rgba(239, 68, 68, 0.1);
+  border-radius: 0.375rem;
+  margin-bottom: 1rem;
+}
+
+/* Estilos para el indicador de carga */
+.loading-spinner {
+  border: 2px solid #4b5563;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

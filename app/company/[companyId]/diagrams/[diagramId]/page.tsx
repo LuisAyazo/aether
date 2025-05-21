@@ -999,7 +999,7 @@ export default function DiagramPage() {
       <div className="relative h-[calc(100vh-200px)]">
         {/* Create a phantom layer for the previous diagram */}
         {loadingType === 'transition' && previousDiagram && selectedEnvironment && (
-          <div className="phantom-diagram">
+          <div >
             <FlowEditor 
               companyId={companyId as string} 
               environmentId={selectedEnvironment}

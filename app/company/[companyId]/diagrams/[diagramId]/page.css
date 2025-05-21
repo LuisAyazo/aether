@@ -38,17 +38,6 @@
   z-index: 51;
 }
 
-/* Phantom background for previous diagram */
-.phantom-diagram {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  pointer-events: none;
-  opacity: 0.2;
-  filter: blur(1px);
-  transition: opacity 0.3s ease-in-out;
-}
-
 /* Sidebar styles */
 .react-flow__sidebar {
   z-index: 1000 !important;
@@ -79,10 +68,10 @@
 
 /* Refined transitions for ReactFlow elements */
 .react-flow__node {
-  background: white;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  z-index: 1 !important; /* Asegura que los nodos regulares estén por encima de los grupos */
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  pointer-events: all !important;
 }
 
 /* AWS Nodes */
@@ -218,4 +207,40 @@
   background: white;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border-radius: 4px;
+}
+
+/* Estilos para los puntos de conexión */
+.react-flow__handle {
+  width: 10px !important;
+  height: 10px !important;
+  background-color: #000 !important;
+  border: 2px solid #fff !important;
+  border-radius: 50% !important;
+  z-index: 1000 !important;
+}
+
+.react-flow__handle:hover {
+  background-color: #333 !important;
+  transform: scale(1.2) !important;
+}
+
+.react-flow__handle-left {
+  left: -5px !important;
+}
+
+.react-flow__handle-right {
+  right: -5px !important;
+}
+
+.react-flow__handle-top {
+  top: -5px !important;
+}
+
+.react-flow__handle-bottom {
+  bottom: -5px !important;
+}
+
+/* Eliminar estilos innecesarios */
+.react-flow__node * {
+  pointer-events: all !important;
 }

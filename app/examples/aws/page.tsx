@@ -14,18 +14,18 @@ import {
 import FlowEditor from '../../components/flow/FlowEditor';
 import { 
   EC2Node, 
-  S3BucketNode, 
-  LambdaFunctionNode,
-  RDSInstanceNode 
-} from '../../components/nodes/AwsNodes';
+  S3BucketNode as S3Node, 
+  LambdaFunctionNode as LambdaNode,
+  RDSInstanceNode as RDSNode
+} from '../../components/nodes/NodeTypes';
 import NodeGroup from '../../components/nodes/NodeGroup';
 
 // Tipo personalizado para los nodos AWS
 const nodeTypes = {
   ec2: EC2Node,
-  s3: S3BucketNode,
-  lambda: LambdaFunctionNode,
-  rds: RDSInstanceNode,
+  s3: S3Node,
+  lambda: LambdaNode,
+  rds: RDSNode,
   group: NodeGroup
 };
 

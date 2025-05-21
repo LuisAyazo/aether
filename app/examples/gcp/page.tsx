@@ -19,7 +19,7 @@ import {
   CloudStorageNode, 
   CloudFunctionsNode,
   CloudSQLNode 
-} from '../../components/nodes/GcpNodes';
+} from '../../components/nodes/NodeTypes';
 import NodeGroup from '../../components/nodes/NodeGroup';
 
 // Tipo personalizado para los nodos GCP

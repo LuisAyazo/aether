@@ -1537,3 +1537,34 @@ button.bg-blue-600 {
   z-index: 1000 !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
+
+/* Estilos base para ReactFlow */
+.react-flow {
+  background-color: #ffffff;
+}
+
+.react-flow__pane {
+  background-color: #ffffff;
+}
+
+/* Estilos para la cuadrícula */
+.react-flow__background {
+  background-color: #ffffff !important;
+}
+
+.react-flow__background-pattern {
+  stroke: #ff0000 !important;
+  stroke-width: 2 !important;
+  opacity: 0.8 !important;
+}
+
+/* Limpiar estilos que interfieren */
+.react-flow__node {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.react-flow__node * {
+  pointer-events: none;
+}

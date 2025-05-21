@@ -14,12 +14,12 @@ export default function Home() {
             Open-source IaC that makes complex deployments accessible to everyone.
           </p>
           <div className="flex gap-4 flex-col sm:flex-row justify-center">
-            <a
-              className="btn-primary rounded-full border border-solid border-transparent transition-colors flex items-center justify-center gap-2 font-medium text-base h-12 px-6"
-              href="#"
+            <Link
+              href="/dashboard"
+              className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
             >
-              Get Started
-            </a>
+              Get started
+            </Link>
             <Link
               className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-base h-12 px-6"
               href="#features"
