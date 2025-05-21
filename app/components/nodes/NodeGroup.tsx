@@ -1,9 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
-// XYPosition removed as it's unused
+// XYPosition removed as it'sunused
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow'; 
 import { 
   MinusIcon, 
-  PlusIcon,
   ArrowsPointingInIcon,
 } from '@heroicons/react/24/outline';
 
@@ -11,6 +10,8 @@ interface NodeGroupProps extends NodeProps {
   data: {
     label: string;
     provider: 'aws' | 'gcp' | 'azure' | 'generic';
+    isMinimized?: boolean;
+    isCollapsed?: boolean;
   };
 }
 
@@ -19,27 +20,8 @@ const DEFAULT_SIZE = { width: 300, height: 200 }; // Aumentado para mejor visual
 const PADDING = 20;
 
 export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
-  // Estados
-  const [isMinimized, setIsMinimized] = useState(() => {
-    try {
-      const saved = localStorage.getItem(`group-${id}-minimized`);
-      return saved ? JSON.parse(saved) : false;
-    } catch (error) {
-      console.warn(`Error parsing localStorage item group-${id}-minimized:`, error);
-      return false;
-    }
-  });
-  
-  const [isCollapsed, setIsCollapsed] = useState(() => {
-    try {
-      const saved = localStorage.getItem(`group-${id}-collapsed`);
-      return saved ? JSON.parse(saved) : false;
-    } catch (error) {
-      console.warn(`Error parsing localStorage item group-${id}-collapsed:`, error);
-      return false;
-    }
-  });
-
+  const [isMinimized, setIsMinimized] = useState(data.isMinimized || false);
+  const [isCollapsed, setIsCollapsed] = useState(data.isCollapsed || false);
   const [isEditing, setIsEditing] = useState(false);
   const [labelText, setLabelText] = useState(data.label);
   
@@ -52,9 +34,22 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
 
   // Persistir estados
   useEffect(() => {
-    localStorage.setItem(`group-${id}-minimized`, JSON.stringify(isMinimized));
-    localStorage.setItem(`group-${id}-collapsed`, JSON.stringify(isCollapsed));
-  }, [id, isMinimized, isCollapsed]);
+    reactFlowInstance.setNodes(nodes => 
+      nodes.map(node => {
+        if (node.id === id) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              isMinimized,
+              isCollapsed
+            }
+          };
+        }
+        return node;
+      })
+    );
+  }, [id, isMinimized, isCollapsed, reactFlowInstance]);
 
   // Obtener color según proveedor
   const getBorderColor = () => {
@@ -69,18 +64,15 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   // Actualizar visibilidad de nodos hijos y edges
   const updateChildNodesAndEdges = useCallback((hide: boolean) => {
     const nodes = reactFlowInstance.getNodes();
-    
-    // Identificar los nodos hijos
     const childNodeIds = nodes
       .filter(node => node.parentNode === id)
       .map(node => node.id);
 
-    // Actualizar nodos
     reactFlowInstance.setNodes(nodes => 
       nodes.map(node => {
         if (node.parentNode === id) {
-          return { 
-            ...node, 
+          return {
+            ...node,
             hidden: hide,
             style: {
               ...node.style,
@@ -94,15 +86,14 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
       })
     );
 
-    // Actualizar edges
     reactFlowInstance.setEdges(edges => 
       edges.map(edge => {
         const isConnectedToGroup = edge.source === id || edge.target === id;
         const isConnectedToChild = childNodeIds.includes(edge.source) || childNodeIds.includes(edge.target);
         
         if (isConnectedToChild && !isConnectedToGroup) {
-          return { 
-            ...edge, 
+          return {
+            ...edge,
             hidden: hide,
             style: {
               ...edge.style,
@@ -121,50 +112,50 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     event.preventDefault();
     event.stopPropagation();
     
-    // Emitir evento personalizado para el menú contextual
-    const customEvent = new CustomEvent('nodeGroupFocus', {
+    const customEvent = new CustomEvent('nodeGroupContextMenu', {
       detail: {
         nodeId: id,
-        isFocused: true
+        isMinimized,
+        isCollapsed,
+        label: labelText
       }
     });
     window.dispatchEvent(customEvent);
-  }, [id]);
+  }, [id, isMinimized, isCollapsed, labelText]);
 
-  // Manejar minimizado
   const handleMinimize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
+    
     const newState = !isMinimized;
     setIsMinimized(newState);
     
-    reactFlowInstance.setNodes(nodes => 
-      nodes.map(node => {
-        if (node.id === id) {
-          return {
-            ...node,
-            data: { ...node.data, label: labelText },
-            style: {
-              width: newState ? MIN_SIZE : DEFAULT_SIZE.width,
-              height: newState ? MIN_SIZE : DEFAULT_SIZE.height,
-              background: 'transparent',
-              border: 'none',
-              padding: '0',
-              overflow: 'visible',
-              outline: 'none',
-              boxShadow: 'none',
-              pointerEvents: 'all'
-            },
-            className: newState ? 'minimized-group-container' : 'group-node-container'
-          };
-        }
-        return node;
-      })
-    );
-
+    // Actualizar el nodo en ReactFlow
+    const updatedNodes = reactFlowInstance.getNodes().map(node => {
+      if (node.id === id) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isMinimized: newState
+          },
+          style: {
+            ...node.style,
+            width: newState ? MIN_SIZE : DEFAULT_SIZE.width,
+            height: newState ? MIN_SIZE : DEFAULT_SIZE.height,
+            borderRadius: newState ? '50%' : '8px',
+            padding: newState ? '0' : PADDING,
+            transform: node.style?.transform || 'translate(0px, 0px)'
+          }
+        };
+      }
+      return node;
+    });
+    
+    reactFlowInstance.setNodes(updatedNodes);
     updateChildNodesAndEdges(newState);
-  }, [isMinimized, reactFlowInstance, id, labelText, updateChildNodesAndEdges]);
+  }, [isMinimized, reactFlowInstance, id, updateChildNodesAndEdges]);
 
-  // Manejar colapsado
   const handleCollapse = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     const newState = !isCollapsed;
@@ -172,18 +163,17 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     updateChildNodesAndEdges(newState);
   }, [isCollapsed, updateChildNodesAndEdges]);
 
-  // Commit label changes to React Flow state
   const handleLabelChangeCommit = useCallback((newLabel: string) => {
     setIsEditing(false);
-    reactFlowInstance.setNodes(nodes =>
+    reactFlowInstance.setNodes(nodes => 
       nodes.map(node => {
         if (node.id === id) {
           return {
             ...node,
             data: {
               ...node.data,
-              label: newLabel,
-            },
+              label: newLabel
+            }
           };
         }
         return node;
@@ -193,51 +183,92 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
 
   // Renderizado minimizado
   if (isMinimized) {
+    const initials = labelText
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 3);
+
     return (
-      <div 
-        className="react-flow__node-group"
+      <div
+        className="react-flow__node react-flow__node-group minimized"
+        data-provider={data.provider}
+        data-id={id}
+        role="button"
+        tabIndex={0}
+        onClick={handleMinimize}
+        onContextMenu={handleContextMenu}
         style={{
           width: MIN_SIZE,
           height: MIN_SIZE,
           position: 'relative',
           pointerEvents: 'all',
-          background: 'white',
+          backgroundColor: '#FFEB3B', // amarillo fuerte
           borderRadius: '50%',
-          border: `2px solid ${getBorderColor()}`,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          zIndex: -1,
+          border: '4px solid #FF0000', // borde rojo fuerte
+          boxShadow: '0 4px 16px 2px rgba(255,0,0,0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 0,
+          overflow: 'visible',
+          cursor: 'pointer',
+          aspectRatio: '1',
+          minWidth: MIN_SIZE,
+          minHeight: MIN_SIZE,
+          maxWidth: MIN_SIZE,
+          maxHeight: MIN_SIZE,
+          zIndex: 2000 // muy alto para que quede por encima
+        }}
+        title={labelText}
+      >
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
-        }}
-      >
-        <div 
-          className="minimized-group"
-          onContextMenu={handleContextMenu}
-          style={{ 
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            pointerEvents: 'all',
-            borderRadius: '50%',
-            backgroundColor: 'white',
-            position: 'relative'
-          }}
-          onClick={handleMinimize}
-          title={labelText}
-        >
-          <span style={{ 
-            fontSize: '16px', 
+        }}>
+          <span style={{
+            fontSize: Math.min(16, MIN_SIZE / 2.5),
             fontWeight: 'bold',
-            color: getBorderColor(),
-            userSelect: 'none'
+            color: '#000000',
+            userSelect: 'none',
+            lineHeight: 1,
+            textAlign: 'center'
           }}>
-            {labelText.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 3)}
+            {initials || labelText.charAt(0).toUpperCase()}
           </span>
         </div>
+        {/* Handles para conectar nodos */}
+        <Handle
+          type="target"
+          position={Position.Top}
+          style={{
+            background: '#FF0000',
+            border: '2px solid #FF0000',
+            height: 8,
+            width: 8,
+            top: -4,
+            zIndex: 2100 // por encima del nodo
+          }}
+        />
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          style={{
+            background: '#FF0000',
+            border: '2px solid #FF0000',
+            height: 8,
+            width: 8,
+            bottom: -4,
+            zIndex: 2100
+          }}
+        />
       </div>
     );
   }
@@ -246,12 +277,13 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   return (
     <div 
       className={`react-flow__node-group group-node-container ${selected ? 'selected' : ''}`}
+      data-provider={data.provider}
       style={{
         width: DEFAULT_SIZE.width,
         height: DEFAULT_SIZE.height,
         border: `2px solid ${getBorderColor()}`,
         borderRadius: '8px',
-        background: 'white',
+        backgroundColor: 'white',
         padding: PADDING,
         position: 'relative',
         pointerEvents: 'all',

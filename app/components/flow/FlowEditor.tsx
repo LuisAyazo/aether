@@ -19,11 +19,10 @@ import ReactFlow, {
   Viewport,
   BackgroundVariant,
   NodeChange,
+  NodePositionChange,
   useNodesState,
   useEdgesState,
-  Position,
-  Connection,
-  addEdge
+  Position
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -534,6 +533,9 @@ const FlowEditorContent = ({
     const group = reactFlowInstance.getNode(groupId);
     if (!group) return;
   
+    // Don't attempt to optimize nodes if the group is minimized
+    if (group.data?.isMinimized) return;
+    
     const childNodes = reactFlowInstance.getNodes().filter((n: Node) => n.parentNode === groupId);
     if (childNodes.length === 0) return;
   
@@ -553,10 +555,18 @@ const FlowEditorContent = ({
       const y = headerHeight + verticalMargin + idx * (40 + nodeSpacing);
       
       // Asegurar que los nodos sean arrastrables dentro del grupo
+      // y preservar cualquier estilo existente
+      const nodeStyle = {
+        ...node.style,
+        width: availableWidth, 
+        height: 40, 
+        transition: 'none'
+      };
+      
       return { 
         ...node, 
         position: { x: horizontalMargin, y }, 
-        style: { ...node.style, width: availableWidth, height: 40, transition: 'none' },
+        style: nodeStyle,
         draggable: true, // Asegurarse de que sea arrastrable
         selectable: true  // Asegurarse de que sea seleccionable
       };
@@ -944,6 +954,140 @@ const FlowEditorContent = ({
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     if (!onNodesChange) return;
 
+    // Filter dragging changes to check for group attachment
+    const dragChanges = changes.filter((change): change is NodePositionChange => 
+      change.type === 'position' && Boolean(change.dragging) && typeof change.id === 'string'
+    );
+
+    // Check if nodes are being dragged and need to be attached to groups
+    if (dragChanges.length > 0) {
+      const updatedChanges = [...changes];
+      const allNodes = reactFlowInstance.getNodes();
+      
+      dragChanges.forEach(dragChange => {
+        const node = allNodes.find(n => n.id === dragChange.id);
+        if (!node) return;
+        
+        // Skip group nodes - they shouldn't be attached to other groups
+        if (node.type === 'group') return;
+        
+        // Skip nodes that are already attached to a group
+        if (node.parentNode) return;
+        
+        // Get the node's current position
+        const nodePosition = {
+          x: node.position.x + (dragChange.position?.x || 0),
+          y: node.position.y + (dragChange.position?.y || 0)
+        };
+        
+        // Check if the node is over a group
+        const groupNode = findGroupAtPosition(nodePosition);
+        if (groupNode && !groupNode.data?.isMinimized) {
+          // Calculate position relative to the group
+          const relativePosition = {
+            x: nodePosition.x - groupNode.position.x,
+            y: nodePosition.y - groupNode.position.y
+          };
+          
+          // Set the node to be a child of the group
+          const updatedNode = {
+            ...node,
+            position: relativePosition,
+            parentNode: groupNode.id,
+            extent: 'parent' as const
+          };
+          
+          // Replace the change with a node removal and addition to update parent
+          const changeIndex = updatedChanges.findIndex(c => 
+            c.type === 'position' && c.id === dragChange.id
+          );
+          
+          if (changeIndex !== -1) {
+            updatedChanges.splice(changeIndex, 1, {
+              type: 'remove',
+              id: dragChange.id
+            });
+            
+            // After the next render cycle, add the node as a child
+            setTimeout(() => {
+              setNodes(nodes => [...nodes, updatedNode]);
+            }, 0);
+          }
+        }
+      });
+      
+      // Use the updated changes
+      changes = updatedChanges;
+    }
+
+    // Also detect when nodes are dragged out of a group
+    interface NodeParentUpdate {
+      id: string;
+      position: { x: number; y: number };
+      removeParent: boolean;
+    }
+    
+    const nodesToUpdateParent: NodeParentUpdate[] = [];
+    
+    // Find nodes that might need to be removed from their group
+    if (dragChanges.length > 0) {
+      dragChanges.forEach(dragChange => {
+        const node = reactFlowInstance.getNode(dragChange.id);
+        if (!node || node.type === 'group') return;
+        
+        // Only process nodes that are inside a group
+        if (node.parentNode) {
+          const parentNode = reactFlowInstance.getNode(node.parentNode);
+          if (!parentNode) return;
+          
+          // Calculate the node's absolute position
+          const newPosition = {
+            x: parentNode.position.x + node.position.x + (dragChange.position?.x || 0),
+            y: parentNode.position.y + node.position.y + (dragChange.position?.y || 0)
+          };
+          
+          // Check if the node is still within the parent group bounds
+          const parentWidth = parentNode.width || 300;
+          const parentHeight = parentNode.height || 200;
+          
+          const isInsideParent = 
+            newPosition.x >= parentNode.position.x &&
+            newPosition.x + (node.width || 200) <= parentNode.position.x + parentWidth &&
+            newPosition.y >= parentNode.position.y &&
+            newPosition.y + (node.height || 100) <= parentNode.position.y + parentHeight;
+            
+          // If node is dragged outside parent bounds, remove it from the group
+          if (!isInsideParent) {
+            nodesToUpdateParent.push({
+              id: node.id,
+              position: newPosition,
+              removeParent: true
+            });
+          }
+        }
+      });
+    }
+    
+    // Process the nodes that need parent updates
+    if (nodesToUpdateParent.length > 0) {
+      setTimeout(() => {
+        setNodes(nodes => 
+          nodes.map(node => {
+            const updateInfo = nodesToUpdateParent.find(n => n.id === node.id);
+            if (updateInfo?.removeParent) {
+              return {
+                ...node,
+                parentNode: undefined,
+                extent: undefined,
+                position: updateInfo.position
+              };
+            }
+            return node;
+          })
+        );
+      }, 0);
+    }
+  
     // Procesar los cambios de nodos
     const updatedNodes = reactFlowInstance.getNodes().map(node => {
       // Asegurar que todos los nodos tengan las propiedades necesarias
@@ -992,7 +1136,7 @@ const FlowEditorContent = ({
         }
       }, 1000);
     }
-  }, [onNodesChange, reactFlowInstance, setNodes, diagramId, onSave]);
+  }, [onNodesChange, reactFlowInstance, setNodes, diagramId, onSave, findGroupAtPosition]);
   
   return (
     <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
@@ -1444,7 +1588,7 @@ const FlowEditorContent = ({
             zIndex: 2000,
             minWidth: '300px'
           }}>
-            <h4 style={{margin: '0 0 15px 0', fontSize: '16px', fontWeight: 'bold'}}>Edit Group Name</h4>
+            <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Edit Group Name</h4>
             <input 
               type="text" 
               defaultValue={editingGroup.label}
@@ -1742,7 +1886,9 @@ const FlowEditorContent = ({
               flexDirection: 'column',
               backgroundColor: 'white',
               paddingBottom: '16px',
-              maxHeight: 'calc(90vh - 48px)' // Ajustado al 90% menos el encabezado
+              maxHeight: 'calc(90vh - 48px)', // Ajustado al 90% menos el encabezado
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#ccc #f1f1f1'
             }}>
               {resourceCategories.map(category => (
                 <div key={category.name} style={{borderBottom: '1px solid #f5f5f5'}}>

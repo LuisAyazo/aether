@@ -68,6 +68,9 @@ export interface Diagram {
     dimensions?: { width: number; height: number };
     provider?: string;
     label?: string;
+    isMinimized?: boolean;
+    isCollapsed?: boolean;
+    style?: Record<string, any>;
   }>;
   nodePositions?: Record<string, Record<string, { 
     relativePosition: { x: number, y: number },
