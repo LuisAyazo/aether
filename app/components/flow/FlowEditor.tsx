@@ -18,7 +18,12 @@ import ReactFlow, {
   ConnectionMode,
   Viewport,
   BackgroundVariant,
-  NodeChange // <-- Import NodeChange from reactflow
+  NodeChange,
+  useNodesState,
+  useEdgesState,
+  Position,
+  Connection,
+  addEdge
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -248,13 +253,15 @@ const FlowEditorContent = ({
   onSave,
   nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
-  resourceCategories = []
+  resourceCategories = [],
+  diagramId
 }: FlowEditorProps): JSX.Element => {
   
   const memoizedNodeTypes = useMemo(() => externalNodeTypes, [externalNodeTypes]);
-
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const [nodes, setNodes] = useNodesState(propNodes || initialNodes);
+  const [edges, setEdges] = useEdgesState(propEdges || initialEdges);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [, setActiveDrag] = useState<{ item: ResourceItem, offset: { x: number, y: number } } | null>(null);
@@ -779,191 +786,225 @@ const FlowEditorContent = ({
     setActiveDrag(null);
   }, [setActiveDrag]);
 
-  // 🔒 Critical code below – do not edit or delete
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault();
-      const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
-      if (!reactFlowBounds || !reactFlowInstance) return;
-
-      try {
-        const dataStr = event.dataTransfer.getData('application/reactflow');
-        if (!dataStr) return;
-        const transferredData = JSON.parse(dataStr) as ResourceItem; // Ensure this is the correct type being transferred
-        
-        // Obtener la posición exacta donde se soltó el elemento en coordenadas del flujo
-        const position = reactFlowInstance.screenToFlowPosition({ 
-          x: event.clientX, 
-          y: event.clientY 
-        });
-        
-        console.log(`Drop detected at screen position: (${event.clientX}, ${event.clientY})`);
-        console.log(`Converted to flow position: (${position.x}, ${position.y})`);
-        
-        // Forzar detección de grupo bajo el puntero en lugar de usar solo la posición calculada
-        const elementBelow = document.elementFromPoint(event.clientX, event.clientY);
-        let groupNodeFromDOM: Node | undefined;
-        let parentNodeId: string | undefined = undefined;
-        let adjustedPosition = { ...position };
-
-        // Buscar si hay un grupo bajo el cursor recorriendo el árbol DOM
-        let currentElement = elementBelow;
-        while (currentElement && !groupNodeFromDOM) {
-          const nodeId = currentElement.getAttribute('data-id') || 
-                         currentElement.getAttribute('data-nodeid') ||
-                         currentElement.closest('[data-id]')?.getAttribute('data-id');
-                         
-          if (nodeId) {
-            const node = reactFlowInstance.getNode(nodeId);
-            if (node && node.type === 'group' && !node.data?.isMinimized) {
-              groupNodeFromDOM = node;
-              console.log(`Grupo encontrado vía DOM: ${nodeId}`);
-              break;
-            }
-          }
-          currentElement = currentElement.parentElement;
-        }
-        
-        // Obtener todos los grupos (y no minimizados)
-        const groups = reactFlowInstance.getNodes().filter(n => n.type === 'group' && !n.data?.isMinimized);
-        
-        // Ordenar grupos de menor a mayor tamaño para priorizar grupos anidados
-        const sortedGroups = [...groups].sort((a, b) => {
-          const areaA = (a.style?.width as number || 200) * (a.style?.height as number || 150);
-          const areaB = (b.style?.width as number || 200) * (b.style?.height as number || 150);
-          return areaA - areaB;
-        });
-        
-        console.log(`Buscando grupo contenedor entre ${sortedGroups.length} grupos disponibles`);
-        
-        // Primero verificamos si encontramos un grupo vía DOM
-        if (groupNodeFromDOM) {
-          parentNodeId = groupNodeFromDOM.id;
-          adjustedPosition = { 
-            x: position.x - groupNodeFromDOM.position.x, 
-            y: position.y - groupNodeFromDOM.position.y 
-          };
-          console.log(`Usando grupo encontrado vía DOM: ${parentNodeId}`);
-        } else {
-          // Si no, usamos el método tradicional de detección por posición
-          for (const group of sortedGroups) {
-            if (isInsideGroup(position, group)) {
-              parentNodeId = group.id;
-              // Ajustar la posición relativa al grupo padre
-              adjustedPosition = { 
-                x: position.x - group.position.x, 
-                y: position.y - group.position.y 
-              };
-              console.log(`Nodo soltado dentro del grupo ${group.id} en posición relativa: (${adjustedPosition.x}, ${adjustedPosition.y})`);
-              break;
-            }
-          }
-        }
-        
-        // Crear el nuevo nodo
-        const timestamp = Date.now();
-        const newNodeId = `${transferredData.type}-${timestamp}`;
-        const newNode: Node = {
-          id: newNodeId, 
-          type: transferredData.type, 
-          position: adjustedPosition,
-          data: { 
-            label: transferredData.name, 
-            description: transferredData.description, 
-            provider: transferredData.provider,
-            isCollapsed: true 
-          },
-          draggable: true, 
+  // Efecto para sincronizar los nodos cuando cambian las props o el diagramId
+  useEffect(() => {
+    if (propNodes) {
+      const currentNodesJSON = JSON.stringify(reactFlowInstance.getNodes());
+      const propNodesJSON = JSON.stringify(propNodes);
+      
+      // Solo actualizar si hay diferencias reales
+      if (currentNodesJSON !== propNodesJSON) {
+        const updatedNodes = propNodes.map(node => ({
+          ...node,
+          draggable: true,
           selectable: true,
-        };
-        
-        // Si se soltó dentro de un grupo, configurar el nodo como hijo
-        if (parentNodeId) {
-          newNode.parentNode = parentNodeId;
-          newNode.extent = 'parent' as const;
-          // Asegurarse que la posición esté dentro de los límites del grupo padre
-          // evitando que quede muy cerca de los bordes
-          adjustedPosition.x = Math.max(10, adjustedPosition.x);
-          adjustedPosition.y = Math.max(30, adjustedPosition.y); // Más margen en Y por el encabezado
-          newNode.position = adjustedPosition;
-
-          console.log(`Nodo configurado como hijo del grupo ${parentNodeId}`);
-          console.log(`Posición final del nodo en el grupo: (${newNode.position.x}, ${newNode.position.y})`);
-        }
-        
-        // Añadir el nuevo nodo al diagrama
-        onNodesChange?.([{ type: 'add', item: newNode }]);
-        
-        // Notificar que se ha añadido un nuevo nodo
-        setTimeout(() => {
-          const customEvent = new CustomEvent('nodesChanged', { 
-            detail: { action: 'nodeAdded', nodeIds: [newNodeId] } 
-          });
-          document.dispatchEvent(customEvent);
-        }, 100);
-
-        setActiveDrag(null);
-        setHighlightedGroupId(null);
-        
-        // Si se añadió a un grupo, optimizar la distribución de nodos en el grupo
-        if (parentNodeId) {
-          setTimeout(() => {
-            optimizeNodesInGroup(parentNodeId!);
-          }, 50);
-        }
-      } catch (error) {
-        console.error("Error al procesar el drop:", error);
-        setActiveDrag(null);
-        setHighlightedGroupId(null);
+          connectable: true,
+          style: {
+            ...node.style,
+            width: node.width || 200,
+            height: node.height || 100
+          }
+        }));
+        setNodes(updatedNodes);
       }
-    },
-    [reactFlowInstance, onNodesChange, optimizeNodesInGroup, isInsideGroup, setActiveDrag]
-  );
+    }
+  }, [propNodes, setNodes, diagramId, reactFlowInstance]);
+
+  // Efecto para sincronizar los edges cuando cambian las props o el diagramId
+  useEffect(() => {
+    if (propEdges) {
+      const currentEdgesJSON = JSON.stringify(reactFlowInstance.getEdges());
+      const propEdgesJSON = JSON.stringify(propEdges);
+      
+      // Solo actualizar si hay diferencias reales
+      if (currentEdgesJSON !== propEdgesJSON) {
+        setEdges(propEdges);
+      }
+    }
+  }, [propEdges, setEdges, diagramId, reactFlowInstance]);
+
+  const findGroupAtPosition = useCallback((position: { x: number; y: number }) => {
+    const currentNodes = reactFlowInstance.getNodes();
+    return currentNodes.find(node => 
+      node.type === 'group' && 
+      !node.data?.isMinimized &&
+      position.x >= node.position.x &&
+      position.x <= node.position.x + (node.width || 300) &&
+      position.y >= node.position.y &&
+      position.y <= node.position.y + (node.height || 200)
+    );
+  }, [reactFlowInstance]);
+
+  const onDrop = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+
+    const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+    if (!reactFlowBounds || !reactFlowInstance) return;
+
+    try {
+      const dataStr = event.dataTransfer.getData('application/reactflow');
+      if (!dataStr) return;
+      
+      const transferredData = JSON.parse(dataStr) as ResourceItem;
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      });
+
+      const newNode: Node = {
+        id: `${transferredData.type}-${Date.now()}`,
+        type: transferredData.type,
+        position,
+        data: { 
+          label: transferredData.name,
+          description: transferredData.description,
+          provider: transferredData.provider
+        },
+        draggable: true,
+        selectable: true,
+        connectable: true,
+        style: {
+          width: 200,
+          height: 100
+        }
+      };
+
+      // Check if the node is dropped within a group
+      const groupNode = findGroupAtPosition(position);
+      if (groupNode) {
+        const parentGroup = reactFlowInstance.getNode(groupNode.id);
+        if (parentGroup) {
+          // Calculate the position relative to the group
+          const groupPosition = parentGroup.position;
+          const relativePosition = {
+            x: position.x - groupPosition.x,
+            y: position.y - groupPosition.y
+          };
+
+          // Ensure the node stays within the group's boundaries
+          const groupWidth = parentGroup.width || 300;
+          const groupHeight = parentGroup.height || 200;
+          const nodeWidth = 200;
+          const nodeHeight = 100;
+          const margin = 20;
+
+          // Calculate safe limits
+          const maxX = groupWidth - nodeWidth - margin;
+          const maxY = groupHeight - nodeHeight - margin;
+          const minX = margin;
+          const minY = margin + 40;
+
+          // Clamp the position within the group's boundaries
+          const clampedPosition = {
+            x: Math.max(minX, Math.min(maxX, relativePosition.x)),
+            y: Math.max(minY, Math.min(maxY, relativePosition.y))
+          };
+
+          // Update the node's position and parent
+          newNode.position = {
+            x: groupPosition.x + clampedPosition.x,
+            y: groupPosition.y + clampedPosition.y
+          };
+          newNode.parentNode = groupNode.id;
+          newNode.extent = 'parent' as const;
+        }
+      }
+
+      // Add the new node
+      const updatedNodes = [...reactFlowInstance.getNodes(), newNode];
+      setNodes(updatedNodes);
+      
+      // Notify parent component if needed
+      if (onNodesChange) {
+        onNodesChange([{ type: 'add', item: newNode }]);
+      }
+
+      // If added to a group, optimize the layout
+      if (newNode.parentNode) {
+        setTimeout(() => {
+          optimizeNodesInGroup(newNode.parentNode!);
+        }, 50);
+      }
+
+      // Si hay un diagramId, guardar los cambios
+      if (diagramId && onSave) {
+        onSave({
+          nodes: updatedNodes,
+          edges: reactFlowInstance.getEdges(),
+          viewport: reactFlowInstance.getViewport()
+        });
+      }
+
+    } catch (error) {
+      console.error("Error handling node drop:", error);
+    }
+  }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodes, diagramId, onSave]);
 
   // Manejador personalizado para los cambios de nodos
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     if (!onNodesChange) return;
-    // Solo cambios de posición con id definido
-    const dragChanges = changes.filter(
-      (change): change is NodeChange & { id: string; position?: { x: number; y: number }; dragging: true } =>
-        change.type === 'position' && typeof change.id === 'string' && change.dragging === true
-    );
-    if (dragChanges.length > 0) {
-      dragChanges.forEach((change) => {
-        const node = reactFlowInstance.getNode(change.id);
-        if (node && node.parentNode) {
-          // Asegurarse que se mantenga dentro de los límites del grupo
-          const parentNode = reactFlowInstance.getNode(node.parentNode);
-          if (parentNode) {
-            node.draggable = true;
-            const parentWidth = (parentNode.style?.width as number) || 300;
-            const parentHeight = (parentNode.style?.height as number) || 200;
-            const minX = 5;
-            const minY = 25;
-            const maxX = parentWidth - 10 - ((node.style?.width as number) || 150);
-            const maxY = parentHeight - 10 - ((node.style?.height as number) || 40);
-            if (change.position) {
-              change.position.x = Math.max(minX, Math.min(maxX, change.position.x));
-              change.position.y = Math.max(minY, Math.min(maxY, change.position.y));
-              setTimeout(() => {
-                reactFlowInstance.setNodes(nodes =>
-                  nodes.map(n =>
-                    n.id === node.id ? { ...n, position: change.position || n.position } : n
-                  )
-                );
-              }, 0);
-            }
-          }
+
+    // Procesar los cambios de nodos
+    const updatedNodes = reactFlowInstance.getNodes().map(node => {
+      // Asegurar que todos los nodos tengan las propiedades necesarias
+      return {
+        ...node,
+        draggable: true,
+        selectable: true,
+        connectable: true,
+        style: {
+          ...node.style,
+          width: node.width || 200,
+          height: node.height || 100
         }
-      });
-    }
+      };
+    });
+
+    // Actualizar el estado local
+    setNodes(updatedNodes);
+
+    // Notificar al componente padre
     onNodesChange(changes);
-  }, [onNodesChange, reactFlowInstance]);
+
+    // Si hay un diagramId, guardar los cambios con debounce
+    if (diagramId && onSave) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      
+      saveTimeoutRef.current = setTimeout(() => {
+        const currentNodes = reactFlowInstance.getNodes();
+        const currentEdges = reactFlowInstance.getEdges();
+        const currentNodesJSON = JSON.stringify(currentNodes);
+        const currentEdgesJSON = JSON.stringify(currentEdges);
+        
+        // Solo guardar si hay cambios reales
+        if (currentNodesJSON !== previousNodesRef.current || 
+            currentEdgesJSON !== previousEdgesRef.current) {
+          previousNodesRef.current = currentNodesJSON;
+          previousEdgesRef.current = currentEdgesJSON;
+          
+          onSave({
+            nodes: currentNodes,
+            edges: currentEdges,
+            viewport: reactFlowInstance.getViewport()
+          });
+        }
+      }, 1000);
+    }
+  }, [onNodesChange, reactFlowInstance, setNodes, diagramId, onSave]);
   
   return (
     <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
       <ReactFlow
-        nodes={propNodes?.map(node => 
+        nodes={propNodes?.sort((a, b) => {
+          // Si a es un grupo, debe ir primero (por debajo)
+          if (a.type === 'group') return -1;
+          // Si b es un grupo, debe ir primero (por debajo)
+          if (b.type === 'group') return 1;
+          // Para otros nodos, mantener el orden original
+          return 0;
+        }).map(node => 
           node.id === highlightedGroupId ? 
           { 
             ...node, 

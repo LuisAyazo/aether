@@ -82,6 +82,7 @@
   background: white;
   border-radius: 4px;
   transition: all 0.2s ease;
+  z-index: 1 !important; /* Asegura que los nodos regulares estén por encima de los grupos */
 }
 
 /* AWS Nodes */
@@ -148,9 +149,36 @@
 }
 
 /* Group nodes */
-.react-flow__node[data-type="group"] {
-  background-color: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(4px);
+.react-flow__node-group {
+  z-index: -1 !important; /* Asegura que los grupos estén por debajo */
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border: 2px solid !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* AWS Groups */
+.react-flow__node-group[data-provider="aws"] {
+  border-color: #FF9900 !important;
+  background-color: rgba(255, 245, 230, 0.95) !important;
+}
+
+/* GCP Groups */
+.react-flow__node-group[data-provider="gcp"] {
+  border-color: #4285F4 !important;
+  background-color: rgba(232, 240, 254, 0.95) !important;
+}
+
+/* Azure Groups */
+.react-flow__node-group[data-provider="azure"] {
+  border-color: #0078D4 !important;
+  background-color: rgba(230, 243, 255, 0.95) !important;
+}
+
+/* Generic Groups */
+.react-flow__node-group[data-provider="generic"] {
+  border-color: #6B7280 !important;
+  background-color: rgba(249, 250, 251, 0.95) !important;
 }
 
 /* Area background */

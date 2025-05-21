@@ -171,117 +171,101 @@ const GenericNode = memo(({ data, selected }: NodeProps) => (
 ));
 
 // Azure Nodes
-const AzureVMNode = ({ data, selected, isConnectable }: any) => (
+const AzureVMNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`p-3 rounded-lg border-2 border-blue-600 bg-blue-50/50 shadow-sm ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : ''}`}
+    className={`border-2 border-blue-600 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : 'shadow-sm'}`}
     data-provider="azure"
     style={{
       boxShadow: selected ? '0 4px 12px rgba(0, 120, 215, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
     }}
   >
-    <Handle
-      type="target"
-      position={Position.Top}
-      isConnectable={isConnectable}
-    />
-    <div className="flex items-center gap-2">
-      <CloudOutlined className="text-blue-600" />
+    <div className="flex items-start gap-2">
+      <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
+        <ServerIcon className="w-6 h-6 text-blue-600" />
+      </div>
       <div>
-        <div className="font-medium">{data.label}</div>
-        <div className="text-xs text-gray-500">{data.description}</div>
+        <h3 className="text-sm font-medium">{data.label || 'Azure VM'}</h3>
+        {data.description && <p className="text-xs text-gray-500">{data.description}</p>}
+        <div className="text-xs mt-1 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit text-blue-600">Azure</div>
       </div>
     </div>
-    <Handle
-      type="source"
-      position={Position.Bottom}
-      isConnectable={isConnectable}
-    />
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
   </div>
-);
+));
 
-const AzureBlobNode = ({ data, selected, isConnectable }: any) => (
+const AzureBlobNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`p-3 rounded-lg border-2 border-blue-600 bg-blue-50/50 shadow-sm ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : ''}`}
+    className={`border-2 border-blue-600 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : 'shadow-sm'}`}
     data-provider="azure"
     style={{
       boxShadow: selected ? '0 4px 12px rgba(0, 120, 215, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
     }}
   >
-    <Handle
-      type="target"
-      position={Position.Top}
-      isConnectable={isConnectable}
-    />
-    <div className="flex items-center gap-2">
-      <DatabaseOutlined className="text-blue-600" />
+    <div className="flex items-start gap-2">
+      <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
+        <CloudIcon className="w-6 h-6 text-blue-600" />
+      </div>
       <div>
-        <div className="font-medium">{data.label}</div>
-        <div className="text-xs text-gray-500">{data.description}</div>
+        <h3 className="text-sm font-medium">{data.label || 'Azure Blob Storage'}</h3>
+        {data.description && <p className="text-xs text-gray-500">{data.description}</p>}
+        <div className="text-xs mt-1 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit text-blue-600">Azure</div>
       </div>
     </div>
-    <Handle
-      type="source"
-      position={Position.Bottom}
-      isConnectable={isConnectable}
-    />
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
   </div>
-);
+));
 
-const AzureCosmosNode = ({ data, selected, isConnectable }: any) => (
+const AzureCosmosNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`p-3 rounded-lg border-2 border-blue-600 bg-blue-50/50 shadow-sm ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : ''}`}
+    className={`border-2 border-blue-600 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : 'shadow-sm'}`}
     data-provider="azure"
     style={{
       boxShadow: selected ? '0 4px 12px rgba(0, 120, 215, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
     }}
   >
-    <Handle
-      type="target"
-      position={Position.Top}
-      isConnectable={isConnectable}
-    />
-    <div className="flex items-center gap-2">
-      <DatabaseOutlined className="text-blue-600" />
+    <div className="flex items-start gap-2">
+      <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
+        <CircleStackIcon className="w-6 h-6 text-blue-600" />
+      </div>
       <div>
-        <div className="font-medium">{data.label}</div>
-        <div className="text-xs text-gray-500">{data.description}</div>
+        <h3 className="text-sm font-medium">{data.label || 'Azure Cosmos DB'}</h3>
+        {data.description && <p className="text-xs text-gray-500">{data.description}</p>}
+        <div className="text-xs mt-1 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit text-blue-600">Azure</div>
       </div>
     </div>
-    <Handle
-      type="source"
-      position={Position.Bottom}
-      isConnectable={isConnectable}
-    />
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
   </div>
-);
+));
 
-const AzureFunctionNode = ({ data, selected, isConnectable }: any) => (
+const AzureFunctionNode = memo(({ data, selected }: NodeProps) => (
   <div 
-    className={`p-3 rounded-lg border-2 border-blue-600 bg-blue-50/50 shadow-sm ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : ''}`}
+    className={`border-2 border-blue-600 bg-blue-50/50 dark:bg-blue-900/20 rounded-lg p-3 transition-all duration-300
+      ${selected ? '!border-blue-600 !bg-blue-50/50 !ring-2 !ring-blue-600 !shadow-lg' : 'shadow-sm'}`}
     data-provider="azure"
     style={{
       boxShadow: selected ? '0 4px 12px rgba(0, 120, 215, 0.2)' : '0 1px 3px rgba(0, 0, 0, 0.1)'
     }}
   >
-    <Handle
-      type="target"
-      position={Position.Top}
-      isConnectable={isConnectable}
-    />
-    <div className="flex items-center gap-2">
-      <ApiOutlined className="text-blue-600" />
+    <div className="flex items-start gap-2">
+      <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md">
+        <CodeBracketIcon className="w-6 h-6 text-blue-600" />
+      </div>
       <div>
-        <div className="font-medium">{data.label}</div>
-        <div className="text-xs text-gray-500">{data.description}</div>
+        <h3 className="text-sm font-medium">{data.label || 'Azure Function'}</h3>
+        {data.description && <p className="text-xs text-gray-500">{data.description}</p>}
+        <div className="text-xs mt-1 bg-blue-100 px-1.5 py-0.5 rounded-full w-fit text-blue-600">Azure</div>
       </div>
     </div>
-    <Handle
-      type="source"
-      position={Position.Bottom}
-      isConnectable={isConnectable}
-    />
+    <Handle type="target" position={Position.Left} />
+    <Handle type="source" position={Position.Right} />
   </div>
-);
+));
 
 // Define todos los tipos de nodos que usamos en la aplicación
 const nodeTypes = {

@@ -15,7 +15,7 @@ interface NodeGroupProps extends NodeProps {
 }
 
 const MIN_SIZE = 40;
-const DEFAULT_SIZE = { width: 200, height: 150 };
+const DEFAULT_SIZE = { width: 300, height: 200 }; // Aumentado para mejor visualización
 const PADDING = 20;
 
 export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
@@ -85,7 +85,8 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             style: {
               ...node.style,
               visibility: hide ? 'hidden' : 'visible',
-              opacity: hide ? 0 : 1
+              opacity: hide ? 0 : 1,
+              pointerEvents: hide ? 'none' : 'all'
             }
           };
         }
@@ -96,7 +97,7 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     // Actualizar edges
     reactFlowInstance.setEdges(edges => 
       edges.map(edge => {
-        const isConnectedToGroup = edge.source === id || edge.target === id; // Corrected syntax
+        const isConnectedToGroup = edge.source === id || edge.target === id;
         const isConnectedToChild = childNodeIds.includes(edge.source) || childNodeIds.includes(edge.target);
         
         if (isConnectedToChild && !isConnectedToGroup) {
@@ -106,7 +107,8 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             style: {
               ...edge.style,
               visibility: hide ? 'hidden' : 'visible',
-              opacity: hide ? 0 : 1
+              opacity: hide ? 0 : 1,
+              pointerEvents: hide ? 'none' : 'all'
             }
           };
         }
@@ -115,14 +117,19 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
     );
   }, [reactFlowInstance, id]);
 
-  const handleContextMenu = useCallback((/* event: React.MouseEvent */) => {
-    // Temporarily commented out for diagnostics to check selection interference
-    // event.preventDefault(); 
-    // event.stopPropagation();
-    // Placeholder for group's own context menu.
-    // For now, it just prevents the default browser context menu.
-    // console.log('Context menu on group:'); // id removed as it's not in deps
-  }, []); // id dependency removed as it was unused
+  const handleContextMenu = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Emitir evento personalizado para el menú contextual
+    const customEvent = new CustomEvent('nodeGroupFocus', {
+      detail: {
+        nodeId: id,
+        isFocused: true
+      }
+    });
+    window.dispatchEvent(customEvent);
+  }, [id]);
 
   // Manejar minimizado
   const handleMinimize = useCallback((e: React.MouseEvent) => {
@@ -144,7 +151,8 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
               padding: '0',
               overflow: 'visible',
               outline: 'none',
-              boxShadow: 'none'
+              boxShadow: 'none',
+              pointerEvents: 'all'
             },
             className: newState ? 'minimized-group-container' : 'group-node-container'
           };
@@ -187,177 +195,145 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
   if (isMinimized) {
     return (
       <div 
+        className="react-flow__node-group"
         style={{
           width: MIN_SIZE,
           height: MIN_SIZE,
           position: 'relative',
-          pointerEvents: 'none',
-          background: 'transparent'
+          pointerEvents: 'all',
+          background: 'white',
+          borderRadius: '50%',
+          border: `2px solid ${getBorderColor()}`,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          zIndex: -1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
         }}
       >
         <div 
           className="minimized-group"
           onContextMenu={handleContextMenu}
-          data-minimized="true"
-          style={{
-            width: MIN_SIZE,
-            height: MIN_SIZE,
-            borderRadius: '50%',
-            border: `2px solid ${getBorderColor()}`,
-            backgroundColor: selected ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
+          style={{ 
+            width: '100%',
+            height: '100%',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 5,
             cursor: 'pointer',
-            pointerEvents: 'all'
+            pointerEvents: 'all',
+            borderRadius: '50%',
+            backgroundColor: 'white',
+            position: 'relative'
           }}
+          onClick={handleMinimize}
+          title={labelText}
         >
-          <button
-            onClick={handleMinimize}
-            className="w-full h-full flex items-center justify-center cursor-pointer bg-transparent border-none rounded-full focus:outline-none"
-            style={{
-              outline: 'none'
-            }}
-          >
-            <span className="text-xs font-bold">
-              {labelText.substring(0, 2).toUpperCase()}
-            </span>
-          </button>
-          
-          <div className="tooltip">
-            {labelText}
-          </div>
+          <span style={{ 
+            fontSize: '16px', 
+            fontWeight: 'bold',
+            color: getBorderColor(),
+            userSelect: 'none'
+          }}>
+            {labelText.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 3)}
+          </span>
         </div>
-
-        <Handle 
-          type="target" 
-          position={Position.Left}
-          style={{
-            left: 0,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: getBorderColor(),
-            border: 'none',
-            zIndex: 3,
-            pointerEvents: 'none',
-            visibility: 'hidden',
-          }}
-        />
-        <Handle 
-          type="source" 
-          position={Position.Right}
-          style={{
-            right: 0,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: getBorderColor(),
-            border: 'none',
-            zIndex: 3,
-            pointerEvents: 'none',
-            visibility: 'hidden',
-          }}
-        />
       </div>
     );
   }
 
-  // Renderizado normal (no minimizado)
+  // Renderizado normal
   return (
     <div 
-      className="group-node"
-      onContextMenu={handleContextMenu}
+      className={`react-flow__node-group group-node-container ${selected ? 'selected' : ''}`}
       style={{
-        position: 'absolute',
-        inset: 0,
+        width: DEFAULT_SIZE.width,
+        height: DEFAULT_SIZE.height,
         border: `2px solid ${getBorderColor()}`,
         borderRadius: '8px',
-        padding: `${PADDING}px`,
-        cursor: 'pointer',
-        zIndex: 1, 
-        display: 'flex', 
-        alignItems: 'center',
-        justifyContent: 'center',
-        outline: 'none',
-        boxShadow: 'none',
-        transition: 'background-color 0.3s ease',
-        backgroundColor: 'rgba(0,0,0,0.001)', // Make the group node area itself clickable for selection
+        background: 'white',
+        padding: PADDING,
+        position: 'relative',
+        pointerEvents: 'all',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        zIndex: -1
       }}
+      onContextMenu={handleContextMenu}
     >
-      {/* Visual background element - non-interactive */}
-      <div style={{
+      <Handle
+        type="target"
+        position={Position.Top}
+        style={{ background: getBorderColor() }}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={{ background: getBorderColor() }}
+      />
+      
+      <div className="group-controls" style={{ 
+        pointerEvents: 'all',
         position: 'absolute',
-        top: 0, 
-        left: 0, 
-        width: '100%', 
-        height: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 'inherit', // Inherit border radius from parent
-        pointerEvents: 'none', // Crucial: background doesn't steal clicks from children
-        zIndex: -1, // Ensure it's visually behind other direct children of "group-node" (label, buttons)
-      }} />
-
-      <Handle 
-        type="target" 
-        position={Position.Left}
-        style={{
-          left: -4,
-          background: getBorderColor(),
-          border: '2px solid white',
-          zIndex: 3
-        }}
-      />
-      <Handle 
-        type="source" 
-        position={Position.Right}
-        style={{
-          right: -4,
-          background: getBorderColor(),
-          border: '2px solid white',
-          zIndex: 3
-        }}
-      />
-
-      {selected && (
-        <div 
-          className="absolute -top-8 left-1/2 -translate-x-1/2 flex gap-1 bg-white rounded-md shadow-md px-1.5 py-1 z-50"
-          style={{ border: `1px solid ${getBorderColor()}` }}
+        top: '8px',
+        right: '8px',
+        display: 'flex',
+        gap: '4px',
+        zIndex: 1000
+      }}>
+        <button
+          onClick={handleMinimize}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background-color 0.2s'
+          }}
+          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
         >
-          <button
-            onClick={handleMinimize} 
-            className="p-1 hover:bg-gray-100 rounded transition-colors" 
-            title="Minimizar"
-          >
-            <ArrowsPointingInIcon className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleCollapse} 
-            className="p-1 hover:bg-gray-100 rounded transition-colors" 
-            title={isCollapsed ? "Expandir" : "Colapsar"}
-          >
-            {isCollapsed ? <PlusIcon className="w-4 h-4" /> : <MinusIcon className="w-4 h-4" />}
-          </button>
-        </div>
-      )}
+          <MinusIcon className="w-4 h-4" style={{ color: getBorderColor() }} />
+        </button>
+        <button
+          onClick={handleCollapse}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background-color 0.2s'
+          }}
+          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+        >
+          <ArrowsPointingInIcon className="w-4 h-4" style={{ color: getBorderColor() }} />
+        </button>
+      </div>
 
       <div 
-        className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-white px-3 py-1 rounded-md shadow-sm cursor-text select-none"
+        className="group-label"
         style={{ 
+          position: 'absolute',
+          bottom: '-30px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          pointerEvents: 'all',
+          zIndex: 1000,
+          background: 'white',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
           border: `1px solid ${getBorderColor()}`,
-          zIndex: 10,
-          minWidth: '140px',
-          maxWidth: '200px'
-        }}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (!isMinimized) {
-            setIsEditing(true);
-          }
+          minWidth: '100px',
+          textAlign: 'center'
         }}
       >
         {isEditing ? (
@@ -369,17 +345,34 @@ export default function NodeGroup({ id, data, selected }: NodeGroupProps) {
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 handleLabelChangeCommit(labelText);
-                (e.target as HTMLInputElement).blur();
               }
             }}
-            className="bg-transparent border-none p-0 text-center w-full outline-none text-sm"
             autoFocus
-            onClick={(e) => e.stopPropagation()}
+            style={{ 
+              width: '100%',
+              padding: '4px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '14px',
+              textAlign: 'center'
+            }}
           />
         ) : (
-          <span className="block text-center text-sm truncate">
+          <div
+            onClick={() => setIsEditing(true)}
+            style={{
+              cursor: 'pointer',
+              padding: '4px',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              color: getBorderColor(),
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}
+          >
             {labelText}
-          </span>
+          </div>
         )}
       </div>
     </div>
