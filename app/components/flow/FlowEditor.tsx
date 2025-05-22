@@ -24,7 +24,8 @@ import ReactFlow, {
   Background,
   BackgroundVariant,
   Connection,
-  addEdge
+  addEdge,
+  ReactFlowInstance
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
@@ -1155,423 +1156,655 @@ const FlowEditorContent = ({
     }
   }, [onNodesChange, reactFlowInstance, setNodes, diagramId, onSave, findGroupAtPosition]);
 
-  return (
-    <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
-      <ReactFlow
-        nodes={propNodes?.sort((a, b) => {
-          if (a.type === 'group') return -1;
-          if (b.type === 'group') return 1;
-          return 0;
-        }).map(node => 
-          node.id === highlightedGroupId ? 
-          { 
-            ...node, 
-            style: { 
-              ...node.style, 
-              boxShadow: '0 0 0 2px #4f8df6', 
-              borderColor: '#4f8df6',
-              backgroundColor: 'rgba(79, 141, 246, 0.05)'
-            } 
-          } : node
-        )}
-        edges={propEdges}
-        onNodesChange={handleNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={memoizedNodeTypes}
-        edgeTypes={edgeTypes}
-        onPaneClick={handlePaneClick}
-        onEdgeClick={onEdgeClick}
-        onNodeContextMenu={handleNodeContextMenu}
-        onPaneContextMenu={handlePaneContextMenu}
-        elementsSelectable={true}
-        nodesDraggable={true}
-        nodesConnectable={true}
-        panOnDrag={true}
-        zoomOnScroll={false}
-        zoomOnPinch={false}
-        zoomOnDoubleClick={false}
-        preventScrolling={true}
-        style={{ width: '100%', height: '100%' }}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-        onDragEnd={onDragEnd}
-        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-        minZoom={0.1}
-        maxZoom={2}
-        deleteKeyCode={[]}
-        multiSelectionKeyCode={[]}
-        selectionKeyCode={[]}
-        selectionOnDrag={false}
-        selectionMode={SelectionMode.Full}
-        noDragClassName="nodrag"
-        noWheelClassName="nowheel"
-        noPanClassName="nopan"
-        onNodeDoubleClick={(_event, node) => {
-          // Solo abrir el panel si no es un grupo
-          if (node.type !== 'group') {
-            const customEvent = new CustomEvent('openIaCPanel', {
-              detail: {
-                nodeId: node.id,
-                resourceData: {
-                  label: node.data.label,
-                  provider: node.data.provider,
-                  resourceType: node.data.resourceType
-                }
-              }
-            });
-            window.dispatchEvent(customEvent);
-            document.dispatchEvent(customEvent);
-          }
-        }}
-      >
-        <Background 
-          variant={BackgroundVariant.Lines} 
-          gap={50} 
-          size={2}
-          color="#ff0000"
-          style={{ opacity: 0.8 }}
-        />
-        <MiniMap />
-        <Controls 
-          position="bottom-left"
-          style={{ bottom: 10, left: 10 }}
-          onZoomIn={() => reactFlowInstance?.zoomIn({ duration: 300 })}
-          onZoomOut={() => reactFlowInstance?.zoomOut({ duration: 300 })}
-          onFitView={() => reactFlowInstance?.fitView({ duration: 500 })}
-        />
-        
-        {contextMenu.visible && (
-          <div 
-            style={{
-              position: 'fixed', left: contextMenu.x, top: contextMenu.y,
-              background: 'white', border: '1px solid #ddd', zIndex: 1000,
-              padding: '0px', borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
-              display: 'flex', flexDirection: 'column', gap: '0px',
-              minWidth: '180px', overflow: 'hidden',
-              transform: 'translate(8px, 8px)' // Offset slightly from cursor position for better visibility
-            }}
-            onClick={(e) => e.stopPropagation()} 
-            onContextMenu={(e) => e.preventDefault()} 
-          >
-            <div style={{ padding: '8px 12px', backgroundColor: '#f7f7f7', borderBottom: '1px solid #eee' }}>
-              {!contextMenu.isPane && contextMenu.nodeId && (
-                <>
-                  <p style={{margin: '0 0 2px 0', fontSize: '13px', fontWeight: 'bold'}}>{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.label || 'Node'}</p>
-                  <p style={{margin: 0, fontSize: '11px', color: '#777'}}>ID: {contextMenu.nodeId}</p>
-                  <p style={{margin: 0, fontSize: '11px', color: '#777'}}>
-                    Type: {contextMenu.nodeType} 
-                    {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider && (
-                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-xs">
-                        {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider.toUpperCase()}
-                      </span>
-                    )}
-                  </p>
-                </>
-              )}
-              {contextMenu.isPane && (
-                <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>Canvas Options</p>
-              )}
-            </div>
+  // Agregar función para contar recursos por proveedor
+  const getResourceCounts = useCallback(() => {
+    const counts = {
+      total: nodes.length,
+      aws: 0,
+      gcp: 0,
+      azure: 0,
+      generic: 0
+    };
 
-            <div>
-              {!contextMenu.isPane && contextMenu.nodeId && (
-                <>
-                  {contextMenu.nodeType === 'group' && (
-                    <>
-                      <button 
-                        onClick={() => {
-                          // Implement expand/collapse children logic
-                          const groupNode = reactFlowInstance.getNode(contextMenu.nodeId!);
-                          if (groupNode) {
-                            const isCurrentlyCollapsed = groupNode.data.isCollapsed;
-                            reactFlowInstance.setNodes(nodes => nodes.map(n => 
-                              n.id === contextMenu.nodeId 
-                                ? { ...n, data: { ...n.data, isCollapsed: !isCurrentlyCollapsed } } 
-                                : n
-                            ));
-                          }
-                          setContextMenu(prev => ({...prev, visible: false}));
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', borderBottom: '1px solid #eee', 
-                          background: 'white', fontSize: '13px',
-                          color: '#333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.isCollapsed ? '↓ Expand Children' : '↑ Collapse Children'}
-                      </button>
-                      <button 
-                        onClick={() => {
-                          // Implement minimize/restore group logic
-                          const groupNode = reactFlowInstance.getNode(contextMenu.nodeId!);
-                          if (groupNode) {
-                            const isCurrentlyMinimized = groupNode.data.isMinimized;
-                            reactFlowInstance.setNodes(nodes => nodes.map(n => 
-                              n.id === contextMenu.nodeId 
-                                ? { ...n, data: { ...n.data, isMinimized: !isCurrentlyMinimized, isCollapsed: !isCurrentlyMinimized ? true : n.data.isCollapsed } } 
-                                : n
-                            ));
-                          }
-                          setContextMenu(prev => ({...prev, visible: false}));
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', borderBottom: '1px solid #eee', 
-                          background: 'white', fontSize: '13px',
-                          color: '#333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.isMinimized ? '□ Restore Group' : '― Minimize Group'}
-                      </button>
-                      <button 
-                        onClick={() => {
-                          const groupNode = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                          if (groupNode) {
-                            startEditingGroupName(contextMenu.nodeId || '', groupNode.data.label || 'Group');
-                            // Context menu will be closed by saveGroupName or if editing is cancelled
-                          }
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', borderBottom: '1px solid #eee', 
-                          background: 'white', fontSize: '13px',
-                          color: '#333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        ✎ Edit Group Name
-                      </button>
-                      <button 
-                        onClick={() => {
-                          // Crear un menú de nodos según el proveedor del grupo
-                          const groupNode = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                          if (groupNode) {
-                            // Determinar el proveedor del grupo actual
-                            const provider = groupNode.data?.provider || 'generic';
-                            
-                            // Posicionar el nuevo nodo dentro del grupo
-                            const position = { x: 30, y: 60 };
-                            
-                            // Crear un diálogo con los recursos disponibles
-                            setContextMenu(prev => ({...prev, visible: false}));
-                            
-                            // Mostrar un nuevo elemento de selección avanzada
-                            const nodesSelectionDiv = document.createElement('div');
-                            nodesSelectionDiv.id = 'node-selection-dialog';
-                            nodesSelectionDiv.style.position = 'fixed';
-                            nodesSelectionDiv.style.left = '50%';
-                            nodesSelectionDiv.style.top = '50%';
-                            nodesSelectionDiv.style.transform = 'translate(-50%, -50%)';
-                            nodesSelectionDiv.style.background = 'white';
-                            nodesSelectionDiv.style.padding = '20px';
-                            nodesSelectionDiv.style.borderRadius = '8px';
-                            nodesSelectionDiv.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
-                            nodesSelectionDiv.style.zIndex = '2000';
-                            nodesSelectionDiv.style.minWidth = '350px';
-                            nodesSelectionDiv.style.maxWidth = '500px';
-                            nodesSelectionDiv.style.maxHeight = '80vh';
-                            nodesSelectionDiv.style.overflow = 'auto';
-                            
-                            // Título y contenido
-                            nodesSelectionDiv.innerHTML = `
-                              <h4 style="margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">Seleccionar Tipo de Nodo</h4>
-                              <div id="node-types-container" style="max-height: 400px; overflow-y: auto;"></div>
-                              <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
-                                <button id="cancel-selection" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; background: #f5f5f5; font-size: 14px; cursor: pointer;">
-                                  Cancelar
-                                </button>
-                              </div>
-                            `;
-                            document.body.appendChild(nodesSelectionDiv);
-                            
-                            // Cerrar al hacer clic en Cancelar
-                            document.getElementById('cancel-selection')?.addEventListener('click', () => {
-                              document.body.removeChild(nodesSelectionDiv);
-                            });
-                            
-                            // Agregamos las opciones de nodos según el proveedor
-                            const nodeTypesContainer = document.getElementById('node-types-container');
-                            if (nodeTypesContainer) {
-                              // Filtrar categorías por proveedor
-                              const matchingCategories = resourceCategories.filter(
-                                category => category.provider === provider
-                              );
-                              
-                              if (matchingCategories.length > 0) {
-                                let html = '';
-                                matchingCategories.forEach(category => {
-                                  html += `<div style="margin-bottom: 10px;">
-                                    <div style="font-weight: bold; padding: 5px 0; border-bottom: 1px solid #eee;">
-                                      ${category.name}
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px;">`;
-                                  
-                                  category.items.forEach(item => {
-                                    html += `<div class="node-type-option" data-type="${item.type}" data-name="${item.name}" 
-                                    data-description="${item.description || ''}" data-provider="${item.provider}"
-                                    style="padding: 8px 10px; border: 1px solid #eee; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                                      <div style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: #999;">•</div>
-                                      <span>${item.name}</span>
-                                    </div>`;
-                                  });
-                                  
-                                  html += `</div></div>`;
-                                });
-                                
-                                nodeTypesContainer.innerHTML = html;
-                                
-                                // Agregar eventos a las opciones
-                                document.querySelectorAll('.node-type-option').forEach(element => {
-                                  element.addEventListener('mouseover', (e) => {
-                                    (e.currentTarget as HTMLElement).style.backgroundColor = '#f0f7ff';
-                                  });
-                                  
-                                  element.addEventListener('mouseout', (e) => {
-                                    (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                                  });
-                                  
-                                  element.addEventListener('click', (e) => {
-                                    const target = e.currentTarget as HTMLElement;
-                                    const nodeType = target.dataset.type || '';
-                                    const nodeName = target.dataset.name || '';
-                                    const nodeDescription = target.dataset.description || '';
-                                    const nodeProvider = target.dataset.provider as 'aws' | 'gcp' | 'azure' | 'generic';
-                                    
-                                    // Crear el nodo del tipo seleccionado
-                                    const timestamp = Date.now();
-                                    const newNodeId = `${nodeType}-${timestamp}`;
-                                    
-                                    const newNode: Node = {
-                                      id: newNodeId,
-                                      type: nodeType,
-                                      position,
-                                      data: { 
-                                        label: nodeName,
-                                        description: nodeDescription,
-                                        provider: nodeProvider,
-                                        isCollapsed: true
-                                      },
-                                      parentNode: contextMenu.nodeId || undefined,
-                                      extent: 'parent' as const,
-                                      draggable: true,
-                                      selectable: true,
-                                    };
-                                    
-                                    onNodesChange?.([{ type: 'add', item: newNode }]);
-                                    setTimeout(() => optimizeNodesInGroup(contextMenu.nodeId || ''), 50);
-                                    
-                                    // Quitar el diálogo
-                                    document.body.removeChild(nodesSelectionDiv);
-                                  });
-                                });
-                              } else {
-                                nodeTypesContainer.innerHTML = '<p>No hay tipos de nodos disponibles para este proveedor.</p>';
-                              }
+    nodes.forEach(node => {
+      const provider = (node.data?.provider || 'generic') as 'aws' | 'gcp' | 'azure' | 'generic';
+      counts[provider]++;
+    });
+
+    return counts;
+  }, [nodes]);
+
+  // Add a ref to track if we're currently updating the diagram
+  const isUpdatingRef = useRef(false);
+  
+  // Add a ref to store the last viewport state
+  const lastViewportRef = useRef<Viewport | null>(null);
+  
+  // Add a ref to track if we've initialized the viewport
+  const viewportInitializedRef = useRef(false);
+
+  // Modify the viewport initialization effect
+  useEffect(() => {
+    if (!reactFlowInstance || !nodes.length) return;
+    
+    // If we have a saved viewport, use it
+    if (lastViewportRef.current) {
+      reactFlowInstance.setViewport(lastViewportRef.current);
+      return;
+    }
+    
+    // If we haven't initialized the viewport yet
+    if (!viewportInitializedRef.current) {
+      // Wait for nodes to be rendered
+      setTimeout(() => {
+        // Calculate nodes bounding box
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+        
+        reactFlowInstance.getNodes().forEach(node => {
+          if (!node.hidden) {
+            const nodeWidth = node.width || 150;
+            const nodeHeight = node.height || 80;
+            
+            minX = Math.min(minX, node.position.x);
+            minY = Math.min(minY, node.position.y);
+            maxX = Math.max(maxX, node.position.x + nodeWidth);
+            maxY = Math.max(maxY, node.position.y + nodeHeight);
+          }
+        });
+
+        // Skip if no nodes are visible or bounding box calculation failed
+        if (minX === Infinity || minY === Infinity) return;
+        
+        // Calculate center of nodes
+        const nodesWidth = maxX - minX;
+        const nodesHeight = maxY - minY;
+        const nodesCenterX = minX + nodesWidth / 2;
+        const nodesCenterY = minY + nodesHeight / 2;
+        
+        // Get viewport dimensions
+        const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 600 };
+        const viewportCenterX = width / 2;
+        const viewportCenterY = height / 2;
+        
+        // Calculate the translation needed to center nodes
+        const zoom = 1; // Keep zoom level fixed at 1
+        const translateX = viewportCenterX - nodesCenterX * zoom;
+        const translateY = viewportCenterY - nodesCenterY * zoom;
+        
+        // Set viewport to center nodes without animation
+        const newViewport = { 
+          x: translateX, 
+          y: translateY, 
+          zoom 
+        };
+        
+        reactFlowInstance.setViewport(newViewport);
+        lastViewportRef.current = newViewport;
+        viewportInitializedRef.current = true;
+      }, 200); // Small delay to ensure nodes are rendered
+    }
+  }, [reactFlowInstance, nodes.length, reactFlowWrapper]);
+
+  // Add effect to save viewport state
+  useEffect(() => {
+    if (!reactFlowInstance) return;
+    
+    const handleViewportChange = () => {
+      const viewport = reactFlowInstance.getViewport();
+      lastViewportRef.current = viewport;
+    };
+    
+    // Use the viewportChange event from ReactFlow
+    document.addEventListener('reactflow.viewportChange', handleViewportChange);
+    
+    return () => {
+      document.removeEventListener('reactflow.viewportChange', handleViewportChange);
+    };
+  }, [reactFlowInstance]);
+
+  // Add effect to ensure nodes and groups are visible
+  useEffect(() => {
+    if (!reactFlowInstance || !nodes.length) return;
+    
+    const ensureVisibility = () => {
+      const currentNodes = reactFlowInstance.getNodes();
+      const updatedNodes = currentNodes.map(node => ({
+        ...node,
+        hidden: false,
+        style: {
+          ...node.style,
+          visibility: 'visible' as const,
+          opacity: 1
+        }
+      }));
+      
+      reactFlowInstance.setNodes(updatedNodes);
+    };
+    
+    // Run once on mount and when nodes change
+    ensureVisibility();
+    
+    // Also run when the viewport changes to ensure visibility
+    document.addEventListener('reactflow.viewportChange', ensureVisibility);
+    
+    return () => {
+      document.removeEventListener('reactflow.viewportChange', ensureVisibility);
+    };
+  }, [reactFlowInstance, nodes.length]);
+
+  // Modify the save effect to include viewport
+  useEffect(() => {
+    const currentNodes = reactFlowInstance.getNodes();
+    const currentEdges = reactFlowInstance.getEdges();
+    const currentNodesJSON = JSON.stringify(currentNodes);
+    const currentEdgesJSON = JSON.stringify(currentEdges);
+    
+    if (onSave && reactFlowInstance && 
+        (currentNodesJSON !== previousNodesRef.current || 
+         currentEdgesJSON !== previousEdgesRef.current)) {
+      
+      previousNodesRef.current = currentNodesJSON;
+      previousEdgesRef.current = currentEdgesJSON;
+      
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+      
+      saveTimeoutRef.current = setTimeout(() => {
+        const flow = reactFlowInstance.toObject();
+        // Include the current viewport in the save data
+        onSave?.({
+          ...flow,
+          viewport: lastViewportRef.current || flow.viewport
+        });
+      }, 1000);
+    }
+    
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [onSave, reactFlowInstance, propNodes, propEdges]);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">Total:</span>
+            <span className="text-sm text-gray-600">{getResourceCounts().total}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">AWS:</span>
+            <span className="text-sm text-gray-600">{getResourceCounts().aws}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">GCP:</span>
+            <span className="text-sm text-gray-600">{getResourceCounts().gcp}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">Azure:</span>
+            <span className="text-sm text-gray-600">{getResourceCounts().azure}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">Generic:</span>
+            <span className="text-sm text-gray-600">{getResourceCounts().generic}</span>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          {/* Aquí van los botones existentes */}
+        </div>
+      </div>
+      <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
+        <ReactFlow
+          nodes={propNodes?.sort((a, b) => {
+            if (a.type === 'group') return -1;
+            if (b.type === 'group') return 1;
+            return 0;
+          }).map(node => 
+            node.id === highlightedGroupId ? 
+            { 
+              ...node, 
+              style: { 
+                ...node.style, 
+                boxShadow: '0 0 0 2px #4f8df6', 
+                borderColor: '#4f8df6',
+                backgroundColor: 'rgba(79, 141, 246, 0.05)'
+              } 
+            } : node
+          )}
+          edges={propEdges}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          nodeTypes={memoizedNodeTypes}
+          edgeTypes={edgeTypes}
+          onPaneClick={handlePaneClick}
+          onEdgeClick={onEdgeClick}
+          onNodeContextMenu={handleNodeContextMenu}
+          onPaneContextMenu={handlePaneContextMenu}
+          elementsSelectable={true}
+          nodesDraggable={true}
+          nodesConnectable={true}
+          panOnDrag={true}
+          zoomOnScroll={false}
+          zoomOnPinch={false}
+          zoomOnDoubleClick={false}
+          preventScrolling={true}
+          style={{ width: '100%', height: '100%' }}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
+          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          minZoom={0.1}
+          maxZoom={2}
+          deleteKeyCode={[]}
+          multiSelectionKeyCode={[]}
+          selectionKeyCode={[]}
+          selectionOnDrag={false}
+          selectionMode={SelectionMode.Full}
+          noDragClassName="nodrag"
+          noWheelClassName="nowheel"
+          noPanClassName="nopan"
+          onNodeDoubleClick={(_event, node) => {
+            // Solo abrir el panel si no es un grupo
+            if (node.type !== 'group') {
+              const customEvent = new CustomEvent('openIaCPanel', {
+                detail: {
+                  nodeId: node.id,
+                  resourceData: {
+                    label: node.data.label,
+                    provider: node.data.provider,
+                    resourceType: node.data.resourceType
+                  }
+                }
+              });
+              window.dispatchEvent(customEvent);
+              document.dispatchEvent(customEvent);
+            }
+          }}
+        >
+          <Background 
+            variant={BackgroundVariant.Lines} 
+            gap={50} 
+            size={2}
+            color="#ff0000"
+            style={{ opacity: 0.8 }}
+          />
+          <MiniMap />
+          <Controls 
+            position="bottom-left"
+            style={{ bottom: 10, left: 10 }}
+            onZoomIn={() => reactFlowInstance?.zoomIn({ duration: 300 })}
+            onZoomOut={() => reactFlowInstance?.zoomOut({ duration: 300 })}
+            // onFitView={() => reactFlowInstance?.fitView({ duration: 500 })}
+          />
+          
+          {contextMenu.visible && (
+            <div 
+              style={{
+                position: 'fixed', left: contextMenu.x, top: contextMenu.y,
+                background: 'white', border: '1px solid #ddd', zIndex: 1000,
+                padding: '0px', borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                display: 'flex', flexDirection: 'column', gap: '0px',
+                minWidth: '180px', overflow: 'hidden',
+                transform: 'translate(8px, 8px)' // Offset slightly from cursor position for better visibility
+              }}
+              onClick={(e) => e.stopPropagation()} 
+              onContextMenu={(e) => e.preventDefault()} 
+            >
+              <div style={{ padding: '8px 12px', backgroundColor: '#f7f7f7', borderBottom: '1px solid #eee' }}>
+                {!contextMenu.isPane && contextMenu.nodeId && (
+                  <>
+                    <p style={{margin: '0 0 2px 0', fontSize: '13px', fontWeight: 'bold'}}>{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.label || 'Node'}</p>
+                    <p style={{margin: 0, fontSize: '11px', color: '#777'}}>ID: {contextMenu.nodeId}</p>
+                    <p style={{margin: 0, fontSize: '11px', color: '#777'}}>
+                      Type: {contextMenu.nodeType} 
+                      {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-xs">
+                          {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider.toUpperCase()}
+                        </span>
+                      )}
+                    </p>
+                  </>
+                )}
+                {contextMenu.isPane && (
+                  <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>Canvas Options</p>
+                )}
+              </div>
+
+              <div>
+                {!contextMenu.isPane && contextMenu.nodeId && (
+                  <>
+                    {contextMenu.nodeType === 'group' && (
+                      <>
+                        <button 
+                          onClick={() => {
+                            // Implement expand/collapse children logic
+                            const groupNode = reactFlowInstance.getNode(contextMenu.nodeId!);
+                            if (groupNode) {
+                              const isCurrentlyCollapsed = groupNode.data.isCollapsed;
+                              reactFlowInstance.setNodes(nodes => nodes.map(n => 
+                                n.id === contextMenu.nodeId 
+                                  ? { ...n, data: { ...n.data, isCollapsed: !isCurrentlyCollapsed } } 
+                                  : n
+                              ));
                             }
-                          }
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', borderBottom: '1px solid #eee', 
-                          background: 'white', fontSize: '13px',
-                          color: '#333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        ➕ Agregar Nodo
-                      </button>
-                      <button 
-                        onClick={() => {
-                          if (contextMenu.nodeId) {
-                            // 🔒 Critical code below – do not edit or delete
-                          // Check for child nodes before deleting
-                            const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === contextMenu.nodeId);
-                            
-                            if (childNodes.length > 0) {
-                              // Move child nodes out of the group before deleting it
-                              const groupNode = reactFlowInstance.getNode(contextMenu.nodeId);
-                              if (groupNode) {
-                                // First update all child nodes to remove them from the group
-                                reactFlowInstance.setNodes(nodes => 
-                                  nodes.map(node => {
-                                    if (node.parentNode === contextMenu.nodeId) {
-                                      return {
-                                        ...node,
-                                        parentNode: undefined, 
-                                        extent: undefined,
-                                        // Adjust position to be in the global space
-                                        position: {
-                                          x: groupNode.position.x + node.position.x,
-                                          y: groupNode.position.y + node.position.y
-                                        }
-                                      };
-                                    }
-                                    return node;
-                                  })
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee', 
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.isCollapsed ? '↓ Expand Children' : '↑ Collapse Children'}
+                        </button>
+                        <button 
+                          onClick={() => {
+                            // Implement minimize/restore group logic
+                            const groupNode = reactFlowInstance.getNode(contextMenu.nodeId!);
+                            if (groupNode) {
+                              const isCurrentlyMinimized = groupNode.data.isMinimized;
+                              reactFlowInstance.setNodes(nodes => nodes.map(n => 
+                                n.id === contextMenu.nodeId 
+                                  ? { ...n, data: { ...n.data, isMinimized: !isCurrentlyMinimized, isCollapsed: !isCurrentlyMinimized ? true : n.data.isCollapsed } } 
+                                  : n
+                              ));
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee', 
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.isMinimized ? '□ Restore Group' : '― Minimize Group'}
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const groupNode = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                            if (groupNode) {
+                              startEditingGroupName(contextMenu.nodeId || '', groupNode.data.label || 'Group');
+                              // Context menu will be closed by saveGroupName or if editing is cancelled
+                            }
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee', 
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          ✎ Edit Group Name
+                        </button>
+                        <button 
+                          onClick={() => {
+                            // Crear un menú de nodos según el proveedor del grupo
+                            const groupNode = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                            if (groupNode) {
+                              // Determinar el proveedor del grupo actual
+                              const provider = groupNode.data?.provider || 'generic';
+                              
+                              // Posicionar el nuevo nodo dentro del grupo
+                              const position = { x: 30, y: 60 };
+                              
+                              // Crear un diálogo con los recursos disponibles
+                              setContextMenu(prev => ({...prev, visible: false}));
+                              
+                              // Mostrar un nuevo elemento de selección avanzada
+                              const nodesSelectionDiv = document.createElement('div');
+                              nodesSelectionDiv.id = 'node-selection-dialog';
+                              nodesSelectionDiv.style.position = 'fixed';
+                              nodesSelectionDiv.style.left = '50%';
+                              nodesSelectionDiv.style.top = '50%';
+                              nodesSelectionDiv.style.transform = 'translate(-50%, -50%)';
+                              nodesSelectionDiv.style.background = 'white';
+                              nodesSelectionDiv.style.padding = '20px';
+                              nodesSelectionDiv.style.borderRadius = '8px';
+                              nodesSelectionDiv.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
+                              nodesSelectionDiv.style.zIndex = '2000';
+                              nodesSelectionDiv.style.minWidth = '350px';
+                              nodesSelectionDiv.style.maxWidth = '500px';
+                              nodesSelectionDiv.style.maxHeight = '80vh';
+                              nodesSelectionDiv.style.overflow = 'auto';
+                              
+                              // Título y contenido
+                              nodesSelectionDiv.innerHTML = `
+                                <h4 style="margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">Seleccionar Tipo de Nodo</h4>
+                                <div id="node-types-container" style="max-height: 400px; overflow-y: auto;"></div>
+                                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
+                                  <button id="cancel-selection" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; background: #f5f5f5; font-size: 14px; cursor: pointer;">
+                                    Cancelar
+                                  </button>
+                                </div>
+                              `;
+                              document.body.appendChild(nodesSelectionDiv);
+                              
+                              // Cerrar al hacer clic en Cancelar
+                              document.getElementById('cancel-selection')?.addEventListener('click', () => {
+                                document.body.removeChild(nodesSelectionDiv);
+                              });
+                              
+                              // Agregamos las opciones de nodos según el proveedor
+                              const nodeTypesContainer = document.getElementById('node-types-container');
+                              if (nodeTypesContainer) {
+                                // Filtrar categorías por proveedor
+                                const matchingCategories = resourceCategories.filter(
+                                  category => category.provider === provider
                                 );
                                 
-                                // Then after a small delay to ensure state updates, remove the group
-                                setTimeout(() => {
-                                  onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId! }]);
-                                }, 50);
+                                if (matchingCategories.length > 0) {
+                                  let html = '';
+                                  matchingCategories.forEach(category => {
+                                    html += `<div style="margin-bottom: 10px;">
+                                      <div style="font-weight: bold; padding: 5px 0; border-bottom: 1px solid #eee;">
+                                        ${category.name}
+                                      </div>
+                                      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px;">`;
+                                    
+                                    category.items.forEach(item => {
+                                      html += `<div class="node-type-option" data-type="${item.type}" data-name="${item.name}" 
+                                      data-description="${item.description || ''}" data-provider="${item.provider}"
+                                      style="padding: 8px 10px; border: 1px solid #eee; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                        <div style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: #999;">•</div>
+                                        <span>${item.name}</span>
+                                      </div>`;
+                                    });
+                                    
+                                    html += `</div></div>`;
+                                  });
+                                  
+                                  nodeTypesContainer.innerHTML = html;
+                                  
+                                  // Agregar eventos a las opciones
+                                  document.querySelectorAll('.node-type-option').forEach(element => {
+                                    element.addEventListener('mouseover', (e) => {
+                                      (e.currentTarget as HTMLElement).style.backgroundColor = '#f0f7ff';
+                                    });
+                                    
+                                    element.addEventListener('mouseout', (e) => {
+                                      (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                                    });
+                                    
+                                    element.addEventListener('click', (e) => {
+                                      const target = e.currentTarget as HTMLElement;
+                                      const nodeType = target.dataset.type || '';
+                                      const nodeName = target.dataset.name || '';
+                                      const nodeDescription = target.dataset.description || '';
+                                      const nodeProvider = target.dataset.provider as 'aws' | 'gcp' | 'azure' | 'generic';
+                                      
+                                      // Crear el nodo del tipo seleccionado
+                                      const timestamp = Date.now();
+                                      const newNodeId = `${nodeType}-${timestamp}`;
+                                      
+                                      const newNode: Node = {
+                                        id: newNodeId,
+                                        type: nodeType,
+                                        position,
+                                        data: { 
+                                          label: nodeName,
+                                          description: nodeDescription,
+                                          provider: nodeProvider,
+                                          isCollapsed: true
+                                        },
+                                        parentNode: contextMenu.nodeId || undefined,
+                                        extent: 'parent' as const,
+                                        draggable: true,
+                                        selectable: true,
+                                      };
+                                      
+                                      onNodesChange?.([{ type: 'add', item: newNode }]);
+                                      setTimeout(() => optimizeNodesInGroup(contextMenu.nodeId || ''), 50);
+                                      
+                                      // Quitar el diálogo
+                                      document.body.removeChild(nodesSelectionDiv);
+                                    });
+                                  });
+                                } else {
+                                  nodeTypesContainer.innerHTML = '<p>No hay tipos de nodos disponibles para este proveedor.</p>';
+                                }
                               }
-                            } else {
-                              // No children, just delete the group
-                              onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
                             }
-                          }
-                          setContextMenu(prev => ({...prev, visible: false}));
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', 
-                          background: 'white', fontSize: '13px',
-                          color: '#ff3333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        🗑 Delete Group
-                      </button>
-                    </>
-                  )}
-                  {contextMenu.nodeType !== 'group' && (
-                    <>
-                      {/* Opción para quitar del grupo cuando está dentro de un grupo */}
-                      {reactFlowInstance.getNode(contextMenu.nodeId || '')?.parentNode && (
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee', 
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          ➕ Agregar Nodo
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (contextMenu.nodeId) {
+                              // 🔒 Critical code below – do not edit or delete
+                            // Check for child nodes before deleting
+                              const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === contextMenu.nodeId);
+                              
+                              if (childNodes.length > 0) {
+                                // Move child nodes out of the group before deleting it
+                                const groupNode = reactFlowInstance.getNode(contextMenu.nodeId);
+                                if (groupNode) {
+                                  // First update all child nodes to remove them from the group
+                                  reactFlowInstance.setNodes(nodes => 
+                                    nodes.map(node => {
+                                      if (node.parentNode === contextMenu.nodeId) {
+                                        return {
+                                          ...node,
+                                          parentNode: undefined, 
+                                          extent: undefined,
+                                          // Adjust position to be in the global space
+                                          position: {
+                                            x: groupNode.position.x + node.position.x,
+                                            y: groupNode.position.y + node.position.y
+                                          }
+                                        };
+                                      }
+                                      return node;
+                                    })
+                                  );
+                                  
+                                  // Then after a small delay to ensure state updates, remove the group
+                                  setTimeout(() => {
+                                    onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId! }]);
+                                  }, 50);
+                                }
+                              } else {
+                                // No children, just delete the group
+                                onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
+                              }
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', 
+                            background: 'white', fontSize: '13px',
+                            color: '#ff3333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          🗑 Delete Group
+                        </button>
+                      </>
+                    )}
+                    {contextMenu.nodeType !== 'group' && (
+                      <>
+                        {/* Opción para quitar del grupo cuando está dentro de un grupo */}
+                        {reactFlowInstance.getNode(contextMenu.nodeId || '')?.parentNode && (
+                          <button 
+                            onClick={() => {
+                              const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                              const parentGroup = node?.parentNode ? reactFlowInstance.getNode(node.parentNode) : undefined;
+                              
+                              if (node && parentGroup) {
+                                // Calcular la nueva posición fuera del grupo
+                                const newPosition = {
+                                  x: parentGroup.position.x + node.position.x,
+                                  y: parentGroup.position.y + node.position.y
+                                };
+                                
+                                // Actualizar el nodo para quitarlo del grupo
+                                reactFlowInstance.setNodes(nodes => 
+                                  nodes.map(n => 
+                                    n.id === contextMenu.nodeId 
+                                      ? { ...n, parentNode: undefined, extent: undefined, position: newPosition } 
+                                      : n
+                                  )
+                                );
+                              }
+                              setContextMenu(prev => ({...prev, visible: false}));
+                            }}
+                            style={{ 
+                              display: 'block', width: '100%', textAlign: 'left', 
+                              padding: '10px 12px', cursor: 'pointer', 
+                              border: 'none', borderBottom: '1px solid #eee',
+                              background: 'white', fontSize: '13px',
+                              color: '#333', transition: 'background-color 0.2s'
+                            }}
+                            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          >
+                            🔓 Quitar del grupo
+                          </button>
+                        )}
                         <button 
                           onClick={() => {
                             const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                            const parentGroup = node?.parentNode ? reactFlowInstance.getNode(node.parentNode) : undefined;
-                            
-                            if (node && parentGroup) {
-                              // Calcular la nueva posición fuera del grupo
-                              const newPosition = {
-                                x: parentGroup.position.x + node.position.x,
-                                y: parentGroup.position.y + node.position.y
-                              };
-                              
-                              // Actualizar el nodo para quitarlo del grupo
-                              reactFlowInstance.setNodes(nodes => 
-                                nodes.map(n => 
-                                  n.id === contextMenu.nodeId 
-                                    ? { ...n, parentNode: undefined, extent: undefined, position: newPosition } 
-                                    : n
-                                )
-                              );
+                            if (node) {
+                              const event = new CustomEvent('openIaCPanel', {
+                                detail: {
+                                  nodeId: node.id,
+                                  resourceData: {
+                                    label: node.data.label,
+                                    provider: node.data.provider,
+                                    resourceType: node.data.resourceType
+                                  }
+                                }
+                              });
+                              window.dispatchEvent(event);
+                              document.dispatchEvent(event);
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -1585,455 +1818,424 @@ const FlowEditorContent = ({
                           onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
                           onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
                         >
-                          🔓 Quitar del grupo
+                          ⚙️ Configuración
                         </button>
-                      )}
-                      <button 
-                        onClick={() => {
-                          const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                          if (node) {
-                            const event = new CustomEvent('openIaCPanel', {
-                              detail: {
-                                nodeId: node.id,
-                                resourceData: {
-                                  label: node.data.label,
-                                  provider: node.data.provider,
-                                  resourceType: node.data.resourceType
-                                }
-                              }
-                            });
-                            window.dispatchEvent(event);
-                            document.dispatchEvent(event);
-                          }
-                          setContextMenu(prev => ({...prev, visible: false}));
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', borderBottom: '1px solid #eee',
-                          background: 'white', fontSize: '13px',
-                          color: '#333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        ⚙️ Configuración
-                      </button>
-                      <button 
-                        onClick={() => {
-                          if (contextMenu.nodeId) {
-                            onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
-                          }
-                          setContextMenu(prev => ({...prev, visible: false}));
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none',
-                          background: 'white', fontSize: '13px',
-                          color: '#ff3333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        🗑 Delete Node
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-              {contextMenu.isPane && (
-                <button 
-                  onClick={() => {
-                    setSidebarOpen(true);
-                    setContextMenu(prev => ({...prev, visible: false}));
-                  }}
-                  style={{ 
-                    display: 'block', width: '100%', textAlign: 'left', 
-                    padding: '10px 12px', cursor: 'pointer', 
-                    border: 'none', borderBottom: '1px solid #eee', 
-                    background: 'white', fontSize: '13px',
-                    color: '#333', transition: 'background-color 0.2s'
-                  }}
-                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                >
-                  📚 Show Resources Panel
-                </button>
-                // Puedes añadir más opciones para el panel aquí
-              )}
+                        <button 
+                          onClick={() => {
+                            if (contextMenu.nodeId) {
+                              onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none',
+                            background: 'white', fontSize: '13px',
+                            color: '#ff3333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          🗑 Delete Node
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+                {contextMenu.isPane && (
+                  <button 
+                    onClick={() => {
+                      setSidebarOpen(true);
+                      setContextMenu(prev => ({...prev, visible: false}));
+                    }}
+                    style={{ 
+                      display: 'block', width: '100%', textAlign: 'left', 
+                      padding: '10px 12px', cursor: 'pointer', 
+                      border: 'none', borderBottom: '1px solid #eee', 
+                      background: 'white', fontSize: '13px',
+                      color: '#333', transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                  >
+                    📚 Show Resources Panel
+                  </button>
+                  // Puedes añadir más opciones para el panel aquí
+                )}
+              </div>
             </div>
-          </div>
-        )}
-        {editingGroup && (
-          <div style={{
-            position: 'fixed', 
-            left: '50%', 
-            top: '50%', 
-            transform: 'translate(-50%, -50%)', 
-            background: 'white', 
-            padding: '20px', 
-            borderRadius: '8px', 
-            boxShadow: '0 4px 15px rgba(0,0,0,0.2)', 
-            zIndex: 2000,
-            minWidth: '300px'
-          }}>
-            <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Edit Group Name</h4>
-            <input 
-              type="text" 
-              defaultValue={editingGroup.label}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  saveGroupName((e.target as HTMLInputElement).value);
-                }
-                if (e.key === 'Escape') {
-                  setEditingGroup(null);
-                  setContextMenu(prev => ({...prev, visible: false})); 
-                }
-              }}
-              autoFocus
-              style={{
-                padding: '10px', 
-                margin: '8px 0 15px', 
-                width: '100%', 
-                boxSizing: 'border-box',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                fontSize: '14px'
-              }}
-            />
-            <div style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}>
-              <button 
-                onClick={() => {
-                  setEditingGroup(null);
-                  setContextMenu(prev => ({...prev, visible: false})); 
+          )}
+          {editingGroup && (
+            <div style={{
+              position: 'fixed', 
+              left: '50%', 
+              top: '50%', 
+              transform: 'translate(-50%, -50%)', 
+              background: 'white', 
+              padding: '20px', 
+              borderRadius: '8px', 
+              boxShadow: '0 4px 15px rgba(0,0,0,0.2)', 
+              zIndex: 2000,
+              minWidth: '300px'
+            }}>
+              <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Edit Group Name</h4>
+              <input 
+                type="text" 
+                defaultValue={editingGroup.label}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveGroupName((e.target as HTMLInputElement).value);
+                  }
+                  if (e.key === 'Escape') {
+                    setEditingGroup(null);
+                    setContextMenu(prev => ({...prev, visible: false})); 
+                  }
                 }}
+                autoFocus
                 style={{
-                  padding: '8px 16px',
+                  padding: '10px', 
+                  margin: '8px 0 15px', 
+                  width: '100%', 
+                  boxSizing: 'border-box',
                   border: '1px solid #ddd',
                   borderRadius: '4px',
-                  background: '#f5f5f5',
-                  fontSize: '14px',
-                  cursor: 'pointer'
+                  fontSize: '14px'
                 }}
-              >
-                Cancel
+              />
+              <div style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}>
+                <button 
+                  onClick={() => {
+                    setEditingGroup(null);
+                    setContextMenu(prev => ({...prev, visible: false})); 
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    background: '#f5f5f5',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => saveGroupName((document.querySelector('input[type="text"]') as HTMLInputElement).value)} 
+                  style={{
+                    padding: '8px 16px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: '#4f8df6',
+                    color: 'white',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
+          {selectedEdge && <EdgeDeleteButton edge={selectedEdge} onEdgeDelete={onEdgeDelete} />}
+
+          {selectionMenu.visible && (
+            <div
+              ref={selectionMenuRef}
+              style={{
+                position: 'fixed', left: `${selectionMenu.x}px`, top: `${selectionMenu.y}px`,
+                transform: 'translateX(-50%)', background: 'rgba(255, 255, 255, 0.95)',
+                padding: '8px 12px', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                zIndex: 1001, display: 'flex', gap: '8px', alignItems: 'center'
+              }}
+            >
+              <button onClick={groupSelectedNodes} title="Group selected nodes (Ctrl+G)">
+                <Square3Stack3DIcon className="h-5 w-5" />
               </button>
+              <button onClick={ungroupNodes} title="Ungroup selected nodes (Ctrl+Shift+G)">
+                <Square2StackIcon className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+
+          <Panel position="top-left">
+            <div style={{ display: 'flex', gap: '8px', padding: '10px', background: 'rgba(255,255,255,0.9)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
               <button 
-                onClick={() => saveGroupName((document.querySelector('input[type="text"]') as HTMLInputElement).value)} 
+                onClick={() => handleToolClick('select')} 
+                title="Select (V)" 
                 style={{
-                  padding: '8px 16px',
+                  background: activeTool === 'select' ? '#f0f7ff' : 'transparent',
                   border: 'none',
                   borderRadius: '4px',
-                  background: '#4f8df6',
-                  color: 'white',
-                  fontSize: '14px',
-                  cursor: 'pointer'
-                }}
-              >
-                Save
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  transition: 'background 0.2s'
+                }}>
+                <CursorArrowRaysIcon className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => handleToolClick('lasso')} 
+                title="Lasso Select (Shift+S)" 
+                style={{
+                  background: activeTool === 'lasso' ? '#f0f7ff' : 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  transition: 'background 0.2s'
+                }}>
+                <SwatchIcon className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => handleToolClick('createGroup')} 
+                title="Create Empty Group" 
+                style={{
+                  background: activeTool === 'createGroup' ? '#f0f7ff' : 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  transition: 'background 0.2s'
+                }}>
+                <FolderPlusIcon className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => handleToolClick('group')} 
+                title="Group Selected (Ctrl+G)" 
+                style={{
+                  background: activeTool === 'group' ? '#f0f7ff' : 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  transition: 'background 0.2s'
+                }}>
+                <Square3Stack3DIcon className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => handleToolClick('ungroup')} 
+                title="Ungroup Selected (Ctrl+Shift+G)" 
+                style={{
+                  background: activeTool === 'ungroup' ? '#f0f7ff' : 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  transition: 'background 0.2s'
+                }}>
+                <FolderMinusIcon className="h-5 w-5" />
               </button>
             </div>
-          </div>
-        )}
-        {selectedEdge && <EdgeDeleteButton edge={selectedEdge} onEdgeDelete={onEdgeDelete} />}
-
-        {selectionMenu.visible && (
-          <div
-            ref={selectionMenuRef}
-            style={{
-              position: 'fixed', left: `${selectionMenu.x}px`, top: `${selectionMenu.y}px`,
-              transform: 'translateX(-50%)', background: 'rgba(255, 255, 255, 0.95)',
-              padding: '8px 12px', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              zIndex: 1001, display: 'flex', gap: '8px', alignItems: 'center'
-            }}
-          >
-            <button onClick={groupSelectedNodes} title="Group selected nodes (Ctrl+G)">
-              <Square3Stack3DIcon className="h-5 w-5" />
-            </button>
-            <button onClick={ungroupNodes} title="Ungroup selected nodes (Ctrl+Shift+G)">
-              <Square2StackIcon className="h-5 w-5" />
-            </button>
-          </div>
-        )}
-
-        <Panel position="top-left">
-          <div style={{ display: 'flex', gap: '8px', padding: '10px', background: 'rgba(255,255,255,0.9)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-            <button 
-              onClick={() => handleToolClick('select')} 
-              title="Select (V)" 
-              style={{
-                background: activeTool === 'select' ? '#f0f7ff' : 'transparent',
-                border: 'none',
-                borderRadius: '4px',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '0',
-                transition: 'background 0.2s'
-              }}>
-              <CursorArrowRaysIcon className="h-5 w-5" />
-            </button>
-            <button 
-              onClick={() => handleToolClick('lasso')} 
-              title="Lasso Select (Shift+S)" 
-              style={{
-                background: activeTool === 'lasso' ? '#f0f7ff' : 'transparent',
-                border: 'none',
-                borderRadius: '4px',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '0',
-                transition: 'background 0.2s'
-              }}>
-              <SwatchIcon className="h-5 w-5" />
-            </button>
-            <button 
-              onClick={() => handleToolClick('createGroup')} 
-              title="Create Empty Group" 
-              style={{
-                background: activeTool === 'createGroup' ? '#f0f7ff' : 'transparent',
-                border: 'none',
-                borderRadius: '4px',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '0',
-                transition: 'background 0.2s'
-              }}>
-              <FolderPlusIcon className="h-5 w-5" />
-            </button>
-            <button 
-              onClick={() => handleToolClick('group')} 
-              title="Group Selected (Ctrl+G)" 
-              style={{
-                background: activeTool === 'group' ? '#f0f7ff' : 'transparent',
-                border: 'none',
-                borderRadius: '4px',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '0',
-                transition: 'background 0.2s'
-              }}>
-              <Square3Stack3DIcon className="h-5 w-5" />
-            </button>
-            <button 
-              onClick={() => handleToolClick('ungroup')} 
-              title="Ungroup Selected (Ctrl+Shift+G)" 
-              style={{
-                background: activeTool === 'ungroup' ? '#f0f7ff' : 'transparent',
-                border: 'none',
-                borderRadius: '4px',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '0',
-                transition: 'background 0.2s'
-              }}>
-              <FolderMinusIcon className="h-5 w-5" />
-            </button>
-          </div>
-        </Panel>
-
-        {/* Botón para mostrar el sidebar cuando está oculto */}
-        {!sidebarOpen && (
-          <Panel position="top-right">
-            <div 
-              style={{ 
-                padding: '8px', 
-                background: 'rgba(255,255,255,0.9)', 
-                borderRadius: '8px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-              onClick={() => setSidebarOpen(true)}
-              title="Show Resources Panel"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
-                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
-              </svg>
-              <span style={{fontSize: '14px'}}>Resources</span>
-            </div>
           </Panel>
-        )}
 
-        {sidebarOpen && (
-          <Panel position="top-right" style={{ 
-            width: '280px', 
-            background: 'rgba(255,255,255,0.85)', 
-            padding: '0', 
-            borderRadius: '8px', 
-            maxHeight: '90vh',
-            height: 'auto',
-            overflow: 'visible',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
-            display: 'flex', 
-            flexDirection: 'column',
-            position: 'fixed',
-            top: '50%',
-            right: '20px',
-            transform: 'translateY(-50%)',
-            zIndex: 9999,
-            animation: 'slideIn 0.3s ease-out',
-            backdropFilter: 'blur(8px)'
-          }}>
-            <style>
-              {`
-                @keyframes slideIn {
-                  0% {
-                    transform: translate(100%, -50%);
-                    opacity: 0;
-                  }
-                  100% {
-                    transform: translate(0, -50%);
-                    opacity: 1;
-                  }
-                }
-              `}
-            </style>
-            <div style={{
+          {/* Botón para mostrar el sidebar cuando está oculto */}
+          {!sidebarOpen && (
+            <Panel position="top-right">
+              <div 
+                style={{ 
+                  padding: '8px', 
+                  background: 'rgba(255,255,255,0.9)', 
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onClick={() => setSidebarOpen(true)}
+                title="Show Resources Panel"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
+                  <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+                </svg>
+                <span style={{fontSize: '14px'}}>Resources</span>
+              </div>
+            </Panel>
+          )}
+
+          {sidebarOpen && (
+            <Panel position="top-right" style={{ 
+              width: '280px', 
+              background: 'rgba(255,255,255,0.85)', 
+              padding: '0', 
+              borderRadius: '8px', 
+              maxHeight: '90vh',
+              height: 'auto',
+              overflow: 'visible',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
               display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center', 
-              padding: '12px 16px', 
-              borderBottom: '1px solid rgba(238, 238, 238, 0.8)', 
-              flexShrink: 0,
-              minHeight: '48px',
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              position: 'relative',
-              zIndex: 10000,
-              backdropFilter: 'blur(8px)'
-            }}>
-                <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Resources</h4>
-                <button 
-                  onClick={() => setSidebarOpen(false)} 
-                  style={{
-                    border: 'none', 
-                    background: 'transparent', 
-                    cursor: 'pointer',
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'background 0.2s'
-                  }}
-                  title="Hide Resources Panel"
-                  onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                  onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
-                  </svg>
-                </button>
-            </div>
-            <div style={{
-              overflowY: 'auto', 
-              overflowX: 'hidden',
-              flexGrow: 1,
-              display: 'flex',
               flexDirection: 'column',
-              backgroundColor: 'rgba(255, 255, 255, 0.85)',
-              paddingBottom: '16px',
-              maxHeight: 'calc(90vh - 48px)',
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#ccc #f1f1f1',
+              position: 'fixed',
+              top: '50%',
+              right: '20px',
+              transform: 'translateY(-50%)',
+              zIndex: 9999,
+              animation: 'slideIn 0.3s ease-out',
               backdropFilter: 'blur(8px)'
             }}>
-              {resourceCategories.map(category => (
-                <div key={category.name} style={{borderBottom: '1px solid #f5f5f5'}}>
-                  <h5 
-                    onClick={() => setCollapsedCategories(prev => ({...prev, [category.name]: !prev[category.name]}))} 
-                    style={{ 
-                      cursor: 'pointer', 
-                      margin: 0, 
-                      padding: '10px 16px', // Reducido el padding vertical
+              <style>
+                {`
+                  @keyframes slideIn {
+                    0% {
+                      transform: translate(100%, -50%);
+                      opacity: 0;
+                    }
+                    100% {
+                      transform: translate(0, -50%);
+                      opacity: 1;
+                    }
+                  }
+                `}
+              </style>
+              <div style={{
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                padding: '12px 16px', 
+                borderBottom: '1px solid rgba(238, 238, 238, 0.8)', 
+                flexShrink: 0,
+                minHeight: '48px',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                position: 'relative',
+                zIndex: 10000,
+                backdropFilter: 'blur(8px)'
+              }}>
+                  <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Resources</h4>
+                  <button 
+                    onClick={() => setSidebarOpen(false)} 
+                    style={{
+                      border: 'none', 
+                      background: 'transparent', 
+                      cursor: 'pointer',
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '4px',
                       display: 'flex',
-                      justifyContent: 'space-between',
                       alignItems: 'center',
-                      fontSize: '14px',
-                      fontWeight: '600',
-                      backgroundColor: collapsedCategories[category.name] ? '#ffffff' : '#f8f8f8',
-                      transition: 'background-color 0.2s'
+                      justifyContent: 'center',
+                      transition: 'background 0.2s'
                     }}
-                    onMouseOver={(e) => {
-                      if (!collapsedCategories[category.name]) return;
-                      e.currentTarget.style.backgroundColor = '#f5f5f5';
-                    }}
-                    onMouseOut={(e) => {
-                      if (!collapsedCategories[category.name]) return;
-                      e.currentTarget.style.backgroundColor = '#ffffff';
-                    }}
+                    title="Hide Resources Panel"
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
-                    <span>{category.name}</span>
-                    <span style={{color: '#666'}}>{collapsedCategories[category.name] ? '▸' : '▾'}</span>
-                  </h5>
-                  {!collapsedCategories[category.name] && (
-                    <ul style={{
-                      listStyleType: 'none', 
-                      padding: '2px 0',
-                      margin: 0, 
-                      backgroundColor: '#fdfdfd',
-                      maxHeight: 'none',
-                      overflowY: 'visible',
-                      position: 'relative',
-                      zIndex: 10001 // Aumentado significativamente
-                    }}>
-                      {category.items.map(item => (
-                        <li
-                          key={category.name + '-' + item.type + '-' + item.name}
-                          draggable
-                          onDragStart={(e) => onDragStartSidebar(e, item)}
-                          style={{ 
-                            padding: '6px 16px', // Reducido el padding vertical
-                            margin: '0', 
-                            cursor: 'grab',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            fontSize: '13px',
-                            color: '#444',
-                            transition: 'background-color 0.15s'
-                          }}
-                          onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
-                          onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
-                        >
-                          <div style={{ minWidth: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {item.icon ? item.icon : <span style={{ fontSize: '18px', color: '#999' }}>•</span>}
-                          </div>
-                          <span style={{ flex: 1 }}>{item.name}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Panel>
-        )}
-      </ReactFlow>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                      <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+                    </svg>
+                  </button>
+              </div>
+              <div style={{
+                overflowY: 'auto', 
+                overflowX: 'hidden',
+                flexGrow: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                paddingBottom: '16px',
+                maxHeight: 'calc(90vh - 48px)',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#ccc #f1f1f1',
+                backdropFilter: 'blur(8px)'
+              }}>
+                {resourceCategories.map(category => (
+                  <div key={category.name} style={{borderBottom: '1px solid #f5f5f5'}}>
+                    <h5 
+                      onClick={() => setCollapsedCategories(prev => ({...prev, [category.name]: !prev[category.name]}))} 
+                      style={{ 
+                        cursor: 'pointer', 
+                        margin: 0, 
+                        padding: '10px 16px', // Reducido el padding vertical
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        backgroundColor: collapsedCategories[category.name] ? '#ffffff' : '#f8f8f8',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseOver={(e) => {
+                        if (!collapsedCategories[category.name]) return;
+                        e.currentTarget.style.backgroundColor = '#f5f5f5';
+                      }}
+                      onMouseOut={(e) => {
+                        if (!collapsedCategories[category.name]) return;
+                        e.currentTarget.style.backgroundColor = '#ffffff';
+                      }}
+                    >
+                      <span>{category.name}</span>
+                      <span style={{color: '#666'}}>{collapsedCategories[category.name] ? '▸' : '▾'}</span>
+                    </h5>
+                    {!collapsedCategories[category.name] && (
+                      <ul style={{
+                        listStyleType: 'none', 
+                        padding: '2px 0',
+                        margin: 0, 
+                        backgroundColor: '#fdfdfd',
+                        maxHeight: 'none',
+                        overflowY: 'visible',
+                        position: 'relative',
+                        zIndex: 10001 // Aumentado significativamente
+                      }}>
+                        {category.items.map(item => (
+                          <li
+                            key={category.name + '-' + item.type + '-' + item.name}
+                            draggable
+                            onDragStart={(e) => onDragStartSidebar(e, item)}
+                            style={{ 
+                              padding: '6px 16px', // Reducido el padding vertical
+                              margin: '0', 
+                              cursor: 'grab',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '13px',
+                              color: '#444',
+                              transition: 'background-color 0.15s'
+                            }}
+                            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
+                            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                          >
+                            <div style={{ minWidth: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {item.icon ? item.icon : <span style={{ fontSize: '18px', color: '#999' }}>•</span>}
+                            </div>
+                            <span style={{ flex: 1 }}>{item.name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
+        </ReactFlow>
+      </div>
     </div>
   );
 };
