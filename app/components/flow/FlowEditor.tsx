@@ -33,7 +33,6 @@ import {
   Square3Stack3DIcon,
   FolderPlusIcon, 
   FolderMinusIcon,
-  ArrowsRightLeftIcon,
   SwatchIcon
 } from '@heroicons/react/24/outline';
 import React from 'react';
@@ -469,55 +468,60 @@ const FlowEditorContent = ({
     };
   }, []);
 
-  const centerNodesInViewport = useCallback(() => { // This function is used by a button
-    const currentNodes = reactFlowInstance.getNodes();
-    if (!reactFlowInstance || currentNodes.length === 0) return;
-    
-    const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 800 };
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    
-    currentNodes.forEach(node => {
-      if (!node.hidden) {
-        const nodeWidth = node.width || 150;
-        const nodeHeight = node.height || 80;
-        minX = Math.min(minX, node.position.x);
-        minY = Math.min(minY, node.position.y);
-        maxX = Math.max(maxX, node.position.x + nodeWidth);
-        maxY = Math.max(maxY, node.position.y + nodeHeight);
-      }
-    });
-    
-    const nodesWidth = maxX - minX;
-    const nodesHeight = maxY - minY;
-    const nodesCenterX = minX + nodesWidth / 2;
-    const nodesCenterY = minY + nodesHeight / 2;
-    
-    const viewportCenterX = width / 2;
-    const viewportCenterY = height / 2;
-    
-    const zoom = reactFlowInstance.getViewport().zoom || 1;
-    const translateX = viewportCenterX - nodesCenterX * zoom;
-    const translateY = viewportCenterY - nodesCenterY * zoom;
-    
-    reactFlowInstance.setViewport({ x: translateX, y: translateY, zoom });
-  }, [reactFlowInstance, reactFlowWrapper]);
-
-  const fitView = useCallback(() => {
-    if (!reactFlowInstance) return;
-    setTimeout(() => {
-      reactFlowInstance.fitView({
-        padding: 0.2,
-        includeHiddenNodes: false,
-        duration: 800
-      });
-    }, 50);
-  }, [reactFlowInstance]);
+  // Removed centerNodesInViewport and fitView functions to eliminate zoom reset functionality
   
+  // Removed useEffect for automatic fitView on component mount
+
+  // Center nodes in the viewport without zooming (added to fix node visibility issue)
+  // Note: Zoom buttons are visible for UI consistency but functionality is disabled
   useEffect(() => {
-    if (reactFlowInstance && (propNodes || initialNodes).length > 0) { // Check against propNodes or initialNodes
-      fitView();
-    }
-  }, [reactFlowInstance, propNodes, initialNodes, fitView]);
+    if (!reactFlowInstance || !nodes.length) return;
+    
+    // Wait for nodes to be rendered
+    setTimeout(() => {
+      // Calculate nodes bounding box
+      let minX = Infinity, minY = Infinity;
+      let maxX = -Infinity, maxY = -Infinity;
+      
+      reactFlowInstance.getNodes().forEach(node => {
+        if (!node.hidden) {
+          const nodeWidth = node.width || 150;
+          const nodeHeight = node.height || 80;
+          
+          minX = Math.min(minX, node.position.x);
+          minY = Math.min(minY, node.position.y);
+          maxX = Math.max(maxX, node.position.x + nodeWidth);
+          maxY = Math.max(maxY, node.position.y + nodeHeight);
+        }
+      });
+
+      // Skip if no nodes are visible or bounding box calculation failed
+      if (minX === Infinity || minY === Infinity) return;
+      
+      // Calculate center of nodes
+      const nodesWidth = maxX - minX;
+      const nodesHeight = maxY - minY;
+      const nodesCenterX = minX + nodesWidth / 2;
+      const nodesCenterY = minY + nodesHeight / 2;
+      
+      // Get viewport dimensions
+      const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 600 };
+      const viewportCenterX = width / 2;
+      const viewportCenterY = height / 2;
+      
+      // Calculate the translation needed to center nodes
+      const zoom = 1; // Keep zoom level fixed at 1
+      const translateX = viewportCenterX - nodesCenterX * zoom;
+      const translateY = viewportCenterY - nodesCenterY * zoom;
+      
+      // Set viewport to center nodes without animation
+      reactFlowInstance.setViewport({ 
+        x: translateX, 
+        y: translateY, 
+        zoom 
+      });
+    }, 200); // Small delay to ensure nodes are rendered
+  }, [reactFlowInstance, nodes.length, reactFlowWrapper]);
 
   const createEmptyGroup = useCallback((provider: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic') => {
     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 800 };
@@ -1150,7 +1154,7 @@ const FlowEditorContent = ({
       }, 1000);
     }
   }, [onNodesChange, reactFlowInstance, setNodes, diagramId, onSave, findGroupAtPosition]);
-  
+
   return (
     <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
       <ReactFlow
@@ -1180,21 +1184,21 @@ const FlowEditorContent = ({
         onEdgeClick={onEdgeClick}
         onNodeContextMenu={handleNodeContextMenu}
         onPaneContextMenu={handlePaneContextMenu}
-        fitView
-        minZoom={0.1}
-        maxZoom={2}
         elementsSelectable={true}
         nodesDraggable={true}
         nodesConnectable={true}
         panOnDrag={true}
-        zoomOnScroll={true}
-        zoomOnDoubleClick={true}
+        zoomOnScroll={false}
+        zoomOnPinch={false}
+        zoomOnDoubleClick={false}
         preventScrolling={true}
         style={{ width: '100%', height: '100%' }}
         onDrop={onDrop}
         onDragOver={onDragOver}
         onDragEnd={onDragEnd}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+        minZoom={0.1}
+        maxZoom={2}
         deleteKeyCode={[]}
         multiSelectionKeyCode={[]}
         selectionKeyCode={[]}
@@ -1228,8 +1232,15 @@ const FlowEditorContent = ({
           color="#ff0000"
           style={{ opacity: 0.8 }}
         />
-        <Controls />
         <MiniMap />
+        <Controls 
+          position="bottom-left"
+          style={{ bottom: 10, left: 10 }}
+          onZoomIn={() => reactFlowInstance?.zoomIn({ duration: 300 })}
+          onZoomOut={() => reactFlowInstance?.zoomOut({ duration: 300 })}
+          onFitView={() => reactFlowInstance?.fitView({ duration: 500 })}
+        />
+        
         {contextMenu.visible && (
           <div 
             style={{
@@ -1838,42 +1849,6 @@ const FlowEditorContent = ({
               }}>
               <FolderMinusIcon className="h-5 w-5" />
             </button>
-            <button 
-              onClick={fitView} 
-              title="Fit View" 
-              style={{
-                background: 'transparent',
-                border: 'none',
-                borderRadius: '4px',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '0',
-                transition: 'background 0.2s'
-              }}>
-              <ArrowsRightLeftIcon className="h-5 w-5" />
-            </button>
-            <button 
-              onClick={centerNodesInViewport} 
-              title="Center Nodes" 
-              style={{
-                background: 'transparent',
-                border: 'none',
-                borderRadius: '4px',
-                width: '32px',
-                height: '32px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                padding: '0',
-                transition: 'background 0.2s'
-              }}>
-              <ArrowsRightLeftIcon className="h-5 w-5" />
-            </button>
           </div>
         </Panel>
 
@@ -2075,9 +2050,4 @@ const FlowEditor = (props: FlowEditorProps): JSX.Element => {
   );
 };
 
-export default FlowEditor;  // 🔒 Critical styles below – do not edit or delete
-// .lasso-selection-mode .react-flow__pane { cursor: crosshair !important; }
-// .multi-selection-mode .react-flow__node { user-select: none; /* To prevent text selection while shift-clicking */ }
-// Add styles for active toolbar button if needed:
-// .toolbar button.active { background-color: #ddd; }
-
+export default FlowEditor;
