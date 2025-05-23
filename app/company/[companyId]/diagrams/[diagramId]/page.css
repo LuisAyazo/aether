@@ -1,246 +1,28 @@
-/* 
- * Custom CSS for smoother diagram transitions
- */
-
-/* Add styles for transition between diagrams */
+/* Essential styles */
 .diagram-container {
-  transition: opacity 0.3s ease-in-out;
-}
-
-.diagram-container.loading {
-  opacity: 0.3;
-}
-
-.diagram-container.ready {
-  opacity: 1;
-}
-
-/* Style for the loading overlay */
-.loading-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 50;
-  background-color: rgba(255, 255, 255, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(2px);
-  transition: opacity 0.3s ease-in-out;
-}
-
-.loading-overlay.hidden {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Ensure the spinner is visible */
-.loading-spinner {
-  z-index: 51;
-}
-
-/* Sidebar styles */
-.react-flow__sidebar {
-  z-index: 1000 !important;
+  width: 100%;
+  height: 100%;
   position: relative;
 }
 
-.react-flow__sidebar .ant-collapse {
-  z-index: 1001 !important;
+.react-flow {
+  background-color: #ffd6e0 !important;
 }
 
-.react-flow__sidebar .ant-collapse-content {
-  z-index: 1002 !important;
-  position: relative;
+.react-flow__viewport {
+  background-color: #ffd6e0 !important;
 }
 
-.react-flow__sidebar .ant-collapse-item {
-  z-index: 1003 !important;
-  position: relative;
-}
-
-/* Ensure sidebar content is above other elements */
-.react-flow__sidebar .ant-collapse-content-box {
-  z-index: 1004 !important;
-  position: relative;
-  background: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* Refined transitions for ReactFlow elements */
-.react-flow__node {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  pointer-events: all !important;
-}
-
-/* AWS Nodes */
-.react-flow__node[data-provider="aws"] {
-  border: 2px solid #FF9900;
-  background-color: #FFF5E6;
-}
-
-.react-flow__node[data-provider="aws"].selected {
-  border: 2px solid #FF9900;
-  background-color: #FFF5E6;
-  box-shadow: 0 4px 12px rgba(255, 153, 0, 0.2);
-}
-
-/* GCP Nodes */
-.react-flow__node[data-provider="gcp"] {
-  border: 2px solid #4285F4;
-  background-color: #E8F0FE;
-}
-
-.react-flow__node[data-provider="gcp"].selected {
-  border: 2px solid #4285F4;
-  background-color: #E8F0FE;
-  box-shadow: 0 4px 12px rgba(66, 133, 244, 0.2);
-}
-
-/* Azure Nodes */
-.react-flow__node[data-provider="azure"] {
-  border: 2px solid #0078D4;
-  background-color: #E6F3FF;
-}
-
-.react-flow__node[data-provider="azure"].selected {
-  border: 2px solid #0078D4;
-  background-color: #E6F3FF;
-  box-shadow: 0 4px 12px rgba(0, 120, 212, 0.2);
-}
-
-/* Generic Nodes */
-.react-flow__node[data-provider="generic"] {
-  border: 2px solid #6B7280;
-  background-color: #F9FAFB;
-}
-
-.react-flow__node[data-provider="generic"].selected {
-  border: 2px solid #6B7280;
-  background-color: #F9FAFB;
-  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
-}
-
-/* Hover effects for all nodes */
-.react-flow__node:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* Selected state for all nodes */
-.react-flow__node.selected {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-/* Resizable nodes */
-.react-flow__node[data-resizable="true"] {
-  border-style: dashed;
-}
-
-/* Group nodes */
-.react-flow__node-group {
-  z-index: -1 !important; /* Asegura que los grupos estén por debajo */
-  background-color: rgba(255, 255, 255, 0.95) !important;
-  border: 2px solid !important;
-  border-radius: 8px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* AWS Groups */
-.react-flow__node-group[data-provider="aws"] {
-  border-color: #FF9900 !important;
-  background-color: rgba(255, 245, 230, 0.95) !important;
-}
-
-/* GCP Groups */
-.react-flow__node-group[data-provider="gcp"] {
-  border-color: #4285F4 !important;
-  background-color: rgba(232, 240, 254, 0.95) !important;
-}
-
-/* Azure Groups */
-.react-flow__node-group[data-provider="azure"] {
-  border-color: #0078D4 !important;
-  background-color: rgba(230, 243, 255, 0.95) !important;
-}
-
-/* Generic Groups */
-.react-flow__node-group[data-provider="generic"] {
-  border-color: #6B7280 !important;
-  background-color: rgba(249, 250, 251, 0.95) !important;
-}
-
-/* Area background */
-.react-flow__node[data-type="areaBackground"] {
-  background-color: rgba(243, 244, 246, 0.5);
-  border: none;
-  pointer-events: none;
-}
-
-/* Ensure proper rendering during transitions */
 .react-flow__renderer {
-  z-index: 20;
+  background-color: #ffd6e0 !important;
 }
 
-/* Ensure the sidebar panel is above other elements */
-.react-flow__sidebar-panel {
-  z-index: 1005 !important;
-  position: relative;
-  background: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-  overflow: visible !important;
+.react-flow__background {
+  background-color: #ffd6e0 !important;
 }
 
-/* Ensure the sidebar content is visible when expanded */
-.react-flow__sidebar-content {
-  z-index: 1006 !important;
-  position: relative;
-  overflow: visible !important;
-}
-
-/* Ensure the resource list is visible when expanded */
-.react-flow__resource-list {
-  z-index: 1007 !important;
-  position: relative;
-  overflow: visible !important;
-  background: white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-}
-
-/* Estilos para los puntos de conexión */
-.react-flow__handle {
-  width: 10px !important;
-  height: 10px !important;
-  background-color: #000 !important;
-  border: 2px solid #fff !important;
-  border-radius: 50% !important;
-  z-index: 1000 !important;
-}
-
-.react-flow__handle:hover {
-  background-color: #333 !important;
-  transform: scale(1.2) !important;
-}
-
-.react-flow__handle-left {
-  left: -5px !important;
-}
-
-.react-flow__handle-right {
-  right: -5px !important;
-}
-
-.react-flow__handle-top {
-  top: -5px !important;
-}
-
-.react-flow__handle-bottom {
-  bottom: -5px !important;
-}
-
-/* Eliminar estilos innecesarios */
-.react-flow__node * {
-  pointer-events: all !important;
+.react-flow__background-pattern {
+  stroke: #000000 !important;
+  stroke-width: 2 !important;
+  opacity: 0.9 !important;
 }

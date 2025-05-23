@@ -1,33 +1,40 @@
-import { useCallback, useState, useRef, useEffect, useMemo, JSX } from 'react';
-import ReactFlow, { 
-  Controls,
+import { 
+  Background, 
+  BackgroundVariant, 
+  Connection, 
+  ConnectionLineType, 
+  ConnectionMode, 
+  Controls, 
+  Edge, 
+  EdgeChange, 
+  EdgeTypes, 
   MiniMap, 
-  ReactFlowProvider,
-  Panel,
   Node, 
-  Edge,
-  useReactFlow,
-  NodeTypes,
-  EdgeTypes,
-  OnNodesChange,
-  OnEdgesChange,
-  OnConnect,
-  SelectionMode,
-  useOnSelectionChange,
-  ConnectionMode,
-  Viewport,
-  NodeChange,
+  NodeChange, 
+  NodeDragHandler,
   NodePositionChange,
-  useNodesState,
-  useEdgesState,
+  NodeTypes, 
+  OnConnect,
+  OnEdgesChange,
+  OnNodesChange,
+  Panel, 
   Position,
-  Background,
-  BackgroundVariant,
-  Connection,
+  ReactFlow, 
+  ReactFlowInstance, 
+  ReactFlowProvider, 
+  SelectionMode, 
+  Viewport,
   addEdge,
-  ReactFlowInstance
+  applyEdgeChanges, 
+  applyNodeChanges, 
+  useEdgesState, 
+  useNodesState, 
+  useOnSelectionChange,
+  useReactFlow 
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import './drag-fixes.css'; // Import the CSS file with drag optimization fixes
+import { useCallback, useEffect, useRef, useState, useMemo, JSX } from 'react';
 import { 
   CursorArrowRaysIcon, 
   Square2StackIcon, 
@@ -271,6 +278,13 @@ const FlowEditorContent = ({
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [selectionActive, setSelectionActive] = useState(false);
+  const [spaceBarPanMode, setSpaceBarPanMode] = useState(false);
+  
+  // Add a ref to store the last viewport state
+  const lastViewportRef = useRef<Viewport | null>(null);
+  
+  // Add a ref to track if we've initialized the viewport
+  const viewportInitializedRef = useRef(false);
   
   const [contextMenu, setContextMenu] = useState<ContextMenu>({
     visible: false,
@@ -279,7 +293,7 @@ const FlowEditorContent = ({
     nodeId: null,
     nodeType: null,
     isPane: false,
-    parentInfo: null // Added parentInfo to the initial state for consistency
+    parentInfo: null
   });
 
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
@@ -290,7 +304,7 @@ const FlowEditorContent = ({
     setSelectedEdge(edge);
   }, []);
 
-  const onEdgeDelete = useCallback((edgeToDelete: Edge) => { // Renamed edge to edgeToDelete
+  const onEdgeDelete = useCallback((edgeToDelete: Edge) => {
     console.log('Deleting edge:', edgeToDelete);
     onEdgesChange?.([{ id: edgeToDelete.id, type: 'remove' }]);
     setSelectedEdge(null);
@@ -302,48 +316,33 @@ const FlowEditorContent = ({
   }, []);
 
   const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node)=>{
-        event.preventDefault(); // This line prevents the default browser context menu.
-        const nodeData = node.data || {};
-        const resourceType = nodeData.resourceType || node.type;
-        const parentInfo = node.parentNode ? {
-            parentId: node.parentNode,
-            parentType: reactFlowInstance.getNode(node.parentNode)?.type
-        } : null;
-        
-        // This updates the state to show a custom context menu.
-        // The actual content of this menu depends on how the <CustomContextMenu /> (or similar) component
-        // is implemented and what options it renders based on the `contextMenu` state.
-        console.log(`Displaying custom context menu for node ${node.id}`);
-        setContextMenu({
-            visible: true,
-            x: event.clientX,
-            y: event.clientY,
-            nodeId: node.id,
-            nodeType: resourceType,
-            isPane: false,
-            parentInfo: parentInfo
-        });
-    }, [
-        reactFlowInstance,
-        // setContextMenu is stable and typically not needed in useCallback dependencies
-    ]);
+    event.preventDefault();
+    const nodeData = node.data || {};
+    const resourceType = nodeData.resourceType || node.type;
+    
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: node.id,
+      nodeType: resourceType,
+      isPane: false,
+      parentInfo: null
+    });
+  }, []);
 
   const handlePaneContextMenu = useCallback((event: React.MouseEvent)=>{
-        event.preventDefault(); // Prevents default browser context menu on the pane.
-        // This updates the state to show a custom context menu for the pane.
-        console.log(`Displaying custom context menu for pane`);
-        setContextMenu({
-            visible: true,
-            x: event.clientX,
-            y: event.clientY,
-            nodeId: null,
-            nodeType: null,
-            isPane: true,
-            parentInfo: null
-        });
-    }, [
-        // setContextMenu is stable and typically not needed in useCallback dependencies
-    ]);
+    event.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: null,
+      nodeType: null,
+      isPane: true,
+      parentInfo: null
+    });
+  }, []);
 
   // 🔒 Critical code below – do not edit or delete
   useEffect(() => {
@@ -697,7 +696,7 @@ const FlowEditorContent = ({
   }, [selectedNodes, reactFlowInstance]);
 
   const handleToolClick = useCallback((tool: ToolType) => {
-    if (tool === activeTool && tool !== 'lasso') return; // Allow re-clicking lasso to toggle
+    if (tool === activeTool && tool !== 'lasso') return;
     
     setSelectionActive(false);
     document.body.classList.remove('lasso-selection-mode');
@@ -708,38 +707,112 @@ const FlowEditorContent = ({
       reactFlowInstance.setNodes(nodes => nodes.map(node => ({ ...node, selected: false, selectable: true })));
     }
     
-    let shouldSwitchBackToSelect = false;
-    switch(tool) {
-      case 'createGroup': createEmptyGroup(); shouldSwitchBackToSelect = true; break;
-      case 'group': groupSelectedNodes(); shouldSwitchBackToSelect = true; break;
-      case 'ungroup': ungroupNodes(); shouldSwitchBackToSelect = true; break;
-    }
-    setActiveTool(shouldSwitchBackToSelect ? 'select' : tool);
-  }, [activeTool, createEmptyGroup, groupSelectedNodes, ungroupNodes, reactFlowInstance]);
+    setActiveTool(tool);
+  }, [activeTool, reactFlowInstance]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.shiftKey && event.key === 'S') { // Changed to uppercase 'S' for consistency
+      // Ignore key events when user is typing in inputs or textareas
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      // Handle spacebar for pan mode
+      if (event.key === ' ' && !spaceBarPanMode) {
+        event.preventDefault();
+        setSpaceBarPanMode(true);
+        const pane = document.querySelector('.react-flow__pane') as HTMLElement | null;
+        if (pane) {
+          pane.classList.add('space-bar-pan-mode');
+          // Add event listeners for dragging state
+          const handleMouseDown = () => {
+            pane.classList.add('dragging');
+            document.body.style.cursor = 'grabbing';
+          };
+          const handleMouseUp = () => {
+            pane.classList.remove('dragging');
+            document.body.style.cursor = '';
+          };
+          pane.addEventListener('mousedown', handleMouseDown);
+          document.addEventListener('mouseup', handleMouseUp);
+          // Store handlers for cleanup
+          (pane as any)._mouseDownHandler = handleMouseDown;
+          (pane as any)._mouseUpHandler = handleMouseUp;
+        }
+      }
+      
+      // Handle shift key for multiple selection
+      if (event.shiftKey && event.key === 'S') { // Shift+S for lasso selection
         event.preventDefault(); // Prevent default browser search on Shift+S
         handleToolClick('lasso');
+      }        // Handle escape key to exit special modes
+      if (event.key === 'Escape') {
+        if (activeTool === 'lasso') {
+          handleToolClick('select');
+        }
+        if (spaceBarPanMode) {
+          setSpaceBarPanMode(false);
+          const pane = document.querySelector('.react-flow__pane');
+          if (pane) {
+            pane.classList.remove('space-bar-pan-mode');
+            pane.classList.remove('dragging');
+            document.body.style.cursor = '';
+          }
+        }
       }
-      if (event.key === 'Escape' && activeTool === 'lasso') {
-        handleToolClick('select');
+      
+      // For multi-selection with shift key
+      if (event.shiftKey) {
+        document.body.classList.add('multi-selection-mode');
       }
-      if (event.shiftKey) document.body.classList.add('multi-selection-mode');
     };
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') document.body.classList.remove('multi-selection-mode');
+      // Release spacebar to exit pan mode
+      if (event.key === ' ' && spaceBarPanMode) {
+        setSpaceBarPanMode(false);
+        const pane = document.querySelector('.react-flow__pane') as HTMLElement | null;
+        if (pane) {
+          pane.classList.remove('space-bar-pan-mode');
+          pane.classList.remove('dragging');
+          document.body.style.cursor = '';
+          // Remove event listeners
+          const down = (pane as any)._mouseDownHandler;
+          const up = (pane as any)._mouseUpHandler;
+          if (down) pane.removeEventListener('mousedown', down);
+          if (up) document.removeEventListener('mouseup', up);
+          delete (pane as any)._mouseDownHandler;
+          delete (pane as any)._mouseUpHandler;
+        }
+      }
+      
+      // Release shift key for multi-selection
+      if (event.key === 'Shift') {
+        document.body.classList.remove('multi-selection-mode');
+      }
     };
+    
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       document.body.classList.remove('multi-selection-mode');
-      document.body.classList.remove('lasso-selection-mode'); // Ensure cleanup
+      document.body.classList.remove('lasso-selection-mode');
+      // Ensure space-bar-pan-mode and dragging class are removed on cleanup
+      const pane = document.querySelector('.react-flow__pane') as HTMLElement | null;
+      if (pane) {
+        pane.classList.remove('space-bar-pan-mode');
+        pane.classList.remove('dragging');
+        document.body.style.cursor = '';
+        const down = (pane as any)._mouseDownHandler;
+        const up = (pane as any)._mouseUpHandler;
+        if (down) pane.removeEventListener('mousedown', down);
+        if (up) document.removeEventListener('mouseup', up);
+        delete (pane as any)._mouseDownHandler;
+        delete (pane as any)._mouseUpHandler;
+      }
     };
-  }, [activeTool, handleToolClick]);
+  }, [activeTool, handleToolClick, spaceBarPanMode, reactFlowInstance]);
 
   const isInsideGroup = (position: { x: number, y: number }, group: Node) => {
     if (group.data?.isMinimized) return false; // No permitir drop en grupos minimizados
@@ -870,10 +943,32 @@ const FlowEditorContent = ({
     if (!reactFlowBounds || !reactFlowInstance) return;
 
     try {
+      // Create a deep copy of the current viewport to prevent reference issues
+      const currentViewport = { ...reactFlowInstance.getViewport() };
+      
+      // Store the exact zoom level - this is critical for high zoom levels
+      // Use the raw value from the viewport to ensure maximum precision
+      const exactZoom = currentViewport.zoom;
+      
+      // If the zoom is at or very close to the maximum (2.0), ensure we use the exact maximum value
+      // This prevents any small floating-point precision issues
+      const MAX_ZOOM = 2.0;
+      const PRECISION_THRESHOLD = 0.01; // Reduced threshold for more accurate max zoom detection
+      const isMaxZoom = Math.abs(exactZoom - MAX_ZOOM) < PRECISION_THRESHOLD;
+      const correctedZoom = isMaxZoom ? MAX_ZOOM : exactZoom;
+      
+      // Store pan position for consistent restoration
+      const panPosition = {
+        x: currentViewport.x,
+        y: currentViewport.y
+      };
+      
       const dataStr = event.dataTransfer.getData('application/reactflow');
       if (!dataStr) return;
       
       const transferredData = JSON.parse(dataStr) as ResourceItem;
+      
+      // Use screenToFlowPosition to get the precise position in flow coordinates
       const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY
@@ -882,7 +977,7 @@ const FlowEditorContent = ({
       const newNode: Node = {
         id: `${transferredData.type}-${Date.now()}`,
         type: transferredData.type,
-        position,
+        position: { ...position }, // Create a copy to avoid reference issues
         data: { 
           label: transferredData.name,
           description: transferredData.description,
@@ -902,8 +997,8 @@ const FlowEditorContent = ({
       if (groupNode) {
         const parentGroup = reactFlowInstance.getNode(groupNode.id);
         if (parentGroup) {
-          // Calculate the position relative to the group
-          const groupPosition = parentGroup.position;
+          // Calculate the position relative to the group with precise math
+          const groupPosition = { ...parentGroup.position };
           const relativePosition = {
             x: position.x - groupPosition.x,
             y: position.y - groupPosition.y
@@ -928,17 +1023,35 @@ const FlowEditorContent = ({
             y: Math.max(minY, Math.min(maxY, relativePosition.y))
           };
 
-          // Update the node's position and parent
-          newNode.position = {
-            x: groupPosition.x + clampedPosition.x,
-            y: groupPosition.y + clampedPosition.y
-          };
+          // Update the node's position and parent - use a new object to avoid mutations
+          newNode.position = { ...clampedPosition };
           newNode.parentNode = groupNode.id;
           newNode.extent = 'parent' as const;
         }
       }
 
-      // Add the new node
+      // Improved viewport restoration function to maintain exact zoom level
+      const restoreViewport = () => {
+        // Use the stored pan position and corrected zoom for precise restoration
+        const viewportToRestore = {
+          x: panPosition.x,
+          y: panPosition.y,
+          zoom: correctedZoom // Use the corrected zoom value for maximum precision
+        };
+        
+        // Apply the viewport restoration directly
+        reactFlowInstance.setViewport(viewportToRestore);
+          
+        // Update the lastViewportRef for consistency
+        if (lastViewportRef) {
+          lastViewportRef.current = { ...viewportToRestore };
+        }
+      };
+      
+      // Apply initial viewport to prevent any immediate zoom changes
+      restoreViewport();
+      
+      // Add the new node to the flow
       const updatedNodes = [...reactFlowInstance.getNodes(), newNode];
       setNodes(updatedNodes);
       
@@ -946,20 +1059,56 @@ const FlowEditorContent = ({
       if (onNodesChange) {
         onNodesChange([{ type: 'add', item: newNode }]);
       }
-
-      // If added to a group, optimize the layout
+      
+      // Apply second restoration immediately after node is added
+      restoreViewport();
+      
+      // If node is added to a group, optimize the group layout first
       if (newNode.parentNode) {
+        // Execute optimization after the next render cycle
         setTimeout(() => {
           optimizeNodesInGroup(newNode.parentNode!);
-        }, 50);
+          
+          // Force multiple viewport restorations with different timings
+          // to catch all potential zoom reset points
+          restoreViewport();
+          
+          // Add high-priority restorations after optimization
+          requestAnimationFrame(() => {
+            restoreViewport();
+            
+            // One more restoration after a short delay
+            setTimeout(restoreViewport, 10);
+          });
+        }, 0);
+      } else {
+        // For nodes not in groups, add a sequence of timed restorations
+        // to ensure the viewport is maintained at critical points
+        setTimeout(() => {
+          restoreViewport();
+          
+          requestAnimationFrame(() => {
+            restoreViewport();
+            
+            // One final restoration after a slight delay
+            setTimeout(restoreViewport, 10);
+          });
+        }, 0);
       }
 
-      // Si hay un diagramId, guardar los cambios
+      // If there's a diagramId, save the changes with the preserved viewport
       if (diagramId && onSave) {
+        // Create a fresh viewport object for saving
+        const viewportForSave = {
+          x: panPosition.x,
+          y: panPosition.y,
+          zoom: correctedZoom // Use the corrected zoom to ensure the saved state is accurate
+        };
+        
         onSave({
           nodes: updatedNodes,
           edges: reactFlowInstance.getEdges(),
-          viewport: reactFlowInstance.getViewport()
+          viewport: viewportForSave
         });
       }
 
@@ -1174,15 +1323,6 @@ const FlowEditorContent = ({
     return counts;
   }, [nodes]);
 
-  // Add a ref to track if we're currently updating the diagram
-  const isUpdatingRef = useRef(false);
-  
-  // Add a ref to store the last viewport state
-  const lastViewportRef = useRef<Viewport | null>(null);
-  
-  // Add a ref to track if we've initialized the viewport
-  const viewportInitializedRef = useRef(false);
-
   // Modify the viewport initialization effect
   useEffect(() => {
     if (!reactFlowInstance || !nodes.length) return;
@@ -1353,28 +1493,10 @@ const FlowEditorContent = ({
             <span className="text-sm text-gray-600">{getResourceCounts().generic}</span>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
-          {/* Aquí van los botones existentes */}
-        </div>
       </div>
       <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
         <ReactFlow
-          nodes={propNodes?.sort((a, b) => {
-            if (a.type === 'group') return -1;
-            if (b.type === 'group') return 1;
-            return 0;
-          }).map(node => 
-            node.id === highlightedGroupId ? 
-            { 
-              ...node, 
-              style: { 
-                ...node.style, 
-                boxShadow: '0 0 0 2px #4f8df6', 
-                borderColor: '#4f8df6',
-                backgroundColor: 'rgba(79, 141, 246, 0.05)'
-              } 
-            } : node
-          )}
+          nodes={propNodes}
           edges={propEdges}
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
@@ -1388,12 +1510,20 @@ const FlowEditorContent = ({
           elementsSelectable={true}
           nodesDraggable={true}
           nodesConnectable={true}
-          panOnDrag={true}
+          panOnDrag={spaceBarPanMode}
+          panOnScroll={false}
           zoomOnScroll={false}
           zoomOnPinch={false}
           zoomOnDoubleClick={false}
           preventScrolling={true}
-          style={{ width: '100%', height: '100%' }}
+          selectionOnDrag={true}
+          selectionMode={SelectionMode.Full}
+          multiSelectionKeyCode={['Shift']}
+          selectionKeyCode={null}
+          style={{ 
+            width: '100%', 
+            height: '100%'
+          }}
           onDrop={onDrop}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
@@ -1401,45 +1531,20 @@ const FlowEditorContent = ({
           minZoom={0.1}
           maxZoom={2}
           deleteKeyCode={[]}
-          multiSelectionKeyCode={[]}
-          selectionKeyCode={[]}
-          selectionOnDrag={false}
-          selectionMode={SelectionMode.Full}
           noDragClassName="nodrag"
           noWheelClassName="nowheel"
           noPanClassName="nopan"
-          onNodeDoubleClick={(_event, node) => {
-            // Solo abrir el panel si no es un grupo
-            if (node.type !== 'group') {
-              const customEvent = new CustomEvent('openIaCPanel', {
-                detail: {
-                  nodeId: node.id,
-                  resourceData: {
-                    label: node.data.label,
-                    provider: node.data.provider,
-                    resourceType: node.data.resourceType
-                  }
-                }
-              });
-              window.dispatchEvent(customEvent);
-              document.dispatchEvent(customEvent);
-            }
-          }}
         >
           <Background 
             variant={BackgroundVariant.Lines} 
             gap={50} 
             size={2}
-            color="#ff0000"
-            style={{ opacity: 0.8 }}
+            color="#000000"
           />
           <MiniMap />
           <Controls 
             position="bottom-left"
             style={{ bottom: 10, left: 10 }}
-            onZoomIn={() => reactFlowInstance?.zoomIn({ duration: 300 })}
-            onZoomOut={() => reactFlowInstance?.zoomOut({ duration: 300 })}
-            // onFitView={() => reactFlowInstance?.fitView({ duration: 500 })}
           />
           
           {contextMenu.visible && (
@@ -1450,7 +1555,7 @@ const FlowEditorContent = ({
                 padding: '0px', borderRadius: '8px', boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
                 display: 'flex', flexDirection: 'column', gap: '0px',
                 minWidth: '180px', overflow: 'hidden',
-                transform: 'translate(8px, 8px)' // Offset slightly from cursor position for better visibility
+                transform: 'translate(8px, 8px)'
               }}
               onClick={(e) => e.stopPropagation()} 
               onContextMenu={(e) => e.preventDefault()} 
@@ -1478,369 +1583,56 @@ const FlowEditorContent = ({
               <div>
                 {!contextMenu.isPane && contextMenu.nodeId && (
                   <>
-                    {contextMenu.nodeType === 'group' && (
-                      <>
-                        <button 
-                          onClick={() => {
-                            // Implement expand/collapse children logic
-                            const groupNode = reactFlowInstance.getNode(contextMenu.nodeId!);
-                            if (groupNode) {
-                              const isCurrentlyCollapsed = groupNode.data.isCollapsed;
-                              reactFlowInstance.setNodes(nodes => nodes.map(n => 
-                                n.id === contextMenu.nodeId 
-                                  ? { ...n, data: { ...n.data, isCollapsed: !isCurrentlyCollapsed } } 
-                                  : n
-                              ));
-                            }
-                            setContextMenu(prev => ({...prev, visible: false}));
-                          }}
-                          style={{ 
-                            display: 'block', width: '100%', textAlign: 'left', 
-                            padding: '10px 12px', cursor: 'pointer', 
-                            border: 'none', borderBottom: '1px solid #eee', 
-                            background: 'white', fontSize: '13px',
-                            color: '#333', transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                        >
-                          {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.isCollapsed ? '↓ Expand Children' : '↑ Collapse Children'}
-                        </button>
-                        <button 
-                          onClick={() => {
-                            // Implement minimize/restore group logic
-                            const groupNode = reactFlowInstance.getNode(contextMenu.nodeId!);
-                            if (groupNode) {
-                              const isCurrentlyMinimized = groupNode.data.isMinimized;
-                              reactFlowInstance.setNodes(nodes => nodes.map(n => 
-                                n.id === contextMenu.nodeId 
-                                  ? { ...n, data: { ...n.data, isMinimized: !isCurrentlyMinimized, isCollapsed: !isCurrentlyMinimized ? true : n.data.isCollapsed } } 
-                                  : n
-                              ));
-                            }
-                            setContextMenu(prev => ({...prev, visible: false}));
-                          }}
-                          style={{ 
-                            display: 'block', width: '100%', textAlign: 'left', 
-                            padding: '10px 12px', cursor: 'pointer', 
-                            border: 'none', borderBottom: '1px solid #eee', 
-                            background: 'white', fontSize: '13px',
-                            color: '#333', transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                        >
-                          {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.isMinimized ? '□ Restore Group' : '― Minimize Group'}
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const groupNode = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                            if (groupNode) {
-                              startEditingGroupName(contextMenu.nodeId || '', groupNode.data.label || 'Group');
-                              // Context menu will be closed by saveGroupName or if editing is cancelled
-                            }
-                          }}
-                          style={{ 
-                            display: 'block', width: '100%', textAlign: 'left', 
-                            padding: '10px 12px', cursor: 'pointer', 
-                            border: 'none', borderBottom: '1px solid #eee', 
-                            background: 'white', fontSize: '13px',
-                            color: '#333', transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                        >
-                          ✎ Edit Group Name
-                        </button>
-                        <button 
-                          onClick={() => {
-                            // Crear un menú de nodos según el proveedor del grupo
-                            const groupNode = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                            if (groupNode) {
-                              // Determinar el proveedor del grupo actual
-                              const provider = groupNode.data?.provider || 'generic';
-                              
-                              // Posicionar el nuevo nodo dentro del grupo
-                              const position = { x: 30, y: 60 };
-                              
-                              // Crear un diálogo con los recursos disponibles
-                              setContextMenu(prev => ({...prev, visible: false}));
-                              
-                              // Mostrar un nuevo elemento de selección avanzada
-                              const nodesSelectionDiv = document.createElement('div');
-                              nodesSelectionDiv.id = 'node-selection-dialog';
-                              nodesSelectionDiv.style.position = 'fixed';
-                              nodesSelectionDiv.style.left = '50%';
-                              nodesSelectionDiv.style.top = '50%';
-                              nodesSelectionDiv.style.transform = 'translate(-50%, -50%)';
-                              nodesSelectionDiv.style.background = 'white';
-                              nodesSelectionDiv.style.padding = '20px';
-                              nodesSelectionDiv.style.borderRadius = '8px';
-                              nodesSelectionDiv.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
-                              nodesSelectionDiv.style.zIndex = '2000';
-                              nodesSelectionDiv.style.minWidth = '350px';
-                              nodesSelectionDiv.style.maxWidth = '500px';
-                              nodesSelectionDiv.style.maxHeight = '80vh';
-                              nodesSelectionDiv.style.overflow = 'auto';
-                              
-                              // Título y contenido
-                              nodesSelectionDiv.innerHTML = `
-                                <h4 style="margin: 0 0 15px 0; font-size: 16px; font-weight: bold;">Seleccionar Tipo de Nodo</h4>
-                                <div id="node-types-container" style="max-height: 400px; overflow-y: auto;"></div>
-                                <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px;">
-                                  <button id="cancel-selection" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 4px; background: #f5f5f5; font-size: 14px; cursor: pointer;">
-                                    Cancelar
-                                  </button>
-                                </div>
-                              `;
-                              document.body.appendChild(nodesSelectionDiv);
-                              
-                              // Cerrar al hacer clic en Cancelar
-                              document.getElementById('cancel-selection')?.addEventListener('click', () => {
-                                document.body.removeChild(nodesSelectionDiv);
-                              });
-                              
-                              // Agregamos las opciones de nodos según el proveedor
-                              const nodeTypesContainer = document.getElementById('node-types-container');
-                              if (nodeTypesContainer) {
-                                // Filtrar categorías por proveedor
-                                const matchingCategories = resourceCategories.filter(
-                                  category => category.provider === provider
-                                );
-                                
-                                if (matchingCategories.length > 0) {
-                                  let html = '';
-                                  matchingCategories.forEach(category => {
-                                    html += `<div style="margin-bottom: 10px;">
-                                      <div style="font-weight: bold; padding: 5px 0; border-bottom: 1px solid #eee;">
-                                        ${category.name}
-                                      </div>
-                                      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px;">`;
-                                    
-                                    category.items.forEach(item => {
-                                      html += `<div class="node-type-option" data-type="${item.type}" data-name="${item.name}" 
-                                      data-description="${item.description || ''}" data-provider="${item.provider}"
-                                      style="padding: 8px 10px; border: 1px solid #eee; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                                        <div style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: #999;">•</div>
-                                        <span>${item.name}</span>
-                                      </div>`;
-                                    });
-                                    
-                                    html += `</div></div>`;
-                                  });
-                                  
-                                  nodeTypesContainer.innerHTML = html;
-                                  
-                                  // Agregar eventos a las opciones
-                                  document.querySelectorAll('.node-type-option').forEach(element => {
-                                    element.addEventListener('mouseover', (e) => {
-                                      (e.currentTarget as HTMLElement).style.backgroundColor = '#f0f7ff';
-                                    });
-                                    
-                                    element.addEventListener('mouseout', (e) => {
-                                      (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                                    });
-                                    
-                                    element.addEventListener('click', (e) => {
-                                      const target = e.currentTarget as HTMLElement;
-                                      const nodeType = target.dataset.type || '';
-                                      const nodeName = target.dataset.name || '';
-                                      const nodeDescription = target.dataset.description || '';
-                                      const nodeProvider = target.dataset.provider as 'aws' | 'gcp' | 'azure' | 'generic';
-                                      
-                                      // Crear el nodo del tipo seleccionado
-                                      const timestamp = Date.now();
-                                      const newNodeId = `${nodeType}-${timestamp}`;
-                                      
-                                      const newNode: Node = {
-                                        id: newNodeId,
-                                        type: nodeType,
-                                        position,
-                                        data: { 
-                                          label: nodeName,
-                                          description: nodeDescription,
-                                          provider: nodeProvider,
-                                          isCollapsed: true
-                                        },
-                                        parentNode: contextMenu.nodeId || undefined,
-                                        extent: 'parent' as const,
-                                        draggable: true,
-                                        selectable: true,
-                                      };
-                                      
-                                      onNodesChange?.([{ type: 'add', item: newNode }]);
-                                      setTimeout(() => optimizeNodesInGroup(contextMenu.nodeId || ''), 50);
-                                      
-                                      // Quitar el diálogo
-                                      document.body.removeChild(nodesSelectionDiv);
-                                    });
-                                  });
-                                } else {
-                                  nodeTypesContainer.innerHTML = '<p>No hay tipos de nodos disponibles para este proveedor.</p>';
-                                }
+                    <button 
+                      onClick={() => {
+                        const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                        if (node) {
+                          const event = new CustomEvent('openIaCPanel', {
+                            detail: {
+                              nodeId: node.id,
+                              resourceData: {
+                                label: node.data.label,
+                                provider: node.data.provider,
+                                resourceType: node.data.resourceType
                               }
                             }
-                          }}
-                          style={{ 
-                            display: 'block', width: '100%', textAlign: 'left', 
-                            padding: '10px 12px', cursor: 'pointer', 
-                            border: 'none', borderBottom: '1px solid #eee', 
-                            background: 'white', fontSize: '13px',
-                            color: '#333', transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                        >
-                          ➕ Agregar Nodo
-                        </button>
-                        <button 
-                          onClick={() => {
-                            if (contextMenu.nodeId) {
-                              // 🔒 Critical code below – do not edit or delete
-                            // Check for child nodes before deleting
-                              const childNodes = reactFlowInstance.getNodes().filter(n => n.parentNode === contextMenu.nodeId);
-                              
-                              if (childNodes.length > 0) {
-                                // Move child nodes out of the group before deleting it
-                                const groupNode = reactFlowInstance.getNode(contextMenu.nodeId);
-                                if (groupNode) {
-                                  // First update all child nodes to remove them from the group
-                                  reactFlowInstance.setNodes(nodes => 
-                                    nodes.map(node => {
-                                      if (node.parentNode === contextMenu.nodeId) {
-                                        return {
-                                          ...node,
-                                          parentNode: undefined, 
-                                          extent: undefined,
-                                          // Adjust position to be in the global space
-                                          position: {
-                                            x: groupNode.position.x + node.position.x,
-                                            y: groupNode.position.y + node.position.y
-                                          }
-                                        };
-                                      }
-                                      return node;
-                                    })
-                                  );
-                                  
-                                  // Then after a small delay to ensure state updates, remove the group
-                                  setTimeout(() => {
-                                    onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId! }]);
-                                  }, 50);
-                                }
-                              } else {
-                                // No children, just delete the group
-                                onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
-                              }
-                            }
-                            setContextMenu(prev => ({...prev, visible: false}));
-                          }}
-                          style={{ 
-                            display: 'block', width: '100%', textAlign: 'left', 
-                            padding: '10px 12px', cursor: 'pointer', 
-                            border: 'none', 
-                            background: 'white', fontSize: '13px',
-                            color: '#ff3333', transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                        >
-                          🗑 Delete Group
-                        </button>
-                      </>
-                    )}
-                    {contextMenu.nodeType !== 'group' && (
-                      <>
-                        {/* Opción para quitar del grupo cuando está dentro de un grupo */}
-                        {reactFlowInstance.getNode(contextMenu.nodeId || '')?.parentNode && (
-                          <button 
-                            onClick={() => {
-                              const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                              const parentGroup = node?.parentNode ? reactFlowInstance.getNode(node.parentNode) : undefined;
-                              
-                              if (node && parentGroup) {
-                                // Calcular la nueva posición fuera del grupo
-                                const newPosition = {
-                                  x: parentGroup.position.x + node.position.x,
-                                  y: parentGroup.position.y + node.position.y
-                                };
-                                
-                                // Actualizar el nodo para quitarlo del grupo
-                                reactFlowInstance.setNodes(nodes => 
-                                  nodes.map(n => 
-                                    n.id === contextMenu.nodeId 
-                                      ? { ...n, parentNode: undefined, extent: undefined, position: newPosition } 
-                                      : n
-                                  )
-                                );
-                              }
-                              setContextMenu(prev => ({...prev, visible: false}));
-                            }}
-                            style={{ 
-                              display: 'block', width: '100%', textAlign: 'left', 
-                              padding: '10px 12px', cursor: 'pointer', 
-                              border: 'none', borderBottom: '1px solid #eee',
-                              background: 'white', fontSize: '13px',
-                              color: '#333', transition: 'background-color 0.2s'
-                            }}
-                            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                          >
-                            🔓 Quitar del grupo
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => {
-                            const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                            if (node) {
-                              const event = new CustomEvent('openIaCPanel', {
-                                detail: {
-                                  nodeId: node.id,
-                                  resourceData: {
-                                    label: node.data.label,
-                                    provider: node.data.provider,
-                                    resourceType: node.data.resourceType
-                                  }
-                                }
-                              });
-                              window.dispatchEvent(event);
-                              document.dispatchEvent(event);
-                            }
-                            setContextMenu(prev => ({...prev, visible: false}));
-                          }}
-                          style={{ 
-                            display: 'block', width: '100%', textAlign: 'left', 
-                            padding: '10px 12px', cursor: 'pointer', 
-                            border: 'none', borderBottom: '1px solid #eee',
-                            background: 'white', fontSize: '13px',
-                            color: '#333', transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                        >
-                          ⚙️ Configuración
-                        </button>
-                        <button 
-                          onClick={() => {
-                            if (contextMenu.nodeId) {
-                              onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
-                            }
-                            setContextMenu(prev => ({...prev, visible: false}));
-                          }}
-                          style={{ 
-                            display: 'block', width: '100%', textAlign: 'left', 
-                            padding: '10px 12px', cursor: 'pointer', 
-                            border: 'none',
-                            background: 'white', fontSize: '13px',
-                            color: '#ff3333', transition: 'background-color 0.2s'
-                          }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                        >
-                          🗑 Delete Node
-                        </button>
-                      </>
-                    )}
+                          });
+                          window.dispatchEvent(event);
+                          document.dispatchEvent(event);
+                        }
+                        setContextMenu(prev => ({...prev, visible: false}));
+                      }}
+                      style={{ 
+                        display: 'block', width: '100%', textAlign: 'left', 
+                        padding: '10px 12px', cursor: 'pointer', 
+                        border: 'none', borderBottom: '1px solid #eee',
+                        background: 'white', fontSize: '13px',
+                        color: '#333', transition: 'background-color 0.2s'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                    >
+                      ⚙️ Configuración
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (contextMenu.nodeId) {
+                          onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
+                        }
+                        setContextMenu(prev => ({...prev, visible: false}));
+                      }}
+                      style={{ 
+                        display: 'block', width: '100%', textAlign: 'left', 
+                        padding: '10px 12px', cursor: 'pointer', 
+                        border: 'none',
+                        background: 'white', fontSize: '13px',
+                        color: '#ff3333', transition: 'background-color 0.2s'
+                      }}
+                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
+                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                    >
+                      🗑 Delete Node
+                    </button>
                   </>
                 )}
                 {contextMenu.isPane && (
@@ -1861,102 +1653,11 @@ const FlowEditorContent = ({
                   >
                     📚 Show Resources Panel
                   </button>
-                  // Puedes añadir más opciones para el panel aquí
                 )}
               </div>
             </div>
           )}
-          {editingGroup && (
-            <div style={{
-              position: 'fixed', 
-              left: '50%', 
-              top: '50%', 
-              transform: 'translate(-50%, -50%)', 
-              background: 'white', 
-              padding: '20px', 
-              borderRadius: '8px', 
-              boxShadow: '0 4px 15px rgba(0,0,0,0.2)', 
-              zIndex: 2000,
-              minWidth: '300px'
-            }}>
-              <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Edit Group Name</h4>
-              <input 
-                type="text" 
-                defaultValue={editingGroup.label}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    saveGroupName((e.target as HTMLInputElement).value);
-                  }
-                  if (e.key === 'Escape') {
-                    setEditingGroup(null);
-                    setContextMenu(prev => ({...prev, visible: false})); 
-                  }
-                }}
-                autoFocus
-                style={{
-                  padding: '10px', 
-                  margin: '8px 0 15px', 
-                  width: '100%', 
-                  boxSizing: 'border-box',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px'
-                }}
-              />
-              <div style={{display: 'flex', justifyContent: 'flex-end', gap: '10px'}}>
-                <button 
-                  onClick={() => {
-                    setEditingGroup(null);
-                    setContextMenu(prev => ({...prev, visible: false})); 
-                  }}
-                  style={{
-                    padding: '8px 16px',
-                    border: '1px solid #ddd',
-                    borderRadius: '4px',
-                    background: '#f5f5f5',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={() => saveGroupName((document.querySelector('input[type="text"]') as HTMLInputElement).value)} 
-                  style={{
-                    padding: '8px 16px',
-                    border: 'none',
-                    borderRadius: '4px',
-                    background: '#4f8df6',
-                    color: 'white',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          )}
           {selectedEdge && <EdgeDeleteButton edge={selectedEdge} onEdgeDelete={onEdgeDelete} />}
-
-          {selectionMenu.visible && (
-            <div
-              ref={selectionMenuRef}
-              style={{
-                position: 'fixed', left: `${selectionMenu.x}px`, top: `${selectionMenu.y}px`,
-                transform: 'translateX(-50%)', background: 'rgba(255, 255, 255, 0.95)',
-                padding: '8px 12px', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                zIndex: 1001, display: 'flex', gap: '8px', alignItems: 'center'
-              }}
-            >
-              <button onClick={groupSelectedNodes} title="Group selected nodes (Ctrl+G)">
-                <Square3Stack3DIcon className="h-5 w-5" />
-              </button>
-              <button onClick={ungroupNodes} title="Ungroup selected nodes (Ctrl+Shift+G)">
-                <Square2StackIcon className="h-5 w-5" />
-              </button>
-            </div>
-          )}
 
           <Panel position="top-left">
             <div style={{ display: 'flex', gap: '8px', padding: '10px', background: 'rgba(255,255,255,0.9)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
@@ -1995,60 +1696,6 @@ const FlowEditorContent = ({
                   transition: 'background 0.2s'
                 }}>
                 <SwatchIcon className="h-5 w-5" />
-              </button>
-              <button 
-                onClick={() => handleToolClick('createGroup')} 
-                title="Create Empty Group" 
-                style={{
-                  background: activeTool === 'createGroup' ? '#f0f7ff' : 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: '0',
-                  transition: 'background 0.2s'
-                }}>
-                <FolderPlusIcon className="h-5 w-5" />
-              </button>
-              <button 
-                onClick={() => handleToolClick('group')} 
-                title="Group Selected (Ctrl+G)" 
-                style={{
-                  background: activeTool === 'group' ? '#f0f7ff' : 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: '0',
-                  transition: 'background 0.2s'
-                }}>
-                <Square3Stack3DIcon className="h-5 w-5" />
-              </button>
-              <button 
-                onClick={() => handleToolClick('ungroup')} 
-                title="Ungroup Selected (Ctrl+Shift+G)" 
-                style={{
-                  background: activeTool === 'ungroup' ? '#f0f7ff' : 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: '0',
-                  transition: 'background 0.2s'
-                }}>
-                <FolderMinusIcon className="h-5 w-5" />
               </button>
             </div>
           </Panel>
@@ -2170,7 +1817,7 @@ const FlowEditorContent = ({
                       style={{ 
                         cursor: 'pointer', 
                         margin: 0, 
-                        padding: '10px 16px', // Reducido el padding vertical
+                        padding: '10px 16px',
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
@@ -2200,7 +1847,7 @@ const FlowEditorContent = ({
                         maxHeight: 'none',
                         overflowY: 'visible',
                         position: 'relative',
-                        zIndex: 10001 // Aumentado significativamente
+                        zIndex: 10001
                       }}>
                         {category.items.map(item => (
                           <li
@@ -2208,7 +1855,7 @@ const FlowEditorContent = ({
                             draggable
                             onDragStart={(e) => onDragStartSidebar(e, item)}
                             style={{ 
-                              padding: '6px 16px', // Reducido el padding vertical
+                              padding: '6px 16px',
                               margin: '0', 
                               cursor: 'grab',
                               display: 'flex',

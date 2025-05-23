@@ -1,7 +1,3 @@
-import NodeGroup from './NodeGroup';
-
-// Para los otros tipos de nodos, vamos a crear componentes simples directamente aquí
-// Podemos mover estos a archivos independientes más adelante
 import { NodeProps } from 'reactflow';
 import { 
   ServerIcon, 
@@ -245,7 +241,6 @@ const nodeTypes = {
   
   // Generic nodes
   generic: GenericNode,
-  group: NodeGroup,
   
   // Azure nodes
   vm: AzureVMNode,
