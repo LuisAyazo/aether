@@ -33,7 +33,6 @@ import {
   useReactFlow 
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import './drag-fixes.css'; // Import the CSS file with drag optimization fixes
 import { useCallback, useEffect, useRef, useState, useMemo, JSX } from 'react';
 import { 
   CursorArrowRaysIcon, 
@@ -1538,16 +1537,18 @@ const FlowEditorContent = ({
           <Background 
             id="1"
             gap={10}
-            color="#ffffff"
-            variant={BackgroundVariant.Lines}
-            style={{ opacity: 0.5 }}
+            color="#000000"
+            variant={BackgroundVariant.Dots}
+            size={1.2}
+            style={{ opacity: 0.25 }}
           />
           <Background 
             id="2"
             gap={100}
-            color="#ffffff"
-            variant={BackgroundVariant.Lines}
-            style={{ opacity: 0.7 }}
+            color="#000000"
+            variant={BackgroundVariant.Dots}
+            size={1.2}
+            style={{ opacity: 0.25 }}
           />
           <MiniMap />
           <Controls 

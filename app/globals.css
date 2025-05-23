@@ -17,9 +17,6 @@ body {
 
 /* Node styles */
 .react-flow__node {
-  background: transparent;
-  border: none;
-  box-shadow: none;
   pointer-events: auto !important;
 }
 
