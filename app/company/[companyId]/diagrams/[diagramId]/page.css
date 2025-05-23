@@ -8,10 +8,18 @@
 /* Node styles */
 .react-flow__node {
   pointer-events: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .react-flow__node * {
   pointer-events: auto !important;
+}
+
+.react-flow__node.selected {
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* Edge styles */
@@ -37,6 +45,19 @@
   background-color: currentColor !important;
   z-index: 3 !important;
   pointer-events: auto !important;
+}
+
+/* Cursor styles */
+.react-flow__pane {
+  cursor: default !important;
+}
+
+.react-flow__pane.dragging {
+  cursor: grabbing !important;
+}
+
+.react-flow__selectionpane {
+  cursor: crosshair !important;
 }
 
 .node-double-clickable {

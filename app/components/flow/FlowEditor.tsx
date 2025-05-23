@@ -332,6 +332,21 @@ const FlowEditorContent = ({
 
   const handlePaneContextMenu = useCallback((event: React.MouseEvent)=>{
     event.preventDefault();
+    
+    // Si hay nodos seleccionados, mostrar el menú contextual para eliminarlos
+    if (selectedNodes.length > 0) {
+      setContextMenu({
+        visible: true,
+        x: event.clientX,
+        y: event.clientY,
+        nodeId: null,
+        nodeType: null,
+        isPane: true,
+        parentInfo: null
+      });
+      return;
+    }
+    
     setContextMenu({
       visible: true,
       x: event.clientX,
@@ -341,7 +356,7 @@ const FlowEditorContent = ({
       isPane: true,
       parentInfo: null
     });
-  }, []);
+  }, [selectedNodes]);
 
   // 🔒 Critical code below – do not edit or delete
   useEffect(() => {
@@ -1521,7 +1536,8 @@ const FlowEditorContent = ({
           selectionKeyCode={null}
           style={{ 
             width: '100%', 
-            height: '100%'
+            height: '100%',
+            cursor: 'default'
           }}
           onDrop={onDrop}
           onDragOver={onDragOver}
@@ -1585,7 +1601,15 @@ const FlowEditorContent = ({
                   </>
                 )}
                 {contextMenu.isPane && (
-                  <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>Canvas Options</p>
+                  <>
+                    {selectedNodes.length > 0 ? (
+                      <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>
+                        {selectedNodes.length} nodos seleccionados
+                      </p>
+                    ) : (
+                      <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>Canvas Options</p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1645,23 +1669,46 @@ const FlowEditorContent = ({
                   </>
                 )}
                 {contextMenu.isPane && (
-                  <button 
-                    onClick={() => {
-                      setSidebarOpen(true);
-                      setContextMenu(prev => ({...prev, visible: false}));
-                    }}
-                    style={{ 
-                      display: 'block', width: '100%', textAlign: 'left', 
-                      padding: '10px 12px', cursor: 'pointer', 
-                      border: 'none', borderBottom: '1px solid #eee', 
-                      background: 'white', fontSize: '13px',
-                      color: '#333', transition: 'background-color 0.2s'
-                    }}
-                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                  >
-                    📚 Show Resources Panel
-                  </button>
+                  <>
+                    {selectedNodes.length > 0 ? (
+                      <button 
+                        onClick={() => {
+                          const nodeIds = selectedNodes.map(node => node.id);
+                          onNodesChange?.(nodeIds.map(id => ({ type: 'remove', id })));
+                          setContextMenu(prev => ({...prev, visible: false}));
+                        }}
+                        style={{ 
+                          display: 'block', width: '100%', textAlign: 'left', 
+                          padding: '10px 12px', cursor: 'pointer', 
+                          border: 'none', borderBottom: '1px solid #eee', 
+                          background: 'white', fontSize: '13px',
+                          color: '#ff3333', transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
+                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                      >
+                        🗑 Delete Selected Nodes
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          setSidebarOpen(true);
+                          setContextMenu(prev => ({...prev, visible: false}));
+                        }}
+                        style={{ 
+                          display: 'block', width: '100%', textAlign: 'left', 
+                          padding: '10px 12px', cursor: 'pointer', 
+                          border: 'none', borderBottom: '1px solid #eee', 
+                          background: 'white', fontSize: '13px',
+                          color: '#333', transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                      >
+                        📚 Show Resources Panel
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

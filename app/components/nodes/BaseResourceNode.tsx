@@ -55,15 +55,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
   const getProviderColor = useCallback(() => {
     switch (data.provider) {
       case 'aws':
-        return 'border-orange-500 bg-orange-50';
+        return selected ? 'border-purple-500 bg-orange-50' : 'border-orange-500 bg-orange-50';
       case 'gcp':
-        return 'border-blue-500 bg-blue-50';
+        return selected ? 'border-purple-500 bg-blue-50' : 'border-blue-500 bg-blue-50';
       case 'azure':
-        return 'border-blue-400 bg-blue-50';
+        return selected ? 'border-purple-500 bg-blue-50' : 'border-blue-400 bg-blue-50';
       default:
-        return 'border-gray-300 bg-gray-50';
+        return selected ? 'border-purple-500 bg-gray-50' : 'border-gray-300 bg-gray-50';
     }
-  }, [data.provider]);
+  }, [data.provider, selected]);
   
   // Update resizable state when data changes
   useEffect(() => {
@@ -419,11 +419,11 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       className={`
         rounded-md border-2 ${getProviderColor()} shadow-sm
         min-w-[150px] min-h-[80px] p-3
-        ${selected ? 'ring-2 ring-primary' : ''}
+        ${selected ? 'border-opacity-100' : 'border-opacity-50'}
         relative node-double-clickable
       `}
       style={{
-        boxShadow: selected ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
+        boxShadow: selected ? 'none' : '0 2px 4px rgba(0,0,0,0.1)',
         position: 'relative',
         zIndex: 1,
         pointerEvents: 'auto'
