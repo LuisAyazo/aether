@@ -239,8 +239,6 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     
     console.log('Double click detected on node:', id);
     console.log('Node data:', data);
-    console.log('Event target:', e.target);
-    console.log('Event current target:', e.currentTarget);
 
     // Ensure we have all required data
     if (!data.label || !data.provider || !data.resourceType) {
@@ -263,8 +261,6 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         }
       }
     });
-
-    console.log('About to dispatch IaC panel event:', event.detail);
 
     // Dispatch the event both on window and document
     window.dispatchEvent(event);
@@ -390,8 +386,9 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         style={{ 
           position: 'relative',
           zIndex: 1000,
-          pointerEvents: 'none'
+          pointerEvents: 'auto'
         }}
+        onDoubleClick={handleDoubleClick}
       >
         {data.icon && (
           <div className="flex-shrink-0 w-4 h-4">
@@ -423,13 +420,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         rounded-md border-2 ${getProviderColor()} shadow-sm
         min-w-[150px] min-h-[80px] p-3
         ${selected ? 'ring-2 ring-primary' : ''}
-        relative
+        relative node-double-clickable
       `}
       style={{
         boxShadow: selected ? '0 4px 12px rgba(0, 0, 0, 0.15)' : 'none',
         position: 'relative',
-        zIndex: 1
+        zIndex: 1,
+        pointerEvents: 'auto'
       }}
+      onDoubleClick={handleDoubleClick}
     >
       <div className="flex items-center gap-1 overflow-hidden">
         {data.icon && (

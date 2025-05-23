@@ -1158,15 +1158,8 @@ export default function DiagramPage() {
           </div>
         )}
         
-        {/* Loading overlay that appears during transitions */}
-        <div className={`loading-overlay ${loadingType === 'transition' ? '' : 'hidden'}`}>
-          <Spin size="large" className="loading-spinner">
-            <div className="p-5">Cargando diagrama...</div>
-          </Spin>
-        </div>
-        
-        {/* Current diagram container with improved transitions */}
-        <div className={`diagram-container ${loadingType === 'transition' ? 'loading' : 'ready'} h-full`}>
+        {/* Current diagram container */}
+        <div className="diagram-container h-full">
           {currentDiagram ? (
             <FlowEditor 
               key={`current-diagram-${currentDiagram.id}`}

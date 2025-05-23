@@ -1536,10 +1536,18 @@ const FlowEditorContent = ({
           noPanClassName="nopan"
         >
           <Background 
-            variant={BackgroundVariant.Lines} 
-            gap={50} 
-            size={2}
-            color="#000000"
+            id="1"
+            gap={10}
+            color="#ffffff"
+            variant={BackgroundVariant.Lines}
+            style={{ opacity: 0.5 }}
+          />
+          <Background 
+            id="2"
+            gap={100}
+            color="#ffffff"
+            variant={BackgroundVariant.Lines}
+            style={{ opacity: 0.7 }}
           />
           <MiniMap />
           <Controls 

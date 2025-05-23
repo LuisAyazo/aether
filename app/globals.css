@@ -6,7 +6,7 @@
   --primary: #3b82f6;
   --primary-dark: #2563eb;
   --secondary: #10b981;
-  --accent: #8b5cf6;
+  --accent: #d2b48c;
 }
 
 body {
@@ -15,34 +15,16 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* ReactFlow essential styles */
-.react-flow {
-  background-color: #ffffff;
-}
-
-.react-flow__pane {
-  background-color: #ffffff;
-}
-
-.react-flow__background {
-  background-color: #ffffff !important;
-}
-
-.react-flow__background-pattern {
-  stroke: #000000 !important;
-  stroke-width: 2 !important;
-  opacity: 0.9 !important;
-}
-
 /* Node styles */
 .react-flow__node {
   background: transparent;
   border: none;
   box-shadow: none;
+  pointer-events: auto !important;
 }
 
 .react-flow__node * {
-  pointer-events: none;
+  pointer-events: auto !important;
 }
 
 /* Edge styles */
@@ -67,4 +49,5 @@ body {
   border: 2px solid white !important;
   background-color: currentColor !important;
   z-index: 3 !important;
+  pointer-events: auto !important;
 }
