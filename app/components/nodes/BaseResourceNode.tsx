@@ -400,11 +400,13 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         <Handle
           type="target"
           position={Position.Left}
+          id="left"
           className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
         />
         <Handle
           type="source"
           position={Position.Right}
+          id="right"
           className="w-2 h-2 bg-primary/70 border-2 border-white z-10"
         />
       </div>
@@ -450,6 +452,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       <Handle
         type="target"
         position={Position.Top}
+        id="top"
         style={{
           width: '10px',
           height: '10px',
@@ -463,6 +466,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       <Handle
         type="source"
         position={Position.Bottom}
+        id="bottom"
         style={{
           width: '10px',
           height: '10px',
@@ -476,6 +480,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       <Handle
         type="target"
         position={Position.Left}
+        id="left"
         style={{
           width: '10px',
           height: '10px',
@@ -489,6 +494,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       <Handle
         type="source"
         position={Position.Right}
+        id="right"
         style={{
           width: '10px',
           height: '10px',

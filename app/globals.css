@@ -48,3 +48,40 @@ body {
   z-index: 3 !important;
   pointer-events: auto !important;
 }
+
+/* Group node styles - override React Flow defaults */
+.react-flow__node-group {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.react-flow__node-group.selectable:hover {
+  box-shadow: none !important;
+}
+
+.react-flow__node-group.selectable.selected,
+.react-flow__node-group.selectable:focus,
+.react-flow__node-group.selectable:focus-visible {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Eliminar cualquier espacio fantasma en grupos minimizados */
+.react-flow__node-group[data-minimized="true"] {
+  background: transparent !important;
+  pointer-events: none !important;
+  overflow: visible !important;
+  /* Reduzca el tamaño del contenedor real */
+  width: 140px !important;
+  height: 28px !important;
+}
+
+.react-flow__node-group[data-minimized="true"] > div {
+  pointer-events: all !important;
+  position: relative !important;
+  /* Asegurarse de que el contenedor interno también tenga el tamaño correcto */
+  width: 140px !important;
+  height: 28px !important;
+}

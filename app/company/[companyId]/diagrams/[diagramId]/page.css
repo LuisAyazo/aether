@@ -47,19 +47,38 @@
   pointer-events: auto !important;
 }
 
-/* Cursor styles */
-.react-flow__pane {
-  cursor: default !important;
+/* Group node styles - override React Flow defaults */
+.react-flow__node-group {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
 }
 
-.react-flow__pane.dragging {
-  cursor: grabbing !important;
+.react-flow__node-group.selectable:hover {
+  box-shadow: none !important;
 }
+
+.react-flow__node-group.selectable.selected,
+.react-flow__node-group.selectable:focus,
+.react-flow__node-group.selectable:focus-visible {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Cursor styles removed - no longer needed */
 
 .react-flow__selectionpane {
   cursor: crosshair !important;
 }
 
+/* Selection styles */
+.react-flow__selection {
+  background: rgba(0, 89, 220, 0.08);
+  border: 1px dashed rgba(0, 89, 220, 0.8);
+}
+
+/* Node interaction styles */
 .node-double-clickable {
   cursor: pointer;
   pointer-events: auto !important;
@@ -73,4 +92,59 @@
   0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3); }
   70% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
   100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+/* Context menu styles */
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  padding: 0;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.context-menu-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.context-menu-item.danger {
+  color: #ff3333;
+}
+
+.context-menu-item.danger:hover {
+  background-color: #fff0f0;
+}
+
+/* Lasso selection styles */
+.lasso-selection-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+.lasso-selection-mode .react-flow__node {
+  pointer-events: auto !important;
+}
+
+/* Multi-selection styles */
+.multi-selection-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+.multi-selection-mode .react-flow__node {
+  pointer-events: auto !important;
 }

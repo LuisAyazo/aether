@@ -7,6 +7,7 @@ import {
   CodeBracketIcon
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
+import GroupNode from './GroupNode';
 
 // AWS Node Implementations using BaseResourceNode for consistent behavior
 export function EC2Node(props: NodeProps) {
@@ -247,6 +248,9 @@ const nodeTypes = {
   blob: AzureBlobNode,
   cosmos: AzureCosmosNode,
   function: AzureFunctionNode,
+  
+  // Group node
+  group: GroupNode,
 };
 
 export default nodeTypes;

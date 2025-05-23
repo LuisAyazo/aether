@@ -66,10 +66,11 @@ interface ContextMenu {
   y: number;
   nodeId: string | null;
   nodeType: string | null;
-  isPane: boolean; // Added to distinguish pane context menu
+  isPane: boolean;
   parentInfo?: {
-    parentId: string;
-    parentType: string | undefined;
+    parentId?: string;
+    parentType?: string;
+    selectedCount?: number;
   } | null;
 }
 
@@ -277,7 +278,6 @@ const FlowEditorContent = ({
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   const [selectionActive, setSelectionActive] = useState(false);
-  const [spaceBarPanMode, setSpaceBarPanMode] = useState(false);
   
   // Add a ref to store the last viewport state
   const lastViewportRef = useRef<Viewport | null>(null);
@@ -312,10 +312,41 @@ const FlowEditorContent = ({
   const handlePaneClick = useCallback(() => {
     setSelectedEdge(null);
     setContextMenu(prev => ({...prev, visible: false}));
-  }, []);
+    
+    // Si estamos en modo lasso, no limpiar la selección al hacer clic
+    if (activeTool !== 'lasso') {
+      // No limpiar selección aquí, dejar que ReactFlow lo maneje
+    }
+  }, [activeTool]);
 
-  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node)=>{
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
+    
+    // Obtener los nodos seleccionados actualmente
+    const currentSelectedNodes = reactFlowInstance.getNodes().filter(n => n.selected);
+    
+    // Si el nodo clickeado no está seleccionado y hay otros nodos seleccionados,
+    // debemos decidir si mantener la selección actual o solo seleccionar este nodo
+    if (!node.selected && currentSelectedNodes.length > 0) {
+      // Si no se está presionando Shift, seleccionar solo el nodo clickeado
+      if (!event.shiftKey) {
+        reactFlowInstance.setNodes(nodes => 
+          nodes.map(n => ({ ...n, selected: n.id === node.id }))
+        );
+      } else {
+        // Si se presiona Shift, añadir el nodo a la selección actual
+        reactFlowInstance.setNodes(nodes => 
+          nodes.map(n => ({ ...n, selected: n.selected || n.id === node.id }))
+        );
+      }
+    } else if (!node.selected && currentSelectedNodes.length === 0) {
+      // Si no hay nada seleccionado, seleccionar este nodo
+      reactFlowInstance.setNodes(nodes => 
+        nodes.map(n => ({ ...n, selected: n.id === node.id }))
+      );
+    }
+    // Si el nodo ya está seleccionado, mantenemos la selección actual
+    
     const nodeData = node.data || {};
     const resourceType = nodeData.resourceType || node.type;
     
@@ -328,25 +359,15 @@ const FlowEditorContent = ({
       isPane: false,
       parentInfo: null
     });
-  }, []);
+  }, [reactFlowInstance]);
 
-  const handlePaneContextMenu = useCallback((event: React.MouseEvent)=>{
+  const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     
-    // Si hay nodos seleccionados, mostrar el menú contextual para eliminarlos
-    if (selectedNodes.length > 0) {
-      setContextMenu({
-        visible: true,
-        x: event.clientX,
-        y: event.clientY,
-        nodeId: null,
-        nodeType: null,
-        isPane: true,
-        parentInfo: null
-      });
-      return;
-    }
+    // Obtener los nodos seleccionados actualmente
+    const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
     
+    // Mostrar el menú contextual y pasar información sobre los nodos seleccionados
     setContextMenu({
       visible: true,
       x: event.clientX,
@@ -354,9 +375,9 @@ const FlowEditorContent = ({
       nodeId: null,
       nodeType: null,
       isPane: true,
-      parentInfo: null
+      parentInfo: currentSelectedNodes.length > 0 ? { selectedCount: currentSelectedNodes.length } : null
     });
-  }, [selectedNodes]);
+  }, [reactFlowInstance]);
 
   // 🔒 Critical code below – do not edit or delete
   useEffect(() => {
@@ -436,10 +457,12 @@ const FlowEditorContent = ({
   });
 
   useOnSelectionChange({
-    onChange: ({ nodes: selected }) => { // Renamed nodes to selected
+    onChange: ({ nodes: selected }) => {
+      // Actualizar el estado de los nodos seleccionados
       setSelectedNodes(selected);
       
-      if (selected.length > 1) {
+      // Si hay nodos seleccionados, actualizar el menú de selección
+      if (selected.length > 0) {
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         
         selected.forEach(node => {
@@ -567,7 +590,7 @@ const FlowEditorContent = ({
     // Don't attempt to optimize nodes if the group is minimized
     if (group.data?.isMinimized) return;
     
-    const childNodes = reactFlowInstance.getNodes().filter((n: Node) => n.parentNode === groupId);
+    const childNodes = reactFlowInstance.getNodes().filter((n: Node) => n.parentId === groupId);
     if (childNodes.length === 0) return;
   
     const groupWidth = (group.style?.width as number) || 300;
@@ -578,10 +601,8 @@ const FlowEditorContent = ({
     const nodeSpacing = 8;
     
     const availableWidth = groupWidth - 2 * horizontalMargin;
-    const sortedChildNodes = [...childNodes].sort((a, b) => a.id.localeCompare(b.id));
-    
-    const updatedNodes = reactFlowInstance.getNodes().map(node => {
-      if (node.parentNode !== groupId) return node;
+    const sortedChildNodes = [...childNodes].sort((a, b) => a.id.localeCompare(b.id));      const updatedNodes = reactFlowInstance.getNodes().map(node => {
+      if (node.parentId !== groupId) return node;
       const idx = sortedChildNodes.findIndex((n: Node) => n.id === node.id);
       const y = headerHeight + verticalMargin + idx * (40 + nodeSpacing);
       
@@ -654,7 +675,7 @@ const FlowEditorContent = ({
     const updatedNodes = reactFlowInstance.getNodes().map(node => {
       if (selectedNodes.some(selectedNode => selectedNode.id === node.id)) {
         return {
-          ...node, parentNode: newGroupId, extent: 'parent' as const,
+          ...node, parentId: newGroupId, extent: 'parent' as const,
           position: { x: node.position.x - minX, y: node.position.y - minY },
           selected: false
         };
@@ -677,9 +698,9 @@ const FlowEditorContent = ({
     if (selectedGroupNodes.length > 0) {
       groupsToProcess = selectedGroupNodes.map(group => group.id);
     } else {
-      const nodesInGroups = selectedNodes.filter(node => node.parentNode);
+      const nodesInGroups = selectedNodes.filter(node => node.parentId);
       if (nodesInGroups.length > 0) {
-        groupsToProcess = [...new Set(nodesInGroups.map(node => node.parentNode))].filter(Boolean) as string[];
+        groupsToProcess = [...new Set(nodesInGroups.map(node => node.parentId))].filter(Boolean) as string[];
       } else {
         console.warn("No hay grupos o nodos en grupos seleccionados para desagrupar");
         return;
@@ -693,11 +714,11 @@ const FlowEditorContent = ({
     console.log("Grupos a desagrupar/procesar:", groupsToProcess);
 
     const finalNodes = allNodes.map(node => {
-      if (node.parentNode && groupsToProcess.includes(node.parentNode)) {
-        const parentGroup = allNodes.find(n => n.id === node.parentNode);
+      if (node.parentId && groupsToProcess.includes(node.parentId)) {
+        const parentGroup = allNodes.find(n => n.id === node.parentId);
         if (parentGroup) {
           return {
-            ...node, parentNode: undefined, extent: undefined,
+            ...node, parentId: undefined, extent: undefined,
             position: { x: parentGroup.position.x + node.position.x, y: parentGroup.position.y + node.position.y }
           };
         }
@@ -718,115 +739,41 @@ const FlowEditorContent = ({
     if (tool === 'lasso') {
       setSelectionActive(true);
       document.body.classList.add('lasso-selection-mode');
-      reactFlowInstance.setNodes(nodes => nodes.map(node => ({ ...node, selected: false, selectable: true })));
+      
+      // Limpiar selección actual cuando se activa la herramienta lasso pero mantener selectable
+      reactFlowInstance.setNodes(nodes => nodes.map(node => ({ 
+        ...node, 
+        selected: false, 
+        selectable: true 
+      })));
     }
     
     setActiveTool(tool);
+    
+    // Asegurarnos de que los nodos se mantengan interactuables para el clic derecho
+    const lassoSelectStyle = document.createElement('style');
+    lassoSelectStyle.id = 'lasso-select-compatibility';
+    lassoSelectStyle.innerHTML = `
+      .react-flow__node {
+        pointer-events: all !important;
+      }
+    `;
+    
+    // Eliminar estilo anterior si existe
+    const existingStyle = document.getElementById('lasso-select-compatibility');
+    if (existingStyle) {
+      existingStyle.remove();
+    }
+    
+    // Agregar estilo solo si está en modo lasso
+    if (tool === 'lasso') {
+      document.head.appendChild(lassoSelectStyle);
+    }
   }, [activeTool, reactFlowInstance]);
 
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore key events when user is typing in inputs or textareas
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-      // Handle spacebar for pan mode
-      if (event.key === ' ' && !spaceBarPanMode) {
-        event.preventDefault();
-        setSpaceBarPanMode(true);
-        const pane = document.querySelector('.react-flow__pane') as HTMLElement | null;
-        if (pane) {
-          pane.classList.add('space-bar-pan-mode');
-          // Add event listeners for dragging state
-          const handleMouseDown = () => {
-            pane.classList.add('dragging');
-            document.body.style.cursor = 'grabbing';
-          };
-          const handleMouseUp = () => {
-            pane.classList.remove('dragging');
-            document.body.style.cursor = '';
-          };
-          pane.addEventListener('mousedown', handleMouseDown);
-          document.addEventListener('mouseup', handleMouseUp);
-          // Store handlers for cleanup
-          (pane as any)._mouseDownHandler = handleMouseDown;
-          (pane as any)._mouseUpHandler = handleMouseUp;
-        }
-      }
-      
-      // Handle shift key for multiple selection
-      if (event.shiftKey && event.key === 'S') { // Shift+S for lasso selection
-        event.preventDefault(); // Prevent default browser search on Shift+S
-        handleToolClick('lasso');
-      }        // Handle escape key to exit special modes
-      if (event.key === 'Escape') {
-        if (activeTool === 'lasso') {
-          handleToolClick('select');
-        }
-        if (spaceBarPanMode) {
-          setSpaceBarPanMode(false);
-          const pane = document.querySelector('.react-flow__pane');
-          if (pane) {
-            pane.classList.remove('space-bar-pan-mode');
-            pane.classList.remove('dragging');
-            document.body.style.cursor = '';
-          }
-        }
-      }
-      
-      // For multi-selection with shift key
-      if (event.shiftKey) {
-        document.body.classList.add('multi-selection-mode');
-      }
-    };
-    const handleKeyUp = (event: KeyboardEvent) => {
-      // Release spacebar to exit pan mode
-      if (event.key === ' ' && spaceBarPanMode) {
-        setSpaceBarPanMode(false);
-        const pane = document.querySelector('.react-flow__pane') as HTMLElement | null;
-        if (pane) {
-          pane.classList.remove('space-bar-pan-mode');
-          pane.classList.remove('dragging');
-          document.body.style.cursor = '';
-          // Remove event listeners
-          const down = (pane as any)._mouseDownHandler;
-          const up = (pane as any)._mouseUpHandler;
-          if (down) pane.removeEventListener('mousedown', down);
-          if (up) document.removeEventListener('mouseup', up);
-          delete (pane as any)._mouseDownHandler;
-          delete (pane as any)._mouseUpHandler;
-        }
-      }
-      
-      // Release shift key for multi-selection
-      if (event.key === 'Shift') {
-        document.body.classList.remove('multi-selection-mode');
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      document.body.classList.remove('multi-selection-mode');
-      document.body.classList.remove('lasso-selection-mode');
-      // Ensure space-bar-pan-mode and dragging class are removed on cleanup
-      const pane = document.querySelector('.react-flow__pane') as HTMLElement | null;
-      if (pane) {
-        pane.classList.remove('space-bar-pan-mode');
-        pane.classList.remove('dragging');
-        document.body.style.cursor = '';
-        const down = (pane as any)._mouseDownHandler;
-        const up = (pane as any)._mouseUpHandler;
-        if (down) pane.removeEventListener('mousedown', down);
-        if (up) document.removeEventListener('mouseup', up);
-        delete (pane as any)._mouseDownHandler;
-        delete (pane as any)._mouseUpHandler;
-      }
-    };
-  }, [activeTool, handleToolClick, spaceBarPanMode, reactFlowInstance]);
+    // Removed all cursor and space bar pan mode functionalitycc
+  }, []);
 
   const isInsideGroup = (position: { x: number, y: number }, group: Node) => {
     if (group.data?.isMinimized) return false; // No permitir drop en grupos minimizados
@@ -1004,9 +951,7 @@ const FlowEditorContent = ({
           width: 200,
           height: 100
         }
-      };
-
-      // Check if the node is dropped within a group
+      };          // Check if the node is dropped within a group
       const groupNode = findGroupAtPosition(position);
       if (groupNode) {
         const parentGroup = reactFlowInstance.getNode(groupNode.id);
@@ -1039,7 +984,7 @@ const FlowEditorContent = ({
 
           // Update the node's position and parent - use a new object to avoid mutations
           newNode.position = { ...clampedPosition };
-          newNode.parentNode = groupNode.id;
+          newNode.parentId = groupNode.id;
           newNode.extent = 'parent' as const;
         }
       }
@@ -1078,10 +1023,10 @@ const FlowEditorContent = ({
       restoreViewport();
       
       // If node is added to a group, optimize the group layout first
-      if (newNode.parentNode) {
+      if (newNode.parentId) {
         // Execute optimization after the next render cycle
         setTimeout(() => {
-          optimizeNodesInGroup(newNode.parentNode!);
+          optimizeNodesInGroup(newNode.parentId!);
           
           // Force multiple viewport restorations with different timings
           // to catch all potential zoom reset points
@@ -1153,7 +1098,7 @@ const FlowEditorContent = ({
         if (node.type === 'group') return;
         
         // Skip nodes that are already attached to a group
-        if (node.parentNode) return;
+        if (node.parentId) return;
         
         // Get the node's current position
         const nodePosition = {
@@ -1174,7 +1119,7 @@ const FlowEditorContent = ({
           const updatedNode = {
             ...node,
             position: relativePosition,
-            parentNode: groupNode.id,
+            parentId: groupNode.id,
             extent: 'parent' as const
           };
           
@@ -1217,8 +1162,8 @@ const FlowEditorContent = ({
         if (!node || node.type === 'group') return;
         
         // Only process nodes that are inside a group
-        if (node.parentNode) {
-          const parentNode = reactFlowInstance.getNode(node.parentNode);
+        if (node.parentId) {
+          const parentNode = reactFlowInstance.getNode(node.parentId);
           if (!parentNode) return;
           
           // Calculate the node's absolute position
@@ -1258,7 +1203,7 @@ const FlowEditorContent = ({
             if (updateInfo?.removeParent) {
               return {
                 ...node,
-                parentNode: undefined,
+                parentId: undefined,
                 extent: undefined,
                 position: updateInfo.position
               };
@@ -1482,8 +1427,99 @@ const FlowEditorContent = ({
     };
   }, [onSave, reactFlowInstance, propNodes, propEdges]);
 
+  // Add a modal for editing group name
+  const renderEditGroupModal = () => {
+    if (!editingGroup) return null;
+    
+    return (
+      <div 
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+        }}
+        onClick={() => setEditingGroup(null)}
+      >
+        <div 
+          style={{
+            backgroundColor: 'white',
+            padding: '20px',
+            borderRadius: '8px',
+            width: '300px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 style={{marginTop: 0, marginBottom: '16px', fontSize: '16px'}}>Edit Group Name</h3>
+          <input
+            type="text"
+            defaultValue={editingGroup.label}
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '14px',
+              marginBottom: '16px'
+            }}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const input = e.target as HTMLInputElement;
+                saveGroupName(input.value);
+              }
+              if (e.key === 'Escape') {
+                setEditingGroup(null);
+              }
+            }}
+          />
+          <div style={{display: 'flex', justifyContent: 'flex-end', gap: '8px'}}>
+            <button
+              onClick={() => setEditingGroup(null)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                backgroundColor: '#f5f5f5',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={(e) => {
+                const input = e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement;
+                saveGroupName(input.value);
+              }}
+              style={{
+                padding: '6px 12px',
+                border: 'none',
+                borderRadius: '4px',
+                backgroundColor: '#0088ff',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-full">
+      {renderEditGroupModal()}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
@@ -1509,6 +1545,47 @@ const FlowEditorContent = ({
         </div>
       </div>
       <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
+        <style>
+          {`
+            .react-flow__pane {
+              cursor: default;
+            }
+            .react-flow__pane.pan-mode {
+              cursor: grab !important;
+              background-color: rgba(0, 0, 0, 0.1) !important;
+            }
+            .react-flow__pane.pan-mode:active {
+              cursor: grabbing !important;
+              background-color: rgba(0, 0, 0, 0.2) !important;
+            }
+            .react-flow__selection {
+              background: rgba(0, 0, 0, 0.3) !important;
+              border: 1px solid rgba(0, 0, 0, 0.5) !important;
+            }
+            .react-flow__selection-rect {
+              background: rgba(0, 0, 0, 0.3) !important;
+              border: 1px solid rgba(0, 0, 0, 0.5) !important;
+            }
+            .react-flow__nodesselection-rect {
+              background: rgba(0, 0, 0, 0.3) !important;
+              border: 1px solid rgba(0, 0, 0, 0.5) !important;
+            }
+            .react-flow__node {
+              pointer-events: all !important;
+            }
+            .react-flow__edge {
+              pointer-events: all !important;
+            }
+            .react-flow__selection {
+              background: rgba(0, 0, 0, 0.3) !important;
+              border: 1px solid rgba(0, 0, 0, 0.5) !important;
+            }
+            .react-flow__selection-rect {
+              background: rgba(0, 0, 0, 0.3) !important;
+              border: 1px solid rgba(0, 0, 0, 0.5) !important;
+            }
+          `}
+        </style>
         <ReactFlow
           nodes={propNodes}
           edges={propEdges}
@@ -1524,7 +1601,7 @@ const FlowEditorContent = ({
           elementsSelectable={true}
           nodesDraggable={true}
           nodesConnectable={true}
-          panOnDrag={spaceBarPanMode}
+          panOnDrag={false}
           panOnScroll={false}
           zoomOnScroll={false}
           zoomOnPinch={false}
@@ -1536,8 +1613,7 @@ const FlowEditorContent = ({
           selectionKeyCode={null}
           style={{ 
             width: '100%', 
-            height: '100%',
-            cursor: 'default'
+            height: '100%'
           }}
           onDrop={onDrop}
           onDragOver={onDragOver}
@@ -1602,13 +1678,16 @@ const FlowEditorContent = ({
                 )}
                 {contextMenu.isPane && (
                   <>
-                    {selectedNodes.length > 0 ? (
-                      <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>
-                        {selectedNodes.length} nodos seleccionados
-                      </p>
-                    ) : (
-                      <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>Canvas Options</p>
-                    )}
+                    {(() => {
+                      const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                      return currentSelectedNodes.length > 0 ? (
+                        <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>
+                          {currentSelectedNodes.length} nodos seleccionados
+                        </p>
+                      ) : (
+                        <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>Canvas Options</p>
+                      );
+                    })()}
                   </>
                 )}
               </div>
@@ -1616,97 +1695,253 @@ const FlowEditorContent = ({
               <div>
                 {!contextMenu.isPane && contextMenu.nodeId && (
                   <>
-                    <button 
-                      onClick={() => {
-                        const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                        if (node) {
-                          const event = new CustomEvent('openIaCPanel', {
-                            detail: {
-                              nodeId: node.id,
-                              resourceData: {
-                                label: node.data.label,
-                                provider: node.data.provider,
-                                resourceType: node.data.resourceType
-                              }
+                    {/* Verificar si hay múltiples nodos seleccionados y el nodo actual está entre ellos */}
+                    {(() => {
+                      const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                      return currentSelectedNodes.length > 1 && currentSelectedNodes.some(n => n.id === contextMenu.nodeId);
+                    })() ? (
+                      <>
+                        <button 
+                          onClick={() => {
+                            // Actualizar para asegurarnos de que usamos los nodos que están seleccionados en este momento
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            console.log("Agrupando nodos seleccionados:", currentSelectedNodes.length);
+                            if (currentSelectedNodes.length > 0) {
+                              groupSelectedNodes();
                             }
-                          });
-                          window.dispatchEvent(event);
-                          document.dispatchEvent(event);
-                        }
-                        setContextMenu(prev => ({...prev, visible: false}));
-                      }}
-                      style={{ 
-                        display: 'block', width: '100%', textAlign: 'left', 
-                        padding: '10px 12px', cursor: 'pointer', 
-                        border: 'none', borderBottom: '1px solid #eee',
-                        background: 'white', fontSize: '13px',
-                        color: '#333', transition: 'background-color 0.2s'
-                      }}
-                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                    >
-                      ⚙️ Configuración
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if (contextMenu.nodeId) {
-                          onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
-                        }
-                        setContextMenu(prev => ({...prev, visible: false}));
-                      }}
-                      style={{ 
-                        display: 'block', width: '100%', textAlign: 'left', 
-                        padding: '10px 12px', cursor: 'pointer', 
-                        border: 'none',
-                        background: 'white', fontSize: '13px',
-                        color: '#ff3333', transition: 'background-color 0.2s'
-                      }}
-                      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                    >
-                      🗑 Delete Node
-                    </button>
-                  </>
-                )}
-                {contextMenu.isPane && (
-                  <>
-                    {selectedNodes.length > 0 ? (
-                      <button 
-                        onClick={() => {
-                          const nodeIds = selectedNodes.map(node => node.id);
-                          onNodesChange?.(nodeIds.map(id => ({ type: 'remove', id })));
-                          setContextMenu(prev => ({...prev, visible: false}));
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', borderBottom: '1px solid #eee', 
-                          background: 'white', fontSize: '13px',
-                          color: '#ff3333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        🗑 Delete Selected Nodes
-                      </button>
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee',
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          📦 Group Selected Nodes ({(() => {
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            return currentSelectedNodes.length;
+                          })()})
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            console.log("Eliminando nodos seleccionados:", currentSelectedNodes.length, currentSelectedNodes.map(n => n.id));
+                            if (currentSelectedNodes.length > 0) {
+                              const nodeIds = currentSelectedNodes.map(node => node.id);
+                              onNodesChange?.(nodeIds.map(id => ({ type: 'remove', id })));
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee',
+                            background: 'white', fontSize: '13px',
+                            color: '#ff3333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          🗑 Delete Selected Nodes ({(() => {
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            return currentSelectedNodes.length;
+                          })()})
+                        </button>
+                      </>
+                    ) : reactFlowInstance.getNode(contextMenu.nodeId)?.type === 'group' ? (
+                      <>
+                        <button 
+                          onClick={() => {
+                            const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                            if (node) {
+                              startEditingGroupName(node.id, node.data?.label || 'Group');
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee',
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          ✏️ Edit Group Name
+                        </button>
+                        <button 
+                          onClick={() => {
+                            ungroupNodes();
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee',
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          📂 Ungroup Nodes
+                        </button>
+                      </>
                     ) : (
                       <button 
                         onClick={() => {
-                          setSidebarOpen(true);
+                          const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                          if (node) {
+                            const event = new CustomEvent('openIaCPanel', {
+                              detail: {
+                                nodeId: node.id,
+                                resourceData: {
+                                  label: node.data.label,
+                                  provider: node.data.provider,
+                                  resourceType: node.data.resourceType
+                                }
+                              }
+                            });
+                            window.dispatchEvent(event);
+                            document.dispatchEvent(event);
+                          }
                           setContextMenu(prev => ({...prev, visible: false}));
                         }}
                         style={{ 
                           display: 'block', width: '100%', textAlign: 'left', 
                           padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', borderBottom: '1px solid #eee', 
+                          border: 'none', borderBottom: '1px solid #eee',
                           background: 'white', fontSize: '13px',
                           color: '#333', transition: 'background-color 0.2s'
                         }}
                         onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
                         onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
                       >
-                        📚 Show Resources Panel
+                        ⚙️ Configuración
                       </button>
+                    )}
+                    
+                    {/* Botón para eliminar un nodo individual si no hay múltiples seleccionados */}
+                    {!(selectedNodes.length > 1 && selectedNodes.some(n => n.id === contextMenu.nodeId)) && (
+                      <button 
+                        onClick={() => {
+                          if (contextMenu.nodeId) {
+                            onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
+                          }
+                          setContextMenu(prev => ({...prev, visible: false}));
+                        }}
+                        style={{ 
+                          display: 'block', width: '100%', textAlign: 'left', 
+                          padding: '10px 12px', cursor: 'pointer', 
+                          border: 'none',
+                          background: 'white', fontSize: '13px',
+                          color: '#ff3333', transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
+                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                      >
+                        🗑 Delete Node
+                      </button>
+                    )}
+                  </>
+                )}
+                {contextMenu.isPane && (
+                  <>
+                    {(() => {
+                      const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                      return currentSelectedNodes.length > 0;
+                    })() ? (
+                      <>
+                        <button 
+                          onClick={() => {
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            if (currentSelectedNodes.length > 0) {
+                              groupSelectedNodes();
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee', 
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          📦 Group Selected Nodes ({(() => {
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            return currentSelectedNodes.length;
+                          })()})
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            if (currentSelectedNodes.length > 0) {
+                              const nodeIds = currentSelectedNodes.map(node => node.id);
+                              onNodesChange?.(nodeIds.map(id => ({ type: 'remove', id })));
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee', 
+                            background: 'white', fontSize: '13px',
+                            color: '#ff3333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          🗑 Delete Selected Nodes ({(() => {
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            return currentSelectedNodes.length;
+                          })()})
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button 
+                          onClick={() => {
+                            createEmptyGroup();
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee', 
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          📦 Create Empty Group
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setSidebarOpen(true);
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee', 
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          📚 Show Resources Panel
+                        </button>
+                      </>
                     )}
                   </>
                 )}
@@ -1752,6 +1987,24 @@ const FlowEditorContent = ({
                   transition: 'background 0.2s'
                 }}>
                 <SwatchIcon className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => createEmptyGroup()} 
+                title="Create Group (G)" 
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  transition: 'background 0.2s'
+                }}>
+                <Square3Stack3DIcon className="h-5 w-5" />
               </button>
             </div>
           </Panel>
