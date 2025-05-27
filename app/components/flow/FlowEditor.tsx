@@ -48,7 +48,7 @@ interface SingleNodePreview {
     type: string;
     provider: string;
     changes: {
-      properties: Record<string, any>;
+      properties: Record<string, unknown>;
     };
   };
   estimated_cost?: {
@@ -389,7 +389,6 @@ const FlowEditorContent = ({
   }>>([]);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
-  const [singleNodePreviewVisible, setSingleNodePreviewVisible] = useState(false);
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
@@ -1686,17 +1685,36 @@ const FlowEditorContent = ({
     if (!currentDiagram) return;
     
     try {
-      setLoading(true);
       setIsExecutionLogVisible(true);
       setExecutionLogs([]);
 
-      // Simular la ejecución
-      await simulateExecution();
+      // Obtener nodos que no son grupos
+      const executionNodes = currentDiagram.nodes.filter((node) => node.type !== 'group');
 
-      // Actualizar los datos de preview
+      // Simular ejecución secuencial con diferentes estados
+      for (let i = 0; i < executionNodes.length; i++) {
+        const node = executionNodes[i];
+        let state: NodeExecutionState;
+        
+        // Asignar diferentes estados según el índice
+        if (i === 0) {
+          state = 'creating';
+        } else if (i === 1) {
+          state = 'updating';
+        } else if (i === 2) {
+          state = 'deleting';
+        } else {
+          state = 'creating';
+        }
+
+        await simulateNodeExecution(node as NodeWithExecutionStatus, state);
+        await simulateNodeExecution(node as NodeWithExecutionStatus, 'success');
+      }
+
+      // Actualizar los datos de preview con estados específicos
       const mockPreviewData = {
         resourcesToCreate: currentDiagram.nodes
-          .filter(node => node.type !== 'group')
+          .filter((node, index) => index === 0 || index > 2)
           .map(node => ({
             id: node.id,
             type: node.type,
@@ -1707,15 +1725,34 @@ const FlowEditorContent = ({
               properties: node.data || {}
             }
           })),
-        resourcesToUpdate: [],
-        resourcesToDelete: []
+        resourcesToUpdate: currentDiagram.nodes
+          .filter((node, index) => index === 1)
+          .map(node => ({
+            id: node.id,
+            type: node.type,
+            name: node.data?.label || 'Unnamed Resource',
+            provider: node.data?.provider || 'generic',
+            changes: {
+              create: false,
+              update: true,
+              properties: node.data || {}
+            }
+          })),
+        resourcesToDelete: currentDiagram.nodes
+          .filter((node, index) => index === 2)
+          .map(node => ({
+            id: node.id,
+            type: node.type,
+            name: node.data?.label || 'Unnamed Resource',
+            provider: node.data?.provider || 'generic'
+          }))
       };
       
       setPreviewData(mockPreviewData);
-    } catch {
+      setPreviewModalVisible(true);
+    } catch (err) {
+      console.error('Error al generar la vista previa:', err);
       message.error('Error al generar la vista previa');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1727,7 +1764,7 @@ const FlowEditorContent = ({
   useEffect(() => {
     const handler = (event: CustomEvent<SingleNodePreview>) => {
       setSingleNodePreview(event.detail);
-      setSingleNodePreviewVisible(true);
+      setShowSingleNodePreview(true);
     };
     window.addEventListener('showSingleNodePreview', handler as EventListener);
     return () => window.removeEventListener('showSingleNodePreview', handler as EventListener);
@@ -2213,7 +2250,23 @@ const FlowEditorContent = ({
                           onClick={() => {
                             const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
                             if (node) {
-                              message.info(`Previewing node: ${node.data?.label || 'Unnamed Node'} (${node.type})`);
+                              // Crear el objeto de preview para el nodo
+                              const nodePreview: SingleNodePreview = {
+                                action: 'create',
+                                resource: {
+                                  name: node.data?.label || 'Unnamed Resource',
+                                  type: node.type || 'unknown',
+                                  provider: node.data?.provider || 'generic',
+                                  changes: {
+                                    properties: node.data || {}
+                                  }
+                                },
+                                dependencies: node.data?.dependencies || [],
+                                estimated_cost: node.data?.estimated_cost
+                              };
+                              
+                              setSingleNodePreview(nodePreview);
+                              setShowSingleNodePreview(true);
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2840,7 +2893,10 @@ const FlowEditorContent = ({
             {/* Recursos a Crear */}
             {previewData.resourcesToCreate.length > 0 && (
               <details open className="mb-6">
-                <summary className="cursor-pointer text-green-700 font-semibold text-lg mb-2">Recursos a Crear</summary>
+                <summary className="cursor-pointer text-green-700 font-semibold text-lg mb-2 flex items-center gap-2">
+                  <span className="inline-block bg-green-100 text-green-700 rounded-full px-3 py-1 text-lg">＋</span>
+                  Recursos a Crear ({previewData.resourcesToCreate.length})
+                </summary>
                 <div className="space-y-3 mt-2">
                   {previewData.resourcesToCreate.map(resource => (
                     <div key={resource.id} className="bg-white border border-green-200 rounded p-4 shadow-sm">
@@ -2849,7 +2905,10 @@ const FlowEditorContent = ({
                           <span className="font-bold text-green-700">{resource.name}</span>
                           <span className="ml-2 text-xs text-gray-500">({resource.type})</span>
                         </div>
-                        <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">{resource.provider}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">Crear</span>
+                          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">{resource.provider}</span>
+                        </div>
                       </div>
                       <div className="text-xs text-gray-600">
                         <span className="font-medium">Propiedades:</span>
@@ -2865,7 +2924,10 @@ const FlowEditorContent = ({
             {/* Recursos a Actualizar */}
             {previewData.resourcesToUpdate.length > 0 && (
               <details open className="mb-6">
-                <summary className="cursor-pointer text-yellow-700 font-semibold text-lg mb-2">Recursos a Actualizar</summary>
+                <summary className="cursor-pointer text-yellow-700 font-semibold text-lg mb-2 flex items-center gap-2">
+                  <span className="inline-block bg-yellow-100 text-yellow-700 rounded-full px-3 py-1 text-lg">✎</span>
+                  Recursos a Actualizar ({previewData.resourcesToUpdate.length})
+                </summary>
                 <div className="space-y-3 mt-2">
                   {previewData.resourcesToUpdate.map(resource => (
                     <div key={resource.id} className="bg-white border border-yellow-200 rounded p-4 shadow-sm">
@@ -2874,7 +2936,10 @@ const FlowEditorContent = ({
                           <span className="font-bold text-yellow-700">{resource.name}</span>
                           <span className="ml-2 text-xs text-gray-500">({resource.type})</span>
                         </div>
-                        <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">{resource.provider}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">Actualizar</span>
+                          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">{resource.provider}</span>
+                        </div>
                       </div>
                       <div className="text-xs text-gray-600">
                         <span className="font-medium">Cambios:</span>
@@ -2890,7 +2955,10 @@ const FlowEditorContent = ({
             {/* Recursos a Eliminar */}
             {previewData.resourcesToDelete.length > 0 && (
               <details open className="mb-6">
-                <summary className="cursor-pointer text-red-700 font-semibold text-lg mb-2">Recursos a Eliminar</summary>
+                <summary className="cursor-pointer text-red-700 font-semibold text-lg mb-2 flex items-center gap-2">
+                  <span className="inline-block bg-red-100 text-red-700 rounded-full px-3 py-1 text-lg">－</span>
+                  Recursos a Eliminar ({previewData.resourcesToDelete.length})
+                </summary>
                 <div className="space-y-3 mt-2">
                   {previewData.resourcesToDelete.map(resource => (
                     <div key={resource.id} className="bg-white border border-red-200 rounded p-4 shadow-sm">
@@ -2899,7 +2967,10 @@ const FlowEditorContent = ({
                           <span className="font-bold text-red-700">{resource.name}</span>
                           <span className="ml-2 text-xs text-gray-500">({resource.type})</span>
                         </div>
-                        <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">{resource.provider}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">Eliminar</span>
+                          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">{resource.provider}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -2927,170 +2998,9 @@ const FlowEditorContent = ({
         </div>
       )}
       {/* Modal de preview de un solo nodo */}
-      {singleNodePreviewVisible && singleNodePreview && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 overflow-hidden border border-gray-100">
-            {/* Header */}
-            <div className="bg-white p-6 border-b border-gray-100">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  {singleNodePreview.action === 'create' && (
-                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                      <span className="text-2xl text-green-600">＋</span>
-                    </div>
-                  )}
-                  {singleNodePreview.action === 'update' && (
-                    <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                      <span className="text-2xl text-yellow-600">✎</span>
-                    </div>
-                  )}
-                  {singleNodePreview.action === 'delete' && (
-                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                      <span className="text-2xl text-red-600">－</span>
-                    </div>
-                  )}
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      {singleNodePreview.action === 'create' && 'Crear nuevo recurso'}
-                      {singleNodePreview.action === 'update' && 'Actualizar recurso'}
-                      {singleNodePreview.action === 'delete' && 'Eliminar recurso'}
-                    </h2>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {singleNodePreview.resource.type} • {singleNodePreview.resource.provider}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSingleNodePreviewVisible(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
-                >
-                  <XMarkIcon className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              {/* Resource Info */}
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-                    <ServerIcon className="w-7 h-7 text-blue-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900 text-lg">{singleNodePreview.resource.name}</h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      ID: {singleNodePreview.resource.id || 'N/A'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Changes */}
-              <div className="space-y-4">
-                <h4 className="font-medium text-gray-900">Cambios a realizar:</h4>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <pre className="text-sm text-gray-700 overflow-x-auto bg-white p-3 rounded-lg border border-gray-100">
-                    {JSON.stringify(singleNodePreview.resource.changes, null, 2)}
-                  </pre>
-                </div>
-              </div>
-
-              {/* Estimated Cost */}
-              {singleNodePreview.estimated_cost && (
-                <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-medium text-green-900">Costo estimado</h4>
-                      <p className="text-sm text-green-700 mt-1">
-                        {singleNodePreview.estimated_cost.monthly} {singleNodePreview.estimated_cost.currency} / mes
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                      <CurrencyDollarIcon className="w-7 h-7 text-green-600" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Dependencies */}
-              {singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0 && (
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Recursos dependientes:</h4>
-                  <div className="space-y-3">
-                    {singleNodePreview.dependencies.map((dep, index) => (
-                      <div key={index} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                            <ServerIcon className="w-6 h-6 text-blue-500" />
-                          </div>
-                          <div>
-                            <h5 className="font-medium text-gray-900">{dep.name}</h5>
-                            <p className="text-sm text-gray-500">{dep.type}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => setSingleNodePreviewVisible(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={async () => {
-                    setSingleNodePreviewVisible(false);
-                    setExecutionLogs([]);
-                    setIsExecutionLogVisible(true);
-
-                    const mainResource = {
-                      id: `resource-${Date.now()}`,
-                      data: {
-                        label: singleNodePreview.resource.name,
-                        type: singleNodePreview.resource.type,
-                        provider: singleNodePreview.resource.provider
-                      }
-                    };
-
-                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'creating');
-                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'success');
-
-                    if (singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0) {
-                      for (const dep of singleNodePreview.dependencies) {
-                        const depResource = {
-                          id: `dep-${Date.now()}-${dep.name}`,
-                          data: {
-                            label: dep.name,
-                            type: dep.type,
-                            provider: singleNodePreview.resource.provider
-                          }
-                        };
-                        await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'creating');
-                        await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
-                      }
-                    }
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  Aplicar cambios
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Modal de previsualización de nodo individual */}
       {showSingleNodePreview && singleNodePreview && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 overflow-hidden border border-gray-100">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 overflow-hidden border border-gray-100" style={{ maxHeight: '80vh' }}>
             {/* Header */}
             <div className="bg-white p-6 border-b border-gray-100">
               <div className="flex justify-between items-center">
@@ -3130,76 +3040,278 @@ const FlowEditorContent = ({
               </div>
             </div>
 
-            {/* Content */}
-            <div className="p-6 space-y-6">
-              {/* Resource Info */}
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-                    <ServerIcon className="w-7 h-7 text-blue-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-900 text-lg">{singleNodePreview.resource.name}</h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Tipo: {singleNodePreview.resource.type}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Changes */}
-              <div className="space-y-4">
-                <h4 className="font-medium text-gray-900">Cambios a realizar:</h4>
+            {/* Content con Scroll */}
+            <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 180px)' }}>
+              <div className="p-6 space-y-6">
+                {/* Resource Info */}
                 <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <pre className="text-sm text-gray-700 overflow-x-auto bg-white p-3 rounded-lg border border-gray-100">
-                    {JSON.stringify(singleNodePreview.resource.changes, null, 2)}
-                  </pre>
-                </div>
-              </div>
-
-              {/* Estimated Cost */}
-              {singleNodePreview.estimated_cost && (
-                <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
+                      <ServerIcon className="w-7 h-7 text-blue-500" />
+                    </div>
                     <div>
-                      <h4 className="font-medium text-green-900">Costo estimado</h4>
-                      <p className="text-sm text-green-700 mt-1">
-                        {singleNodePreview.estimated_cost.monthly} {singleNodePreview.estimated_cost.currency} / mes
+                      <h3 className="font-medium text-gray-900 text-lg">{singleNodePreview.resource.name}</h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Tipo: {singleNodePreview.resource.type}
                       </p>
                     </div>
-                    <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                      <CurrencyDollarIcon className="w-7 h-7 text-green-600" />
-                    </div>
                   </div>
                 </div>
-              )}
 
-              {/* Dependencies */}
-              {singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0 && (
+                {/* Changes */}
                 <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Recursos dependientes:</h4>
+                  <h4 className="font-medium text-gray-900">Detalles de los cambios:</h4>
                   <div className="space-y-3">
-                    {singleNodePreview.dependencies.map((dep, index) => (
-                      <div key={index} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-                            <ServerIcon className="w-6 h-6 text-blue-500" />
+                    {/* Recurso Principal */}
+                    <details open className="bg-gray-50 rounded-xl border border-gray-100">
+                      <summary className="p-4 cursor-pointer flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            singleNodePreview.action === 'create' ? 'bg-green-100' :
+                            singleNodePreview.action === 'update' ? 'bg-yellow-100' :
+                            'bg-red-100'
+                          }`}>
+                            {singleNodePreview.action === 'create' ? '＋' :
+                             singleNodePreview.action === 'update' ? '✎' : '－'}
                           </div>
                           <div>
-                            <h5 className="font-medium text-gray-900">{dep.name}</h5>
-                            <p className="text-sm text-gray-500">{dep.type}</p>
+                            <h5 className="font-medium text-gray-900">Recurso Principal</h5>
+                            <p className="text-sm text-gray-500">{singleNodePreview.resource.name}</p>
                           </div>
                         </div>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          singleNodePreview.action === 'create' ? 'bg-green-100 text-green-800' :
+                          singleNodePreview.action === 'update' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {singleNodePreview.action === 'create' ? 'Crear' :
+                           singleNodePreview.action === 'update' ? 'Actualizar' : 'Eliminar'}
+                        </span>
+                      </summary>
+                      <div className="px-4 pb-4">
+                        <div className="bg-white p-3 rounded-lg border border-gray-100">
+                          {singleNodePreview.action === 'update' ? (
+                            <div className="space-y-3">
+                              {Object.entries(singleNodePreview.resource.changes.properties).map(([key, value]) => (
+                                <div key={key} className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded">
+                                  <div className="w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-yellow-600">✎</span>
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex justify-between items-start">
+                                      <span className="font-medium text-gray-900">{key}</span>
+                                      <span className="text-sm text-gray-500">
+                                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : singleNodePreview.action === 'create' ? (
+                            <div className="space-y-3">
+                              {Object.entries(singleNodePreview.resource.changes.properties).map(([key, value]) => (
+                                <div key={key} className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded">
+                                  <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-green-600">＋</span>
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="flex justify-between items-start">
+                                      <span className="font-medium text-gray-900">{key}</span>
+                                      <span className="text-sm text-gray-500">
+                                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-red-50 rounded-lg">
+                              <p className="text-sm text-red-700">
+                                Este recurso será eliminado permanentemente junto con todos sus datos asociados.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    ))}
+                    </details>
+
+                    {/* Dependencias */}
+                    {singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0 && (
+                      <details open className="bg-gray-50 rounded-xl border border-gray-100">
+                        <summary className="p-4 cursor-pointer flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                              <span className="text-blue-600">🔗</span>
+                            </div>
+                            <div>
+                              <h5 className="font-medium text-gray-900">Dependencias</h5>
+                              <p className="text-sm text-gray-500">{singleNodePreview.dependencies.length} recursos</p>
+                            </div>
+                          </div>
+                        </summary>
+                        <div className="px-4 pb-4 space-y-3">
+                          {singleNodePreview.dependencies.map((dep, index) => (
+                            <div key={index} className="bg-white rounded-lg p-3 border border-gray-100">
+                              <div className="flex items-center justify-between mb-2">
+                                <div>
+                                  <span className="font-medium text-gray-900">{dep.name}</span>
+                                  <span className="text-xs text-gray-500 ml-2">({dep.type})</span>
+                                </div>
+                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                  index === 0 ? 'bg-yellow-100 text-yellow-800' :
+                                  index === 1 ? 'bg-red-100 text-red-800' :
+                                  'bg-green-100 text-green-800'
+                                }`}>
+                                  {index === 0 ? 'Actualizar' : index === 1 ? 'Eliminar' : 'Crear'}
+                                </span>
+                              </div>
+                              {/* Detalles de cambios para actualizaciones */}
+                              {index === 0 && (
+                                <div className="mt-3 space-y-2">
+                                  <div className="text-sm font-medium text-gray-700">Cambios a realizar:</div>
+                                  <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                                    {/* Ejemplo de cambios en propiedades específicas */}
+                                    <div className="flex items-start gap-2">
+                                      <div className="w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-yellow-600">✎</span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="text-sm text-gray-600">
+                                          <span className="font-medium">Tamaño del disco:</span>
+                                          <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-red-600 line-through">10 GB</span>
+                                            <span className="text-gray-500">→</span>
+                                            <span className="text-green-600">20 GB</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                      <div className="w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-yellow-600">✎</span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="text-sm text-gray-600">
+                                          <span className="font-medium">Etiquetas:</span>
+                                          <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-red-600 line-through">team:devops</span>
+                                            <span className="text-gray-500">→</span>
+                                            <span className="text-green-600">team:payments</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                      <div className="w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-yellow-600">✎</span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="text-sm text-gray-600">
+                                          <span className="font-medium">Conexiones:</span>
+                                          <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-red-600 line-through">db-1</span>
+                                            <span className="text-gray-500">→</span>
+                                            <span className="text-green-600">db-2</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {/* Detalles para eliminaciones */}
+                              {index === 1 && (
+                                <div className="mt-3">
+                                  <div className="bg-red-50 rounded-lg p-3">
+                                    <div className="flex items-start gap-2">
+                                      <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-red-600">⚠️</span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="text-sm text-red-700">
+                                          Este recurso será eliminado permanentemente. Se eliminarán todos los datos asociados y las conexiones con otros recursos.
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {/* Detalles para creaciones */}
+                              {index > 1 && (
+                                <div className="mt-3 space-y-2">
+                                  <div className="text-sm font-medium text-gray-700">Nuevo recurso:</div>
+                                  <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                                    <div className="flex items-start gap-2">
+                                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-green-600">＋</span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="text-sm text-gray-600">
+                                          <span className="font-medium">Configuración inicial:</span>
+                                          <div className="mt-1 space-y-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-gray-500">•</span>
+                                              <span>Tamaño del disco: 20 GB</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-gray-500">•</span>
+                                              <span>Etiquetas: team:payments</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                        <span className="text-green-600">＋</span>
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="text-sm text-gray-600">
+                                          <span className="font-medium">Conexiones:</span>
+                                          <div className="mt-1 space-y-1">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-gray-500">•</span>
+                                              <span>db-2</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 </div>
-              )}
+
+                {/* Estimated Cost */}
+                {singleNodePreview.estimated_cost && (
+                  <div className="bg-green-50 rounded-xl p-4 border border-green-100">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-green-900">Costo estimado</h4>
+                        <p className="text-sm text-green-700 mt-1">
+                          {singleNodePreview.estimated_cost.monthly} {singleNodePreview.estimated_cost.currency} / mes
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                        <CurrencyDollarIcon className="w-7 h-7 text-green-600" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Footer */}
             <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
-              <div className="flex justify-end gap-3 mt-6">
+              <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowSingleNodePreview(false)}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
@@ -3208,34 +3320,58 @@ const FlowEditorContent = ({
                 </button>
                 <button
                   onClick={async () => {
-                    setShowSingleNodePreview(false);
-                    setExecutionLogs([]);
-                    setIsExecutionLogVisible(true);
+                    // Mostrar confirmación
+                    const confirmed = window.confirm(
+                      `¿Estás seguro de que deseas ${singleNodePreview.action === 'create' ? 'crear' : 
+                       singleNodePreview.action === 'update' ? 'actualizar' : 'eliminar'} este recurso y sus dependencias?`
+                    );
+                    
+                    if (confirmed) {
+                      setShowSingleNodePreview(false);
+                      setExecutionLogs([]);
+                      setIsExecutionLogVisible(true);
 
-                    const mainResource = {
-                      id: `resource-${Date.now()}`,
-                      data: {
-                        label: singleNodePreview.resource.name,
-                        type: singleNodePreview.resource.type,
-                        provider: singleNodePreview.resource.provider
-                      }
-                    };
+                      // Simular el recurso principal
+                      const mainResource = {
+                        id: `resource-${Date.now()}`,
+                        data: {
+                          label: singleNodePreview.resource.name,
+                          type: singleNodePreview.resource.type,
+                          provider: singleNodePreview.resource.provider
+                        }
+                      };
 
-                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'creating');
-                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'success');
+                      // Simular creación del recurso principal
+                      await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'creating');
+                      await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'success');
 
-                    if (singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0) {
-                      for (const dep of singleNodePreview.dependencies) {
-                        const depResource = {
-                          id: `dep-${Date.now()}-${dep.name}`,
-                          data: {
-                            label: dep.name,
-                            type: dep.type,
-                            provider: singleNodePreview.resource.provider
+                      // Simular diferentes estados para las dependencias
+                      if (singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0) {
+                        for (const dep of singleNodePreview.dependencies) {
+                          const depResource = {
+                            id: `dep-${Date.now()}-${dep.name}`,
+                            data: {
+                              label: dep.name,
+                              type: dep.type,
+                              provider: singleNodePreview.resource.provider
+                            }
+                          };
+
+                          // Simular diferentes estados según el índice
+                          if (dep === singleNodePreview.dependencies[0]) {
+                            // Primera dependencia: Actualizar
+                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'updating');
+                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
+                          } else if (dep === singleNodePreview.dependencies[1]) {
+                            // Segunda dependencia: Eliminar
+                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'deleting');
+                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
+                          } else {
+                            // Resto de dependencias: Crear
+                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'creating');
+                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
                           }
-                        };
-                        await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'creating');
-                        await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
+                        }
                       }
                     }
                   }}
