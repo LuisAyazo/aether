@@ -10,6 +10,7 @@ import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';
 import NoteNode from './NoteNode';
 import TextNode from './TextNode';
+import AreaNode from './AreaNode';
 
 // AWS Node Implementations using BaseResourceNode for consistent behavior
 export function EC2Node(props: NodeProps) {
@@ -257,6 +258,9 @@ const nodeTypes = {
   // Note and Text nodes
   noteNode: NoteNode,
   textNode: TextNode,
+  
+  // Area node
+  areaNode: AreaNode,
 };
 
 export default nodeTypes;

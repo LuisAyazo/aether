@@ -115,6 +115,8 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
         isVisible={selected}
         minWidth={50}
         minHeight={20}
+        // @ts-expect-error - handlePosition is available in newer versions
+        handlePosition="all"
         lineStyle={{
           borderColor: '#3b82f6',
           borderWidth: 1,
@@ -122,9 +124,13 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
         }}
         handleStyle={{
           backgroundColor: '#3b82f6',
-          width: '4px',
-          height: '4px',
-          opacity: 0.5,
+          width: '6px',
+          height: '6px',
+          opacity: 0.7,
+          border: 'none',
+          borderRadius: '0',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 10,
         }}
       />
 

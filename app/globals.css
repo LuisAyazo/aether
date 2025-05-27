@@ -111,3 +111,66 @@ body {
   width: 140px !important;
   height: 28px !important;
 }
+
+/* Estilos para el lasso select */
+.lasso-selection-mode {
+  cursor: crosshair !important;
+}
+
+.lasso-selection-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+/* Estilos para la herramienta de dibujo de área */
+.area-drawing-mode {
+  cursor: crosshair !important;
+}
+
+.area-drawing-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+.area-drawing-overlay {
+  position: absolute !important;
+  border: 2px solid rgba(59, 130, 246, 1) !important;
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  pointer-events: none !important;
+  z-index: 1000 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
+  transition: none !important;
+}
+
+.react-flow__selection {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  border: 2px solid rgba(59, 130, 246, 1) !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
+}
+
+.react-flow__selection-rect {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  border: 2px solid rgba(59, 130, 246, 1) !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Ensure NodeResizer handles are visible and interactive */
+.react-flow__node-noteNode,
+.react-flow__node-textNode {
+  z-index: 5;
+}
+
+.react-flow__resize-control {
+  z-index: 10;
+  pointer-events: all !important;
+}
+
+.react-flow__resize-control.top,
+.react-flow__resize-control.right,
+.react-flow__resize-control.bottom,
+.react-flow__resize-control.left,
+.react-flow__resize-control.top-left,
+.react-flow__resize-control.top-right,
+.react-flow__resize-control.bottom-left,
+.react-flow__resize-control.bottom-right {
+  pointer-events: all !important;
+}

@@ -109,6 +109,10 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         cursor: isEditing ? 'text' : 'default',
         pointerEvents: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        boxSizing: 'border-box'
       }}
       onDoubleClick={handleDoubleClick}
     >
@@ -124,6 +128,11 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
           backgroundColor: '#3b82f6',
           width: '8px',
           height: '8px',
+          border: '2px solid white',
+          borderRadius: '50%',
+          transform: 'translate(-50%, -50%)',
+          opacity: 1,
+          zIndex: 10,
         }}
       />
 
@@ -217,51 +226,60 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
       )}
 
       {/* Content */}
-      {isEditing ? (
-        <textarea
-          ref={textareaRef}
-          value={text}
-          onChange={handleTextChange}
-          onBlur={handleTextSubmit}
-          onKeyDown={handleKeyDown}
-          style={{
-            width: '100%',
-            border: 'none',
-            outline: 'none',
-            background: 'transparent',
-            resize: 'none',
-            fontFamily: 'inherit',
-            fontSize: `${fontSize}px`,
-            color: textColor,
-            minHeight: '60px',
-          }}
-          placeholder="Escribe aquí tu nota..."
-        />
-      ) : (
-        <div
-          style={{
-            fontSize: `${fontSize}px`,
-            color: textColor,
-            lineHeight: '1.5',
-            whiteSpace: 'pre-wrap',
-            minHeight: '60px',
-            wordWrap: 'break-word',
-          }}
-        >
-          {text || 'Doble clic para editar...'}
-        </div>
-      )}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {isEditing ? (
+          <textarea
+            ref={textareaRef}
+            value={text}
+            onChange={handleTextChange}
+            onBlur={handleTextSubmit}
+            onKeyDown={handleKeyDown}
+            style={{
+              width: '100%',
+              border: 'none',
+              outline: 'none',
+              background: 'transparent',
+              resize: 'both',
+              fontFamily: 'inherit',
+              fontSize: `${fontSize}px`,
+              color: textColor,
+              minHeight: '60px',
+              height: 'auto',
+              overflow: 'auto',
+              padding: '4px',
+              boxSizing: 'border-box',
+              flex: 1
+            }}
+            placeholder="Escribe aquí tu nota..."
+          />
+        ) : (
+          <div
+            style={{
+              fontSize: `${fontSize}px`,
+              color: textColor,
+              lineHeight: '1.5',
+              whiteSpace: 'pre-wrap',
+              minHeight: '60px',
+              wordWrap: 'break-word',
+              padding: '4px',
+              boxSizing: 'border-box',
+              flex: 1
+            }}
+          >
+            {text || 'Doble clic para editar...'}
+          </div>
+        )}
+      </div>
 
       {/* Instruction text */}
       {!isEditing && !text && (
         <div
           style={{
-            position: 'absolute',
-            bottom: '4px',
-            right: '8px',
             fontSize: '10px',
             color: '#9ca3af',
             fontStyle: 'italic',
+            marginTop: '4px',
+            textAlign: 'right'
           }}
         >
           Ctrl+Enter para guardar
