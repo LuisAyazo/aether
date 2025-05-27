@@ -8,6 +8,8 @@ import {
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';
+import NoteNode from './NoteNode';
+import TextNode from './TextNode';
 
 // AWS Node Implementations using BaseResourceNode for consistent behavior
 export function EC2Node(props: NodeProps) {
@@ -251,6 +253,10 @@ const nodeTypes = {
   
   // Group node
   group: GroupNode,
+  
+  // Note and Text nodes
+  noteNode: NoteNode,
+  textNode: TextNode,
 };
 
 export default nodeTypes;

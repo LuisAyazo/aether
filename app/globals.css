@@ -68,6 +68,32 @@ body {
   outline: none !important;
 }
 
+/* Text node styles - override React Flow defaults */
+.react-flow__node-textNode {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: auto !important;
+  min-height: auto !important;
+}
+
+.react-flow__node-textNode.selectable:hover {
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.react-flow__node-textNode.selectable.selected,
+.react-flow__node-textNode.selectable:focus,
+.react-flow__node-textNode.selectable:focus-visible {
+  box-shadow: none !important;
+  border: none !important;
+}
+
 /* Eliminar cualquier espacio fantasma en grupos minimizados */
 .react-flow__node-group[data-minimized="true"] {
   background: transparent !important;

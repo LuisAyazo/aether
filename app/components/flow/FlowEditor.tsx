@@ -40,11 +40,14 @@ import {
   Square3Stack3DIcon,
   FolderPlusIcon, 
   FolderMinusIcon,
-  SwatchIcon
+  SwatchIcon,
+  DocumentTextIcon,
+  PencilIcon
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
 import GlobalIaCTemplatePanel from '../ui/GlobalIaCTemplatePanel';
+import nodeTypes from '../nodes/NodeTypes';
 
 interface ResourceCategory {
   name: string;
@@ -74,7 +77,7 @@ interface ContextMenu {
   } | null;
 }
 
-type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea';
+type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea' | 'note' | 'text';
 
 interface FlowEditorProps {
   nodes?: Node[];
@@ -266,7 +269,20 @@ const FlowEditorContent = ({
   diagramId
 }: FlowEditorProps): JSX.Element => {
   
-  const memoizedNodeTypes = useMemo(() => externalNodeTypes, [externalNodeTypes]);
+  // Combinar los tipos de nodos externos con los tipos de nodos definidos en NodeTypes.tsx
+  const memoizedNodeTypes = useMemo(() => {
+    // Add explicit mapping for note and text nodes
+    const combinedNodeTypes = {
+      ...nodeTypes,         // Incluye noteNode y textNode
+      ...externalNodeTypes,  // Tipos de nodos proporcionados externamente
+      // Add explicit mappings for note and text
+      note: nodeTypes.noteNode,
+      text: nodeTypes.textNode
+    };
+    
+    console.log('Available node types:', Object.keys(combinedNodeTypes));
+    return combinedNodeTypes;
+  }, [externalNodeTypes]);
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useNodesState(propNodes || initialNodes);
@@ -282,8 +298,11 @@ const FlowEditorContent = ({
   // Add a ref to store the last viewport state
   const lastViewportRef = useRef<Viewport | null>(null);
   
-  // Add a ref to track if we've initialized the viewport
+  // Ref para rastrear si hemos inicializado el viewport
   const viewportInitializedRef = useRef(false);
+  
+  // Ref para el timeout del debounce del cambio de viewport
+  const viewportChangeTimeout = useRef<NodeJS.Timeout | null>(null);
   
   const [contextMenu, setContextMenu] = useState<ContextMenu>({
     visible: false,
@@ -309,7 +328,7 @@ const FlowEditorContent = ({
     setSelectedEdge(null);
   }, [onEdgesChange]);
 
-  const handlePaneClick = useCallback(() => {
+  const handlePaneClick = useCallback((event: React.MouseEvent) => {
     setSelectedEdge(null);
     setContextMenu(prev => ({...prev, visible: false}));
     
@@ -317,7 +336,74 @@ const FlowEditorContent = ({
     if (activeTool !== 'lasso') {
       // No limpiar selección aquí, dejar que ReactFlow lo maneje
     }
-  }, [activeTool]);
+
+    // Crear nodo de nota cuando la herramienta de nota está activa
+    if (activeTool === 'note' && reactFlowInstance) {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Usar el método oficial de React Flow para convertir coordenadas de pantalla a flow
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      });
+      
+      const newNode: Node = {
+        id: `note-${Date.now()}`,
+        type: 'noteNode',
+        position,
+        data: {
+          text: 'Click to edit',
+          backgroundColor: '#FEF08A', // Amarillo por defecto
+          textColor: '#1F2937',
+          fontSize: 14
+        },
+        selected: true,
+        draggable: true,
+        selectable: true
+      };
+      
+      // Usar onNodesChange para agregar el nodo correctamente
+      if (onNodesChange) {
+        onNodesChange([{ type: 'add', item: newNode }]);
+      }
+      
+      return;
+    }
+    
+    // Crear nodo de texto cuando la herramienta de texto está activa
+    if (activeTool === 'text' && reactFlowInstance) {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Usar el método oficial de React Flow para convertir coordenadas de pantalla a flow
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      });
+      
+      const newNode: Node = {
+        id: `text-${Date.now()}`,
+        type: 'textNode',
+        position,
+        data: {
+          text: 'Click to edit',
+          fontSize: 16,
+          textColor: '#000000'
+        },
+        selected: true,
+        draggable: true,
+        selectable: true
+      };
+      
+      // Usar onNodesChange para agregar el nodo correctamente
+      if (onNodesChange) {
+        onNodesChange([{ type: 'add', item: newNode }]);
+      }
+      
+      return;
+    }
+  }, [activeTool, reactFlowInstance, onNodesChange]);
 
   const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
@@ -382,6 +468,10 @@ const FlowEditorContent = ({
   // 🔒 Critical code below – do not edit or delete
   useEffect(() => {
     if (initialViewport && reactFlowInstance) {
+      // Guardar el viewport inicial en lastViewportRef para que se use en los guardados
+      lastViewportRef.current = initialViewport;
+      
+      // Establecer el viewport con un pequeño retraso para asegurar que ReactFlow esté listo
       setTimeout(() => {
         reactFlowInstance.setViewport(initialViewport);
       }, 100);
@@ -730,12 +820,61 @@ const FlowEditorContent = ({
     reactFlowInstance.setNodes(finalNodes);
   }, [selectedNodes, reactFlowInstance]);
 
+  // Function to add a node to the center of the stage
+  const addNodeToCenter = useCallback((nodeType: string, label: string, provider: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic') => {
+    if (!reactFlowInstance) return;
+    
+    // DEBUG: Comment out viewport handling
+    // const currentViewport = reactFlowInstance.getViewport();
+    
+    // Get the dimensions of the flow container
+    const flowBounds = reactFlowWrapper.current?.getBoundingClientRect();
+    if (!flowBounds) return;
+    
+    // Calculate the center position in screen coordinates
+    const centerX = flowBounds.width / 2;
+    const centerY = flowBounds.height / 2;
+    
+    // Convert to flow coordinates
+    const position = reactFlowInstance.screenToFlowPosition({
+      x: centerX,
+      y: centerY
+    });
+    
+    // Create a new node
+    const newNode: Node = {
+      id: `${nodeType}-${Date.now()}`,
+      type: nodeType,
+      position,
+      data: { 
+        label,
+        provider
+      },
+      draggable: true,
+      selectable: true,
+      connectable: true,
+      style: {
+        width: 200,
+        height: 100
+      }
+    };
+    
+    // Add the new node to the flow without triggering viewport changes
+    setNodes((nds) => [...nds, newNode]);
+    
+    // DEBUG: Comment out viewport restoration
+    // if (lastViewportRef) {
+    //   lastViewportRef.current = currentViewport;
+    // }
+  }, [reactFlowInstance, reactFlowWrapper]);
+
   const handleToolClick = useCallback((tool: ToolType) => {
     if (tool === activeTool && tool !== 'lasso') return;
     
     setSelectionActive(false);
     document.body.classList.remove('lasso-selection-mode');
 
+    // Handle tool-specific actions
     if (tool === 'lasso') {
       setSelectionActive(true);
       document.body.classList.add('lasso-selection-mode');
@@ -747,6 +886,9 @@ const FlowEditorContent = ({
         selectable: true 
       })));
     }
+    
+    // Simplemente establecer la herramienta activa sin agregar nodos inmediatamente
+    // Los nodos se agregarán cuando se haga clic en el canvas (en el evento paneClick)
     
     setActiveTool(tool);
     
@@ -935,23 +1077,60 @@ const FlowEditorContent = ({
         y: event.clientY
       });
 
-      const newNode: Node = {
-        id: `${transferredData.type}-${Date.now()}`,
-        type: transferredData.type,
-        position: { ...position }, // Create a copy to avoid reference issues
-        data: { 
-          label: transferredData.name,
-          description: transferredData.description,
-          provider: transferredData.provider
-        },
-        draggable: true,
-        selectable: true,
-        connectable: true,
-        style: {
-          width: 200,
-          height: 100
-        }
-      };          // Check if the node is dropped within a group
+      let newNode: Node;
+
+      // Handle specific node types with their required data structures
+      if (transferredData.type === 'note') {
+        newNode = {
+          id: `note-${Date.now()}`,
+          type: 'noteNode',
+          position: { ...position },
+          data: {
+            text: 'Click to edit',
+            backgroundColor: '#FEF08A', // Amarillo por defecto
+            textColor: '#1F2937',
+            fontSize: 14
+          },
+          draggable: true,
+          selectable: true
+        };
+      } else if (transferredData.type === 'text') {
+        newNode = {
+          id: `text-${Date.now()}`,
+          type: 'textNode',
+          position: { ...position },
+          data: {
+            text: 'Click to edit',
+            fontSize: 16,
+            fontWeight: 'normal',
+            textAlign: 'left',
+            textColor: '#000000',
+            backgroundColor: 'transparent',
+            borderStyle: 'none'
+          },
+          draggable: true,
+          selectable: true
+        };
+      } else {
+        // Default handling for other node types
+        newNode = {
+          id: `${transferredData.type}-${Date.now()}`,
+          type: transferredData.type,
+          position: { ...position }, // Create a copy to avoid reference issues
+          data: { 
+            label: transferredData.name,
+            description: transferredData.description,
+            provider: transferredData.provider
+          },
+          draggable: true,
+          selectable: true,
+          connectable: true,
+          style: {
+            width: 200,
+            height: 100
+          }
+        };
+      }          // Check if the node is dropped within a group
       const groupNode = findGroupAtPosition(position);
       if (groupNode) {
         const parentGroup = reactFlowInstance.getNode(groupNode.id);
@@ -989,26 +1168,27 @@ const FlowEditorContent = ({
         }
       }
 
+      // DEBUG: Comentado para evitar reinicio del zoom al agregar nodos
       // Improved viewport restoration function to maintain exact zoom level
-      const restoreViewport = () => {
-        // Use the stored pan position and corrected zoom for precise restoration
-        const viewportToRestore = {
-          x: panPosition.x,
-          y: panPosition.y,
-          zoom: correctedZoom // Use the corrected zoom value for maximum precision
-        };
-        
-        // Apply the viewport restoration directly
-        reactFlowInstance.setViewport(viewportToRestore);
-          
-        // Update the lastViewportRef for consistency
-        if (lastViewportRef) {
-          lastViewportRef.current = { ...viewportToRestore };
-        }
-      };
+      // const restoreViewport = () => {
+      //   // Use the stored pan position and corrected zoom for precise restoration
+      //   const viewportToRestore = {
+      //     x: panPosition.x,
+      //     y: panPosition.y,
+      //     zoom: correctedZoom // Use the corrected zoom value for maximum precision
+      //   };
+      //   
+      //   // Apply the viewport restoration directly
+      //   reactFlowInstance.setViewport(viewportToRestore);
+      //     
+      //   // Update the lastViewportRef for consistency
+      //   if (lastViewportRef) {
+      //     lastViewportRef.current = { ...viewportToRestore };
+      //   }
+      // };
       
-      // Apply initial viewport to prevent any immediate zoom changes
-      restoreViewport();
+      // // Apply initial viewport to prevent any immediate zoom changes
+      // restoreViewport();
       
       // Add the new node to the flow
       const updatedNodes = [...reactFlowInstance.getNodes(), newNode];
@@ -1020,7 +1200,8 @@ const FlowEditorContent = ({
       }
       
       // Apply second restoration immediately after node is added
-      restoreViewport();
+      // DEBUG: Comentado para evitar reinicio del zoom
+      // restoreViewport();
       
       // If node is added to a group, optimize the group layout first
       if (newNode.parentId) {
@@ -1028,29 +1209,31 @@ const FlowEditorContent = ({
         setTimeout(() => {
           optimizeNodesInGroup(newNode.parentId!);
           
+          // DEBUG: Comentado para evitar reinicio del zoom
           // Force multiple viewport restorations with different timings
           // to catch all potential zoom reset points
-          restoreViewport();
+          // restoreViewport();
           
           // Add high-priority restorations after optimization
           requestAnimationFrame(() => {
-            restoreViewport();
+            // restoreViewport();
             
             // One more restoration after a short delay
-            setTimeout(restoreViewport, 10);
+            // setTimeout(restoreViewport, 10);
           });
         }, 0);
       } else {
+        // DEBUG: Comentado para evitar reinicio del zoom
         // For nodes not in groups, add a sequence of timed restorations
         // to ensure the viewport is maintained at critical points
         setTimeout(() => {
-          restoreViewport();
+          // restoreViewport();
           
           requestAnimationFrame(() => {
-            restoreViewport();
+            // restoreViewport();
             
             // One final restoration after a slight delay
-            setTimeout(restoreViewport, 10);
+            // setTimeout(restoreViewport, 10);
           });
         }, 0);
       }
@@ -1079,6 +1262,9 @@ const FlowEditorContent = ({
   // Manejador personalizado para los cambios de nodos
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     if (!onNodesChange) return;
+    
+    // DEBUG: Comment out viewport handling
+    // const currentViewport = reactFlowInstance.getViewport();
 
     // Filter dragging changes to check for group attachment
     const dragChanges = changes.filter((change): change is NodePositionChange => 
@@ -1235,6 +1421,15 @@ const FlowEditorContent = ({
 
     // Notificar al componente padre
     onNodesChange(changes);
+    
+    // DEBUG: Comment out viewport restoration
+    // if (lastViewportRef) {
+    //   lastViewportRef.current = currentViewport;
+    //   // Use a small timeout to ensure the viewport is restored after React has processed the changes
+    //   setTimeout(() => {
+    //     reactFlowInstance.setViewport(currentViewport, { duration: 0 });
+    //   }, 0);
+    // }
 
     // Si hay un diagramId, guardar los cambios con debounce
     if (diagramId && onSave) {
@@ -1282,141 +1477,165 @@ const FlowEditorContent = ({
     return counts;
   }, [nodes]);
 
-  // Modify the viewport initialization effect
-  useEffect(() => {
-    if (!reactFlowInstance || !nodes.length) return;
+  // Add effect to initialize viewport when nodes are loaded
+  // DEBUG: Comment out the ensureVisibility function that might be causing zoom resets
+  // useEffect(() => {
+  //   if (!reactFlowInstance || !nodes.length) return;
     
-    // If we have a saved viewport, use it
-    if (lastViewportRef.current) {
-      reactFlowInstance.setViewport(lastViewportRef.current);
-      return;
-    }
+  //   // Solo inicializamos el viewport una vez al cargar
+  //   if (viewportInitializedRef.current) return;
     
-    // If we haven't initialized the viewport yet
-    if (!viewportInitializedRef.current) {
-      // Wait for nodes to be rendered
-      setTimeout(() => {
-        // Calculate nodes bounding box
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
-        
-        reactFlowInstance.getNodes().forEach(node => {
-          if (!node.hidden) {
-            const nodeWidth = node.width || 150;
-            const nodeHeight = node.height || 80;
-            
-            minX = Math.min(minX, node.position.x);
-            minY = Math.min(minY, node.position.y);
-            maxX = Math.max(maxX, node.position.x + nodeWidth);
-            maxY = Math.max(maxY, node.position.y + nodeHeight);
-          }
-        });
-
-        // Skip if no nodes are visible or bounding box calculation failed
-        if (minX === Infinity || minY === Infinity) return;
-        
-        // Calculate center of nodes
-        const nodesWidth = maxX - minX;
-        const nodesHeight = maxY - minY;
-        const nodesCenterX = minX + nodesWidth / 2;
-        const nodesCenterY = minY + nodesHeight / 2;
-        
-        // Get viewport dimensions
-        const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 600 };
-        const viewportCenterX = width / 2;
-        const viewportCenterY = height / 2;
-        
-        // Calculate the translation needed to center nodes
-        const zoom = 1; // Keep zoom level fixed at 1
-        const translateX = viewportCenterX - nodesCenterX * zoom;
-        const translateY = viewportCenterY - nodesCenterY * zoom;
-        
-        // Set viewport to center nodes without animation
-        const newViewport = { 
-          x: translateX, 
-          y: translateY, 
-          zoom 
-        };
-        
-        reactFlowInstance.setViewport(newViewport);
-        lastViewportRef.current = newViewport;
-        viewportInitializedRef.current = true;
-      }, 200); // Small delay to ensure nodes are rendered
-    }
-  }, [reactFlowInstance, nodes.length, reactFlowWrapper]);
-
-  // Add effect to save viewport state
-  useEffect(() => {
-    if (!reactFlowInstance) return;
+  //   // Si tenemos un viewport inicial desde props, usamos ese
+  //   if (initialViewport) {
+  //     console.log('Usando initialViewport guardado:', initialViewport);
+  //     // Asegurarnos de que el viewport tenga valores válidos
+  //     const validViewport = {
+  //       x: initialViewport.x || 0,
+  //       y: initialViewport.y || 0,
+  //       zoom: initialViewport.zoom || 1
+  //     };
+  //     reactFlowInstance.setViewport(validViewport, { duration: 0 });
+  //     lastViewportRef.current = validViewport;
+  //     viewportInitializedRef.current = true;
+  //     return;
+  //   }
     
-    const handleViewportChange = () => {
-      const viewport = reactFlowInstance.getViewport();
-      lastViewportRef.current = viewport;
-    };
-    
-    // Use the viewportChange event from ReactFlow
-    document.addEventListener('reactflow.viewportChange', handleViewportChange);
-    
-    return () => {
-      document.removeEventListener('reactflow.viewportChange', handleViewportChange);
-    };
-  }, [reactFlowInstance]);
-
-  // Add effect to ensure nodes and groups are visible
-  useEffect(() => {
-    if (!reactFlowInstance || !nodes.length) return;
-    
-    const ensureVisibility = () => {
-      const currentNodes = reactFlowInstance.getNodes();
-      const updatedNodes = currentNodes.map(node => ({
-        ...node,
-        hidden: false,
-        style: {
-          ...node.style,
-          visibility: 'visible' as const,
-          opacity: 1
-        }
-      }));
+  //   // De lo contrario, calculamos un viewport que muestre todos los nodos
+  //   setTimeout(() => {
+  //     if (!reactFlowInstance) return;
       
-      reactFlowInstance.setNodes(updatedNodes);
-    };
-    
-    // Run once on mount and when nodes change
-    ensureVisibility();
-    
-    // Also run when the viewport changes to ensure visibility
-    document.addEventListener('reactflow.viewportChange', ensureVisibility);
-    
-    return () => {
-      document.removeEventListener('reactflow.viewportChange', ensureVisibility);
-    };
-  }, [reactFlowInstance, nodes.length]);
+  //     // Encontrar el cuadro delimitador de todos los nodos
+  //     const nodePositions = nodes.map(node => ({
+  //       x: node.position.x,
+  //       y: node.position.y,
+  //       width: node.width || 150,
+  //       height: node.height || 40
+  //     }));
+      
+  //     if (!nodePositions.length) return;
+      
+  //     // Calcular el cuadro delimitador con un margen adicional
+  //     const margin = 100; // Margen adicional para asegurar que todos los nodos sean visibles
+  //     const minX = Math.min(...nodePositions.map(pos => pos.x)) - margin;
+  //     const maxX = Math.max(...nodePositions.map(pos => pos.x + (pos.width || 150))) + margin;
+  //     const minY = Math.min(...nodePositions.map(pos => pos.y)) - margin;
+  //     const maxY = Math.max(...nodePositions.map(pos => pos.y + (pos.height || 40))) + margin;
+      
+  //     // Calcular el centro de los nodos
+  //     const nodesWidth = maxX - minX;
+  //     const nodesHeight = maxY - minY;
+  //     const nodesCenterX = minX + nodesWidth / 2;
+  //     const nodesCenterY = minY + nodesHeight / 2;
+      
+  //     // Obtener dimensiones del viewport
+  //     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 600 };
+      
+  //     // Calcular el zoom óptimo para mostrar todos los nodos
+  //     const zoomX = width / nodesWidth;
+  //     const zoomY = height / nodesHeight;
+  //     const zoom = Math.min(Math.min(zoomX, zoomY), 1); // No hacer zoom más allá de 1
+      
+  //     // Calcular la traslación necesaria para centrar los nodos
+  //     const translateX = width / 2 - nodesCenterX * zoom;
+  //     const translateY = height / 2 - nodesCenterY * zoom;
+      
+  //     // Establecer el viewport para centrar los nodos sin animación
+  //     const newViewport = { 
+  //       x: translateX, 
+  //       y: translateY, 
+  //       zoom 
+  //     };
+      
+  //     console.log('Inicializando viewport para mostrar todos los nodos:', newViewport);
+  //     reactFlowInstance.setViewport(newViewport, { duration: 0 });
+  //   }, 300); // Pequeño retraso para asegurar que los nodos estén renderizados
+  // }, [reactFlowInstance, nodes.length, initialViewport, nodes, reactFlowWrapper]);
+  
+  // DEBUG: Comment out the viewport change handler
+  // useEffect(() => {
+  //   // Code commented out to debug zoom reset issues
+  // }, [reactFlowInstance, onSave]);
 
-  // Modify the save effect to include viewport
+  // DEBUG: Comment out the ensureVisibility function that might be causing zoom resets
+  // useEffect(() => {
+  //   if (!reactFlowInstance || !nodes.length) return;
+    
+  //   // Ensure all nodes are visible
+  //   const ensureVisibility = () => {
+  //     const currentNodes = reactFlowInstance.getNodes();
+  //     const updatedNodes = currentNodes.map(node => ({
+  //       ...node,
+  //       hidden: false,
+  //       style: {
+  //         ...node.style,
+  //         visibility: 'visible' as const,
+  //         opacity: 1
+  //       }
+  //     }));
+      
+  //     reactFlowInstance.setNodes(updatedNodes);
+  //   };
+    
+  //   // Run once on mount and when nodes change
+  //   // ensureVisibility();
+  //   
+  //   // Also run when the viewport changes to ensure visibility
+  //   document.addEventListener('reactflow.viewportChange', ensureVisibility);
+  //   
+  //   return () => {
+  //     document.removeEventListener('reactflow.viewportChange', ensureVisibility);
+  //   };
+  // }, [reactFlowInstance, nodes.length]);
+
+  // Función para guardar explícitamente el estado actual del diagrama
+  const saveCurrentDiagramState = useCallback(() => {
+    if (!reactFlowInstance || !onSave) return;
+    
+    // Obtener el estado actual del diagrama
+    const currentNodes = reactFlowInstance.getNodes();
+    const currentEdges = reactFlowInstance.getEdges();
+    
+    // Obtener el viewport actual (zoom y posición)
+    const currentViewport = reactFlowInstance.getViewport();
+    console.log('Guardando viewport explícitamente:', currentViewport);
+    
+    // Actualizar la referencia al viewport
+    lastViewportRef.current = currentViewport;
+    
+    // Crear el objeto de flujo completo
+    const flow = reactFlowInstance.toObject();
+    
+    // Guardar el diagrama con el viewport actual
+    onSave({
+      ...flow,
+      viewport: currentViewport
+    });
+    
+    // Actualizar las referencias para comparaciones futuras
+    previousNodesRef.current = JSON.stringify(currentNodes);
+    previousEdgesRef.current = JSON.stringify(currentEdges);
+    
+    console.log('Diagrama guardado con viewport:', currentViewport);
+  }, [reactFlowInstance, onSave]);
+  
+  // Efecto para guardar automáticamente cuando cambian los nodos o bordes
   useEffect(() => {
+    if (!reactFlowInstance || !onSave) return;
+    
     const currentNodes = reactFlowInstance.getNodes();
     const currentEdges = reactFlowInstance.getEdges();
     const currentNodesJSON = JSON.stringify(currentNodes);
     const currentEdgesJSON = JSON.stringify(currentEdges);
     
-    if (onSave && reactFlowInstance && 
-        (currentNodesJSON !== previousNodesRef.current || 
-         currentEdgesJSON !== previousEdgesRef.current)) {
-      
-      previousNodesRef.current = currentNodesJSON;
-      previousEdgesRef.current = currentEdgesJSON;
+    if (currentNodesJSON !== previousNodesRef.current || 
+        currentEdgesJSON !== previousEdgesRef.current) {
       
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
       
       saveTimeoutRef.current = setTimeout(() => {
-        const flow = reactFlowInstance.toObject();
-        // Include the current viewport in the save data
-        onSave?.({
-          ...flow,
-          viewport: lastViewportRef.current || flow.viewport
-        });
+        saveCurrentDiagramState();
       }, 1000);
     }
     
@@ -1426,6 +1645,49 @@ const FlowEditorContent = ({
       }
     };
   }, [onSave, reactFlowInstance, propNodes, propEdges]);
+
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore keyboard shortcuts when typing in input fields
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      // Keyboard shortcuts for tools
+      switch (event.key.toLowerCase()) {
+        case 'v': // Select tool
+          handleToolClick('select');
+          break;
+        case 'n': // Note tool
+          handleToolClick('note');
+          break;
+        case 't': // Text tool
+          handleToolClick('text');
+          break;
+        case 'g': // Create group
+          if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
+            createEmptyGroup();
+          }
+          break;
+        case 's': // Lasso select
+          if (event.shiftKey) {
+            handleToolClick('lasso');
+          }
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleToolClick, createEmptyGroup]);
 
   // Add a modal for editing group name
   const renderEditGroupModal = () => {
@@ -1548,7 +1810,7 @@ const FlowEditorContent = ({
         <style>
           {`
             .react-flow__pane {
-              cursor: default;
+              cursor: ${activeTool === 'note' ? 'url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBmaWxsPSIjMzMzIiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMSIvPgo8L3N2Zz4K") 12 12, pointer' : 'default'};
             }
             .react-flow__pane.pan-mode {
               cursor: grab !important;
@@ -1580,20 +1842,21 @@ const FlowEditorContent = ({
               background: rgba(0, 0, 0, 0.3) !important;
               border: 1px solid rgba(0, 0, 0, 0.5) !important;
             }
-            .react-flow__selection-rect {
-              background: rgba(0, 0, 0, 0.3) !important;
-              border: 1px solid rgba(0, 0, 0, 0.5) !important;
-            }
           `}
         </style>
         <ReactFlow
-          nodes={propNodes}
-          edges={propEdges}
-          onNodesChange={handleNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
+          defaultViewport={initialViewport || { x: 0, y: 0, zoom: 1 }}
+          minZoom={0.1}
+          maxZoom={2}
+          deleteKeyCode={[]}
+          noDragClassName="nodrag"
+          nodes={nodes}
+          edges={edges}
           nodeTypes={memoizedNodeTypes}
           edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
           onPaneClick={handlePaneClick}
           onEdgeClick={onEdgeClick}
           onNodeContextMenu={handleNodeContextMenu}
@@ -1601,30 +1864,14 @@ const FlowEditorContent = ({
           elementsSelectable={true}
           nodesDraggable={true}
           nodesConnectable={true}
-          panOnDrag={false}
-          panOnScroll={false}
-          zoomOnScroll={false}
-          zoomOnPinch={false}
+          panOnDrag={true}
+          panOnScroll={true}
+          zoomOnScroll={true}
+          zoomOnPinch={true}
           zoomOnDoubleClick={false}
-          preventScrolling={true}
           selectionOnDrag={true}
           selectionMode={SelectionMode.Full}
           multiSelectionKeyCode={['Shift']}
-          selectionKeyCode={null}
-          style={{ 
-            width: '100%', 
-            height: '100%'
-          }}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragEnd={onDragEnd}
-          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-          minZoom={0.1}
-          maxZoom={2}
-          deleteKeyCode={[]}
-          noDragClassName="nodrag"
-          noWheelClassName="nowheel"
-          noPanClassName="nopan"
         >
           <Background 
             id="1"
@@ -1632,7 +1879,7 @@ const FlowEditorContent = ({
             color="#000000"
             variant={BackgroundVariant.Dots}
             size={1.2}
-            style={{ opacity: 0.25 }}
+            style={{ opacity: 0.25, backgroundColor: '#E8F5E9' }}
           />
           <Background 
             id="2"
@@ -1949,9 +2196,67 @@ const FlowEditorContent = ({
             </div>
           )}
           {selectedEdge && <EdgeDeleteButton edge={selectedEdge} onEdgeDelete={onEdgeDelete} />}
-
-          <Panel position="top-left">
+          
+          <Panel position="top-center">
             <div style={{ display: 'flex', gap: '8px', padding: '10px', background: 'rgba(255,255,255,0.9)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+              {/* Botón para guardar explícitamente el estado del diagrama */}
+              <button 
+                onClick={() => {
+                  // Obtener el viewport actual
+                  const currentViewport = reactFlowInstance.getViewport();
+                  console.log('Guardando viewport:', currentViewport);
+                  
+                  // Actualizar la referencia al viewport
+                  lastViewportRef.current = currentViewport;
+                  
+                  // Guardar el diagrama completo con el viewport
+                  if (onSave) {
+                    const flow = reactFlowInstance.toObject();
+                    onSave({
+                      ...flow,
+                      viewport: currentViewport
+                    });
+                    alert('Diagrama guardado con éxito, incluyendo zoom y posición');
+                  }
+                }} 
+                title="Guardar estado actual (zoom y posición)" 
+                style={{
+                  background: '#4CAF50',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '16px'
+                }}>
+                💾
+              </button>
+              <button 
+                onClick={saveCurrentDiagramState} 
+                title="Guardar estado actual" 
+                style={{
+                  background: '#4CAF50',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '16px'
+                }}>
+                💾
+              </button>
               <button 
                 onClick={() => handleToolClick('select')} 
                 title="Select (V)" 
@@ -1987,6 +2292,60 @@ const FlowEditorContent = ({
                   transition: 'background 0.2s'
                 }}>
                 <SwatchIcon className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => handleToolClick('note')} 
+                onMouseDown={(e) => {
+                  // Permitir tanto click como drag
+                  e.preventDefault();
+                }}
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  onDragStartSidebar(e, {type: 'note', name: 'New Note', description: 'Add a note', provider: 'generic'});
+                }}
+                title="Add Note (N) - Click to activate tool or drag to canvas" 
+                style={{
+                  background: activeTool === 'note' ? '#f0f7ff' : 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  transition: 'background 0.2s'
+                }}>
+                <DocumentTextIcon className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={() => handleToolClick('text')} 
+                onMouseDown={(e) => {
+                  // Permitir tanto click como drag
+                  e.preventDefault();
+                }}
+                draggable
+                onDragStart={(e) => {
+                  e.stopPropagation();
+                  onDragStartSidebar(e, {type: 'text', name: 'New Text', description: 'Add text', provider: 'generic'});
+                }}
+                title="Add Text (T) - Click to activate tool or drag to canvas" 
+                style={{
+                  background: activeTool === 'text' ? '#f0f7ff' : 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '0',
+                  transition: 'background 0.2s'
+                }}>
+                <PencilIcon className="h-5 w-5" />
               </button>
               <button 
                 onClick={() => createEmptyGroup()} 
@@ -2050,25 +2409,12 @@ const FlowEditorContent = ({
               position: 'fixed',
               top: '50%',
               right: '20px',
-              transform: 'translateY(-50%)',
               zIndex: 9999,
-              animation: 'slideIn 0.3s ease-out',
+              // Use CSS transform with transition instead of animation to avoid TypeScript parsing issues
+              transform: 'translateY(-50%)',
+              transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
               backdropFilter: 'blur(8px)'
             }}>
-              <style>
-                {`
-                  @keyframes slideIn {
-                    0% {
-                      transform: translate(100%, -50%);
-                      opacity: 0;
-                    }
-                    100% {
-                      transform: translate(0, -50%);
-                      opacity: 1;
-                    }
-                  }
-                `}
-              </style>
               <div style={{
                 display: 'flex', 
                 justifyContent: 'space-between', 

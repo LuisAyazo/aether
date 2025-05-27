@@ -7,7 +7,7 @@ import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, Viewport } from '../../../../services/diagramService';
 import { Button, Select, Typography, Modal, Input, Spin, App, message } from 'antd';
-import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteOutlined } from '@ant-design/icons';
 import { 
   addEdge, 
   applyEdgeChanges, 
@@ -936,7 +936,9 @@ export default function DiagramPage() {
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [promoteModalVisible, setPromoteModalVisible] = useState(false);
   const [runModalVisible, setRunModalVisible] = useState(false);
+  const [destroyModalVisible, setDestroyModalVisible] = useState(false);
   const [selectedTargetEnvironment, setSelectedTargetEnvironment] = useState<string>('');
+  const [destroyConfirmationText, setDestroyConfirmationText] = useState<string>('');
 
   // Add type guards for URL parameters
   const getCompanyId = (): string => {
@@ -1042,6 +1044,66 @@ export default function DiagramPage() {
     }
   };
 
+  // Add destroy handlers
+  const handleDestroy = () => {
+    setDestroyConfirmationText(''); // Reset confirmation text
+    setDestroyModalVisible(true);
+  };
+
+  const handleDestroyConfirm = async () => {
+    if (!currentDiagram) return;
+    
+    // Validate that user typed the diagram name correctly
+    if (destroyConfirmationText.trim() !== currentDiagram.name) {
+      message.error(`Debe escribir exactamente "${currentDiagram.name}" para confirmar`);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Clear all nodes and edges from the current diagram
+      const clearedNodes: Node[] = [];
+      const clearedEdges: Edge[] = [];
+      
+      // Update the current diagram with empty nodes and edges
+      const updatedDiagram: Diagram = {
+        ...currentDiagram,
+        nodes: clearedNodes,
+        edges: clearedEdges,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Update the diagram via API
+      if (selectedEnvironment) {
+        await updateDiagram(companyId as string, selectedEnvironment, currentDiagram.id, {
+          name: updatedDiagram.name,
+          description: updatedDiagram.description,
+          nodes: clearedNodes,
+          edges: clearedEdges,
+          viewport: updatedDiagram.viewport
+        });
+      }
+      
+      // Update local state immediately
+      setCurrentDiagram(updatedDiagram);
+      setNodes([]); // Clear ReactFlow nodes
+      setEdges([]); // Clear ReactFlow edges
+      
+      // Update cache
+      const singleDiagramCacheKey = `diagram-${companyId}-${selectedEnvironment}-${currentDiagram.id}`;
+      singleDiagramCache.set(singleDiagramCacheKey, updatedDiagram);
+      
+      message.success(`Todos los recursos del diagrama "${currentDiagram.name}" han sido eliminados`);
+      setDestroyModalVisible(false);
+      setDestroyConfirmationText('');
+    } catch (error) {
+      message.error('Error al destruir los recursos del diagrama');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // We'll show the initial loading only for the first render
   if (loadingType === 'initial') {
     return (
@@ -1127,6 +1189,14 @@ export default function DiagramPage() {
               onClick={handlePromote}
             >
               Promote
+            </Button>
+
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              onClick={handleDestroy}
+            >
+              Clear Diagram
             </Button>
           </div>
         </div>
@@ -1470,6 +1540,70 @@ export default function DiagramPage() {
           <p>¿Está seguro que desea desplegar este diagrama en el ambiente actual?</p>
           <p className="text-sm text-gray-500">
             Esta acción desplegará todos los recursos definidos en el diagrama en el ambiente {environments.find(env => env.id === selectedEnvironment)?.name}.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Destroy All Modal */}
+      <Modal
+        title="Limpiar Diagrama"
+        open={destroyModalVisible}
+        onCancel={() => {
+          setDestroyModalVisible(false);
+          setDestroyConfirmationText('');
+        }}
+        onOk={handleDestroyConfirm}
+        okText="Limpiar Diagrama"
+        cancelText="Cancelar"
+        okButtonProps={{ 
+          danger: true,
+          disabled: destroyConfirmationText.trim() !== (currentDiagram?.name || '')
+        }}
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 p-4 rounded-md border border-red-200">
+            <p className="text-red-800 font-semibold">⚠️ ADVERTENCIA: Esta acción es irreversible</p>
+            <p className="text-red-700 mt-2">
+              Esta acción eliminará TODOS los nodos y conexiones de este diagrama específico.
+            </p>
+          </div>
+          
+          <div className="space-y-3">
+            <p className="text-gray-700">
+              <strong>Diagrama a destruir:</strong> {currentDiagram?.name}
+            </p>
+            <p className="text-gray-700">
+              <strong>Ambiente:</strong> {environments.find(env => env.id === selectedEnvironment)?.name}
+            </p>
+          </div>
+          
+          <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
+            <p className="text-yellow-800 text-sm">
+              Para confirmar esta acción, escriba exactamente el nombre del diagrama:
+            </p>
+            <p className="text-yellow-900 font-mono font-semibold mt-1">
+              {currentDiagram?.name}
+            </p>
+          </div>
+          
+          <div>
+            <Input
+              placeholder={`Escriba: ${currentDiagram?.name}`}
+              value={destroyConfirmationText}
+              onChange={(e) => setDestroyConfirmationText(e.target.value)}
+              className={`${
+                destroyConfirmationText.trim() === (currentDiagram?.name || '') 
+                  ? 'border-green-400' 
+                  : destroyConfirmationText.trim() !== '' 
+                    ? 'border-red-400' 
+                    : ''
+              }`}
+            />
+          </div>
+          
+          <p className="text-sm text-gray-500">
+            Esta operación eliminará permanentemente todos los nodos y conexiones de este diagrama.
+            El diagrama quedará completamente vacío y podrá comenzar de nuevo.
           </p>
         </div>
       </Modal>
