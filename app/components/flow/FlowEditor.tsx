@@ -364,6 +364,45 @@ const FlowEditorContent = ({
       
       return;
     }
+
+    // Crear nodo de texto cuando la herramienta de texto está activa
+    if (activeTool === 'text' && reactFlowInstance) {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Mantener el cursor crosshair durante la creación
+      document.body.style.cursor = 'crosshair';
+      
+      // Usar el método oficial de React Flow para convertir coordenadas de pantalla a flow
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY
+      });
+      
+      const newNode: Node = {
+        id: `text-${Date.now()}`,
+        type: 'textNode',
+        position,
+        data: {
+          text: 'Click to edit',
+          fontSize: 16,
+          fontWeight: 'normal',
+          textAlign: 'left',
+          textColor: '#000000',
+          backgroundColor: 'transparent',
+          borderStyle: 'none'
+        },
+        selected: true,
+        draggable: true,
+        selectable: true
+      };
+      
+      if (onNodesChange) {
+        onNodesChange([{ type: 'add', item: newNode }]);
+      }
+      
+      return;
+    }
     
     // Restaurar el cursor por defecto después de la creación
     document.body.style.cursor = 'default';
@@ -814,8 +853,8 @@ const FlowEditorContent = ({
   };
 
   const onDragStartSidebar = (event: React.DragEvent, itemData: ResourceItem) => {
-    // Prevent dragging when area tool is active
-    if (activeTool === 'area') {
+    // Prevent dragging when area or text tool is active
+    if (activeTool === 'area' || activeTool === 'text') {
       event.preventDefault();
       return;
     }
@@ -844,8 +883,8 @@ const FlowEditorContent = ({
   const [highlightedGroupId, setHighlightedGroupId] = useState<string | null>(null);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
-    // Prevent drag over when area tool is active
-    if (activeTool === 'area') {
+    // Prevent drag over when area or text tool is active
+    if (activeTool === 'area' || activeTool === 'text') {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'none';
       return;
@@ -1492,6 +1531,7 @@ const FlowEditorContent = ({
           {`
             .react-flow__pane {
               cursor: ${activeTool === 'note' ? 'move' : 
+                       activeTool === 'text' ? 'move' :
                        activeTool === 'area' ? 'move' : 'default'};
             }
             .react-flow__node {

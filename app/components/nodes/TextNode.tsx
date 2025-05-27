@@ -5,24 +5,29 @@ import '@reactflow/node-resizer/dist/style.css';
 
 interface TextNodeData {
   text: string;
-  fontSize: number;
-  fontWeight: 'normal' | 'bold';
-  textAlign: 'left' | 'center' | 'right';
-  textColor: string;
-  backgroundColor?: string;
-  borderStyle: 'none' | 'solid' | 'dashed';
+  fontWeight?: 'normal' | 'bold';
+  textAlign?: 'left' | 'center' | 'right';
+  textColor?: string;
 }
 
-const fontSizeOptions = [10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
 const colorOptions = [
-  '#000000', '#374151', '#6B7280', '#EF4444', '#F59E0B', 
-  '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#FFFFFF'
+  { name: 'Negro', value: '#000000' },
+  { name: 'Gris Oscuro', value: '#374151' },
+  { name: 'Gris', value: '#6B7280' },
+  { name: 'Rojo', value: '#EF4444' },
+  { name: 'Naranja', value: '#F59E0B' },
+  { name: 'Verde', value: '#10B981' },
+  { name: 'Azul', value: '#3B82F6' },
+  { name: 'Morado', value: '#8B5CF6' },
+  { name: 'Rosa', value: '#EC4899' },
+  { name: 'Blanco', value: '#FFFFFF' },
 ];
 
 const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(data.text);
-  const [fontSize, setFontSize] = useState(data.fontSize || 16);
+  const [fontWeight, setFontWeight] = useState(data.fontWeight || 'normal');
+  const [textAlign, setTextAlign] = useState(data.textAlign || 'left');
   const [textColor, setTextColor] = useState(data.textColor || '#000000');
   const [showToolbar, setShowToolbar] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -48,14 +53,15 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
               data: {
                 ...node.data,
                 text,
-                fontSize,
+                fontWeight,
+                textAlign,
                 textColor,
               },
             }
           : node
       )
     );
-  }, [id, text, fontSize, textColor, reactFlow]);
+  }, [id, text, fontWeight, textAlign, textColor, reactFlow]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && e.ctrlKey) {
@@ -65,6 +71,14 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
       setIsEditing(false);
     }
   }, [handleTextSubmit, data.text]);
+
+  const toggleBold = useCallback(() => {
+    setFontWeight(fontWeight === 'bold' ? 'normal' : 'bold');
+  }, [fontWeight]);
+
+  const setAlignment = useCallback((align: 'left' | 'center' | 'right') => {
+    setTextAlign(align);
+  }, []);
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -84,14 +98,12 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
   const containerStyle = {
     backgroundColor: 'transparent',
     border: 'none',
-    padding: '0',
+    padding: '8px',
     margin: '0',
-    minWidth: 'auto',
-    minHeight: 'auto',
-    width: 'fit-content',
-    height: 'fit-content',
+    minWidth: '100px',
+    minHeight: '40px',
     position: 'relative' as const,
-    cursor: isEditing ? 'text' : 'default',
+    cursor: isEditing ? 'text' : selected ? 'move' : 'default',
     outline: selected ? '2px solid #3b82f6' : 'none',
     outlineOffset: '2px',
     pointerEvents: 'auto' as const,
@@ -100,41 +112,32 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
   return (
     <div
       className="text-node"
-      style={{
-        ...containerStyle,
-        // Anular estilos de React Flow
-        borderWidth: '0 !important',
-        borderStyle: 'none !important',
-        borderColor: 'transparent !important',
-      }}
+      style={containerStyle}
       onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setShowToolbar(true)}
       onMouseLeave={() => setShowToolbar(false)}
     >
       <NodeResizer
         isVisible={selected}
-        minWidth={50}
-        minHeight={20}
-        // @ts-expect-error - handlePosition is available in newer versions
-        handlePosition="all"
+        minWidth={100}
+        minHeight={40}
         lineStyle={{
           borderColor: '#3b82f6',
-          borderWidth: 1,
-          opacity: 0.3,
+          borderWidth: 2,
         }}
         handleStyle={{
           backgroundColor: '#3b82f6',
-          width: '6px',
-          height: '6px',
-          opacity: 0.7,
-          border: 'none',
-          borderRadius: '0',
+          width: '8px',
+          height: '8px',
+          border: '2px solid white',
+          borderRadius: '50%',
           transform: 'translate(-50%, -50%)',
+          opacity: 1,
           zIndex: 10,
         }}
       />
 
-      {/* Toolbar */}
+      {/* Horizontal Toolbar */}
       {(selected || showToolbar) && (
         <div
           style={{
@@ -142,53 +145,129 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
             top: '-50px',
             left: '0',
             display: 'flex',
-            gap: '4px',
+            alignItems: 'center',
+            gap: '8px',
             background: 'white',
-            padding: '6px',
-            borderRadius: '6px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            border: '1px solid #d1d5db',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            border: '1px solid #e5e7eb',
             zIndex: 1000,
-            flexWrap: 'wrap',
-            minWidth: '140px',
+            fontSize: '14px',
           }}
         >
-          {/* Font size */}
-          <select
-            value={fontSize}
-            onChange={(e) => setFontSize(parseInt(e.target.value))}
+          {/* Bold Toggle */}
+          <button
+            onClick={toggleBold}
             style={{
-              fontSize: '12px',
-              padding: '2px 4px',
+              padding: '4px 8px',
+              backgroundColor: fontWeight === 'bold' ? '#3b82f6' : 'transparent',
+              color: fontWeight === 'bold' ? 'white' : '#374151',
               border: '1px solid #d1d5db',
               borderRadius: '4px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              fontSize: '12px',
             }}
-            title="Tamaño de fuente"
+            title="Negrita"
           >
-            {fontSizeOptions.map(size => (
-              <option key={size} value={size}>{size}px</option>
-            ))}
-          </select>
+            B
+          </button>
 
-          {/* Text color */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <span style={{ fontSize: '10px' }}>Color:</span>
+          {/* Divider */}
+          <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb' }} />
+
+          {/* Text Alignment */}
+          <div style={{ display: 'flex', gap: '2px' }}>
+            <button
+              onClick={() => setAlignment('left')}
+              style={{
+                padding: '4px 6px',
+                backgroundColor: textAlign === 'left' ? '#3b82f6' : 'transparent',
+                color: textAlign === 'left' ? 'white' : '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+              title="Alinear izquierda"
+            >
+              ⟵
+            </button>
+            <button
+              onClick={() => setAlignment('center')}
+              style={{
+                padding: '4px 6px',
+                backgroundColor: textAlign === 'center' ? '#3b82f6' : 'transparent',
+                color: textAlign === 'center' ? 'white' : '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+              title="Centrar"
+            >
+              ⟷
+            </button>
+            <button
+              onClick={() => setAlignment('right')}
+              style={{
+                padding: '4px 6px',
+                backgroundColor: textAlign === 'right' ? '#3b82f6' : 'transparent',
+                color: textAlign === 'right' ? 'white' : '#374151',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+              title="Alinear derecha"
+            >
+              ⟶
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div style={{ width: '1px', height: '20px', backgroundColor: '#e5e7eb' }} />
+
+          {/* Color Palette */}
+          <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+            <span style={{ fontSize: '11px', color: '#6b7280', marginRight: '4px' }}>Color:</span>
+            {colorOptions.slice(0, 6).map((color) => (
+              <button
+                key={color.value}
+                onClick={() => setTextColor(color.value)}
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  backgroundColor: color.value,
+                  border: textColor === color.value ? '2px solid #3b82f6' : '1px solid #d1d5db',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  padding: '0',
+                }}
+                title={color.name}
+              />
+            ))}
+            {/* More colors dropdown */}
             <select
               value={textColor}
               onChange={(e) => setTextColor(e.target.value)}
               style={{
-                width: '40px',
-                height: '24px',
+                width: '20px',
+                height: '20px',
                 border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                backgroundColor: textColor,
+                borderRadius: '3px',
+                backgroundColor: 'transparent',
                 cursor: 'pointer',
+                fontSize: '12px',
+                textAlign: 'center',
               }}
-              title="Color de texto"
+              title="Más colores"
             >
-              {colorOptions.map(color => (
-                <option key={color} value={color} style={{ backgroundColor: color }}>
-                  {color}
+              <option value="">⋯</option>
+              {colorOptions.map((color) => (
+                <option key={color.value} value={color.value}>
+                  {color.name}
                 </option>
               ))}
             </select>
@@ -206,54 +285,57 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
           onKeyDown={handleKeyDown}
           style={{
             width: '100%',
+            height: '100%',
             border: 'none',
             outline: 'none',
             background: 'transparent',
-            resize: 'both',
+            resize: 'none',
             fontFamily: 'inherit',
-            fontSize: `${fontSize}px`,
-            fontWeight: 'normal',
-            textAlign: 'left',
+            fontSize: '16px',
+            fontWeight,
+            textAlign,
             color: textColor,
-            minHeight: 'auto',
+            lineHeight: '1.4',
             padding: '0',
             margin: '0',
-            lineHeight: '1.2',
-            maxWidth: '500px',
           }}
           placeholder="Escribe tu texto aquí..."
         />
       ) : (
         <div
           style={{
-            fontSize: `${fontSize}px`,
-            fontWeight: 'normal',
-            textAlign: 'left',
+            width: '100%',
+            height: '100%',
+            fontSize: '16px',
+            fontWeight,
+            textAlign,
             color: textColor,
-            lineHeight: '1.2',
+            lineHeight: '1.4',
             whiteSpace: 'pre-wrap',
-            minHeight: 'auto',
             wordWrap: 'break-word',
             margin: '0',
             padding: '0',
-            display: 'inline-block',
-            maxWidth: '500px',
+            display: 'flex',
+            alignItems: textAlign === 'center' ? 'center' : 'flex-start',
+            justifyContent: textAlign === 'center' ? 'center' : textAlign === 'right' ? 'flex-end' : 'flex-start',
+            minHeight: '20px',
           }}
         >
           {text || 'Doble clic para editar...'}
         </div>
       )}
 
-      {/* Instruction text for empty text */}
+      {/* Help text for empty nodes */}
       {!isEditing && !text && (
         <div
           style={{
             position: 'absolute',
-            bottom: '-16px',
+            bottom: '-20px',
             left: '0',
             fontSize: '10px',
             color: '#9ca3af',
             fontStyle: 'italic',
+            pointerEvents: 'none',
           }}
         >
           Ctrl+Enter para guardar
