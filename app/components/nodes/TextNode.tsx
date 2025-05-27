@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useReactFlow, NodeProps } from 'reactflow';
-import { NodeResizer } from '@reactflow/node-resizer';
+import { useReactFlow, NodeProps, NodeResizer } from 'reactflow';
 import '@reactflow/node-resizer/dist/style.css';
 
 interface TextNodeData {
@@ -102,11 +101,14 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
     margin: '0',
     minWidth: '100px',
     minHeight: '40px',
+    width: '100%',
+    height: '100%',
     position: 'relative' as const,
     cursor: isEditing ? 'text' : selected ? 'move' : 'default',
     outline: selected ? '2px solid #3b82f6' : 'none',
     outlineOffset: '2px',
     pointerEvents: 'auto' as const,
+    boxSizing: 'border-box' as const,
   };
 
   return (
