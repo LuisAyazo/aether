@@ -670,31 +670,5 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
   );
 };
 
-// Helper function to infer resource type from label if not explicitly provided
-function getResourceTypeFromLabel(label: string): string {
-  const labelLower = label.toLowerCase();
-  
-  // AWS resource types
-  if (labelLower.includes('ec2') || labelLower.includes('instance')) return 'ec2';
-  if (labelLower.includes('s3') || labelLower.includes('bucket')) return 's3';
-  if (labelLower.includes('lambda') || labelLower.includes('function')) return 'lambda';
-  if (labelLower.includes('rds') || labelLower.includes('database')) return 'rds';
-  if (labelLower.includes('vpc') || labelLower.includes('network')) return 'vpc';
-  
-  // GCP resource types
-  if (labelLower.includes('compute') || labelLower.includes('vm')) return 'compute';
-  if (labelLower.includes('storage')) return 'storage';
-  if (labelLower.includes('sql')) return 'sql';
-  if (labelLower.includes('cloud functions')) return 'function';
-  
-  // Azure resource types
-  if (labelLower.includes('virtual machine') || labelLower.includes('vm')) return 'vm';
-  if (labelLower.includes('storage account')) return 'storageaccount';
-  if (labelLower.includes('cosmos')) return 'cosmosdb';
-  if (labelLower.includes('functions')) return 'functions';
-  
-  // Default to generic resource type
-  return 'generic';
-}
 
 export default BaseResourceNode;

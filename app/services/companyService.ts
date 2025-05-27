@@ -94,17 +94,10 @@ export async function getCompanies(): Promise<Company[]> {
   return response.json();
 }
 
-export async function getCompany(companyId: string): Promise<Company> {
+export const getCompany = async (companyId: string): Promise<Company> => {
   const token = getAuthToken();
-  
   if (!token) {
     throw new Error('No estás autenticado');
-  }
-
-  // Verificar que companyId no sea undefined o vacío
-  if (!companyId || companyId === 'undefined') {
-    console.error('Error: companyId es undefined o inválido en getCompany');
-    throw new Error('ID de compañía no válido. Por favor, vuelve a la página principal y selecciona una compañía.');
   }
 
   try {
@@ -112,7 +105,7 @@ export async function getCompany(companyId: string): Promise<Company> {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
-      }
+      },
     });
 
     if (!response.ok) {
@@ -120,13 +113,12 @@ export async function getCompany(companyId: string): Promise<Company> {
       throw new Error(error.detail || 'Error al obtener la compañía');
     }
 
-    const company = await response.json();
-    return company;
+    return await response.json();
   } catch (error) {
     console.error('Error al obtener compañía:', error);
     throw new Error('No se pudo obtener la información de la compañía. Por favor, vuelve a la página principal.');
   }
-}
+};
 
 export async function updateCompany(companyId: string, companyData: Partial<Company>): Promise<Company> {
   const token = getAuthToken();

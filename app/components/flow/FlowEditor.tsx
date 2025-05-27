@@ -390,6 +390,7 @@ const FlowEditorContent = ({
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
@@ -1769,6 +1770,16 @@ const FlowEditorContent = ({
     window.addEventListener('showSingleNodePreview', handler as EventListener);
     return () => window.removeEventListener('showSingleNodePreview', handler as EventListener);
   }, []);
+
+  const handleApplyChanges = () => {
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmApply = () => {
+    // Aquí iría la lógica para aplicar los cambios
+    setShowConfirmModal(false);
+    setShowSingleNodePreview(false);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -3319,61 +3330,9 @@ const FlowEditorContent = ({
                   Cancelar
                 </button>
                 <button
-                  onClick={async () => {
-                    // Mostrar confirmación
-                    const confirmed = window.confirm(
-                      `¿Estás seguro de que deseas ${singleNodePreview.action === 'create' ? 'crear' : 
-                       singleNodePreview.action === 'update' ? 'actualizar' : 'eliminar'} este recurso y sus dependencias?`
-                    );
-                    
-                    if (confirmed) {
-                      setShowSingleNodePreview(false);
-                      setExecutionLogs([]);
-                      setIsExecutionLogVisible(true);
-
-                      // Simular el recurso principal
-                      const mainResource = {
-                        id: `resource-${Date.now()}`,
-                        data: {
-                          label: singleNodePreview.resource.name,
-                          type: singleNodePreview.resource.type,
-                          provider: singleNodePreview.resource.provider
-                        }
-                      };
-
-                      // Simular creación del recurso principal
-                      await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'creating');
-                      await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'success');
-
-                      // Simular diferentes estados para las dependencias
-                      if (singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0) {
-                        for (const dep of singleNodePreview.dependencies) {
-                          const depResource = {
-                            id: `dep-${Date.now()}-${dep.name}`,
-                            data: {
-                              label: dep.name,
-                              type: dep.type,
-                              provider: singleNodePreview.resource.provider
-                            }
-                          };
-
-                          // Simular diferentes estados según el índice
-                          if (dep === singleNodePreview.dependencies[0]) {
-                            // Primera dependencia: Actualizar
-                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'updating');
-                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
-                          } else if (dep === singleNodePreview.dependencies[1]) {
-                            // Segunda dependencia: Eliminar
-                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'deleting');
-                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
-                          } else {
-                            // Resto de dependencias: Crear
-                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'creating');
-                            await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
-                          }
-                        }
-                      }
-                    }
+                  onClick={() => {
+                    setShowSingleNodePreview(false);
+                    setShowConfirmModal(true);
                   }}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
                 >
@@ -3391,6 +3350,148 @@ const FlowEditorContent = ({
         logs={executionLogs}
         onClose={() => setIsExecutionLogVisible(false)}
       />
+
+      {/* Modal de Confirmación */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden border border-gray-200">
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
+                  <span className="text-2xl text-blue-600">⚠️</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Confirmar Cambios</h3>
+                  <p className="text-gray-600">
+                    ¿Estás seguro de que deseas {singleNodePreview?.action === 'create' ? 'crear' : 
+                     singleNodePreview?.action === 'update' ? 'actualizar' : 'eliminar'} este recurso?
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
+                <h4 className="font-medium text-gray-900 mb-3">Resumen de Cambios</h4>
+                <div className="space-y-3">
+                  {/* Recurso Principal */}
+                  <div className="flex items-start gap-3">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      singleNodePreview?.action === 'create' ? 'bg-green-50' :
+                      singleNodePreview?.action === 'update' ? 'bg-yellow-50' :
+                      'bg-red-50'
+                    }`}>
+                      <span className={`text-sm ${
+                        singleNodePreview?.action === 'create' ? 'text-green-600' :
+                        singleNodePreview?.action === 'update' ? 'text-yellow-600' :
+                        'text-red-600'
+                      }`}>
+                        {singleNodePreview?.action === 'create' ? '＋' :
+                         singleNodePreview?.action === 'update' ? '✎' : '－'}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">{singleNodePreview?.resource.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {singleNodePreview?.action === 'create' ? 'Se creará nuevo recurso' :
+                         singleNodePreview?.action === 'update' ? 'Se actualizará la configuración' :
+                         'Se eliminará permanentemente'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dependencias */}
+                  {singleNodePreview?.dependencies && singleNodePreview.dependencies.map((dep, index) => (
+                    <div key={index} className="flex items-start gap-3">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        index === 0 ? 'bg-yellow-50' :
+                        index === 1 ? 'bg-red-50' :
+                        'bg-green-50'
+                      }`}>
+                        <span className={`text-sm ${
+                          index === 0 ? 'text-yellow-600' :
+                          index === 1 ? 'text-red-600' :
+                          'text-green-600'
+                        }`}>
+                          {index === 0 ? '✎' : index === 1 ? '－' : '＋'}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900">{dep.name}</div>
+                        <div className="text-sm text-gray-600">
+                          {index === 0 ? 'Se actualizará la configuración' :
+                           index === 1 ? 'Se eliminará permanentemente' :
+                           'Se creará nuevo recurso'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowConfirmModal(false);
+                    setExecutionLogs([]);
+                    setIsExecutionLogVisible(true);
+
+                    // Simular el recurso principal
+                    const mainResource = {
+                      id: `resource-${Date.now()}`,
+                      data: {
+                        label: singleNodePreview?.resource.name,
+                        type: singleNodePreview?.resource.type,
+                        provider: singleNodePreview?.resource.provider
+                      }
+                    };
+
+                    // Simular creación del recurso principal
+                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'creating');
+                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'success');
+
+                    // Simular diferentes estados para las dependencias
+                    if (singleNodePreview?.dependencies && singleNodePreview.dependencies.length > 0) {
+                      for (const dep of singleNodePreview.dependencies) {
+                        const depResource = {
+                          id: `dep-${Date.now()}-${dep.name}`,
+                          data: {
+                            label: dep.name,
+                            type: dep.type,
+                            provider: singleNodePreview.resource.provider
+                          }
+                        };
+
+                        // Simular diferentes estados según el índice
+                        if (dep === singleNodePreview.dependencies[0]) {
+                          // Primera dependencia: Actualizar
+                          await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'updating');
+                          await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
+                        } else if (dep === singleNodePreview.dependencies[1]) {
+                          // Segunda dependencia: Eliminar
+                          await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'deleting');
+                          await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
+                        } else {
+                          // Resto de dependencias: Crear
+                          await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'creating');
+                          await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
+                        }
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Confirmar y Aplicar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

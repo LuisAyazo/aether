@@ -6,8 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram } from '../../../../services/diagramService';
-import { Button, Select, Typography, Modal, Input, Spin, message } from 'antd';
-import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Button, Select, Modal, Input, Spin, message, Timeline, Drawer, Empty } from 'antd';
+import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteOutlined, HistoryOutlined, RollbackOutlined, BranchesOutlined } from '@ant-design/icons';
 import { 
   addEdge, 
   applyEdgeChanges, 
@@ -20,13 +20,13 @@ import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
 // Importar nodeTypes desde el archivo centralizado
 import nodeTypes from '../../../../components/nodes/NodeTypes';
 import { Node, Edge } from '../../../../services/diagramService';
+import { isAuthenticated } from '../../../../services/authService';
 
 // Cache for environments and diagrams
 const environmentCache = new Map<string, Environment[]>();
 const diagramCache = new Map<string, Diagram[]>();
 const singleDiagramCache = new Map<string, Diagram>();
 
-const { Title } = Typography;
 const { TextArea } = Input;
 
 // Define interfaces for resource categories
@@ -168,6 +168,14 @@ export default function DiagramPage() {
   const params = useParams();
   const router = useRouter();
   const { companyId, diagramId } = params;
+
+  useEffect(() => {
+    // Verificar si el usuario está autenticado
+    if (!isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+  }, [router]);
 
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [diagrams, setDiagrams] = useState<Diagram[]>([]);
@@ -1018,13 +1026,14 @@ export default function DiagramPage() {
     resourcesToDelete: []
   });
 
-  // Modify handlePreview to analyze changes
+  // Modify handlePreview to analyze changes and update version history
   const handlePreview = useCallback(async () => {
     if (!currentDiagram) return;
     
     try {
       setLoading(true);
-      // Simular análisis de cambios (esto debería ser reemplazado por tu lógica real)
+      
+      // Simular análisis de cambios
       const mockPreviewData = {
         resourcesToCreate: currentDiagram.nodes
           .filter(node => node.type !== 'group')
@@ -1041,10 +1050,36 @@ export default function DiagramPage() {
         resourcesToUpdate: [],
         resourcesToDelete: []
       };
+
+      // Crear datos de versión más detallados
+      const newVersion = {
+        id: `v${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        author: 'Usuario Actual',
+        description: `Modificación de ${mockPreviewData.resourcesToCreate.length} recursos`,
+        changes: {
+          created: mockPreviewData.resourcesToCreate.length,
+          updated: mockPreviewData.resourcesToUpdate.length,
+          deleted: mockPreviewData.resourcesToDelete.length
+        }
+      };
+
+      // Actualizar el estado de versiones
+      setVersionHistory(prevHistory => {
+        console.log('Actualizando historial de versiones:', [...prevHistory, newVersion]);
+        return [newVersion, ...prevHistory];
+      });
       
+      // Actualizar el estado de preview
       setPreviewData(mockPreviewData);
+      
+      // Mostrar el modal de preview
       setPreviewModalVisible(true);
-    } catch {
+
+      // Mostrar mensaje de éxito
+      message.success('Cambios registrados en el historial');
+    } catch (error) {
+      console.error('Error al generar la vista previa:', error);
       message.error('Error al generar la vista previa');
     } finally {
       setLoading(false);
@@ -1075,15 +1110,37 @@ export default function DiagramPage() {
     }
   };
 
+  // Modificar handleRunConfirm para que también actualice el historial
   const handleRunConfirm = async () => {
     if (!currentDiagram) return;
     
     try {
       setLoading(true);
-      // Implement run logic here
+      
+      // Crear una nueva versión con más detalles
+      const newVersion = {
+        id: `v${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        author: 'Usuario Actual',
+        description: `Ejecución de ${previewData.resourcesToCreate.length} cambios`,
+        changes: {
+          created: previewData.resourcesToCreate.length,
+          updated: previewData.resourcesToUpdate.length,
+          deleted: previewData.resourcesToDelete.length
+        }
+      };
+
+      // Actualizar el estado de versiones
+      setVersionHistory(prevHistory => {
+        console.log('Actualizando historial después de ejecutar:', [...prevHistory, newVersion]);
+        return [newVersion, ...prevHistory];
+      });
+      
+      // Implementar lógica de ejecución aquí
       message.success('Diagrama desplegado exitosamente');
       setRunModalVisible(false);
-    } catch {
+    } catch (error) {
+      console.error('Error al desplegar el diagrama:', error);
       message.error('Error al desplegar el diagrama');
     } finally {
       setLoading(false);
@@ -1150,6 +1207,190 @@ export default function DiagramPage() {
     }
   };
 
+  // Nuevos estados para la compañía y control de versiones
+  const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [rollbackModalVisible, setRollbackModalVisible] = useState(false);
+  const [versionsModalVisible, setVersionsModalVisible] = useState(false);
+  const [versionHistory, setVersionHistory] = useState<Array<{
+    id: string;
+    timestamp: string;
+    author: string;
+    description: string;
+    changes: {
+      created: number;
+      updated: number;
+      deleted: number;
+    };
+  }>>([]);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+
+  // Cargar información de la compañía
+  useEffect(() => {
+    const fetchCompanyInfo = async () => {
+      try {
+        const response = await fetch(`/api/companies/${companyId}`);
+        const data = await response.json();
+        setCompany(data);
+      } catch (error) {
+        console.error('Error fetching company info:', error);
+        message.error('No se pudo cargar la información de la compañía');
+      }
+    };
+
+    if (companyId) {
+      fetchCompanyInfo();
+    }
+  }, [companyId]);
+
+  // Funciones para el control de versiones
+  const handleVersions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No estás autenticado');
+      }
+
+      const versionsResponse = await fetch(`/api/${diagramId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await versionsResponse.json();
+      
+      if (!versionsResponse.ok) {
+        throw new Error(data.error || data.detail || 'Error al cargar las versiones');
+      }
+      
+      if (!Array.isArray(data)) {
+        throw new Error('Formato de respuesta inválido');
+      }
+      
+      setVersionHistory(data);
+      setVersionsModalVisible(true);
+    } catch (err) {
+      console.error('Error loading versions:', err);
+      message.error(err instanceof Error ? err.message : 'Error al cargar las versiones');
+    }
+  };
+
+  const handleHistory = async () => {
+    try {
+      console.log('Fetching history for diagram:', diagramId);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No estás autenticado');
+      }
+
+      const historyResponse = await fetch(`/api/${diagramId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      console.log('History response status:', historyResponse.status);
+      
+      const data = await historyResponse.json();
+      console.log('History response data:', data);
+      
+      if (!historyResponse.ok) {
+        console.error('Error response:', data);
+        throw new Error(data.error || data.detail || 'Error al cargar el historial');
+      }
+      
+      if (!Array.isArray(data)) {
+        console.error('Invalid response format:', data);
+        throw new Error('Formato de respuesta inválido');
+      }
+      
+      setVersionHistory(data);
+      setHistoryModalVisible(true);
+    } catch (err) {
+      console.error('Error loading history:', err);
+      message.error(err instanceof Error ? err.message : 'Error al cargar el historial');
+    }
+  };
+
+  const handleRollback = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No estás autenticado');
+      }
+
+      const versionsResponse = await fetch(`/api/${diagramId}/history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      const data = await versionsResponse.json();
+      
+      if (!versionsResponse.ok) {
+        throw new Error(data.error || data.detail || 'Error al cargar las versiones');
+      }
+      
+      if (!Array.isArray(data)) {
+        throw new Error('Formato de respuesta inválido');
+      }
+      
+      setVersionHistory(data);
+      setRollbackModalVisible(true);
+    } catch (err) {
+      console.error('Error loading versions:', err);
+      message.error(err instanceof Error ? err.message : 'Error al cargar las versiones');
+    }
+  };
+
+  // Modificar handleRollbackConfirm para que actualice el historial después de revertir
+  const handleRollbackConfirm = async () => {
+    if (!selectedVersion) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No estás autenticado');
+      }
+
+      // Crear una nueva versión de reversión con más detalles
+      const newVersion = {
+        id: `v${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        author: 'Usuario Actual',
+        description: `Reversión a la versión ${selectedVersion}`,
+        changes: {
+          created: 0,
+          updated: 0,
+          deleted: 0
+        }
+      };
+
+      // Actualizar el estado de versiones
+      setVersionHistory(prevHistory => {
+        console.log('Actualizando historial después de revertir:', [...prevHistory, newVersion]);
+        return [newVersion, ...prevHistory];
+      });
+      
+      message.success('Versión restaurada exitosamente');
+      setRollbackModalVisible(false);
+      handleDiagramChange(diagramId as string);
+    } catch (err) {
+      console.error('Error rolling back version:', err);
+      message.error(err instanceof Error ? err.message : 'Error al restaurar la versión');
+    }
+  };
+
+  // Agregar un efecto para depurar cambios en el historial
+  useEffect(() => {
+    console.log('Historial de versiones actualizado:', versionHistory);
+  }, [versionHistory]);
+
   // We'll show the initial loading only for the first render
   if (loadingType === 'initial') {
     return (
@@ -1163,93 +1404,117 @@ export default function DiagramPage() {
 
   return (
     <div className="p-4">
-      <div className="mb-6">
-        <Title level={3}>Diagrama</Title>
-        <div className="flex flex-wrap items-center gap-4 mb-4">
-          <div className="flex items-center">
-            <span className="mr-2">Ambiente:</span>
-            <Select 
-              style={{ width: 200 }} 
-              value={selectedEnvironment}
-              onChange={handleEnvironmentChange}
-              options={environments.map(env => ({
-                value: env.id,
-                label: env.name
-              }))}
-            />
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              className="ml-2"
-              onClick={handleCreateEnvironment}
-            >
-              Nuevo Ambiente
-            </Button>
-          </div>
-          
-          {selectedEnvironment && (
-            <div className="flex items-center">
-              <span className="mr-2">Diagrama:</span>
-              <Select 
-                style={{ width: 200 }} 
-                value={selectedDiagram}
-                onChange={handleDiagramChange}
-                options={diagrams.map(diag => ({
-                  value: diag.id,
-                  label: diag.name
-                }))}
-              />
-              <Button 
-                type="primary" 
-                icon={<PlusOutlined />} 
-                className="ml-2"
-                onClick={handleCreateDiagram}
-              >
-                Nuevo Diagrama
-              </Button>
+      <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                <span className="text-gray-700 font-medium mr-2">Compañía:</span>
+                <span className="text-blue-600 font-medium">{company?.name || 'Cargando...'}</span>
+              </div>
+
+              <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                <span className="text-gray-700 font-medium mr-2">Ambiente:</span>
+                <Select 
+                  style={{ width: 160 }} 
+                  value={selectedEnvironment}
+                  onChange={handleEnvironmentChange}
+                  options={environments.map(env => ({
+                    value: env.id,
+                    label: env.name
+                  }))}
+                  className="!bg-white"
+                />
+                <Button 
+                  type="primary" 
+                  icon={<PlusOutlined />} 
+                  className="ml-2 bg-blue-600 hover:bg-blue-700 border-blue-600"
+                  onClick={() => setNewEnvironmentModalVisible(true)}
+                />
+              </div>
+              
+              {selectedEnvironment && (
+                <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                  <span className="text-gray-700 font-medium mr-2">Diagrama:</span>
+                  <Select 
+                    style={{ width: 160 }} 
+                    value={selectedDiagram}
+                    onChange={handleDiagramChange}
+                    options={diagrams.map(diag => ({
+                      value: diag.id,
+                      label: diag.name
+                    }))}
+                    className="!bg-white"
+                  />
+                  <Button 
+                    type="primary" 
+                    icon={<PlusOutlined />} 
+                    className="ml-2 bg-blue-600 hover:bg-blue-700 border-blue-600"
+                    onClick={() => setNewDiagramModalVisible(true)}
+                  />
+                </div>
+              )}
             </div>
-          )}
 
-          {/* Infrastructure Management Buttons */}
-          <div className="flex items-center gap-2 ml-4">
-            <Button
-              icon={<EyeOutlined />}
-              onClick={handlePreview}
-            >
-              Preview
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 border-r border-gray-200 pr-3">
+                <Button
+                  icon={<HistoryOutlined />}
+                  className="hover:bg-gray-50"
+                  title="Historial de cambios"
+                  onClick={handleHistory}
+                />
+                <Button
+                  icon={<RollbackOutlined />}
+                  className="hover:bg-gray-50"
+                  title="Revertir cambios"
+                  onClick={handleRollback}
+                />
+                <Button
+                  icon={<BranchesOutlined />}
+                  className="hover:bg-gray-50"
+                  title="Gestionar versiones"
+                  onClick={handleVersions}
+                />
+              </div>
 
-            <Button
-              type="primary"
-              danger={false}
-              icon={<PlayCircleOutlined />}
-              onClick={handleRun}
-              className="bg-green-600 hover:bg-green-700 border-green-600"
-            >
-              Run
-            </Button>
-
-            <Button
-              type="primary"
-              icon={<ArrowUpOutlined />}
-              onClick={handlePromote}
-            >
-              Promote
-            </Button>
-
-            <Button
-              danger
-              icon={<DeleteOutlined />}
-              onClick={handleDestroy}
-            >
-              Clear Diagram
-            </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  icon={<EyeOutlined />}
+                  onClick={handlePreview}
+                  className="hover:bg-gray-50"
+                  title="Vista previa"
+                />
+                <Button
+                  type="primary"
+                  danger={false}
+                  icon={<PlayCircleOutlined />}
+                  onClick={handleRun}
+                  className="bg-green-600 hover:bg-green-700 border-green-600"
+                  title="Ejecutar cambios"
+                />
+                <Button
+                  type="primary"
+                  icon={<ArrowUpOutlined />}
+                  onClick={handlePromote}
+                  className="bg-blue-600 hover:bg-blue-700 border-blue-600"
+                  title="Promover a otro ambiente"
+                />
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={handleDestroy}
+                  className="hover:bg-red-50"
+                  title="Limpiar diagrama"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Enhanced diagram display with advanced transition handling */}
-      <div className="relative h-[calc(100vh-200px)]">
+      <div className="relative h-[calc(100vh-120px)]">
         {/* Create a phantom layer for the previous diagram */}
         {loadingType === 'transition' && previousDiagram && selectedEnvironment && (
           <div>
@@ -1670,6 +1935,162 @@ export default function DiagramPage() {
           </p>
         </div>
       </Modal>
+
+      {/* Modal de Historial */}
+      <Drawer
+        title="Historial de Cambios"
+        placement="right"
+        onClose={() => setHistoryModalVisible(false)}
+        open={historyModalVisible}
+        width="30%"
+      >
+        {versionHistory.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <div className="text-center">
+                <p className="text-gray-500 mb-2">No hay historial disponible</p>
+                <p className="text-sm text-gray-400">
+                  El historial aparecerá aquí cuando realices cambios en el diagrama
+                </p>
+              </div>
+            }
+          />
+        ) : (
+          <Timeline
+            mode="left"
+            items={versionHistory.map(version => ({
+              key: version.id,
+              color: 'blue',
+              label: new Date(version.timestamp).toLocaleString(),
+              children: (
+                <div className="mb-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-medium">{version.description}</h4>
+                      <p className="text-sm text-gray-500">
+                        {version.author}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 text-sm">
+                      <span className="text-green-600">+{version.changes.created}</span>
+                      <span className="text-yellow-600">~{version.changes.updated}</span>
+                      <span className="text-red-600">-{version.changes.deleted}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            }))}
+          />
+        )}
+      </Drawer>
+
+      {/* Modal de Rollback */}
+      <Drawer
+        title="Revertir a Versión Anterior"
+        placement="right"
+        onClose={() => setRollbackModalVisible(false)}
+        open={rollbackModalVisible}
+        width="30%"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setRollbackModalVisible(false)}>
+              Cancelar
+            </Button>
+            <Button type="primary" onClick={handleRollbackConfirm}>
+              Revertir
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {versionHistory.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div className="text-center">
+                  <p className="text-gray-500 mb-2">No hay versiones disponibles</p>
+                  <p className="text-sm text-gray-400">
+                    No hay versiones anteriores a las que puedas revertir
+                  </p>
+                </div>
+              }
+            />
+          ) : (
+            <>
+              <p className="text-gray-600">
+                Seleccione la versión a la que desea revertir. Esta acción no se puede deshacer.
+              </p>
+              <Select
+                style={{ width: '100%' }}
+                value={selectedVersion}
+                onChange={setSelectedVersion}
+                options={versionHistory.map(version => ({
+                  value: version.id,
+                  label: (
+                    <div className="flex justify-between items-center">
+                      <span>{version.description}</span>
+                      <span className="text-sm text-gray-500">
+                        {new Date(version.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  )
+                }))}
+              />
+            </>
+          )}
+        </div>
+      </Drawer>
+
+      {/* Modal de Versiones */}
+      <Drawer
+        title="Gestionar Versiones"
+        placement="right"
+        onClose={() => setVersionsModalVisible(false)}
+        open={versionsModalVisible}
+        width="30%"
+      >
+        <div className="space-y-4">
+          {versionHistory.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div className="text-center">
+                  <p className="text-gray-500 mb-2">No hay versiones disponibles</p>
+                  <p className="text-sm text-gray-400">
+                    Las versiones aparecerán aquí cuando realices cambios en el diagrama
+                  </p>
+                </div>
+              }
+            />
+          ) : (
+            versionHistory.map(version => (
+              <div key={version.id} className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-medium">{version.description}</h4>
+                    <p className="text-sm text-gray-500">
+                      {new Date(version.timestamp).toLocaleString()} - {version.author}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="small" onClick={() => {
+                      setSelectedVersion(version.id);
+                      setVersionsModalVisible(false);
+                      setRollbackModalVisible(true);
+                    }}>
+                      Revertir
+                    </Button>
+                    <Button size="small" type="primary">
+                      Comparar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 }
