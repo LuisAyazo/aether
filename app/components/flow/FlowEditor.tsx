@@ -60,6 +60,11 @@ interface ContextMenu {
     parentType?: string;
     selectedCount?: number;
   } | null;
+  customItems?: Array<{
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+  }>;
 }
 
 type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea' | 'note' | 'text' | 'area';
@@ -303,7 +308,8 @@ const FlowEditorContent = ({
     nodeId: null,
     nodeType: null,
     isPane: false,
-    parentInfo: null
+    parentInfo: null,
+    customItems: undefined
   });
 
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
@@ -427,6 +433,31 @@ const FlowEditorContent = ({
       window.removeEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener);
     };
   }, [reactFlowInstance]);
+
+  // Listener for showContextMenu events from nodes
+  useEffect(() => {
+    const handleShowContextMenu = (event: CustomEvent) => {
+      const { x, y, items } = event.detail;
+      
+      // Create a custom context menu with the items from the node
+      setContextMenu({
+        visible: true,
+        x,
+        y,
+        nodeId: null, // This will be handled by the menu items themselves
+        nodeType: null,
+        isPane: false,
+        parentInfo: null,
+        customItems: items // Store the custom items
+      });
+    };
+
+    document.addEventListener('showContextMenu', handleShowContextMenu as EventListener);
+    
+    return () => {
+      document.removeEventListener('showContextMenu', handleShowContextMenu as EventListener);
+    };
+  }, []);
 
   const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
@@ -2128,6 +2159,41 @@ const FlowEditorContent = ({
                         </button>
                       </>
                     )}
+                  </>
+                )}
+                
+                {/* Render custom items from nodes */}
+                {contextMenu.customItems && (
+                  <>
+                    {contextMenu.customItems.map((item, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          item.onClick();
+                          setContextMenu(prev => ({...prev, visible: false}));
+                        }}
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%', 
+                          textAlign: 'left', 
+                          padding: '10px 12px', 
+                          cursor: 'pointer', 
+                          border: 'none', 
+                          borderBottom: index < (contextMenu.customItems?.length || 0) - 1 ? '1px solid #eee' : 'none',
+                          background: 'white', 
+                          fontSize: '13px',
+                          color: '#333', 
+                          transition: 'background-color 0.2s'
+                        }}
+                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                      >
+                        {item.icon}
+                        {item.label}
+                      </button>
+                    ))}
                   </>
                 )}
               </div>

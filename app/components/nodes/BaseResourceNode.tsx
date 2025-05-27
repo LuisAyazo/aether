@@ -10,7 +10,11 @@ import {
   ListBulletIcon, 
   EyeSlashIcon, 
   EyeIcon, 
-  TrashIcon 
+  TrashIcon,
+  LockClosedIcon,
+  LockOpenIcon,
+  DocumentDuplicateIcon,
+  PlayCircleIcon
 } from '@heroicons/react/24/outline';
 import { NodeData } from '../../utils/customTypes';
 
@@ -49,6 +53,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
   const [isFocused, setIsFocused] = useState(false);
   const [isListView, setIsListView] = useState(false);
   const [isResizable, setIsResizable] = useState(data.resizable !== false && data.userResized === true);
+  const [isLocked, setIsLocked] = useState(false);
   const reactFlowInstance = useReactFlow();
   
   // Color mapping based on cloud provider
@@ -262,12 +267,126 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       }
     });
 
-    // Dispatch the event both on window and document
-    window.dispatchEvent(event);
+    // Only dispatch to document to avoid duplicate events
     document.dispatchEvent(event);
     
     console.log('IaC panel event dispatched:', event.detail);
   }, [id, data]);
+
+  // Handler for Preview functionality
+  const handlePreview = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('Preview action for node:', id);
+    
+    // Dispatch custom event for preview functionality
+    const event = new CustomEvent('nodePreview', {
+      detail: {
+        nodeId: id,
+        resourceData: {
+          label: data.label,
+          provider: data.provider,
+          resourceType: data.resourceType
+        }
+      }
+    });
+    // Only dispatch to document to avoid duplicate events
+    document.dispatchEvent(event);
+  }, [id, data]);
+
+  // Handler for Run functionality
+  const handleRun = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('Run action for node:', id);
+    
+    // Dispatch custom event for run functionality
+    const event = new CustomEvent('nodeRun', {
+      detail: {
+        nodeId: id,
+        resourceData: {
+          label: data.label,
+          provider: data.provider,
+          resourceType: data.resourceType
+        }
+      }
+    });
+    // Only dispatch to document to avoid duplicate events
+    document.dispatchEvent(event);
+  }, [id, data]);
+
+  // Handler for Lock/Unlock functionality
+  const handleLockToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newLockedState = !isLocked;
+    setIsLocked(newLockedState);
+    
+    console.log(`${newLockedState ? 'Locking' : 'Unlocking'} node:`, id);
+    
+    // Update node data to reflect locked state
+    reactFlowInstance.setNodes(nds => 
+      nds.map(n => {
+        if (n.id === id) {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              isLocked: newLockedState
+            }
+          };
+        }
+        return n;
+      })
+    );
+    
+    // Dispatch event for lock state change
+    const event = new CustomEvent('nodeLockToggle', {
+      detail: {
+        nodeId: id,
+        isLocked: newLockedState
+      }
+    });
+    document.dispatchEvent(event);
+  }, [id, isLocked, reactFlowInstance]);
+
+  // Handler for Duplicate functionality
+  const handleDuplicate = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('Duplicating node:', id);
+    
+    // Get current node to duplicate
+    const currentNode = reactFlowInstance.getNode(id);
+    if (!currentNode) return;
+    
+    // Create new node with offset position
+    const newNodeId = `${id}-copy-${Date.now()}`;
+    const offset = 50;
+    
+    const duplicatedNode = {
+      ...currentNode,
+      id: newNodeId,
+      position: {
+        x: currentNode.position.x + offset,
+        y: currentNode.position.y + offset
+      },
+      data: {
+        ...currentNode.data,
+        label: `${currentNode.data.label} (Copy)`
+      },
+      selected: false
+    };
+    
+    // Add the duplicated node
+    reactFlowInstance.setNodes(nds => [...nds, duplicatedNode]);
+    
+    // Dispatch event for duplicate action
+    const event = new CustomEvent('nodeDuplicated', {
+      detail: {
+        originalNodeId: id,
+        newNodeId: newNodeId,
+        newNode: duplicatedNode
+      }
+    });
+    document.dispatchEvent(event);
+  }, [id, reactFlowInstance]);
 
   // Add event listener for node actions
   useEffect(() => {
@@ -289,6 +408,18 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
           case 'toggleResizable':
             toggleResizable({ stopPropagation: () => {} } as React.MouseEvent);
             break;
+          case 'preview':
+            handlePreview({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'run':
+            handleRun({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'toggleLock':
+            handleLockToggle({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
+          case 'duplicate':
+            handleDuplicate({ stopPropagation: () => {} } as React.MouseEvent);
+            break;
           case 'openIaCPanel':
             console.log('Opening IaC panel from action');
             handleDoubleClick({ stopPropagation: () => {}, preventDefault: () => {} } as React.MouseEvent);
@@ -307,13 +438,33 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     return () => {
       document.removeEventListener('nodeAction', handleNodeAction as EventListener);
     };
-  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance, handleDoubleClick]);
+  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance, handleDoubleClick, handlePreview, handleRun, handleLockToggle, handleDuplicate]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
     const menuItems = [
+      {
+        label: 'Preview',
+        icon: <EyeIcon className="w-4 h-4" />,
+        onClick: () => handlePreview({ stopPropagation: () => {} } as React.MouseEvent)
+      },
+      {
+        label: 'Run',
+        icon: <PlayCircleIcon className="w-4 h-4" />,
+        onClick: () => handleRun({ stopPropagation: () => {} } as React.MouseEvent)
+      },
+      {
+        label: isLocked ? 'Unlock' : 'Lock',
+        icon: isLocked ? <LockOpenIcon className="w-4 h-4" /> : <LockClosedIcon className="w-4 h-4" />,
+        onClick: () => handleLockToggle({ stopPropagation: () => {} } as React.MouseEvent)
+      },
+      {
+        label: 'Duplicate',
+        icon: <DocumentDuplicateIcon className="w-4 h-4" />,
+        onClick: () => handleDuplicate({ stopPropagation: () => {} } as React.MouseEvent)
+      },
       {
         label: 'Configuración',
         icon: <Cog6ToothIcon className="w-4 h-4" />,
@@ -329,7 +480,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
               }
             }
           });
-          window.dispatchEvent(event);
+          // Only dispatch to document to avoid duplicate events
           document.dispatchEvent(event);
         }
       },
@@ -373,7 +524,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       }
     });
     document.dispatchEvent(event);
-  }, [id, data, isListView, isFocused, isCollapsed, isResizable, toggleListView, toggleFocus, toggleCollapse, toggleResizable]);
+  }, [id, data, isListView, isFocused, isCollapsed, isResizable, isLocked, toggleListView, toggleFocus, toggleCollapse, toggleResizable, handlePreview, handleRun, handleLockToggle, handleDuplicate]);
 
   // Si estamos en vista de lista (modo compacto)
   if (isListView) {
@@ -389,6 +540,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
           pointerEvents: 'auto'
         }}
         onDoubleClick={handleDoubleClick}
+        onContextMenu={handleContextMenu}
       >
         {data.icon && (
           <div className="flex-shrink-0 w-4 h-4">
@@ -431,6 +583,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         pointerEvents: 'auto'
       }}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
     >
       <div className="flex items-center gap-1 overflow-hidden">
         {data.icon && (

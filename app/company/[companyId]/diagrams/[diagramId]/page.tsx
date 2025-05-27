@@ -5,25 +5,21 @@ import ReactDOM from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
-import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, Viewport } from '../../../../services/diagramService';
-import { Button, Select, Typography, Modal, Input, Spin, App, message } from 'antd';
+import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram } from '../../../../services/diagramService';
+import { Button, Select, Typography, Modal, Input, Spin, message } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteOutlined } from '@ant-design/icons';
 import { 
   addEdge, 
   applyEdgeChanges, 
   applyNodeChanges,
-  Connection, 
   OnNodesChange,
   OnEdgesChange,
-  OnConnect,
-  ReactFlowInstance
+  OnConnect
 } from 'reactflow';
 import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
 // Importar nodeTypes desde el archivo centralizado
 import nodeTypes from '../../../../components/nodes/NodeTypes';
 import { Node, Edge } from '../../../../services/diagramService';
-import { Node as DiagramNode, Edge as DiagramEdge } from '@/app/services/diagramService';
-import { CustomNode, CustomEdge } from '@/app/utils/customTypes';
 
 // Cache for environments and diagrams
 const environmentCache = new Map<string, Environment[]>();
@@ -31,7 +27,6 @@ const diagramCache = new Map<string, Diagram[]>();
 const singleDiagramCache = new Map<string, Diagram>();
 
 const { Title } = Typography;
-const { Option } = Select;
 const { TextArea } = Input;
 
 // Define interfaces for resource categories
@@ -180,7 +175,7 @@ export default function DiagramPage() {
   const [selectedDiagram, setSelectedDiagram] = useState<string | null>(diagramId as string);
   const [currentDiagram, setCurrentDiagram] = useState<Diagram | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   
   // Estados para los nodos y conexiones del diagrama actual
   const [nodes, setNodes] = useState<ReactFlowNode[]>([]);
@@ -343,12 +338,6 @@ export default function DiagramPage() {
   // Track the previous URL params to avoid unnecessary URL updates
   const prevUrlRef = useRef({ envId: '', diagramId: '' });
   
-  // Reference for reactFlowInstance - corrected with proper typing
-  const reactFlowInstance = useRef<ReactFlowInstance | null>(null);
-  
-  // Reference for tracking update times to prevent rapid consecutive updates
-  const updateTimeRef = useRef<number>(0);
-
   // Add a ref to track if we're currently updating the diagram
   const isUpdatingRef = useRef(false);
   
@@ -435,7 +424,6 @@ export default function DiagramPage() {
   }, [currentDiagram]);
 
   // Define constants for consistent transition timings
-  const TRANSITION_DURATION = 500; // ms
   const MIN_LOADING_DURATION = 300; // ms
   
   const handleEnvironmentChange = async (environmentId: string) => {
@@ -535,8 +523,7 @@ export default function DiagramPage() {
           setLoading(false);
         }, remainingTime);
       }
-    } catch (error) {
-      console.error("Error cargando diagramas:", error);
+    } catch {
       message.error("No se pudieron cargar los diagramas. Por favor, inténtelo de nuevo más tarde.");
       setLoading(false);
     }
@@ -726,9 +713,17 @@ export default function DiagramPage() {
     }
   }, [loading, environments.length, selectedEnvironment]);
 
+  // Add a ref to track if initial load is complete
+  const initialLoadCompleteRef = useRef(false);
+
   // Add back the loadEnvironments effect
   useEffect(() => {
     const loadEnvironments = async () => {
+      // Skip if initial load is already complete
+      if (initialLoadCompleteRef.current) {
+        return;
+      }
+
       try {
         // Set loading state first
         setLoading(true);
@@ -763,7 +758,7 @@ export default function DiagramPage() {
           // Verificar si hay un environmentId en la URL
           const urlParams = new URLSearchParams(window.location.search);
           const urlEnvironmentId = urlParams.get('environmentId');
-          const urlDiagramId = urlParams.get('id') || diagramId as string; // Usar el ID de diagrama de la query param o de la ruta
+          const urlDiagramId = urlParams.get('id') || diagramId as string;
           
           // Buscar el ambiente en la lista de ambientes
           const targetEnvironment = urlEnvironmentId 
@@ -783,9 +778,7 @@ export default function DiagramPage() {
                 console.log('Using cached diagrams data');
                 return diagramCache.get(diagramsCacheKey) || [];
               } else {
-                // Cargar los diagramas del ambiente seleccionado
                 const data = await getDiagramsByEnvironment(companyId as string, targetEnvironment.id);
-                // Store in cache
                 diagramCache.set(diagramsCacheKey, data);
                 console.log('Fetched and cached diagrams data');
                 return data;
@@ -817,10 +810,8 @@ export default function DiagramPage() {
                   console.log('Using cached diagram data');
                   return singleDiagramCache.get(singleDiagramCacheKey) || null;
                 } else {
-                  // Cargar el diagrama específico
                   console.log(`Cargando diagrama específico: ${targetDiagramId} en ambiente ${targetEnvironment.id}`);
                   const data = await getDiagram(companyId as string, targetEnvironment.id, targetDiagramId);
-                  // Store in cache
                   singleDiagramCache.set(singleDiagramCacheKey, data);
                   console.log('Fetched and cached specific diagram data');
                   return data;
@@ -836,18 +827,19 @@ export default function DiagramPage() {
               }
               
               // Update the URL before we update the diagram data
-              // This ensures the URL is ready when the diagram loads
               const envName = targetEnvironment.name;
               const diagramName = diagramData.name;
               updateUrlWithNames(targetEnvironment.id, targetDiagramId, envName, diagramName);
               
               // Use batch state updates to minimize rerenders
-              // This ensures all updates happen atomically
               batchStateUpdates({
                 diagram: diagramData,
                 nodes: diagramData.nodes || [],
                 edges: diagramData.edges || []
               });
+              
+              // Mark initial load as complete
+              initialLoadCompleteRef.current = true;
               
               // Turn off loading with a small delay to ensure render is complete
               setTimeout(() => {
@@ -862,24 +854,33 @@ export default function DiagramPage() {
               setNodes([]);
               setEdges([]);
               
+              // Mark initial load as complete even if no diagrams
+              initialLoadCompleteRef.current = true;
+              
               // Turn off loading since we have no diagrams
               setLoading(false);
             }
           } else {
+            // Mark initial load as complete even if no environment
+            initialLoadCompleteRef.current = true;
             setLoading(false);
           }
         } else {
+          // Mark initial load as complete even if no environments
+          initialLoadCompleteRef.current = true;
           setLoading(false);
         }
       } catch (error) {
         console.error("Error cargando datos:", error);
         message.error("No se pudieron cargar los datos. Por favor, inténtelo de nuevo más tarde.");
+        // Mark initial load as complete even on error
+        initialLoadCompleteRef.current = true;
         setLoading(false);
       }
     };
 
     loadEnvironments();
-  }, [companyId, diagramId, router]);
+  }, [companyId, diagramId]); // Remove router, batchStateUpdates, and updateUrlWithNames from dependencies
 
   // Add back the group update effect
   useEffect(() => {
@@ -888,7 +889,7 @@ export default function DiagramPage() {
     
     const handleGroupUpdate = (event: CustomEvent) => {
       console.log("Received updateGroupNodes event:", event.detail);
-      const { groupId, nodes: updatedNodes, edges: updatedEdges, hasNewNodes } = event.detail;
+      const { groupId, nodes: updatedNodes, edges: updatedEdges } = event.detail;
       
       // Prevent multiple rapid updates (debounce)
       const currentTime = Date.now();
@@ -902,7 +903,7 @@ export default function DiagramPage() {
       
       if (groupId && updatedNodes) {
         // Create a "safe" copy of the nodes with new references to avoid mutation issues
-        const safeUpdatedNodes = updatedNodes.map((n: any) => ({...n}));
+        const safeUpdatedNodes = updatedNodes.map((n: ReactFlowNode) => ({...n}));
         
         // Directly update our state instead of using reactFlowInstance
         setNodes(currentNodes => {
@@ -915,7 +916,7 @@ export default function DiagramPage() {
             // Keep edges that don't connect to the updated nodes
             const edgesToKeep = currentEdges.filter(edge => {
               // Keep edges that don't involve nodes in this group
-              return !updatedNodes.some((n: any) => n.id === edge.source || n.id === edge.target);
+              return !updatedNodes.some((n: ReactFlowNode) => n.id === edge.source || n.id === edge.target);
             });
             
             // Add the updated edges
@@ -932,6 +933,47 @@ export default function DiagramPage() {
     };
   }, []);
 
+  // Event listeners for node-level preview and run events
+  useEffect(() => {
+    const handleNodePreview = (event: CustomEvent) => {
+      console.log("Received nodePreview event:", event.detail);
+      const { nodeId, resourceData } = event.detail;
+      
+      // Store the node data for the preview modal
+      setPreviewData(prevData => ({
+        ...prevData,
+        selectedNode: { nodeId, resourceData }
+      }));
+      
+      // Show the preview modal
+      setPreviewModalVisible(true);
+    };
+
+    const handleNodeRun = (event: CustomEvent) => {
+      console.log("Received nodeRun event:", event.detail);
+      const { nodeId, resourceData } = event.detail;
+      
+      // Store the node data for the run modal
+      setPreviewData(prevData => ({
+        ...prevData,
+        selectedNode: { nodeId, resourceData }
+      }));
+      
+      // Show the run modal
+      setRunModalVisible(true);
+    };
+
+    // Only add event listeners to document to avoid duplicate events
+    document.addEventListener('nodePreview', handleNodePreview as EventListener);
+    document.addEventListener('nodeRun', handleNodeRun as EventListener);
+    
+    return () => {
+      // Clean up event listeners
+      document.removeEventListener('nodePreview', handleNodePreview as EventListener);
+      document.removeEventListener('nodeRun', handleNodeRun as EventListener);
+    };
+  }, [/* No dependencies to avoid re-registering listeners */]);
+
   // Add new state for modals
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [promoteModalVisible, setPromoteModalVisible] = useState(false);
@@ -940,32 +982,36 @@ export default function DiagramPage() {
   const [selectedTargetEnvironment, setSelectedTargetEnvironment] = useState<string>('');
   const [destroyConfirmationText, setDestroyConfirmationText] = useState<string>('');
 
-  // Add type guards for URL parameters
-  const getCompanyId = (): string => {
-    if (typeof params.companyId === 'string') {
-      return params.companyId;
-    }
-    if (Array.isArray(params.companyId)) {
-      return params.companyId[0];
-    }
-    return '';
-  };
-
-  const getDiagramId = (): string => {
-    if (typeof params.diagramId === 'string') {
-      return params.diagramId;
-    }
-    if (Array.isArray(params.diagramId)) {
-      return params.diagramId[0];
-    }
-    return '';
-  };
-
   // Add new state for preview data
   const [previewData, setPreviewData] = useState<{
-    resourcesToCreate: any[];
-    resourcesToUpdate: any[];
-    resourcesToDelete: any[];
+    resourcesToCreate: Array<{
+      id: string;
+      type: string;
+      name: string;
+      provider: string;
+      changes: Record<string, unknown>;
+    }>;
+    resourcesToUpdate: Array<{
+      id: string;
+      type: string;
+      name: string;
+      provider: string;
+      changes: Record<string, unknown>;
+    }>;
+    resourcesToDelete: Array<{
+      id: string;
+      type: string;
+      name: string;
+      provider: string;
+    }>;
+    selectedNode?: {
+      nodeId: string;
+      resourceData: {
+        label: string;
+        provider: string;
+        resourceType: string;
+      };
+    };
   }>({
     resourcesToCreate: [],
     resourcesToUpdate: [],
@@ -973,7 +1019,7 @@ export default function DiagramPage() {
   });
 
   // Modify handlePreview to analyze changes
-  const handlePreview = async () => {
+  const handlePreview = useCallback(async () => {
     if (!currentDiagram) return;
     
     try {
@@ -998,17 +1044,17 @@ export default function DiagramPage() {
       
       setPreviewData(mockPreviewData);
       setPreviewModalVisible(true);
-    } catch (error) {
+    } catch {
       message.error('Error al generar la vista previa');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDiagram]);
 
   // Add handler functions
-  const handleRun = () => {
+  const handleRun = useCallback(() => {
     setRunModalVisible(true);
-  };
+  }, []);
 
   const handlePromote = () => {
     setPromoteModalVisible(true);
@@ -1022,7 +1068,7 @@ export default function DiagramPage() {
       // Implement promotion logic here
       message.success('Diagrama promovido exitosamente');
       setPromoteModalVisible(false);
-    } catch (error) {
+    } catch {
       message.error('Error al promover el diagrama');
     } finally {
       setLoading(false);
@@ -1037,7 +1083,7 @@ export default function DiagramPage() {
       // Implement run logic here
       message.success('Diagrama desplegado exitosamente');
       setRunModalVisible(false);
-    } catch (error) {
+    } catch {
       message.error('Error al desplegar el diagrama');
     } finally {
       setLoading(false);
@@ -1097,7 +1143,7 @@ export default function DiagramPage() {
       message.success(`Todos los recursos del diagrama "${currentDiagram.name}" han sido eliminados`);
       setDestroyModalVisible(false);
       setDestroyConfirmationText('');
-    } catch (error) {
+    } catch {
       message.error('Error al destruir los recursos del diagrama');
     } finally {
       setLoading(false);
@@ -1246,22 +1292,37 @@ export default function DiagramPage() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
-              onSave={(flowData) => {
+              onSave={(diagramData) => {
                 if (isUpdatingRef.current) return;
                 
+                // Store the ReactFlow data as-is since it's already in ReactFlow format
+                const flowData = {
+                  nodes: diagramData.nodes,
+                  edges: diagramData.edges,
+                  viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 }
+                };
+                
                 // Procesar los metadatos de grupos y posiciones de nodos
-                const groupNodes = flowData.nodes.filter((node: any) => node.type === 'group');
-                const nodeGroups: Record<string, any> = {};
-                const nodePositions: Record<string, Record<string, any>> = {};
+                const groupNodes = flowData.nodes.filter((node: ReactFlowNode) => node.type === 'group');
+                const nodeGroups: Record<string, {
+                  nodeIds: string[];
+                  dimensions: { width: number; height: number };
+                  provider: string;
+                  label: string;
+                }> = {};
+                const nodePositions: Record<string, Record<string, {
+                  relativePosition: { x: number; y: number };
+                  dimensions: { width: number; height: number };
+                }>> = {};
 
                 // Construir estructura de grupos
-                groupNodes.forEach((groupNode: any) => {
-                  const childNodes = flowData.nodes.filter((node: any) => node.parentNode === groupNode.id);
+                groupNodes.forEach((groupNode: ReactFlowNode) => {
+                  const childNodes = flowData.nodes.filter((node: ReactFlowNode) => node.parentNode === groupNode.id);
                   nodeGroups[groupNode.id] = {
-                    nodeIds: childNodes.map((node: any) => node.id),
+                    nodeIds: childNodes.map((node: ReactFlowNode) => node.id),
                     dimensions: {
-                      width: groupNode.style?.width || 300,
-                      height: groupNode.style?.height || 200
+                      width: typeof groupNode.style?.width === 'number' ? groupNode.style.width : 300,
+                      height: typeof groupNode.style?.height === 'number' ? groupNode.style.height : 200
                     },
                     provider: groupNode.data?.provider || 'generic',
                     label: groupNode.data?.label || 'Group'
@@ -1269,20 +1330,20 @@ export default function DiagramPage() {
 
                   // Guardar posiciones relativas de los nodos dentro de este grupo
                   nodePositions[groupNode.id] = {};
-                  childNodes.forEach((childNode: any) => {
+                  childNodes.forEach((childNode: ReactFlowNode) => {
                     nodePositions[groupNode.id][childNode.id] = {
                       relativePosition: { ...childNode.position },
                       dimensions: {
-                        width: childNode.style?.width || childNode.width || 100,
-                        height: childNode.style?.height || childNode.height || 50
+                        width: typeof childNode.style?.width === 'number' ? childNode.style.width : (typeof childNode.width === 'number' ? childNode.width : 100),
+                        height: typeof childNode.style?.height === 'number' ? childNode.style.height : (typeof childNode.height === 'number' ? childNode.height : 50)
                       }
                     };
                   });
                 });
                 
                 // Convertir los nodos y aristas de React Flow a nuestro formato personalizado
-                const customNodes = convertToCustomNodes(flowData.nodes);
-                const customEdges = convertToCustomEdges(flowData.edges);
+                const customNodes = convertToCustomNodes(diagramData.nodes);
+                const customEdges = convertToCustomEdges(diagramData.edges);
                 
                 // Conservar el nombre y descripción originales del diagrama y guardar los cambios
                 updateDiagram(
