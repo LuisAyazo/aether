@@ -106,3 +106,15 @@ export interface PaginatedResponse<T> {
   size: number;
   hasMore: boolean;
 }
+
+export type NodeExecutionState = 'pending' | 'creating' | 'updating' | 'deleting' | 'success' | 'error';
+
+export interface NodeExecutionStatus {
+  state: NodeExecutionState;
+  message?: string;
+  timestamp: number;
+}
+
+export interface NodeWithExecutionStatus extends Node {
+  executionStatus?: NodeExecutionStatus;
+}

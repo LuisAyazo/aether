@@ -1,3 +1,4 @@
+import { message } from 'antd';
 import { 
   Background, 
   BackgroundVariant, 
@@ -28,11 +29,37 @@ import {
   SwatchIcon,
   DocumentTextIcon,
   PencilIcon,
-  RectangleGroupIcon
+  RectangleGroupIcon,
+  XMarkIcon,
+  ServerIcon,
+  CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
 import nodeTypes from '../nodes/NodeTypes';
+import { NodeExecutionState, NodeWithExecutionStatus } from '../../utils/customTypes';
+import ExecutionLog from './ExecutionLog';
+
+// Add this interface at the top of the file with other interfaces
+interface SingleNodePreview {
+  action: 'create' | 'update' | 'delete';
+  resource: {
+    name: string;
+    type: string;
+    provider: string;
+    changes: {
+      properties: Record<string, any>;
+    };
+  };
+  estimated_cost?: {
+    monthly: number;
+    currency: string;
+  };
+  dependencies?: {
+    name: string;
+    type: string;
+  }[];
+}
 
 interface ResourceCategory {
   name: string;
@@ -88,6 +115,40 @@ interface FlowEditorProps {
   environmentId?: string;
   diagramId?: string;
   initialDiagram?: Diagram;
+}
+
+interface ResourceProperties {
+  [key: string]: string | number | boolean | null;
+}
+
+interface PreviewData {
+  resourcesToCreate: Array<{
+    id: string;
+    type: string | undefined;
+    name: string;
+    provider: string;
+    changes: {
+      create: boolean;
+      properties: ResourceProperties;
+    };
+  }>;
+  resourcesToUpdate: Array<{
+    id: string;
+    type: string | undefined;
+    name: string;
+    provider: string;
+    changes: {
+      create: boolean;
+      update: boolean;
+      properties: ResourceProperties;
+    };
+  }>;
+  resourcesToDelete: Array<{
+    id: string;
+    type: string | undefined;
+    name: string;
+    provider: string;
+  }>;
 }
 
 // Define throttle function outside or import if it's a general utility
@@ -256,7 +317,8 @@ const FlowEditorContent = ({
   nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
   resourceCategories = [],
-  diagramId
+  diagramId,
+  initialDiagram
 }: FlowEditorProps): JSX.Element => {
   
   // Combinar los tipos de nodos externos con los tipos de nodos definidos en NodeTypes.tsx
@@ -313,6 +375,22 @@ const FlowEditorContent = ({
   });
 
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+  const [isExecutionLogVisible, setIsExecutionLogVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [runModalVisible, setRunModalVisible] = useState(false);
+  const currentDiagram = initialDiagram;
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  const [executionLogs, setExecutionLogs] = useState<Array<{
+    nodeId: string;
+    nodeName: string;
+    state: NodeExecutionState;
+    message: string;
+    timestamp: number;
+  }>>([]);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
+  const [singleNodePreviewVisible, setSingleNodePreviewVisible] = useState(false);
+  const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
@@ -1530,6 +1608,131 @@ const FlowEditorContent = ({
     reactFlowInstance.setNodes(updatedNodes);
   }, [reactFlowInstance]);
 
+  // Función para simular la ejecución de un nodo
+  const simulateNodeExecution = async (node: NodeWithExecutionStatus, state: NodeExecutionState) => {
+    const nodeName = node.data?.label || 'Unnamed Node';
+    const message = getExecutionMessage(node, state);
+    
+    // Actualizar el estado del nodo
+    setNodes((nds) =>
+      nds.map((n) =>
+        n.id === node.id
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                executionStatus: {
+                  state,
+                  message,
+                  timestamp: Date.now(),
+                },
+              },
+            }
+          : n
+      )
+    );
+
+    // Añadir al log
+    setExecutionLogs((logs) => [
+      ...logs,
+      {
+        nodeId: node.id,
+        nodeName,
+        state,
+        message,
+        timestamp: Date.now(),
+      },
+    ]);
+
+    // Simular un delay para la ejecución
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  };
+
+  const getExecutionMessage = (node: NodeWithExecutionStatus, state: NodeExecutionState): string => {
+    const nodeName = node.data?.label || 'Unnamed Node';
+    switch (state) {
+      case 'creating':
+        return `Creando ${nodeName}...`;
+      case 'updating':
+        return `Actualizando ${nodeName}...`;
+      case 'deleting':
+        return `Eliminando ${nodeName}...`;
+      case 'success':
+        return `${nodeName} completado exitosamente`;
+      case 'error':
+        return `Error al procesar ${nodeName}`;
+      default:
+        return `Procesando ${nodeName}...`;
+    }
+  };
+
+  // Función para simular la ejecución de todos los nodos
+  const simulateExecution = async () => {
+    setIsExecutionLogVisible(true);
+    setExecutionLogs([]);
+
+    // Obtener nodos que no son grupos
+    const executionNodes = nodes.filter((node) => node.type !== 'group');
+
+    // Simular ejecución secuencial
+    for (const node of executionNodes) {
+      await simulateNodeExecution(node as NodeWithExecutionStatus, 'creating');
+      await simulateNodeExecution(node as NodeWithExecutionStatus, 'success');
+    }
+  };
+
+  // Modificar el handlePreview para incluir la simulación
+  const handlePreview = async () => {
+    if (!currentDiagram) return;
+    
+    try {
+      setLoading(true);
+      setIsExecutionLogVisible(true);
+      setExecutionLogs([]);
+
+      // Simular la ejecución
+      await simulateExecution();
+
+      // Actualizar los datos de preview
+      const mockPreviewData = {
+        resourcesToCreate: currentDiagram.nodes
+          .filter(node => node.type !== 'group')
+          .map(node => ({
+            id: node.id,
+            type: node.type,
+            name: node.data?.label || 'Unnamed Resource',
+            provider: node.data?.provider || 'generic',
+            changes: {
+              create: true,
+              properties: node.data || {}
+            }
+          })),
+        resourcesToUpdate: [],
+        resourcesToDelete: []
+      };
+      
+      setPreviewData(mockPreviewData);
+    } catch {
+      message.error('Error al generar la vista previa');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Modificar el handleRun para incluir la simulación
+  const handleRun = useCallback(() => {
+    setRunModalVisible(true);
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: CustomEvent<SingleNodePreview>) => {
+      setSingleNodePreview(event.detail);
+      setSingleNodePreviewVisible(true);
+    };
+    window.addEventListener('showSingleNodePreview', handler as EventListener);
+    return () => window.removeEventListener('showSingleNodePreview', handler as EventListener);
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       {renderEditGroupModal()}
@@ -1981,37 +2184,83 @@ const FlowEditorContent = ({
                         </button>
                       </>
                     ) : (
-                      <button 
-                        onClick={() => {
-                          const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
-                          if (node) {
-                            const event = new CustomEvent('openIaCPanel', {
-                              detail: {
-                                nodeId: node.id,
-                                resourceData: {
-                                  label: node.data.label,
-                                  provider: node.data.provider,
-                                  resourceType: node.data.resourceType
+                      <>
+                        <button 
+                          onClick={() => {
+                            const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                            if (node) {
+                              setLoading(true);
+                              setIsExecutionLogVisible(true);
+                              simulateNodeExecution(node as NodeWithExecutionStatus, 'creating')
+                                .then(() => simulateNodeExecution(node as NodeWithExecutionStatus, 'success'))
+                                .finally(() => setLoading(false));
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee',
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          ▶️ Run Node
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                            if (node) {
+                              message.info(`Previewing node: ${node.data?.label || 'Unnamed Node'} (${node.type})`);
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee',
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          👁️ Preview
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
+                            if (node) {
+                              const event = new CustomEvent('openIaCPanel', {
+                                detail: {
+                                  nodeId: node.id,
+                                  resourceData: {
+                                    label: node.data.label,
+                                    provider: node.data.provider,
+                                    resourceType: node.data.resourceType
+                                  }
                                 }
-                              }
-                            });
-                            window.dispatchEvent(event);
-                            document.dispatchEvent(event);
-                          }
-                          setContextMenu(prev => ({...prev, visible: false}));
-                        }}
-                        style={{ 
-                          display: 'block', width: '100%', textAlign: 'left', 
-                          padding: '10px 12px', cursor: 'pointer', 
-                          border: 'none', borderBottom: '1px solid #eee',
-                          background: 'white', fontSize: '13px',
-                          color: '#333', transition: 'background-color 0.2s'
-                        }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-                      >
-                        ⚙️ Configuración
-                      </button>
+                              });
+                              window.dispatchEvent(event);
+                              document.dispatchEvent(event);
+                            }
+                            setContextMenu(prev => ({...prev, visible: false}));
+                          }}
+                          style={{ 
+                            display: 'block', width: '100%', textAlign: 'left', 
+                            padding: '10px 12px', cursor: 'pointer', 
+                            border: 'none', borderBottom: '1px solid #eee',
+                            background: 'white', fontSize: '13px',
+                            color: '#333', transition: 'background-color 0.2s'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
+                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        >
+                          ⚙️ Configuración
+                        </button>
+                      </>
                     )}
                     
                     {/* Botón para eliminar un nodo individual si no hay múltiples seleccionados */}
@@ -2203,7 +2452,6 @@ const FlowEditorContent = ({
           
           <Panel position="top-center">
             <div style={{ display: 'flex', gap: '8px', padding: '10px', background: 'rgba(255,255,255,0.9)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-              {/* Botón para guardar explícitamente el estado del diagrama */}
               <button 
                 onClick={saveCurrentDiagramState} 
                 title="Guardar estado actual (zoom y posición)" 
@@ -2523,6 +2771,490 @@ const FlowEditorContent = ({
           )}
         </ReactFlow>
       </div>
+      
+      {/* Añadir el componente ExecutionLog */}
+      <ExecutionLog
+        isVisible={isExecutionLogVisible}
+        logs={executionLogs}
+        onClose={() => setIsExecutionLogVisible(false)}
+      />
+
+      {/* Run Modal */}
+      {runModalVisible && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl">
+            <h3 className="text-lg font-semibold mb-4">Run Deployment</h3>
+            <p className="mb-4">Are you sure you want to deploy this diagram?</p>
+            <div className="flex justify-end gap-2">
+              <button 
+                onClick={() => setRunModalVisible(false)}
+                className="px-4 py-2 border rounded hover:bg-gray-100">
+                Cancel
+              </button>
+              <button 
+                onClick={handleRun}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                Run
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewModalVisible && previewData && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-8 relative animate-fade-in">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none"
+              onClick={() => setPreviewModalVisible(false)}
+              aria-label="Cerrar"
+            >
+              ×
+            </button>
+            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+              <span className="inline-block bg-blue-100 text-blue-700 rounded-full px-3 py-1 text-lg">👁️</span>
+              Vista Previa de Cambios
+            </h2>
+            <p className="text-gray-500 mb-6">Revisa los cambios que se aplicarán al ejecutar el diagrama.</p>
+            <div className="grid grid-cols-3 gap-4 mb-8 text-center">
+              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                <div className="text-3xl font-bold text-green-600 flex items-center justify-center gap-2">
+                  <span>＋</span>{previewData.resourcesToCreate.length}
+                </div>
+                <div className="text-sm text-green-700 mt-1">Recursos a Crear</div>
+              </div>
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                <div className="text-3xl font-bold text-yellow-600 flex items-center justify-center gap-2">
+                  <span>✎</span>{previewData.resourcesToUpdate.length}
+                </div>
+                <div className="text-sm text-yellow-700 mt-1">Recursos a Actualizar</div>
+              </div>
+              <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                <div className="text-3xl font-bold text-red-600 flex items-center justify-center gap-2">
+                  <span>－</span>{previewData.resourcesToDelete.length}
+                </div>
+                <div className="text-sm text-red-700 mt-1">Recursos a Eliminar</div>
+              </div>
+            </div>
+            {/* Recursos a Crear */}
+            {previewData.resourcesToCreate.length > 0 && (
+              <details open className="mb-6">
+                <summary className="cursor-pointer text-green-700 font-semibold text-lg mb-2">Recursos a Crear</summary>
+                <div className="space-y-3 mt-2">
+                  {previewData.resourcesToCreate.map(resource => (
+                    <div key={resource.id} className="bg-white border border-green-200 rounded p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <span className="font-bold text-green-700">{resource.name}</span>
+                          <span className="ml-2 text-xs text-gray-500">({resource.type})</span>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">{resource.provider}</span>
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        <span className="font-medium">Propiedades:</span>
+                        <pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-x-auto">
+                          {JSON.stringify(resource.changes.properties, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+            {/* Recursos a Actualizar */}
+            {previewData.resourcesToUpdate.length > 0 && (
+              <details open className="mb-6">
+                <summary className="cursor-pointer text-yellow-700 font-semibold text-lg mb-2">Recursos a Actualizar</summary>
+                <div className="space-y-3 mt-2">
+                  {previewData.resourcesToUpdate.map(resource => (
+                    <div key={resource.id} className="bg-white border border-yellow-200 rounded p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <span className="font-bold text-yellow-700">{resource.name}</span>
+                          <span className="ml-2 text-xs text-gray-500">({resource.type})</span>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">{resource.provider}</span>
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        <span className="font-medium">Cambios:</span>
+                        <pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-x-auto">
+                          {JSON.stringify(resource.changes, null, 2)}
+                        </pre>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+            {/* Recursos a Eliminar */}
+            {previewData.resourcesToDelete.length > 0 && (
+              <details open className="mb-6">
+                <summary className="cursor-pointer text-red-700 font-semibold text-lg mb-2">Recursos a Eliminar</summary>
+                <div className="space-y-3 mt-2">
+                  {previewData.resourcesToDelete.map(resource => (
+                    <div key={resource.id} className="bg-white border border-red-200 rounded p-4 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <span className="font-bold text-red-700">{resource.name}</span>
+                          <span className="ml-2 text-xs text-gray-500">({resource.type})</span>
+                        </div>
+                        <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">{resource.provider}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+            <div className="flex justify-end gap-3 mt-8">
+              <button
+                className="px-5 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold"
+                onClick={() => setPreviewModalVisible(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="px-5 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow"
+                onClick={() => {
+                  setPreviewModalVisible(false);
+                  handleRun();
+                }}
+              >
+                Ejecutar Cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de preview de un solo nodo */}
+      {singleNodePreviewVisible && singleNodePreview && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 overflow-hidden border border-gray-100">
+            {/* Header */}
+            <div className="bg-white p-6 border-b border-gray-100">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  {singleNodePreview.action === 'create' && (
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <span className="text-2xl text-green-600">＋</span>
+                    </div>
+                  )}
+                  {singleNodePreview.action === 'update' && (
+                    <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                      <span className="text-2xl text-yellow-600">✎</span>
+                    </div>
+                  )}
+                  {singleNodePreview.action === 'delete' && (
+                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                      <span className="text-2xl text-red-600">－</span>
+                    </div>
+                  )}
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      {singleNodePreview.action === 'create' && 'Crear nuevo recurso'}
+                      {singleNodePreview.action === 'update' && 'Actualizar recurso'}
+                      {singleNodePreview.action === 'delete' && 'Eliminar recurso'}
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {singleNodePreview.resource.type} • {singleNodePreview.resource.provider}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSingleNodePreviewVisible(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Resource Info */}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <ServerIcon className="w-7 h-7 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900 text-lg">{singleNodePreview.resource.name}</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      ID: {singleNodePreview.resource.id || 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Changes */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900">Cambios a realizar:</h4>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <pre className="text-sm text-gray-700 overflow-x-auto bg-white p-3 rounded-lg border border-gray-100">
+                    {JSON.stringify(singleNodePreview.resource.changes, null, 2)}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Estimated Cost */}
+              {singleNodePreview.estimated_cost && (
+                <div className="bg-green-50 rounded-xl p-4 border border-green-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-green-900">Costo estimado</h4>
+                      <p className="text-sm text-green-700 mt-1">
+                        {singleNodePreview.estimated_cost.monthly} {singleNodePreview.estimated_cost.currency} / mes
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                      <CurrencyDollarIcon className="w-7 h-7 text-green-600" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dependencies */}
+              {singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="font-medium text-gray-900">Recursos dependientes:</h4>
+                  <div className="space-y-3">
+                    {singleNodePreview.dependencies.map((dep, index) => (
+                      <div key={index} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                            <ServerIcon className="w-6 h-6 text-blue-500" />
+                          </div>
+                          <div>
+                            <h5 className="font-medium text-gray-900">{dep.name}</h5>
+                            <p className="text-sm text-gray-500">{dep.type}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setSingleNodePreviewVisible(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    setSingleNodePreviewVisible(false);
+                    setExecutionLogs([]);
+                    setIsExecutionLogVisible(true);
+
+                    const mainResource = {
+                      id: `resource-${Date.now()}`,
+                      data: {
+                        label: singleNodePreview.resource.name,
+                        type: singleNodePreview.resource.type,
+                        provider: singleNodePreview.resource.provider
+                      }
+                    };
+
+                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'creating');
+                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'success');
+
+                    if (singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0) {
+                      for (const dep of singleNodePreview.dependencies) {
+                        const depResource = {
+                          id: `dep-${Date.now()}-${dep.name}`,
+                          data: {
+                            label: dep.name,
+                            type: dep.type,
+                            provider: singleNodePreview.resource.provider
+                          }
+                        };
+                        await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'creating');
+                        await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  Aplicar cambios
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de previsualización de nodo individual */}
+      {showSingleNodePreview && singleNodePreview && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 overflow-hidden border border-gray-100">
+            {/* Header */}
+            <div className="bg-white p-6 border-b border-gray-100">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  {singleNodePreview.action === 'create' && (
+                    <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                      <span className="text-2xl text-green-600">＋</span>
+                    </div>
+                  )}
+                  {singleNodePreview.action === 'update' && (
+                    <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
+                      <span className="text-2xl text-yellow-600">✎</span>
+                    </div>
+                  )}
+                  {singleNodePreview.action === 'delete' && (
+                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                      <span className="text-2xl text-red-600">－</span>
+                    </div>
+                  )}
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      {singleNodePreview.action === 'create' && 'Crear nuevo recurso'}
+                      {singleNodePreview.action === 'update' && 'Actualizar recurso'}
+                      {singleNodePreview.action === 'delete' && 'Eliminar recurso'}
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {singleNodePreview.resource.type} • {singleNodePreview.resource.provider}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSingleNodePreview(false)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-6">
+              {/* Resource Info */}
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
+                    <ServerIcon className="w-7 h-7 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900 text-lg">{singleNodePreview.resource.name}</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Tipo: {singleNodePreview.resource.type}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Changes */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-gray-900">Cambios a realizar:</h4>
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <pre className="text-sm text-gray-700 overflow-x-auto bg-white p-3 rounded-lg border border-gray-100">
+                    {JSON.stringify(singleNodePreview.resource.changes, null, 2)}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Estimated Cost */}
+              {singleNodePreview.estimated_cost && (
+                <div className="bg-green-50 rounded-xl p-4 border border-green-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-green-900">Costo estimado</h4>
+                      <p className="text-sm text-green-700 mt-1">
+                        {singleNodePreview.estimated_cost.monthly} {singleNodePreview.estimated_cost.currency} / mes
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                      <CurrencyDollarIcon className="w-7 h-7 text-green-600" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dependencies */}
+              {singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="font-medium text-gray-900">Recursos dependientes:</h4>
+                  <div className="space-y-3">
+                    {singleNodePreview.dependencies.map((dep, index) => (
+                      <div key={index} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                            <ServerIcon className="w-6 h-6 text-blue-500" />
+                          </div>
+                          <div>
+                            <h5 className="font-medium text-gray-900">{dep.name}</h5>
+                            <p className="text-sm text-gray-500">{dep.type}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  onClick={() => setShowSingleNodePreview(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowSingleNodePreview(false);
+                    setExecutionLogs([]);
+                    setIsExecutionLogVisible(true);
+
+                    const mainResource = {
+                      id: `resource-${Date.now()}`,
+                      data: {
+                        label: singleNodePreview.resource.name,
+                        type: singleNodePreview.resource.type,
+                        provider: singleNodePreview.resource.provider
+                      }
+                    };
+
+                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'creating');
+                    await simulateNodeExecution(mainResource as NodeWithExecutionStatus, 'success');
+
+                    if (singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0) {
+                      for (const dep of singleNodePreview.dependencies) {
+                        const depResource = {
+                          id: `dep-${Date.now()}-${dep.name}`,
+                          data: {
+                            label: dep.name,
+                            type: dep.type,
+                            provider: singleNodePreview.resource.provider
+                          }
+                        };
+                        await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'creating');
+                        await simulateNodeExecution(depResource as NodeWithExecutionStatus, 'success');
+                      }
+                    }
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  Aplicar cambios
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Execution Log */}
+      <ExecutionLog
+        isVisible={isExecutionLogVisible}
+        logs={executionLogs}
+        onClose={() => setIsExecutionLogVisible(false)}
+      />
     </div>
   );
 };

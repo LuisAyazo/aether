@@ -17,6 +17,7 @@ import {
   PlayCircleIcon
 } from '@heroicons/react/24/outline';
 import { NodeData } from '../../utils/customTypes';
+import { message } from 'antd';
 
 // Add some CSS styles for double-click animation
 const doubleClickableStyles = `
@@ -274,24 +275,31 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
   }, [id, data]);
 
   // Handler for Preview functionality
-  const handlePreview = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handlePreview = useCallback(async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     console.log('Preview action for node:', id);
-    
-    // Dispatch custom event for preview functionality
-    const event = new CustomEvent('nodePreview', {
-      detail: {
-        nodeId: id,
-        resourceData: {
-          label: data.label,
-          provider: data.provider,
-          resourceType: data.resourceType
-        }
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        message.error('No estás autenticado');
+        return;
       }
-    });
-    // Only dispatch to document to avoid duplicate events
-    document.dispatchEvent(event);
-  }, [id, data]);
+
+      // Llama al backend para obtener el preview de este nodo
+      const res = await fetch(`/api/node/preview?nodeId=${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) throw new Error('Error al obtener preview del backend');
+      const preview = await res.json();
+      // Dispara un evento global para que el editor muestre el modal
+      const event = new CustomEvent('showSingleNodePreview', { detail: preview });
+      window.dispatchEvent(event);
+    } catch (err) {
+      message.error('No se pudo obtener la vista previa del nodo');
+    }
+  }, [id]);
 
   // Handler for Run functionality
   const handleRun = useCallback((e: React.MouseEvent) => {
@@ -448,7 +456,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       {
         label: 'Preview',
         icon: <EyeIcon className="w-4 h-4" />,
-        onClick: () => handlePreview({ stopPropagation: () => {} } as React.MouseEvent)
+        onClick: (e: React.MouseEvent) => handlePreview(e)
       },
       {
         label: 'Run',
