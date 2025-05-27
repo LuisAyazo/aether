@@ -289,7 +289,11 @@ const FlowEditorContent = ({
   const [edges, setEdges] = useEdgesState(propEdges || initialEdges);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
-  const [, setActiveDrag] = useState<{ item: ResourceItem, offset: { x: number, y: number } } | null>(null);
+  const [activeDrag, setActiveDrag] = useState<{ 
+    item: ResourceItem, 
+    offset: { x: number, y: number },
+    elementSize?: { width: number, height: number }
+  } | null>(null);
   const [, setFocusedNodeId] = useState<string | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [activeTool, setActiveTool] = useState<ToolType>('select');
@@ -599,56 +603,56 @@ const FlowEditorContent = ({
   
   // Removed useEffect for automatic fitView on component mount
 
-  // Center nodes in the viewport without zooming (added to fix node visibility issue)
-  // Note: Zoom buttons are visible for UI consistency but functionality is disabled
-  useEffect(() => {
-    if (!reactFlowInstance || !nodes.length) return;
-    
-    // Wait for nodes to be rendered
-    setTimeout(() => {
-      // Calculate nodes bounding box
-      let minX = Infinity, minY = Infinity;
-      let maxX = -Infinity, maxY = -Infinity;
-      
-      reactFlowInstance.getNodes().forEach(node => {
-        if (!node.hidden) {
-          const nodeWidth = node.width || 150;
-          const nodeHeight = node.height || 80;
-          
-          minX = Math.min(minX, node.position.x);
-          minY = Math.min(minY, node.position.y);
-          maxX = Math.max(maxX, node.position.x + nodeWidth);
-          maxY = Math.max(maxY, node.position.y + nodeHeight);
-        }
-      });
+  // DISABLED: Auto-centering nodes in viewport to fix drag-and-drop positioning issues
+  // This was causing the viewport to automatically center when dropping nodes near edges
+  // useEffect(() => {
+  //   if (!reactFlowInstance || !nodes.length) return;
+  //   
+  //   // Wait for nodes to be rendered
+  //   setTimeout(() => {
+  //     // Calculate nodes bounding box
+  //     let minX = Infinity, minY = Infinity;
+  //     let maxX = -Infinity, maxY = -Infinity;
+  //     
+  //     reactFlowInstance.getNodes().forEach(node => {
+  //       if (!node.hidden) {
+  //         const nodeWidth = node.width || 150;
+  //         const nodeHeight = node.height || 80;
+  //         
+  //         minX = Math.min(minX, node.position.x);
+  //         minY = Math.min(minY, node.position.y);
+  //         maxX = Math.max(maxX, node.position.x + nodeWidth);
+  //         maxY = Math.max(maxY, node.position.y + nodeHeight);
+  //       }
+  //     });
 
-      // Skip if no nodes are visible or bounding box calculation failed
-      if (minX === Infinity || minY === Infinity) return;
-      
-      // Calculate center of nodes
-      const nodesWidth = maxX - minX;
-      const nodesHeight = maxY - minY;
-      const nodesCenterX = minX + nodesWidth / 2;
-      const nodesCenterY = minY + nodesHeight / 2;
-      
-      // Get viewport dimensions
-      const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 600 };
-      const viewportCenterX = width / 2;
-      const viewportCenterY = height / 2;
-      
-      // Calculate the translation needed to center nodes
-      const zoom = 1; // Keep zoom level fixed at 1
-      const translateX = viewportCenterX - nodesCenterX * zoom;
-      const translateY = viewportCenterY - nodesCenterY * zoom;
-      
-      // Set viewport to center nodes without animation
-      reactFlowInstance.setViewport({ 
-        x: translateX, 
-        y: translateY, 
-        zoom 
-      });
-    }, 200); // Small delay to ensure nodes are rendered
-  }, [reactFlowInstance, nodes.length, reactFlowWrapper]);
+  //     // Skip if no nodes are visible or bounding box calculation failed
+  //     if (minX === Infinity || minY === Infinity) return;
+  //     
+  //     // Calculate center of nodes
+  //     const nodesWidth = maxX - minX;
+  //     const nodesHeight = maxY - minY;
+  //     const nodesCenterX = minX + nodesWidth / 2;
+  //     const nodesCenterY = minY + nodesHeight / 2;
+  //     
+  //     // Get viewport dimensions
+  //     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 600 };
+  //     const viewportCenterX = width / 2;
+  //     const viewportCenterY = height / 2;
+  //     
+  //     // Calculate the translation needed to center nodes
+  //     const zoom = 1; // Keep zoom level fixed at 1
+  //     const translateX = viewportCenterX - nodesCenterX * zoom;
+  //     const translateY = viewportCenterY - nodesCenterY * zoom;
+  //     
+  //     // Set viewport to center nodes without animation
+  //     reactFlowInstance.setViewport({ 
+  //       x: translateX, 
+  //       y: translateY, 
+  //       zoom 
+  //     });
+  //   }, 200); // Small delay to ensure nodes are rendered
+  // }, [reactFlowInstance, nodes.length, reactFlowWrapper]);
 
   const createEmptyGroup = useCallback((provider: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic') => {
     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 800 };
@@ -943,9 +947,17 @@ const FlowEditorContent = ({
     event.dataTransfer.effectAllowed = 'move';
     const dragElement = event.currentTarget as HTMLDivElement;
     const rect = dragElement.getBoundingClientRect();
+    
+    // More precise offset calculation - get exact click position within element
     const offsetX = event.clientX - rect.left;
     const offsetY = event.clientY - rect.top;
-    setActiveDrag({ item: itemData, offset: { x: offsetX, y: offsetY } });
+    
+    // Store both the element dimensions and click offset for more accurate positioning
+    setActiveDrag({ 
+      item: itemData, 
+      offset: { x: offsetX, y: offsetY },
+      elementSize: { width: rect.width, height: rect.height }
+    });
   };
 
   // Estado para rastrear el grupo sobre el cual se está arrastrando un nodo
@@ -1046,35 +1058,41 @@ const FlowEditorContent = ({
     if (!reactFlowBounds || !reactFlowInstance) return;
 
     try {
-      // Create a deep copy of the current viewport to prevent reference issues
-      const currentViewport = { ...reactFlowInstance.getViewport() };
-      
-      // Store the exact zoom level - this is critical for high zoom levels
-      // Use the raw value from the viewport to ensure maximum precision
-      const exactZoom = currentViewport.zoom;
-      
-      // If the zoom is at or very close to the maximum (2.0), ensure we use the exact maximum value
-      // This prevents any small floating-point precision issues
-      const MAX_ZOOM = 2.0;
-      const PRECISION_THRESHOLD = 0.01; // Reduced threshold for more accurate max zoom detection
-      const isMaxZoom = Math.abs(exactZoom - MAX_ZOOM) < PRECISION_THRESHOLD;
-      const correctedZoom = isMaxZoom ? MAX_ZOOM : exactZoom;
-      
-      // Store pan position for consistent restoration
-      const panPosition = {
-        x: currentViewport.x,
-        y: currentViewport.y
-      };
-      
       const dataStr = event.dataTransfer.getData('application/reactflow');
       if (!dataStr) return;
       
       const transferredData = JSON.parse(dataStr) as ResourceItem;
       
       // Use screenToFlowPosition to get the precise position in flow coordinates
+      // Account for the exact drag offset so the node appears exactly where the cursor is
+      const dragOffset = activeDrag?.offset || { x: 0, y: 0 };
+      
+      // Get node dimensions for group boundary calculations
+      let nodeWidth = 200;
+      let nodeHeight = 100;
+      
+      // Adjust dimensions for specific node types
+      if (transferredData.type === 'note') {
+        nodeWidth = 200;
+        nodeHeight = 120;
+      } else if (transferredData.type === 'text') {
+        nodeWidth = 150;
+        nodeHeight = 80;
+      } else if (transferredData.type === 'group') {
+        nodeWidth = 300;
+        nodeHeight = 200;
+      }
+      
+      // Precise positioning: 
+      // 1. Start with mouse position
+      // 2. Subtract where user clicked within the dragged element (dragOffset)
+      // This ensures the node appears exactly where the mouse cursor is
+      const adjustedX = event.clientX - dragOffset.x;
+      const adjustedY = event.clientY - dragOffset.y;
+      
       const position = reactFlowInstance.screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY
+        x: adjustedX,
+        y: adjustedY
       });
 
       let newNode: Node;
@@ -1116,7 +1134,7 @@ const FlowEditorContent = ({
         newNode = {
           id: `${transferredData.type}-${Date.now()}`,
           type: transferredData.type,
-          position: { ...position }, // Create a copy to avoid reference issues
+          position: { ...position },
           data: { 
             label: transferredData.name,
             description: transferredData.description,
@@ -1130,12 +1148,14 @@ const FlowEditorContent = ({
             height: 100
           }
         };
-      }          // Check if the node is dropped within a group
+      }
+
+      // Check if the node is dropped within a group
       const groupNode = findGroupAtPosition(position);
       if (groupNode) {
         const parentGroup = reactFlowInstance.getNode(groupNode.id);
         if (parentGroup) {
-          // Calculate the position relative to the group with precise math
+          // Calculate the position relative to the group
           const groupPosition = { ...parentGroup.position };
           const relativePosition = {
             x: position.x - groupPosition.x,
@@ -1145,8 +1165,6 @@ const FlowEditorContent = ({
           // Ensure the node stays within the group's boundaries
           const groupWidth = parentGroup.width || 300;
           const groupHeight = parentGroup.height || 200;
-          const nodeWidth = 200;
-          const nodeHeight = 100;
           const margin = 20;
 
           // Calculate safe limits
@@ -1161,36 +1179,14 @@ const FlowEditorContent = ({
             y: Math.max(minY, Math.min(maxY, relativePosition.y))
           };
 
-          // Update the node's position and parent - use a new object to avoid mutations
+          // Update the node's position and parent
           newNode.position = { ...clampedPosition };
           newNode.parentId = groupNode.id;
           newNode.extent = 'parent' as const;
         }
       }
 
-      // DEBUG: Comentado para evitar reinicio del zoom al agregar nodos
-      // Improved viewport restoration function to maintain exact zoom level
-      // const restoreViewport = () => {
-      //   // Use the stored pan position and corrected zoom for precise restoration
-      //   const viewportToRestore = {
-      //     x: panPosition.x,
-      //     y: panPosition.y,
-      //     zoom: correctedZoom // Use the corrected zoom value for maximum precision
-      //   };
-      //   
-      //   // Apply the viewport restoration directly
-      //   reactFlowInstance.setViewport(viewportToRestore);
-      //     
-      //   // Update the lastViewportRef for consistency
-      //   if (lastViewportRef) {
-      //     lastViewportRef.current = { ...viewportToRestore };
-      //   }
-      // };
-      
-      // // Apply initial viewport to prevent any immediate zoom changes
-      // restoreViewport();
-      
-      // Add the new node to the flow
+      // Add the new node to the flow without any viewport manipulation
       const updatedNodes = [...reactFlowInstance.getNodes(), newNode];
       setNodes(updatedNodes);
       
@@ -1199,65 +1195,27 @@ const FlowEditorContent = ({
         onNodesChange([{ type: 'add', item: newNode }]);
       }
       
-      // Apply second restoration immediately after node is added
-      // DEBUG: Comentado para evitar reinicio del zoom
-      // restoreViewport();
-      
-      // If node is added to a group, optimize the group layout first
+      // If node is added to a group, optimize the group layout
       if (newNode.parentId) {
-        // Execute optimization after the next render cycle
         setTimeout(() => {
           optimizeNodesInGroup(newNode.parentId!);
-          
-          // DEBUG: Comentado para evitar reinicio del zoom
-          // Force multiple viewport restorations with different timings
-          // to catch all potential zoom reset points
-          // restoreViewport();
-          
-          // Add high-priority restorations after optimization
-          requestAnimationFrame(() => {
-            // restoreViewport();
-            
-            // One more restoration after a short delay
-            // setTimeout(restoreViewport, 10);
-          });
-        }, 0);
-      } else {
-        // DEBUG: Comentado para evitar reinicio del zoom
-        // For nodes not in groups, add a sequence of timed restorations
-        // to ensure the viewport is maintained at critical points
-        setTimeout(() => {
-          // restoreViewport();
-          
-          requestAnimationFrame(() => {
-            // restoreViewport();
-            
-            // One final restoration after a slight delay
-            // setTimeout(restoreViewport, 10);
-          });
         }, 0);
       }
 
-      // If there's a diagramId, save the changes with the preserved viewport
+      // Save the diagram if needed
       if (diagramId && onSave) {
-        // Create a fresh viewport object for saving
-        const viewportForSave = {
-          x: panPosition.x,
-          y: panPosition.y,
-          zoom: correctedZoom // Use the corrected zoom to ensure the saved state is accurate
-        };
-        
+        const currentViewport = reactFlowInstance.getViewport();
         onSave({
           nodes: updatedNodes,
           edges: reactFlowInstance.getEdges(),
-          viewport: viewportForSave
+          viewport: currentViewport
         });
       }
 
     } catch (error) {
       console.error("Error handling node drop:", error);
     }
-  }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodes, diagramId, onSave]);
+  }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodes, diagramId, onSave, activeDrag]);
 
   // Manejador personalizado para los cambios de nodos
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
@@ -1861,6 +1819,9 @@ const FlowEditorContent = ({
           onEdgeClick={onEdgeClick}
           onNodeContextMenu={handleNodeContextMenu}
           onPaneContextMenu={handlePaneContextMenu}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
           elementsSelectable={true}
           nodesDraggable={true}
           nodesConnectable={true}
@@ -2201,45 +2162,8 @@ const FlowEditorContent = ({
             <div style={{ display: 'flex', gap: '8px', padding: '10px', background: 'rgba(255,255,255,0.9)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
               {/* Botón para guardar explícitamente el estado del diagrama */}
               <button 
-                onClick={() => {
-                  // Obtener el viewport actual
-                  const currentViewport = reactFlowInstance.getViewport();
-                  console.log('Guardando viewport:', currentViewport);
-                  
-                  // Actualizar la referencia al viewport
-                  lastViewportRef.current = currentViewport;
-                  
-                  // Guardar el diagrama completo con el viewport
-                  if (onSave) {
-                    const flow = reactFlowInstance.toObject();
-                    onSave({
-                      ...flow,
-                      viewport: currentViewport
-                    });
-                    alert('Diagrama guardado con éxito, incluyendo zoom y posición');
-                  }
-                }} 
-                title="Guardar estado actual (zoom y posición)" 
-                style={{
-                  background: '#4CAF50',
-                  border: 'none',
-                  borderRadius: '4px',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: '0',
-                  color: 'white',
-                  fontWeight: 'bold',
-                  fontSize: '16px'
-                }}>
-                💾
-              </button>
-              <button 
                 onClick={saveCurrentDiagramState} 
-                title="Guardar estado actual" 
+                title="Guardar estado actual (zoom y posición)" 
                 style={{
                   background: '#4CAF50',
                   border: 'none',

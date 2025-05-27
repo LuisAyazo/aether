@@ -1217,6 +1217,7 @@ export default function DiagramPage() {
                 created_at: previousDiagram.created_at || new Date().toISOString(),
                 updated_at: previousDiagram.updated_at || new Date().toISOString(),
               }}
+              initialViewport={previousDiagram.viewport}
               nodeTypes={memoizedNodeTypes}
               resourceCategories={resourceCategories}
               nodes={previousDiagram.nodes || []}
@@ -1237,6 +1238,7 @@ export default function DiagramPage() {
               environmentId={selectedEnvironment as string}
               diagramId={selectedDiagram as string} 
               initialDiagram={currentDiagram}
+              initialViewport={currentDiagram.viewport}
               nodeTypes={memoizedNodeTypes}
               resourceCategories={resourceCategories}
               nodes={nodes}
