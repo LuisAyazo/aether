@@ -358,7 +358,7 @@ const FlowEditorContent = ({
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useNodesState(propNodes || initialNodes);
   const [edges, setEdges] = useEdgesState(propEdges || initialEdges);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [activeDrag, setActiveDrag] = useState<{ 
     item: ResourceItem, 
@@ -2665,7 +2665,7 @@ const FlowEditorContent = ({
               background: 'rgba(255,255,255,0.85)', 
               padding: '0', 
               borderRadius: '8px', 
-              maxHeight: '90vh',
+              maxHeight: '75vh',
               height: 'auto',
               overflow: 'visible',
               boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
@@ -2725,7 +2725,7 @@ const FlowEditorContent = ({
                 flexDirection: 'column',
                 backgroundColor: 'rgba(255, 255, 255, 0.85)',
                 paddingBottom: '16px',
-                maxHeight: 'calc(90vh - 48px)',
+                maxHeight: 'calc(75vh - 48px)',
                 scrollbarWidth: 'thin',
                 scrollbarColor: '#ccc #f1f1f1',
                 backdropFilter: 'blur(8px)'
@@ -3167,7 +3167,7 @@ const FlowEditorContent = ({
       )}
 
       {/* Drawer de logs */}
-      <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '480px' }}>
         <ExecutionLog
           isVisible={showLogs}
           logs={executionLogs}
