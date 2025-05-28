@@ -227,48 +227,48 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
 
       {/* Content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {isEditing ? (
-          <textarea
-            ref={textareaRef}
-            value={text}
-            onChange={handleTextChange}
-            onBlur={handleTextSubmit}
-            onKeyDown={handleKeyDown}
-            style={{
-              width: '100%',
-              border: 'none',
-              outline: 'none',
-              background: 'transparent',
+      {isEditing ? (
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={handleTextChange}
+          onBlur={handleTextSubmit}
+          onKeyDown={handleKeyDown}
+          style={{
+            width: '100%',
+            border: 'none',
+            outline: 'none',
+            background: 'transparent',
               resize: 'both',
-              fontFamily: 'inherit',
-              fontSize: `${fontSize}px`,
-              color: textColor,
-              minHeight: '60px',
+            fontFamily: 'inherit',
+            fontSize: `${fontSize}px`,
+            color: textColor,
+            minHeight: '60px',
               height: 'auto',
               overflow: 'auto',
               padding: '4px',
               boxSizing: 'border-box',
               flex: 1
-            }}
-            placeholder="Escribe aquí tu nota..."
-          />
-        ) : (
-          <div
-            style={{
-              fontSize: `${fontSize}px`,
-              color: textColor,
-              lineHeight: '1.5',
-              whiteSpace: 'pre-wrap',
-              minHeight: '60px',
-              wordWrap: 'break-word',
+          }}
+          placeholder="Escribe aquí tu nota..."
+        />
+      ) : (
+        <div
+          style={{
+            fontSize: `${fontSize}px`,
+            color: textColor,
+            lineHeight: '1.5',
+            whiteSpace: 'pre-wrap',
+            minHeight: '60px',
+            wordWrap: 'break-word',
               padding: '4px',
               boxSizing: 'border-box',
               flex: 1
-            }}
-          >
-            {text || 'Doble clic para editar...'}
-          </div>
-        )}
+          }}
+        >
+          {text || 'Doble clic para editar...'}
+        </div>
+      )}
       </div>
 
       {/* Instruction text */}

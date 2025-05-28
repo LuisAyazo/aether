@@ -32,9 +32,7 @@ import {
   RectangleGroupIcon,
   XMarkIcon,
   ServerIcon,
-  CurrencyDollarIcon,
-  EyeIcon,
-  PlayIcon
+  CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
@@ -396,13 +394,6 @@ const FlowEditorContent = ({
   const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [executionLog, setExecutionLog] = useState<Array<{
-    nodeId: string;
-    nodeName: string;
-    state: NodeExecutionState;
-    message: string;
-    timestamp: number;
-  }>>([]);
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
@@ -1662,19 +1653,86 @@ const FlowEditorContent = ({
 
   const getExecutionMessage = (node: NodeWithExecutionStatus, state: NodeExecutionState): string => {
     const nodeName = node.data?.label || 'Unnamed Node';
+    const nodeType = node.type || 'resource';
+    const provider = node.data?.provider || 'generic';
+    
+    // Get detailed resource information
+    const getResourceDetails = () => {
+      const details = [];
+      
+      // Add instance/size information if available
+      if (node.data?.instanceType) {
+        details.push(`Tipo: ${node.data.instanceType}`);
+      }
+      if (node.data?.size) {
+        details.push(`Tamaño: ${node.data.size}`);
+      }
+      
+      // Add disk information
+      if (node.data?.diskSize) {
+        details.push(`Disco: ${node.data.diskSize}GB`);
+      }
+      if (node.data?.diskType) {
+        details.push(`Tipo de disco: ${node.data.diskType}`);
+      }
+      
+      // Add network information
+      if (node.data?.vpcId) {
+        details.push(`VPC: ${node.data.vpcId}`);
+      }
+      if (node.data?.subnetId) {
+        details.push(`Subnet: ${node.data.subnetId}`);
+      }
+      if (node.data?.securityGroups) {
+        details.push(`Security Groups: ${Array.isArray(node.data.securityGroups) ? node.data.securityGroups.join(', ') : node.data.securityGroups}`);
+      }
+      
+      // Add database specific info
+      if (node.data?.engine) {
+        details.push(`Motor: ${node.data.engine}`);
+      }
+      if (node.data?.engineVersion) {
+        details.push(`Versión: ${node.data.engineVersion}`);
+      }
+      if (node.data?.allocatedStorage) {
+        details.push(`Almacenamiento: ${node.data.allocatedStorage}GB`);
+      }
+      
+      // Add compute specific info
+      if (node.data?.cpu) {
+        details.push(`CPU: ${node.data.cpu} cores`);
+      }
+      if (node.data?.memory) {
+        details.push(`Memoria: ${node.data.memory}GB`);
+      }
+      
+      // Add region/zone info
+      if (node.data?.region) {
+        details.push(`Región: ${node.data.region}`);
+      }
+      if (node.data?.zone) {
+        details.push(`Zona: ${node.data.zone}`);
+      }
+      
+      return details.length > 0 ? ` (${details.join(', ')})` : '';
+    };
+
+    const resourceDetails = getResourceDetails();
+    const providerPrefix = provider !== 'generic' ? `[${provider.toUpperCase()}] ` : '';
+    
     switch (state) {
       case 'creating':
-        return `Creando ${nodeName}...`;
+        return `${providerPrefix}Creando ${nodeType} "${nodeName}"${resourceDetails}...`;
       case 'updating':
-        return `Actualizando ${nodeName}...`;
+        return `${providerPrefix}Actualizando ${nodeType} "${nodeName}"${resourceDetails}...`;
       case 'deleting':
-        return `Eliminando ${nodeName}...`;
+        return `${providerPrefix}Eliminando ${nodeType} "${nodeName}"${resourceDetails}...`;
       case 'success':
-        return `${nodeName} completado exitosamente`;
+        return `${providerPrefix}${nodeType} "${nodeName}" completado exitosamente${resourceDetails}`;
       case 'error':
-        return `Error al procesar ${nodeName}`;
+        return `${providerPrefix}Error al procesar ${nodeType} "${nodeName}"${resourceDetails}`;
       default:
-        return `Procesando ${nodeName}...`;
+        return `${providerPrefix}Procesando ${nodeType} "${nodeName}"${resourceDetails}...`;
     }
   };
 
@@ -1704,19 +1762,19 @@ const FlowEditorContent = ({
       // Obtener nodos que no son grupos
       const executionNodes = currentDiagram.nodes.filter((node) => node.type !== 'group');
 
-      // Simular ejecución secuencial con diferentes estados
-      for (let i = 0; i < executionNodes.length; i++) {
-        const node = executionNodes[i];
+      // Simular ejecución secuencial basada en el estado real de los nodos
+      for (const node of executionNodes) {
         let state: NodeExecutionState;
         
-        // Asignar diferentes estados según el índice
-        if (i === 0) {
+        // Determinar el estado basado en las propiedades reales del nodo
+        if (node.data?.status === 'creating' || node.data?.status === 'new' || (!node.data?.status && node.data?.isNew)) {
           state = 'creating';
-        } else if (i === 1) {
+        } else if (node.data?.status === 'updating' || node.data?.status === 'modified' || node.data?.hasChanges) {
           state = 'updating';
-        } else if (i === 2) {
+        } else if (node.data?.status === 'deleting' || node.data?.status === 'toDelete' || node.data?.markedForDeletion) {
           state = 'deleting';
         } else {
+          // Por defecto, considera como creación si no hay estado específico
           state = 'creating';
         }
 
@@ -1724,44 +1782,50 @@ const FlowEditorContent = ({
         await simulateNodeExecution(node as NodeWithExecutionStatus, 'success');
       }
 
-      // Actualizar los datos de preview con estados específicos
-      const mockPreviewData = {
-        resourcesToCreate: currentDiagram.nodes
-          .filter((node, index) => index === 0 || index > 2)
-          .map(node => ({
-            id: node.id,
-            type: node.type,
-            name: node.data?.label || 'Unnamed Resource',
-            provider: node.data?.provider || 'generic',
-            changes: {
-              create: true,
-              properties: node.data || {}
-            }
-          })),
-        resourcesToUpdate: currentDiagram.nodes
-          .filter((node, index) => index === 1)
-          .map(node => ({
-            id: node.id,
-            type: node.type,
-            name: node.data?.label || 'Unnamed Resource',
-            provider: node.data?.provider || 'generic',
-            changes: {
-              create: false,
-              update: true,
-              properties: node.data || {}
-            }
-          })),
-        resourcesToDelete: currentDiagram.nodes
-          .filter((node, index) => index === 2)
-          .map(node => ({
-            id: node.id,
-            type: node.type,
-            name: node.data?.label || 'Unnamed Resource',
-            provider: node.data?.provider || 'generic'
-          }))
+      // Actualizar los datos de preview con estados específicos basados en datos reales
+      const resourcesToCreate = currentDiagram.nodes
+        .filter(node => node.type !== 'group' && (node.data?.status === 'creating' || node.data?.status === 'new' || (!node.data?.status && node.data?.isNew)))
+        .map(node => ({
+          id: node.id,
+          type: node.type,
+          name: node.data?.label || 'Unnamed Resource',
+          provider: node.data?.provider || 'generic',
+          changes: {
+            create: true,
+            properties: node.data || {}
+          }
+        }));
+
+      const resourcesToUpdate = currentDiagram.nodes
+        .filter(node => node.type !== 'group' && (node.data?.status === 'updating' || node.data?.status === 'modified' || node.data?.hasChanges))
+        .map(node => ({
+          id: node.id,
+          type: node.type,
+          name: node.data?.label || 'Unnamed Resource',
+          provider: node.data?.provider || 'generic',
+          changes: {
+            create: false,
+            update: true,
+            properties: node.data || {}
+          }
+        }));
+
+      const resourcesToDelete = currentDiagram.nodes
+        .filter(node => node.type !== 'group' && (node.data?.status === 'deleting' || node.data?.status === 'toDelete' || node.data?.markedForDeletion))
+        .map(node => ({
+          id: node.id,
+          type: node.type,
+          name: node.data?.label || 'Unnamed Resource',
+          provider: node.data?.provider || 'generic'
+        }));
+
+      const previewData = {
+        resourcesToCreate,
+        resourcesToUpdate,
+        resourcesToDelete
       };
       
-      setPreviewData(mockPreviewData);
+      setPreviewData(previewData);
       setPreviewModalVisible(true);
     } catch (err) {
       console.error('Error al generar la vista previa:', err);
@@ -1791,7 +1855,7 @@ const FlowEditorContent = ({
     try {
       setLoading(true);
       setIsExecutionLogVisible(true);
-      setExecutionLog([]);
+      setExecutionLogs([]);
 
       const token = localStorage.getItem('token');
       if (!token) {
@@ -1799,40 +1863,55 @@ const FlowEditorContent = ({
         return;
       }
 
-      // Usar el mismo formato que en handlePreview
-      const resourcesToCreate = nodes.filter(n => n.data?.status === 'creating').map(node => ({
-        id: node.id,
-        type: node.type,
-        name: node.data?.label || 'Unnamed Resource',
-        provider: node.data?.provider || 'generic',
-        changes: {
-          create: true,
-          properties: node.data || {}
-        }
-      }));
+      // Generate resources based on actual node status instead of arbitrary indices
+      const resourcesToCreate = nodes
+        .filter(n => n.type !== 'group' && (n.data?.status === 'creating' || n.data?.status === 'new' || (!n.data?.status && n.data?.isNew)))
+        .map(node => ({
+          id: node.id,
+          type: node.type,
+          name: node.data?.label || 'Unnamed Resource',
+          provider: node.data?.provider || 'generic',
+          changes: {
+            create: true,
+            properties: node.data || {}
+          }
+        }));
 
-      const resourcesToUpdate = nodes.filter(n => n.data?.status === 'updating').map(node => ({
-        id: node.id,
-        type: node.type,
-        name: node.data?.label || 'Unnamed Resource',
-        provider: node.data?.provider || 'generic',
-        changes: {
-          create: false,
-          update: true,
-          properties: node.data || {}
-        }
-      }));
+      const resourcesToUpdate = nodes
+        .filter(n => n.type !== 'group' && (n.data?.status === 'updating' || n.data?.status === 'modified' || n.data?.hasChanges))
+        .map(node => ({
+          id: node.id,
+          type: node.type,
+          name: node.data?.label || 'Unnamed Resource',
+          provider: node.data?.provider || 'generic',
+          changes: {
+            create: false,
+            update: true,
+            properties: node.data || {}
+          }
+        }));
 
-      const resourcesToDelete = nodes.filter(n => n.data?.status === 'deleting').map(node => ({
-        id: node.id,
-        type: node.type,
-        name: node.data?.label || 'Unnamed Resource',
-        provider: node.data?.provider || 'generic'
-      }));
+      const resourcesToDelete = nodes
+        .filter(n => n.type !== 'group' && (n.data?.status === 'deleting' || n.data?.status === 'toDelete' || n.data?.markedForDeletion))
+        .map(node => ({
+          id: node.id,
+          type: node.type,
+          name: node.data?.label || 'Unnamed Resource',
+          provider: node.data?.provider || 'generic'
+        }));
+
+      // Generate preview data based on actual node analysis
+      const previewData = {
+        resourcesToCreate,
+        resourcesToUpdate,
+        resourcesToDelete
+      };
+      
+      setPreviewData(previewData);
 
       // Agregar logs detallados de los recursos
       if (resourcesToCreate.length > 0) {
-        setExecutionLog(prevLog => [
+        setExecutionLogs(prevLog => [
           ...prevLog,
           {
             nodeId: 'system',
@@ -1849,7 +1928,7 @@ const FlowEditorContent = ({
             .map(([key, value]) => `${key}: ${value}`)
             .join(', ');
 
-          setExecutionLog(prevLog => [
+          setExecutionLogs(prevLog => [
             ...prevLog,
             {
               nodeId: resource.id,
@@ -1863,7 +1942,7 @@ const FlowEditorContent = ({
       }
 
       if (resourcesToUpdate.length > 0) {
-        setExecutionLog(prevLog => [
+        setExecutionLogs(prevLog => [
           ...prevLog,
           {
             nodeId: 'system',
@@ -1880,7 +1959,7 @@ const FlowEditorContent = ({
             .map(([key, value]) => `${key}: ${value}`)
             .join(', ');
 
-          setExecutionLog(prevLog => [
+          setExecutionLogs(prevLog => [
             ...prevLog,
             {
               nodeId: resource.id,
@@ -1894,7 +1973,7 @@ const FlowEditorContent = ({
       }
 
       if (resourcesToDelete.length > 0) {
-        setExecutionLog(prevLog => [
+        setExecutionLogs(prevLog => [
           ...prevLog,
           {
             nodeId: 'system',
@@ -1906,7 +1985,7 @@ const FlowEditorContent = ({
         ]);
 
         resourcesToDelete.forEach(resource => {
-          setExecutionLog(prevLog => [
+          setExecutionLogs(prevLog => [
             ...prevLog,
             {
               nodeId: resource.id,
@@ -1922,7 +2001,7 @@ const FlowEditorContent = ({
       // 1. Create new version in backend
       const versionUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}/versions`;
       
-      setExecutionLog(prevLog => [
+      setExecutionLogs(prevLog => [
         ...prevLog,
         {
           nodeId: 'system',
@@ -1965,10 +2044,9 @@ const FlowEditorContent = ({
         throw new Error('Error al crear la versión');
       }
 
-      const versionData = await versionResponse.json();
-      const versionId = versionData.id;
+      await versionResponse.json(); // Just consume the response
 
-      setExecutionLog(prevLog => [
+      setExecutionLogs(prevLog => [
         ...prevLog,
         {
           nodeId: 'system',
@@ -1982,7 +2060,7 @@ const FlowEditorContent = ({
       // 2. Update diagram with correct format
       const updateUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`;
       
-      setExecutionLog(prevLog => [
+      setExecutionLogs(prevLog => [
         ...prevLog,
         {
           nodeId: 'system',
@@ -2028,7 +2106,7 @@ const FlowEditorContent = ({
         throw new Error(`Error al actualizar el diagrama: ${updateResponse.status}`);
       }
 
-      setExecutionLog(prevLog => [
+      setExecutionLogs(prevLog => [
         ...prevLog,
         {
           nodeId: 'system',
@@ -2040,7 +2118,7 @@ const FlowEditorContent = ({
       ]);
 
       // Skip history and rollback for now to avoid errors
-      setExecutionLog(prevLog => [
+      setExecutionLogs(prevLog => [
         ...prevLog,
         {
           nodeId: 'system',
@@ -2056,7 +2134,7 @@ const FlowEditorContent = ({
     } catch (error) {
       console.error('Error al aplicar cambios:', error);
       message.error('Error al aplicar los cambios');
-      setExecutionLog(prevLog => [
+      setExecutionLogs(prevLog => [
         ...prevLog,
         {
           nodeId: 'system',
@@ -2098,22 +2176,6 @@ const FlowEditorContent = ({
             <span className="text-sm font-medium text-gray-700">Generic:</span>
             <span className="text-sm text-gray-600">{getResourceCounts().generic}</span>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
-            onClick={handlePreview}
-          >
-            <EyeIcon className="w-5 h-5" />
-            Vista Previa
-          </button>
-          <button
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg"
-            onClick={simulateExecution}
-          >
-            <PlayIcon className="w-5 h-5" />
-            Ejecutar
-          </button>
         </div>
       </div>
       <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
@@ -2322,7 +2384,7 @@ const FlowEditorContent = ({
           <MiniMap />
           <Controls 
             position="bottom-left"
-            style={{ bottom: 10, left: 10 }}
+            style={{ bottom: 20, left: 20 }}
           />
           
           {/* Overlay visual para el dibujo de área */}
@@ -3144,13 +3206,6 @@ const FlowEditorContent = ({
         </ReactFlow>
       </div>
       
-      {/* Añadir el componente ExecutionLog */}
-      <ExecutionLog
-        isVisible={isExecutionLogVisible}
-        logs={executionLog}
-        onClose={() => setIsExecutionLogVisible(false)}
-      />
-
       {/* Run Modal */}
       {runModalVisible && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -3304,10 +3359,11 @@ const FlowEditorContent = ({
                 Cancelar
               </button>
               <button
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleApplyChanges}
+                disabled={loading}
               >
-                Aplicar cambios
+                {loading ? 'Aplicando...' : 'Aplicar cambios'}
               </button>
             </div>
           </div>
@@ -3654,6 +3710,7 @@ const FlowEditorContent = ({
         isVisible={isExecutionLogVisible}
         logs={executionLogs}
         onClose={() => setIsExecutionLogVisible(false)}
+        previewData={previewData}
       />
 
       {/* Modal de Confirmación */}

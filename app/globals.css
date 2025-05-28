@@ -174,3 +174,8 @@ body {
 .react-flow__resize-control.bottom-right {
   pointer-events: all !important;
 }
+
+/* Adjust ReactFlow Controls position */
+.react-flow__panel.top.left {
+  top: 0px !important; /* Moved 20px further up from the previous 20px */
+}
