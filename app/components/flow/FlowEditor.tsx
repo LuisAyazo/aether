@@ -1686,7 +1686,7 @@ const FlowEditorContent = ({
         setExecutionLogs(prev => [...prev, `Procesando ${singleNodePreview.dependencies.length} dependencias...`]);
         
         for (const dep of singleNodePreview.dependencies) {
-          const depLog = `Procesando dependencia: ${dep.name} (${dep.type}) - Acción: ${dep.action}`;
+          const depLog = `Procesando dependencia: ${dep.name} (${dep.type}) - ${dep.action === 'create' ? 'Creando' : dep.action === 'update' ? 'Actualizando' : 'Eliminando'}`;
           setExecutionLogs(prev => [...prev, depLog]);
           await new Promise(resolve => setTimeout(resolve, 500));
           
@@ -3167,7 +3167,7 @@ const FlowEditorContent = ({
       )}
 
       {/* Drawer de logs */}
-      <div className={`fixed inset-y-0 right-0 w-96 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`}>
         <ExecutionLog
           isVisible={showLogs}
           logs={executionLogs}

@@ -69,20 +69,13 @@ const ExecutionLog: React.FC<ExecutionLogProps> = ({ isVisible, logs, onClose, p
         duration = 1500;
       } else if (log.includes('Procesando')) {
         status = 'processing';
-        if (log.includes('create')) action = 'create';
-        else if (log.includes('update')) action = 'update';
-        else if (log.includes('delete')) action = 'delete';
+        if (log.includes('Creando')) action = 'create';
+        else if (log.includes('Actualizando')) action = 'update';
+        else if (log.includes('Eliminando')) action = 'delete';
       }
 
       return {
-        message: log.replace(/Procesando (create|update|delete)/, (_, action) => {
-          switch (action) {
-            case 'create': return 'Creando';
-            case 'update': return 'Actualizando';
-            case 'delete': return 'Eliminando';
-            default: return 'Procesando';
-          }
-        }),
+        message: log,
         timestamp,
         status,
         duration,
@@ -126,90 +119,89 @@ const ExecutionLog: React.FC<ExecutionLogProps> = ({ isVisible, logs, onClose, p
   if (!isVisible) return null;
 
   return (
-    <div className="h-full flex flex-col bg-white border-l border-gray-200" style={{ width: '420px' }}>
-      <div className="flex items-center justify-between p-4 border-b bg-white">
+    <div className="h-full flex flex-col bg-white border-l border-gray-200 shadow-lg" style={{ width: '480px' }}>
+      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-            <span className="text-lg text-gray-600">📋</span>
+          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+            <span className="text-lg text-blue-600">📋</span>
           </div>
           <div>
-            <h3 className="text-base font-medium text-gray-900">Logs de Ejecución</h3>
+            <h3 className="text-base font-semibold text-gray-900">Logs de Ejecución</h3>
             <p className="text-xs text-gray-500">Seguimiento de operaciones</p>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-1.5 hover:bg-gray-200 rounded-lg transition-colors"
         >
-          <XMarkIcon className="w-5 h-5 text-gray-500" />
+          <XMarkIcon className="w-5 h-5 text-gray-600" />
         </button>
       </div>
 
       <div 
         ref={logContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-3"
+        className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50"
         style={{ maxHeight: 'calc(100vh - 64px)' }}
       >
-        {processedLogs.map((log, index) => (
-          <div
-            key={index}
-            className={`p-3 rounded-lg border text-sm transition-all duration-200 ${
-              log.status === 'error' 
-                ? 'bg-rose-50 border-rose-200' 
-                : log.status === 'success'
-                ? 'bg-emerald-50 border-emerald-200'
-                : log.status === 'processing'
-                ? 'bg-blue-50 border-blue-200'
-                : 'bg-gray-50 border-gray-200'
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 mt-0.5">
-                {log.status === 'error' ? (
-                  <span className="text-rose-500">⚠️</span>
-                ) : log.status === 'success' ? (
-                  <span className="text-emerald-500">✓</span>
-                ) : log.status === 'processing' ? (
-                  <span className="text-blue-500 animate-spin">⟳</span>
-                ) : (
-                  <span className="text-gray-500">•</span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
+        {processedLogs.map((log, index) => {
+          const isEliminando = log.message.includes('Eliminando');
+          const isActualizando = log.message.includes('Actualizando');
+          const isCreando = log.message.includes('Creando');
+          // Iconos para cada acción
+          let icon = <span className="text-gray-400">•</span>;
+          if (log.status === 'error') icon = <span className="text-rose-500">⚠️</span>;
+          else if (log.status === 'success') icon = <span className="text-emerald-500">✓</span>;
+          else if (isEliminando) icon = <span className="text-rose-500">－</span>;
+          else if (isActualizando) icon = <span className="text-amber-500">✎</span>;
+          else if (isCreando) icon = <span className="text-gray-500">＋</span>;
+          else if (log.status === 'processing') icon = <span className="text-gray-400 animate-spin">⟳</span>;
+
+          // Colores de fondo y texto
+          let containerClass = 'bg-white border-gray-200';
+          let textClass = 'text-gray-700';
+          if (log.status === 'error') {
+            containerClass = 'bg-rose-50 border-rose-200';
+            textClass = 'text-rose-700';
+          } else if (log.status === 'success') {
+            containerClass = 'bg-white border-emerald-200';
+            textClass = 'text-emerald-700';
+          } else if (isEliminando) {
+            containerClass = 'bg-rose-50 border-rose-200';
+            textClass = 'text-rose-700';
+          } else if (isActualizando) {
+            containerClass = 'bg-yellow-50 border-amber-200';
+            textClass = 'text-amber-700';
+          } else if (isCreando) {
+            containerClass = 'bg-white border-gray-200';
+            textClass = 'text-gray-700';
+          }
+
+          return (
+            <div
+              key={index}
+              className={`p-3 rounded-lg border text-sm transition-all duration-200 shadow-sm ${containerClass}`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 mt-0.5 text-xl">{icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs font-medium text-gray-500">
                       {formatTimestamp(log.timestamp)}
                     </span>
-                    {log.action && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${getActionColor(log.action)}`}>
-                        {log.action === 'create' ? 'Creando' :
-                         log.action === 'update' ? 'Actualizando' :
-                         log.action === 'delete' ? 'Eliminando' : 'Procesando'}
+                    {log.duration && (
+                      <span className="text-xs font-medium text-gray-400">
+                        {formatDuration(log.duration)}
                       </span>
                     )}
                   </div>
-                  {log.duration && (
-                    <span className="text-xs font-medium text-gray-500">
-                      {formatDuration(log.duration)}
-                    </span>
-                  )}
+                  <p className={`text-sm whitespace-pre-wrap font-medium ${textClass}`}>
+                    {log.message}
+                  </p>
                 </div>
-                <p className={`text-sm whitespace-pre-wrap ${
-                  log.status === 'error' 
-                    ? 'text-rose-700' 
-                    : log.status === 'success'
-                    ? 'text-emerald-700'
-                    : log.status === 'processing'
-                    ? 'text-blue-700'
-                    : 'text-gray-700'
-                }`}>
-                  {log.message}
-                </p>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
