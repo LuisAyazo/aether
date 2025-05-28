@@ -279,27 +279,125 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     if (e) e.stopPropagation();
     console.log('Preview action for node:', id);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        message.error('No estás autenticado');
-        return;
-      }
+      // Importar el mock directamente
+      const mockPreview = {
+        action: 'create',
+        resource: {
+          name: data.label || 'Unnamed Resource',
+          type: data.resourceType || 'unknown',
+          provider: data.provider || 'generic',
+          changes: {
+            properties: {
+              description: {
+                after: data.description || 'Máquina virtual en la nube',
+                action: 'create'
+              },
+              machine_type: {
+                after: 'e2-medium',
+                action: 'create'
+              },
+              zone: {
+                after: 'us-central1-a',
+                action: 'create'
+              },
+              labels: {
+                before: 'team:devops',
+                after: 'team:payments',
+                action: 'update'
+              },
+              new_field: {
+                after: 'valor nuevo',
+                action: 'create'
+              },
+              deprecated_field: {
+                before: 'valor viejo',
+                action: 'delete'
+              }
+            }
+          }
+        },
+        dependencies: [
+          {
+            name: 'Compute Engine-boot-disk',
+            type: 'disk',
+            action: 'create',
+            properties: {
+              size_gb: {
+                before: 50,
+                after: 100,
+                action: 'update'
+              },
+              type: {
+                after: 'pd-standard',
+                action: 'create'
+              },
+              zone: {
+                after: 'us-central1-a',
+                action: 'create'
+              },
+              image: {
+                after: 'debian-cloud/debian-11',
+                action: 'create'
+              }
+            }
+          },
+          {
+            name: 'gcp-network-1',
+            type: 'google_compute_network',
+            action: 'update',
+            properties: {
+              cidr: {
+                before: '10.0.0.0/16',
+                after: '10.1.0.0/16',
+                action: 'update'
+              },
+              new_cidr: {
+                after: '10.2.0.0/16',
+                action: 'create'
+              }
+            }
+          },
+          {
+            name: 'gcp-firewall-1',
+            type: 'google_compute_firewall',
+            action: 'delete',
+            properties: {}
+          },
+          {
+            name: 'gcp-disk-2',
+            type: 'google_compute_disk',
+            action: 'create',
+            properties: {
+              size_gb: {
+                after: 100,
+                action: 'create'
+              },
+              type: {
+                after: 'pd-ssd',
+                action: 'create'
+              }
+            }
+          }
+        ]
+      };
 
-      // Llama al backend para obtener el preview de este nodo
-      const res = await fetch(`/api/node/preview?nodeId=${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      // Log de los cambios en la consola sin información de costos
+      console.log('Preview data:', {
+        action: mockPreview.action,
+        resource: mockPreview.resource,
+        dependencies: mockPreview.dependencies
       });
-      if (!res.ok) throw new Error('Error al obtener preview del backend');
-      const preview = await res.json();
+      console.log('Resource changes:', mockPreview.resource.changes.properties);
+      console.log('Dependencies:', mockPreview.dependencies);
+
       // Dispara un evento global para que el editor muestre el modal
-      const event = new CustomEvent('showSingleNodePreview', { detail: preview });
+      const event = new CustomEvent('showSingleNodePreview', { detail: mockPreview });
       window.dispatchEvent(event);
     } catch (err) {
+      console.error('Error al mostrar la vista previa:', err);
       message.error('No se pudo obtener la vista previa del nodo');
     }
-  }, [id]);
+  }, [id, data]);
 
   // Handler for Run functionality
   const handleRun = useCallback((e: React.MouseEvent) => {

@@ -39,7 +39,6 @@ import { Diagram } from '@/app/services/diagramService';
 import nodeTypes from '../nodes/NodeTypes';
 import { NodeExecutionState, NodeWithExecutionStatus } from '../../utils/customTypes';
 import ExecutionLog from './ExecutionLog';
-import { Modal } from 'antd';
 
 // Add this interface at the top of the file with other interfaces
 interface SingleNodePreview {
@@ -49,17 +48,33 @@ interface SingleNodePreview {
     type: string;
     provider: string;
     changes: {
-      properties: Record<string, unknown>;
+      properties: Record<string, {
+        before?: any;
+        after?: any;
+        action: 'create' | 'update' | 'delete';
+      }>;
     };
   };
+  dependencies: Array<{
+    name: string;
+    type: string;
+    action: 'create' | 'update' | 'delete';
+    properties: Record<string, {
+      before?: any;
+      after?: any;
+      action: 'create' | 'update' | 'delete';
+    }>;
+  }>;
   estimated_cost?: {
     monthly: number;
     currency: string;
   };
-  dependencies?: {
-    name: string;
-    type: string;
-  }[];
+}
+
+interface Dependency {
+  name: string;
+  type: string;
+  [key: string]: any;
 }
 
 interface ResourceCategory {
@@ -130,6 +145,7 @@ interface PreviewData {
     provider: string;
     changes: {
       create: boolean;
+      update: boolean;
       properties: ResourceProperties;
     };
   }>;
@@ -383,17 +399,11 @@ const FlowEditorContent = ({
   const [runModalVisible, setRunModalVisible] = useState(false);
   const currentDiagram = initialDiagram;
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
-  const [executionLogs, setExecutionLogs] = useState<Array<{
-    nodeId: string;
-    nodeName: string;
-    state: NodeExecutionState;
-    message: string;
-    timestamp: number;
-  }>>([]);
+  const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
@@ -1283,118 +1293,6 @@ const FlowEditorContent = ({
     return counts;
   }, [nodes]);
 
-  // Add effect to initialize viewport when nodes are loaded
-  // DEBUG: Comment out the ensureVisibility function that might be causing zoom resets
-  // useEffect(() => {
-  //   if (!reactFlowInstance || !nodes.length) return;
-    
-  //   // Solo inicializamos el viewport una vez al cargar
-  //   if (viewportInitializedRef.current) return;
-    
-  //   // Si tenemos un viewport inicial desde props, usamos ese
-  //   if (initialViewport) {
-  //     console.log('Usando initialViewport guardado:', initialViewport);
-  //     // Asegurarnos de que el viewport tenga valores válidos
-  //     const validViewport = {
-  //       x: initialViewport.x || 0,
-  //       y: initialViewport.y || 0,
-  //       zoom: initialViewport.zoom || 1
-  //     };
-  //     reactFlowInstance.setViewport(validViewport, { duration: 0 });
-  //     lastViewportRef.current = validViewport;
-  //     viewportInitializedRef.current = true;
-  //     return;
-  //   }
-    
-  //   // De lo contrario, calculamos un viewport que muestre todos los nodos
-  //   setTimeout(() => {
-  //     if (!reactFlowInstance) return;
-      
-  //     // Encontrar el cuadro delimitador de todos los nodos
-  //     const nodePositions = nodes.map(node => ({
-  //       x: node.position.x,
-  //       y: node.position.y,
-  //       width: node.width || 150,
-  //       height: node.height || 40
-  //     }));
-      
-  //     if (!nodePositions.length) return;
-      
-  //     // Calcular el cuadro delimitador con un margen adicional
-  //     const margin = 100; // Margen adicional para asegurar que todos los nodos sean visibles
-  //     const minX = Math.min(...nodePositions.map(pos => pos.x)) - margin;
-  //     const maxX = Math.max(...nodePositions.map(pos => pos.x + (pos.width || 150))) + margin;
-  //     const minY = Math.min(...nodePositions.map(pos => pos.y)) - margin;
-  //     const maxY = Math.max(...nodePositions.map(pos => pos.y + (pos.height || 40))) + margin;
-      
-  //     // Calcular el centro de los nodos
-  //     const nodesWidth = maxX - minX;
-  //     const nodesHeight = maxY - minY;
-  //     const nodesCenterX = minX + nodesWidth / 2;
-  //     const nodesCenterY = minY + nodesHeight / 2;
-  //     
-  //     // Obtener dimensiones del viewport
-  //     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 600 };
-  //     const viewportCenterX = width / 2;
-  //     const viewportCenterY = height / 2;
-  //     
-  //     // Calcular el zoom óptimo para mostrar todos los nodos
-  //     const zoomX = width / nodesWidth;
-  //     const zoomY = height / nodesHeight;
-  //     const zoom = Math.min(Math.min(zoomX, zoomY), 1); // No hacer zoom más allá de 1
-      
-  //     // Calcular la traslación necesaria para centrar nodos
-  //     const translateX = width / 2 - nodesCenterX * zoom;
-  //     const translateY = height / 2 - nodesCenterY * zoom;
-      
-  //     // Establecer el viewport para centrar los nodos sin animación
-  //     const newViewport = { 
-  //       x: translateX, 
-  //       y: translateY, 
-  //       zoom 
-  //     };
-      
-  //     console.log('Inicializando viewport para mostrar todos los nodos:', newViewport);
-  //     reactFlowInstance.setViewport(newViewport, { duration: 0 });
-  //   }, 300); // Pequeño retraso para asegurar que los nodos estén renderizados
-  // }, [reactFlowInstance, nodes.length, initialViewport, nodes, reactFlowWrapper]);
-  
-  // DEBUG: Comment out the viewport change handler
-  // useEffect(() => {
-  //   // Code commented out to debug zoom reset issues
-  // }, [reactFlowInstance, onSave]);
-
-  // DEBUG: Comment out the ensureVisibility function that might be causing zoom resets
-  // useEffect(() => {
-  //   if (!reactFlowInstance || !nodes.length) return;
-    
-  //   // Ensure all nodes are visible
-  //   const ensureVisibility = () => {
-  //     const currentNodes = reactFlowInstance.getNodes();
-  //     const updatedNodes = currentNodes.map(node => ({
-  //       ...node,
-  //       hidden: false,
-  //       style: {
-  //         ...node.style,
-  //         visibility: 'visible' as const,
-  //         opacity: 1
-  //       }
-  //     }));
-      
-  //     reactFlowInstance.setNodes(updatedNodes);
-  //   };
-    
-  //   // Run once on mount and when nodes change
-  //   // ensureVisibility();
-  //   
-  //   // Also run when the viewport changes to ensure visibility
-  //   document.addEventListener('reactflow.viewportChange', ensureVisibility);
-  //   
-  //   return () => {
-  //     document.removeEventListener('reactflow.viewportChange', ensureVisibility);
-  //   };
-  // }, [reactFlowInstance, nodes.length]);
-
   // Función para guardar explícitamente el estado actual del diagrama
   const saveCurrentDiagramState = useCallback(() => {
     if (!reactFlowInstance || !onSave) return;
@@ -1613,146 +1511,38 @@ const FlowEditorContent = ({
 
   // Función para simular la ejecución de un nodo
   const simulateNodeExecution = async (node: NodeWithExecutionStatus, state: NodeExecutionState) => {
-    const nodeName = node.data?.label || 'Unnamed Node';
     const message = getExecutionMessage(node, state);
-    
-    // Actualizar el estado del nodo
-    setNodes((nds) =>
-      nds.map((n) =>
-        n.id === node.id
-          ? {
-              ...n,
-              data: {
-                ...n.data,
-                executionStatus: {
-                  state,
-                  message,
-                  timestamp: Date.now(),
-                },
-              },
-            }
-          : n
-      )
-    );
-
-    // Añadir al log
-    setExecutionLogs((logs) => [
-      ...logs,
-      {
-        nodeId: node.id,
-        nodeName,
-        state,
-        message,
-        timestamp: Date.now(),
-      },
-    ]);
-
-    // Simular un delay para la ejecución
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    setExecutionLogs(prev => [...prev, message]);
+    await new Promise(resolve => setTimeout(resolve, 1000));
   };
 
   const getExecutionMessage = (node: NodeWithExecutionStatus, state: NodeExecutionState): string => {
-    const nodeName = node.data?.label || 'Unnamed Node';
-    const nodeType = node.type || 'resource';
-    const provider = node.data?.provider || 'generic';
-    
-    // Get detailed resource information
+    const nodeName = node.data?.label || 'Unnamed Resource';
     const getResourceDetails = () => {
       const details = [];
-      
-      // Add instance/size information if available
-      if (node.data?.instanceType) {
-        details.push(`Tipo: ${node.data.instanceType}`);
-      }
-      if (node.data?.size) {
-        details.push(`Tamaño: ${node.data.size}`);
-      }
-      
-      // Add disk information
-      if (node.data?.diskSize) {
-        details.push(`Disco: ${node.data.diskSize}GB`);
-      }
-      if (node.data?.diskType) {
-        details.push(`Tipo de disco: ${node.data.diskType}`);
-      }
-      
-      // Add network information
-      if (node.data?.vpcId) {
-        details.push(`VPC: ${node.data.vpcId}`);
-      }
-      if (node.data?.subnetId) {
-        details.push(`Subnet: ${node.data.subnetId}`);
-      }
-      if (node.data?.securityGroups) {
-        details.push(`Security Groups: ${Array.isArray(node.data.securityGroups) ? node.data.securityGroups.join(', ') : node.data.securityGroups}`);
-      }
-      
-      // Add database specific info
-      if (node.data?.engine) {
-        details.push(`Motor: ${node.data.engine}`);
-      }
-      if (node.data?.engineVersion) {
-        details.push(`Versión: ${node.data.engineVersion}`);
-      }
-      if (node.data?.allocatedStorage) {
-        details.push(`Almacenamiento: ${node.data.allocatedStorage}GB`);
-      }
-      
-      // Add compute specific info
-      if (node.data?.cpu) {
-        details.push(`CPU: ${node.data.cpu} cores`);
-      }
-      if (node.data?.memory) {
-        details.push(`Memoria: ${node.data.memory}GB`);
-      }
-      
-      // Add region/zone info
-      if (node.data?.region) {
-        details.push(`Región: ${node.data.region}`);
-      }
-      if (node.data?.zone) {
-        details.push(`Zona: ${node.data.zone}`);
-      }
-      
+      if (node.data?.provider) details.push(`Provider: ${node.data.provider}`);
+      if (node.data?.resourceType) details.push(`Type: ${node.data.resourceType}`);
       return details.length > 0 ? ` (${details.join(', ')})` : '';
     };
 
-    const resourceDetails = getResourceDetails();
-    const providerPrefix = provider !== 'generic' ? `[${provider.toUpperCase()}] ` : '';
-    
     switch (state) {
       case 'creating':
-        return `${providerPrefix}Creando ${nodeType} "${nodeName}"${resourceDetails}...`;
+        return `Iniciando creación de ${nodeName}${getResourceDetails()}...`;
       case 'updating':
-        return `${providerPrefix}Actualizando ${nodeType} "${nodeName}"${resourceDetails}...`;
+        return `Iniciando actualización de ${nodeName}${getResourceDetails()}...`;
       case 'deleting':
-        return `${providerPrefix}Eliminando ${nodeType} "${nodeName}"${resourceDetails}...`;
+        return `Iniciando eliminación de ${nodeName}${getResourceDetails()}...`;
       case 'success':
-        return `${providerPrefix}${nodeType} "${nodeName}" completado exitosamente${resourceDetails}`;
+        return `${nodeName} procesado exitosamente`;
       case 'error':
-        return `${providerPrefix}Error al procesar ${nodeType} "${nodeName}"${resourceDetails}`;
+        return `Error al procesar ${nodeName}`;
       default:
-        return `${providerPrefix}Procesando ${nodeType} "${nodeName}"${resourceDetails}...`;
-    }
-  };
-
-  // Función para simular la ejecución de todos los nodos
-  const simulateExecution = async () => {
-    setIsExecutionLogVisible(true);
-    setExecutionLogs([]);
-
-    // Obtener nodos que no son grupos
-    const executionNodes = nodes.filter((node) => node.type !== 'group');
-
-    // Simular ejecución secuencial
-    for (const node of executionNodes) {
-      await simulateNodeExecution(node as NodeWithExecutionStatus, 'creating');
-      await simulateNodeExecution(node as NodeWithExecutionStatus, 'success');
+        return `Procesando ${nodeName}...`;
     }
   };
 
   // Modificar el handlePreview para incluir la simulación
-  const handlePreview = async () => {
+  const handlePreview = useCallback(() => {
     if (!currentDiagram) return;
     
     try {
@@ -1762,81 +1552,99 @@ const FlowEditorContent = ({
       // Obtener nodos que no son grupos
       const executionNodes = currentDiagram.nodes.filter((node) => node.type !== 'group');
 
-      // Simular ejecución secuencial basada en el estado real de los nodos
-      for (const node of executionNodes) {
-        let state: NodeExecutionState;
-        
-        // Determinar el estado basado en las propiedades reales del nodo
-        if (node.data?.status === 'creating' || node.data?.status === 'new' || (!node.data?.status && node.data?.isNew)) {
-          state = 'creating';
-        } else if (node.data?.status === 'updating' || node.data?.status === 'modified' || node.data?.hasChanges) {
-          state = 'updating';
-        } else if (node.data?.status === 'deleting' || node.data?.status === 'toDelete' || node.data?.markedForDeletion) {
-          state = 'deleting';
-        } else {
-          // Por defecto, considera como creación si no hay estado específico
-          state = 'creating';
+      // Simular ejecución secuencial
+      const simulateExecution = async () => {
+        for (const node of executionNodes) {
+          let state: NodeExecutionState;
+          
+          // Determinar el estado basado en las propiedades reales del nodo
+          if (node.data?.status === 'creating' || node.data?.status === 'new' || (!node.data?.status && node.data?.isNew)) {
+            state = 'creating';
+          } else if (node.data?.status === 'updating' || node.data?.status === 'modified' || node.data?.hasChanges) {
+            state = 'updating';
+          } else if (node.data?.status === 'deleting' || node.data?.status === 'toDelete' || node.data?.markedForDeletion) {
+            state = 'deleting';
+          } else {
+            state = 'creating';
+          }
+
+          const nodeName = node.data?.label || 'Unnamed Resource';
+          
+          // Logs de procesamiento
+          const processingLog = `Procesando ${state} para ${nodeName}...`;
+          const successLog = `${state} completado para ${nodeName}`;
+          const costLog = `Costo estimado para ${nodeName}: $${node.data?.estimated_cost?.monthly || 0} USD/mes`;
+
+          // Agregar logs
+          setExecutionLogs(prev => [...prev, processingLog]);
+          
+          // Simular tiempo de ejecución
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Agregar logs de éxito y costo
+          setExecutionLogs(prev => [...prev, successLog]);
+          setExecutionLogs(prev => [...prev, costLog]);
         }
-
-        await simulateNodeExecution(node as NodeWithExecutionStatus, state);
-        await simulateNodeExecution(node as NodeWithExecutionStatus, 'success');
-      }
-
-      // Actualizar los datos de preview con estados específicos basados en datos reales
-      const resourcesToCreate = currentDiagram.nodes
-        .filter(node => node.type !== 'group' && (node.data?.status === 'creating' || node.data?.status === 'new' || (!node.data?.status && node.data?.isNew)))
-        .map(node => ({
-          id: node.id,
-          type: node.type,
-          name: node.data?.label || 'Unnamed Resource',
-          provider: node.data?.provider || 'generic',
-          changes: {
-            create: true,
-            properties: node.data || {}
-          }
-        }));
-
-      const resourcesToUpdate = currentDiagram.nodes
-        .filter(node => node.type !== 'group' && (node.data?.status === 'updating' || node.data?.status === 'modified' || node.data?.hasChanges))
-        .map(node => ({
-          id: node.id,
-          type: node.type,
-          name: node.data?.label || 'Unnamed Resource',
-          provider: node.data?.provider || 'generic',
-          changes: {
-            create: false,
-            update: true,
-            properties: node.data || {}
-          }
-        }));
-
-      const resourcesToDelete = currentDiagram.nodes
-        .filter(node => node.type !== 'group' && (node.data?.status === 'deleting' || node.data?.status === 'toDelete' || node.data?.markedForDeletion))
-        .map(node => ({
-          id: node.id,
-          type: node.type,
-          name: node.data?.label || 'Unnamed Resource',
-          provider: node.data?.provider || 'generic'
-        }));
-
-      const previewData = {
-        resourcesToCreate,
-        resourcesToUpdate,
-        resourcesToDelete
       };
-      
-      setPreviewData(previewData);
-      setPreviewModalVisible(true);
+
+      simulateExecution();
     } catch (err) {
-      console.error('Error al generar la vista previa:', err);
-      message.error('Error al generar la vista previa');
+      console.error('Error al ejecutar el preview:', err);
+      message.error('Error al ejecutar el preview');
     }
-  };
+  }, [currentDiagram]);
 
   // Modificar el handleRun para incluir la simulación
   const handleRun = useCallback(() => {
-    setRunModalVisible(true);
-  }, []);
+    if (!currentDiagram) return;
+    
+    try {
+      setIsExecutionLogVisible(true);
+      setExecutionLogs([]);
+
+      // Obtener nodos que no son grupos
+      const executionNodes = currentDiagram.nodes.filter((node) => node.type !== 'group');
+
+      // Simular ejecución secuencial
+      const simulateExecution = async () => {
+        for (const node of executionNodes) {
+          let state: NodeExecutionState;
+          
+          // Determinar el estado basado en las propiedades reales del nodo
+          if (node.data?.status === 'creating' || node.data?.status === 'new' || (!node.data?.status && node.data?.isNew)) {
+            state = 'creating';
+          } else if (node.data?.status === 'updating' || node.data?.status === 'modified' || node.data?.hasChanges) {
+            state = 'updating';
+          } else if (node.data?.status === 'deleting' || node.data?.status === 'toDelete' || node.data?.markedForDeletion) {
+            state = 'deleting';
+          } else {
+            state = 'creating';
+          }
+
+          const nodeName = node.data?.label || 'Unnamed Resource';
+          
+          // Logs de procesamiento
+          const processingLog = `Procesando ${state} para ${nodeName}...`;
+          const successLog = `${state} completado para ${nodeName}`;
+          const costLog = `Costo estimado para ${nodeName}: $${node.data?.estimated_cost?.monthly || 0} USD/mes`;
+
+          // Agregar logs
+          setExecutionLogs(prev => [...prev, processingLog]);
+          
+          // Simular tiempo de ejecución
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Agregar logs de éxito y costo
+          setExecutionLogs(prev => [...prev, successLog, costLog]);
+        }
+      };
+
+      simulateExecution();
+    } catch (err) {
+      console.error('Error al ejecutar el diagrama:', err);
+      message.error('Error al ejecutar el diagrama');
+    }
+  }, [currentDiagram]);
 
   useEffect(() => {
     const handler = (event: CustomEvent<SingleNodePreview>) => {
@@ -1847,304 +1655,54 @@ const FlowEditorContent = ({
     return () => window.removeEventListener('showSingleNodePreview', handler as EventListener);
   }, []);
 
-  const handleApplyChanges = () => {
-    setShowConfirmModal(true);
-  };
-
-  const handleConfirmApply = async () => {
+  const handleApplyChanges = async () => {
+    if (!singleNodePreview) return;
+    
     try {
       setLoading(true);
-      setIsExecutionLogVisible(true);
-      setExecutionLogs([]);
-
-      const token = localStorage.getItem('token');
-      if (!token) {
-        message.error('No hay sesión activa');
-        return;
-      }
-
-      // Generate resources based on actual node status instead of arbitrary indices
-      const resourcesToCreate = nodes
-        .filter(n => n.type !== 'group' && (n.data?.status === 'creating' || n.data?.status === 'new' || (!n.data?.status && n.data?.isNew)))
-        .map(node => ({
-          id: node.id,
-          type: node.type,
-          name: node.data?.label || 'Unnamed Resource',
-          provider: node.data?.provider || 'generic',
-          changes: {
-            create: true,
-            properties: node.data || {}
-          }
-        }));
-
-      const resourcesToUpdate = nodes
-        .filter(n => n.type !== 'group' && (n.data?.status === 'updating' || n.data?.status === 'modified' || n.data?.hasChanges))
-        .map(node => ({
-          id: node.id,
-          type: node.type,
-          name: node.data?.label || 'Unnamed Resource',
-          provider: node.data?.provider || 'generic',
-          changes: {
-            create: false,
-            update: true,
-            properties: node.data || {}
-          }
-        }));
-
-      const resourcesToDelete = nodes
-        .filter(n => n.type !== 'group' && (n.data?.status === 'deleting' || n.data?.status === 'toDelete' || n.data?.markedForDeletion))
-        .map(node => ({
-          id: node.id,
-          type: node.type,
-          name: node.data?.label || 'Unnamed Resource',
-          provider: node.data?.provider || 'generic'
-        }));
-
-      // Generate preview data based on actual node analysis
-      const previewData = {
-        resourcesToCreate,
-        resourcesToUpdate,
-        resourcesToDelete
-      };
+      setShowLogs(true); // Asegurar que los logs se muestren
+      setExecutionLogs([]); // Limpiar logs anteriores
       
-      setPreviewData(previewData);
+      // Procesar el recurso principal
+      const processingLog = `Procesando ${singleNodePreview.action} del recurso ${singleNodePreview.resource.name}`;
+      setExecutionLogs(prev => [...prev, processingLog]);
 
-      // Agregar logs detallados de los recursos
-      if (resourcesToCreate.length > 0) {
-        setExecutionLogs(prevLog => [
-          ...prevLog,
-          {
-            nodeId: 'system',
-            nodeName: 'Recursos a Crear',
-            state: 'creating',
-            message: `Se crearán ${resourcesToCreate.length} recursos:`,
-            timestamp: Date.now()
-          }
-        ]);
-
-        resourcesToCreate.forEach(resource => {
-          const properties = resource.changes.properties;
-          const details = Object.entries(properties)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join(', ');
-
-          setExecutionLogs(prevLog => [
-            ...prevLog,
-            {
-              nodeId: resource.id,
-              nodeName: resource.name,
-              state: 'creating',
-              message: `Creando ${resource.type} (${resource.provider}):\n${details}`,
-              timestamp: Date.now()
-            }
-          ]);
-        });
-      }
-
-      if (resourcesToUpdate.length > 0) {
-        setExecutionLogs(prevLog => [
-          ...prevLog,
-          {
-            nodeId: 'system',
-            nodeName: 'Recursos a Actualizar',
-            state: 'updating',
-            message: `Se actualizarán ${resourcesToUpdate.length} recursos:`,
-            timestamp: Date.now()
-          }
-        ]);
-
-        resourcesToUpdate.forEach(resource => {
-          const properties = resource.changes.properties;
-          const details = Object.entries(properties)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join(', ');
-
-          setExecutionLogs(prevLog => [
-            ...prevLog,
-            {
-              nodeId: resource.id,
-              nodeName: resource.name,
-              state: 'updating',
-              message: `Actualizando ${resource.type} (${resource.provider}):\n${details}`,
-              timestamp: Date.now()
-            }
-          ]);
-        });
-      }
-
-      if (resourcesToDelete.length > 0) {
-        setExecutionLogs(prevLog => [
-          ...prevLog,
-          {
-            nodeId: 'system',
-            nodeName: 'Recursos a Eliminar',
-            state: 'deleting',
-            message: `Se eliminarán ${resourcesToDelete.length} recursos:`,
-            timestamp: Date.now()
-          }
-        ]);
-
-        resourcesToDelete.forEach(resource => {
-          setExecutionLogs(prevLog => [
-            ...prevLog,
-            {
-              nodeId: resource.id,
-              nodeName: resource.name,
-              state: 'deleting',
-              message: `Eliminando ${resource.type} (${resource.provider})`,
-              timestamp: Date.now()
-            }
-          ]);
-        });
-      }
-
-      // 1. Create new version in backend
-      const versionUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}/versions`;
+      // Simular procesamiento del recurso principal
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      setExecutionLogs(prevLog => [
-        ...prevLog,
-        {
-          nodeId: 'system',
-          nodeName: 'Sistema',
-          state: 'creating',
-          message: 'Creando nueva versión...',
-          timestamp: Date.now()
-        }
-      ]);
+      // Log de éxito final
+      const successLog = `Recurso ${singleNodePreview.resource.name} ${singleNodePreview.action === 'create' ? 'creado' : 
+              singleNodePreview.action === 'update' ? 'actualizado' : 'eliminado'} exitosamente`;
+      setExecutionLogs(prev => [...prev, successLog]);
 
-      const versionResponse = await fetch(versionUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          nodes: nodes.map(node => ({
-            id: node.id,
-            type: node.type,
-            position: node.position,
-            data: {
-              ...node.data,
-              properties: node.data || {}
-            }
-          })),
-          edges: edges.map(edge => ({
-            id: edge.id,
-            source: edge.source,
-            target: edge.target,
-            type: edge.type,
-            data: edge.data
-          }))
-        })
-      });
-
-      if (!versionResponse.ok) {
-        const errorText = await versionResponse.text();
-        console.error('Version creation error:', errorText);
-        throw new Error('Error al crear la versión');
+      // Si hay costo estimado, mostrarlo
+      if (singleNodePreview.estimated_cost) {
+        const costLog = `Costo estimado: ${singleNodePreview.estimated_cost.currency} ${singleNodePreview.estimated_cost.monthly.toFixed(2)}`;
+        setExecutionLogs(prev => [...prev, costLog]);
       }
 
-      await versionResponse.json(); // Just consume the response
-
-      setExecutionLogs(prevLog => [
-        ...prevLog,
-        {
-          nodeId: 'system',
-          nodeName: 'Sistema',
-          state: 'success',
-          message: 'Versión creada exitosamente',
-          timestamp: Date.now()
+      // Procesar dependencias si existen
+      if (singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0) {
+        setExecutionLogs(prev => [...prev, `Procesando ${singleNodePreview.dependencies.length} dependencias...`]);
+        
+        for (const dep of singleNodePreview.dependencies) {
+          const depLog = `Procesando dependencia: ${dep.name} (${dep.type}) - Acción: ${dep.action}`;
+          setExecutionLogs(prev => [...prev, depLog]);
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const depSuccessLog = `Dependencia ${dep.name} procesada exitosamente`;
+          setExecutionLogs(prev => [...prev, depSuccessLog]);
         }
-      ]);
-
-      // 2. Update diagram with correct format
-      const updateUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`;
-      
-      setExecutionLogs(prevLog => [
-        ...prevLog,
-        {
-          nodeId: 'system',
-          nodeName: 'Sistema',
-          state: 'updating',
-          message: 'Actualizando diagrama...',
-          timestamp: Date.now()
-        }
-      ]);
-
-      // Get current viewport
-      const currentViewport = reactFlowInstance?.getViewport() || { x: 0, y: 0, zoom: 1 };
-
-      const updatePayload = {
-        nodes: nodes.map(node => ({
-          id: node.id,
-          type: node.type,
-          position: node.position,
-          data: node.data || {}
-        })),
-        edges: edges.map(edge => ({
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          type: edge.type || 'default',
-          data: edge.data || {}
-        })),
-        viewport: currentViewport
-      };
-
-      const updateResponse = await fetch(updateUrl, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updatePayload)
-      });
-
-      if (!updateResponse.ok) {
-        const errorText = await updateResponse.text();
-        console.error('Update diagram error:', updateResponse.status, errorText);
-        throw new Error(`Error al actualizar el diagrama: ${updateResponse.status}`);
       }
 
-      setExecutionLogs(prevLog => [
-        ...prevLog,
-        {
-          nodeId: 'system',
-          nodeName: 'Sistema',
-          state: 'success',
-          message: 'Diagrama actualizado exitosamente',
-          timestamp: Date.now()
-        }
-      ]);
-
-      // Skip history and rollback for now to avoid errors
-      setExecutionLogs(prevLog => [
-        ...prevLog,
-        {
-          nodeId: 'system',
-          nodeName: 'Sistema',
-          state: 'success',
-          message: 'Cambios aplicados exitosamente',
-          timestamp: Date.now()
-        }
-      ]);
-
-      message.success('Cambios aplicados exitosamente');
-      setShowConfirmModal(false);
-    } catch (error) {
-      console.error('Error al aplicar cambios:', error);
-      message.error('Error al aplicar los cambios');
-      setExecutionLogs(prevLog => [
-        ...prevLog,
-        {
-          nodeId: 'system',
-          nodeName: 'Error',
-          state: 'error',
-          message: error instanceof Error ? error.message : 'Error desconocido',
-          timestamp: Date.now()
-        }
-      ]);
-    } finally {
+      setLoading(false);
+      setShowSingleNodePreview(false);
+      setSingleNodePreview(null);
+    } catch (err) {
+      console.error('Error al aplicar cambios:', err);
+      const errorLog = `Error al aplicar cambios: ${err instanceof Error ? err.message : 'Error desconocido'}`;
+      setExecutionLogs(prev => [...prev, errorLog]);
+      message.error('Error al aplicar cambios');
       setLoading(false);
     }
   };
@@ -2639,10 +2197,50 @@ const FlowEditorContent = ({
                                   type: node.type || 'unknown',
                                   provider: node.data?.provider || 'generic',
                                   changes: {
-                                    properties: node.data || {}
+                                    properties: {
+                                      label: {
+                                        after: node.data?.label || 'Unnamed Resource',
+                                        action: 'create'
+                                      },
+                                      description: {
+                                        after: node.data?.description || '',
+                                        action: 'create'
+                                      },
+                                      provider: {
+                                        after: node.data?.provider || 'generic',
+                                        action: 'create'
+                                      },
+                                      status: {
+                                        after: node.data?.status || 'success',
+                                        action: 'create'
+                                      },
+                                      lastUpdated: {
+                                        after: node.data?.lastUpdated || new Date().toISOString(),
+                                        action: 'create'
+                                      },
+                                      version: {
+                                        after: node.data?.version || 1,
+                                        action: 'create'
+                                      }
+                                    }
                                   }
                                 },
-                                dependencies: node.data?.dependencies || [],
+                                dependencies: node.data?.dependencies?.map((dep: Dependency) => ({
+                                  name: dep.name,
+                                  type: dep.type,
+                                  action: 'create',
+                                  properties: {
+                                    ...Object.entries(dep).reduce((acc: Record<string, any>, [key, value]) => {
+                                      if (key !== 'name' && key !== 'type') {
+                                        acc[key] = {
+                                          after: value,
+                                          action: 'create'
+                                        };
+                                      }
+                                      return acc;
+                                    }, {})
+                                  }
+                                })) || [],
                                 estimated_cost: node.data?.estimated_cost
                               };
                               
@@ -3394,9 +2992,7 @@ const FlowEditorContent = ({
                   )}
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900">
-                      {singleNodePreview.action === 'create' && 'Crear nuevo recurso'}
-                      {singleNodePreview.action === 'update' && 'Actualizar recurso'}
-                      {singleNodePreview.action === 'delete' && 'Eliminar recurso'}
+                      {singleNodePreview.resource.name}
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">
                       {singleNodePreview.resource.type} • {singleNodePreview.resource.provider}
@@ -3412,268 +3008,135 @@ const FlowEditorContent = ({
               </div>
             </div>
 
-            {/* Content con Scroll */}
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 180px)' }}>
-              <div className="p-6 space-y-6">
-                {/* Resource Info */}
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
-                      <ServerIcon className="w-7 h-7 text-blue-500" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900 text-lg">{singleNodePreview.resource.name}</h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Tipo: {singleNodePreview.resource.type}
-                      </p>
+            {/* Content */}
+            <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 180px)' }}>
+              <div className="space-y-6">
+                {/* Changes */}
+                <div>
+                  <h3 className="font-medium text-gray-900 mb-3">Cambios:</h3>
+                  <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
+                    <div className="space-y-3">
+                      {Object.entries(singleNodePreview.resource.changes.properties).map(([key, value]) => {
+                        if (value && typeof value === 'object' && 'action' in value) {
+                          return (
+                            <div key={key} className="flex justify-between items-start text-sm">
+                              <span className="text-gray-600">{key}</span>
+                              <div className="flex flex-col items-end">
+                                {value.action === 'update' && (
+                                  <>
+                                    <span className="text-red-500 line-through text-xs">- {value.before}</span>
+                                    <span className="text-green-500">+ {value.after}</span>
+                                  </>
+                                )}
+                                {value.action === 'create' && (
+                                  <span className="text-green-500">+ {value.after}</span>
+                                )}
+                                {value.action === 'delete' && (
+                                  <span className="text-red-500">- {value.before}</span>
+                                )}
+                                <span className="text-xs text-gray-400 mt-1">
+                                  {value.action === 'create' ? 'Nuevo' : 
+                                   value.action === 'update' ? 'Actualizado' : 'Eliminado'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={key} className="flex justify-between items-start text-sm">
+                            <span className="text-gray-600">{key}</span>
+                            <span className="text-gray-500">
+                              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
 
-                {/* Changes */}
-                <div className="space-y-4">
-                  <h4 className="font-medium text-gray-900">Detalles de los cambios:</h4>
-                  <div className="space-y-3">
-                    {/* Recurso Principal */}
-                    <details open className="bg-gray-50 rounded-xl border border-gray-100">
-                      <summary className="p-4 cursor-pointer flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            singleNodePreview.action === 'create' ? 'bg-green-100' :
-                            singleNodePreview.action === 'update' ? 'bg-yellow-100' :
-                            'bg-red-100'
-                          }`}>
-                            {singleNodePreview.action === 'create' ? '＋' :
-                             singleNodePreview.action === 'update' ? '✎' : '－'}
-                          </div>
-                          <div>
-                            <h5 className="font-medium text-gray-900">Recurso Principal</h5>
-                            <p className="text-sm text-gray-500">{singleNodePreview.resource.name}</p>
-                          </div>
-                        </div>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          singleNodePreview.action === 'create' ? 'bg-green-100 text-green-800' :
-                          singleNodePreview.action === 'update' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {singleNodePreview.action === 'create' ? 'Crear' :
-                           singleNodePreview.action === 'update' ? 'Actualizar' : 'Eliminar'}
-                        </span>
-                      </summary>
-                      <div className="px-4 pb-4">
-                        <div className="bg-white p-3 rounded-lg border border-gray-100">
-                          {singleNodePreview.action === 'update' ? (
-                            <div className="space-y-3">
-                              {Object.entries(singleNodePreview.resource.changes.properties).map(([key, value]) => (
-                                <div key={key} className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded">
-                                  <div className="w-6 h-6 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-yellow-600">✎</span>
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                      <span className="font-medium text-gray-900">{key}</span>
-                                      <span className="text-sm text-gray-500">
-                                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
+                {/* Dependencies */}
+                {singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0 && (
+                  <div>
+                    <h3 className="font-medium text-gray-900 mb-3">Dependencias:</h3>
+                    <div className="space-y-3">
+                      {singleNodePreview.dependencies.map((dep, index) => (
+                        <div key={index} className="bg-gray-50 rounded-xl border border-gray-100 p-4">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className={`w-8 h-8 rounded-full ${
+                              dep.action === 'create' ? 'bg-green-100' :
+                              dep.action === 'update' ? 'bg-yellow-100' :
+                              'bg-red-100'
+                            } flex items-center justify-center`}>
+                              <span className={
+                                dep.action === 'create' ? 'text-green-600' :
+                                dep.action === 'update' ? 'text-yellow-600' :
+                                'text-red-600'
+                              }>
+                                {dep.action === 'create' ? '＋' :
+                                 dep.action === 'update' ? '✎' : '－'}
+                              </span>
                             </div>
-                          ) : singleNodePreview.action === 'create' ? (
-                            <div className="space-y-3">
-                              {Object.entries(singleNodePreview.resource.changes.properties).map(([key, value]) => (
-                                <div key={key} className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded">
-                                  <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-green-600">＋</span>
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                      <span className="font-medium text-gray-900">{key}</span>
-                                      <span className="text-sm text-gray-500">
-                                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
+                            <div>
+                              <div className="font-medium text-gray-900">{dep.name}</div>
+                              <div className="text-sm text-gray-500">{dep.type}</div>
                             </div>
-                          ) : (
-                            <div className="p-3 bg-red-50 rounded-lg">
-                              <p className="text-sm text-red-700">
-                                Este recurso será eliminado permanentemente junto con todos sus datos asociados.
-                              </p>
+                          </div>
+                          {Object.entries(dep.properties).length > 0 && (
+                            <div className="ml-11 space-y-2">
+                              {Object.entries(dep.properties).map(([key, value]) => {
+                                if (value && typeof value === 'object' && 'action' in value) {
+                                  return (
+                                    <div key={key} className="flex justify-between items-start text-sm">
+                                      <span className="text-gray-600">{key}</span>
+                                      <div className="flex flex-col items-end">
+                                        {value.action === 'update' && (
+                                          <>
+                                            <span className="text-red-500 line-through text-xs">- {value.before}</span>
+                                            <span className="text-green-500">+ {value.after}</span>
+                                          </>
+                                        )}
+                                        {value.action === 'create' && (
+                                          <span className="text-green-500">+ {value.after}</span>
+                                        )}
+                                        {value.action === 'delete' && (
+                                          <span className="text-red-500">- {value.before}</span>
+                                        )}
+                                        <span className="text-xs text-gray-400 mt-1">
+                                          {value.action === 'create' ? 'Nuevo' : 
+                                           value.action === 'update' ? 'Actualizado' : 'Eliminado'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div key={key} className="flex justify-between items-start text-sm">
+                                    <span className="text-gray-600">{key}</span>
+                                    <span className="text-gray-500">
+                                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
-                      </div>
-                    </details>
-
-                    {/* Dependencias */}
-                    {singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0 && (
-                      <details open className="bg-gray-50 rounded-xl border border-gray-100">
-                        <summary className="p-4 cursor-pointer flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                              <span className="text-blue-600">🔗</span>
-                            </div>
-                            <div>
-                              <h5 className="font-medium text-gray-900">Dependencias</h5>
-                              <p className="text-sm text-gray-500">{singleNodePreview.dependencies.length} recursos</p>
-                            </div>
-                          </div>
-                        </summary>
-                        <div className="px-4 pb-4 space-y-3">
-                          {singleNodePreview.dependencies.map((dep, index) => (
-                            <div key={index} className="bg-white rounded-lg p-3 border border-gray-100">
-                              <div className="flex items-center justify-between mb-2">
-                                <div>
-                                  <span className="font-medium text-gray-900">{dep.name}</span>
-                                  <span className="text-xs text-gray-500 ml-2">({dep.type})</span>
-                                </div>
-                                <span className={`text-xs px-2 py-1 rounded-full ${
-                                  index === 0 ? 'bg-yellow-100 text-yellow-800' :
-                                  index === 1 ? 'bg-red-100 text-red-800' :
-                                  'bg-green-100 text-green-800'
-                                }`}>
-                                  {index === 0 ? 'Actualizar' : index === 1 ? 'Eliminar' : 'Crear'}
-                                </span>
-                              </div>
-                              {/* Detalles de cambios para actualizaciones */}
-                              {index === 0 && (
-                                <div className="mt-3 space-y-2">
-                                  <div className="text-sm font-medium text-gray-700">Cambios a realizar:</div>
-                                  <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-                                    {/* Ejemplo de cambios en propiedades específicas */}
-                                    <div className="flex items-start gap-2">
-                                      <div className="w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-yellow-600">✎</span>
-                                      </div>
-                                      <div className="flex-1">
-                                        <div className="text-sm text-gray-600">
-                                          <span className="font-medium">Tamaño del disco:</span>
-                                          <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-red-600 line-through">10 GB</span>
-                                            <span className="text-gray-500">→</span>
-                                            <span className="text-green-600">20 GB</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-start gap-2">
-                                      <div className="w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-yellow-600">✎</span>
-                                      </div>
-                                      <div className="flex-1">
-                                        <div className="text-sm text-gray-600">
-                                          <span className="font-medium">Etiquetas:</span>
-                                          <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-red-600 line-through">team:devops</span>
-                                            <span className="text-gray-500">→</span>
-                                            <span className="text-green-600">team:payments</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-start gap-2">
-                                      <div className="w-5 h-5 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-yellow-600">✎</span>
-                                      </div>
-                                      <div className="flex-1">
-                                        <div className="text-sm text-gray-600">
-                                          <span className="font-medium">Conexiones:</span>
-                                          <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-red-600 line-through">db-1</span>
-                                            <span className="text-gray-500">→</span>
-                                            <span className="text-green-600">db-2</span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              {/* Detalles para eliminaciones */}
-                              {index === 1 && (
-                                <div className="mt-3">
-                                  <div className="bg-red-50 rounded-lg p-3">
-                                    <div className="flex items-start gap-2">
-                                      <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-red-600">⚠️</span>
-                                      </div>
-                                      <div className="flex-1">
-                                        <div className="text-sm text-red-700">
-                                          Este recurso será eliminado permanentemente. Se eliminarán todos los datos asociados y las conexiones con otros recursos.
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              {/* Detalles para creaciones */}
-                              {index > 1 && (
-                                <div className="mt-3 space-y-2">
-                                  <div className="text-sm font-medium text-gray-700">Nuevo recurso:</div>
-                                  <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-                                    <div className="flex items-start gap-2">
-                                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-green-600">＋</span>
-                                      </div>
-                                      <div className="flex-1">
-                                        <div className="text-sm text-gray-600">
-                                          <span className="font-medium">Configuración inicial:</span>
-                                          <div className="mt-1 space-y-1">
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-gray-500">•</span>
-                                              <span>Tamaño del disco: 20 GB</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-gray-500">•</span>
-                                              <span>Etiquetas: team:payments</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-start gap-2">
-                                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-green-600">＋</span>
-                                      </div>
-                                      <div className="flex-1">
-                                        <div className="text-sm text-gray-600">
-                                          <span className="font-medium">Conexiones:</span>
-                                          <div className="mt-1 space-y-1">
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-gray-500">•</span>
-                                              <span>db-2</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    )}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Estimated Cost */}
                 {singleNodePreview.estimated_cost && (
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-100">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-green-900">Costo estimado</h4>
-                        <p className="text-sm text-green-700 mt-1">
-                          {singleNodePreview.estimated_cost.monthly} {singleNodePreview.estimated_cost.currency} / mes
-                        </p>
-                      </div>
-                      <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                        <CurrencyDollarIcon className="w-7 h-7 text-green-600" />
+                  <div>
+                    <h3 className="font-medium text-gray-900 mb-3">Costo estimado:</h3>
+                    <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">Costo mensual</span>
+                        <span className="font-medium text-gray-900">
+                          {singleNodePreview.estimated_cost.currency} {singleNodePreview.estimated_cost.monthly.toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -3681,23 +3144,21 @@ const FlowEditorContent = ({
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="bg-gray-50 px-6 py-4 border-t border-gray-100">
+            {/* Footer with action buttons */}
+            <div className="p-6 border-t border-gray-100 bg-gray-50">
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowSingleNodePreview(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={() => {
-                    setShowSingleNodePreview(false);
-                    setShowConfirmModal(true);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  onClick={handleApplyChanges}
+                  disabled={loading}
+                  className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Aplicar cambios
+                  {loading ? 'Aplicando...' : 'Aplicar cambios'}
                 </button>
               </div>
             </div>
@@ -3705,97 +3166,15 @@ const FlowEditorContent = ({
         </div>
       )}
 
-      {/* Execution Log */}
-      <ExecutionLog
-        isVisible={isExecutionLogVisible}
-        logs={executionLogs}
-        onClose={() => setIsExecutionLogVisible(false)}
-        previewData={previewData}
-      />
-
-      {/* Modal de Confirmación */}
-      <Modal
-        title="Confirmar cambios"
-        open={showConfirmModal}
-        onOk={handleConfirmApply}
-        onCancel={() => setShowConfirmModal(false)}
-        okText="Confirmar y Aplicar"
-        cancelText="Cancelar"
-      >
-        <div className="p-6">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
-              <span className="text-2xl text-blue-600">⚠️</span>
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-gray-900">Confirmar Cambios</h3>
-              <p className="text-gray-600">
-                ¿Estás seguro de que deseas {singleNodePreview?.action === 'create' ? 'crear' : 
-                 singleNodePreview?.action === 'update' ? 'actualizar' : 'eliminar'} este recurso?
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-gray-50 rounded-lg p-4 mb-6 border border-gray-100">
-            <h4 className="font-medium text-gray-900 mb-3">Resumen de Cambios</h4>
-            <div className="space-y-3">
-              {/* Recurso Principal */}
-              <div className="flex items-start gap-3">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  singleNodePreview?.action === 'create' ? 'bg-green-50' :
-                  singleNodePreview?.action === 'update' ? 'bg-yellow-50' :
-                  'bg-red-50'
-                }`}>
-                  <span className={`text-sm ${
-                    singleNodePreview?.action === 'create' ? 'text-green-600' :
-                    singleNodePreview?.action === 'update' ? 'text-yellow-600' :
-                    'text-red-600'
-                  }`}>
-                    {singleNodePreview?.action === 'create' ? '＋' :
-                     singleNodePreview?.action === 'update' ? '✎' : '－'}
-                  </span>
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900">{singleNodePreview?.resource.name}</div>
-                  <div className="text-sm text-gray-600">
-                    {singleNodePreview?.action === 'create' ? 'Se creará nuevo recurso' :
-                     singleNodePreview?.action === 'update' ? 'Se actualizará la configuración' :
-                     'Se eliminará permanentemente'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Dependencias */}
-              {singleNodePreview?.dependencies && singleNodePreview.dependencies.map((dep, index) => (
-                <div key={index} className="flex items-start gap-3">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    index === 0 ? 'bg-yellow-50' :
-                    index === 1 ? 'bg-red-50' :
-                    'bg-green-50'
-                  }`}>
-                    <span className={`text-sm ${
-                      index === 0 ? 'text-yellow-600' :
-                      index === 1 ? 'text-red-600' :
-                      'text-green-600'
-                    }`}>
-                      {index === 0 ? '✎' : index === 1 ? '－' : '＋'}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-900">{dep.name}</div>
-                    <div className="text-sm text-gray-600">
-                      {index === 0 ? 'Se actualizará la configuración' :
-                      
-                       index === 1 ? 'Se eliminará permanentemente' :
-                       'Se creará nuevo recurso'}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Modal>
+      {/* Drawer de logs */}
+      <div className={`fixed inset-y-0 right-0 w-96 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`}>
+        <ExecutionLog
+          isVisible={showLogs}
+          logs={executionLogs}
+          onClose={() => setShowLogs(false)}
+          previewData={previewData}
+        />
+      </div>
     </div>
   );
 };
