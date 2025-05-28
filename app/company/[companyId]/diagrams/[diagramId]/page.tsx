@@ -1248,20 +1248,21 @@ export default function DiagramPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        throw new Error('No estás autenticado');
+        message.error('No hay sesión activa');
+        return;
       }
 
-      const versionsResponse = await fetch(`/api/${diagramId}/history`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+      // Fix URL structure to match backend routes
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${selectedEnvironment}/diagrams/${diagramId}/history`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
         }
-      });
+      );
       
-      const data = await versionsResponse.json();
+      const data = await response.json();
       
-      if (!versionsResponse.ok) {
+      if (!response.ok) {
         throw new Error(data.error || data.detail || 'Error al cargar las versiones');
       }
       
@@ -1279,25 +1280,23 @@ export default function DiagramPage() {
 
   const handleHistory = async () => {
     try {
-      console.log('Fetching history for diagram:', diagramId);
       const token = localStorage.getItem('token');
       if (!token) {
-        throw new Error('No estás autenticado');
+        message.error('No hay sesión activa');
+        return;
       }
 
-      const historyResponse = await fetch(`/api/${diagramId}/history`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+      // Fix URL structure to match backend routes
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${selectedEnvironment}/diagrams/${diagramId}/history`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
         }
-      });
-      console.log('History response status:', historyResponse.status);
+      );
       
-      const data = await historyResponse.json();
-      console.log('History response data:', data);
+      const data = await response.json();
       
-      if (!historyResponse.ok) {
+      if (!response.ok) {
         console.error('Error response:', data);
         throw new Error(data.error || data.detail || 'Error al cargar el historial');
       }
@@ -1319,20 +1318,21 @@ export default function DiagramPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        throw new Error('No estás autenticado');
+        message.error('No hay sesión activa');
+        return;
       }
 
-      const versionsResponse = await fetch(`/api/${diagramId}/history`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+      // Fix URL structure to match backend routes
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${selectedEnvironment}/diagrams/${diagramId}/history`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
         }
-      });
+      );
       
-      const data = await versionsResponse.json();
+      const data = await response.json();
       
-      if (!versionsResponse.ok) {
+      if (!response.ok) {
         throw new Error(data.error || data.detail || 'Error al cargar las versiones');
       }
       
@@ -2005,7 +2005,7 @@ export default function DiagramPage() {
       >
         <div className="space-y-4">
           {versionHistory.length === 0 ? (
-            <Empty
+                       <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
                 <div className="text-center">
