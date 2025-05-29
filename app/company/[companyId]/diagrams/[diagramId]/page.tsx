@@ -21,6 +21,11 @@ import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
 import nodeTypes from '../../../../components/nodes/NodeTypes';
 import { Node, Edge } from '../../../../services/diagramService';
 import { isAuthenticated } from '../../../../services/authService';
+import CompanySidebar from '../../../../components/ui/CompanySidebar';
+import CredentialsPage from '../../../../components/ui/CredentialsPage';
+import DeploymentsPage from '../../../../components/ui/DeploymentsPage';
+import SettingsPage from '../../../../components/ui/SettingsPage';
+import TeamPage from '../../../../components/ui/TeamPage';
 
 // Cache for environments and diagrams
 const environmentCache = new Map<string, Environment[]>();
@@ -191,6 +196,10 @@ export default function DiagramPage() {
   
   // Keep the previous diagram for smooth transitions
   const [previousDiagram, setPreviousDiagram] = useState<Diagram | null>(null);
+  
+  // Sidebar state management
+  const [activeSection, setActiveSection] = useState<'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team'>('diagrams');
+  const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
   
   // Memoize nodeTypes to prevent recreating on each render
   const memoizedNodeTypes = useMemo(() => nodeTypes, []);
@@ -1207,8 +1216,7 @@ export default function DiagramPage() {
     }
   };
 
-  // Nuevos estados para la compañía y control de versiones
-  const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+  // Nuevos estados para control de versiones
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [rollbackModalVisible, setRollbackModalVisible] = useState(false);
   const [versionsModalVisible, setVersionsModalVisible] = useState(false);
@@ -1391,19 +1399,26 @@ export default function DiagramPage() {
     console.log('Historial de versiones actualizado:', versionHistory);
   }, [versionHistory]);
 
-  // We'll show the initial loading only for the first render
-  if (loadingType === 'initial') {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <Spin size="large">
-          <div className="p-5">Cargando...</div>
-        </Spin>
-      </div>
-    );
-  }
+  // Helper function to render different sections based on activeSection
+  const renderActiveSection = () => {
+    switch (activeSection) {
+      case 'credentials':
+        return <CredentialsPage companyId={companyId as string} />;
+      case 'deployments':
+        return <DeploymentsPage companyId={companyId as string} />;
+      case 'settings':
+        return <SettingsPage companyId={companyId as string} />;
+      case 'team':
+        return <TeamPage companyId={companyId as string} />;
+      case 'diagrams':
+      default:
+        return renderDiagramsSection();
+    }
+  };
 
-  return (
-    <div className="p-4">
+  // Helper function to render the diagrams section (existing diagram content)
+  const renderDiagramsSection = () => (
+    <>
       <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-3">
           <div className="flex items-center justify-between">
@@ -1514,7 +1529,7 @@ export default function DiagramPage() {
       </div>
 
       {/* Enhanced diagram display with advanced transition handling */}
-      <div className="relative h-[calc(100vh-120px)]">
+      <div className="relative h-[calc(100vh-200px)]">
         {/* Create a phantom layer for the previous diagram */}
         {loadingType === 'transition' && previousDiagram && selectedEnvironment && (
           <div>
@@ -1645,6 +1660,39 @@ export default function DiagramPage() {
           ) : null}
         </div>
       </div>
+    </>
+  );
+
+  // We'll show the initial loading only for the first render
+  if (loadingType === 'initial') {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Spin size="large">
+          <div className="p-5">Cargando...</div>
+        </Spin>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar */}
+      <div className="w-64 bg-white shadow-lg">
+        <CompanySidebar
+          companyName={company?.name || 'Cargando...'}
+          activeSection={activeSection}
+          onSectionChange={(section) => setActiveSection(section)}
+        />
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col">
+        <div className="p-4">
+          {renderActiveSection()}
+        </div>
+      </div>
+
+      {/* Modals */}
 
       {/* Modal para crear nuevo ambiente */}
       <Modal
