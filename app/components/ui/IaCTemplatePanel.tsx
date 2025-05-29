@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import SidePanel from './SidePanel';
 import ResourceConfigForm from './ResourceConfigForm';
-import { Tabs, Tab, Box, Button, Divider } from '@mui/material';
 import CodeBlock from './CodeBlock';
 import { ResourceValues, ResourceType } from '@/app/types/resourceConfig';
+import { 
+  DocumentDuplicateIcon, 
+  CheckIcon, 
+  CommandLineIcon,
+  CloudIcon,
+  CogIcon,
+  DocumentTextIcon,
+  PlayIcon,
+  CodeBracketIcon
+} from '@heroicons/react/24/outline';
 
 interface Metadata {
   key: string;
@@ -27,6 +36,49 @@ interface IaCTemplatePanelProps {
     resourceType: ResourceType;
   };
 }
+
+// Tab definitions with icons and metadata
+const IaC_TABS = [
+  { 
+    id: 'config', 
+    label: 'Configuration', 
+    icon: CogIcon, 
+    description: 'Configure resource parameters',
+    color: 'blue'
+  },
+  { 
+    id: 'terraform', 
+    label: 'Terraform', 
+    icon: CommandLineIcon, 
+    description: 'HashiCorp Terraform HCL',
+    color: 'purple',
+    language: 'hcl'
+  },
+  { 
+    id: 'pulumi', 
+    label: 'Pulumi', 
+    icon: CloudIcon, 
+    description: 'TypeScript/JavaScript SDK',
+    color: 'indigo',
+    language: 'typescript'
+  },
+  { 
+    id: 'ansible', 
+    label: 'Ansible', 
+    icon: PlayIcon, 
+    description: 'YAML Playbook',
+    color: 'red',
+    language: 'yaml'
+  },
+  { 
+    id: 'cloudformation', 
+    label: 'CloudFormation', 
+    icon: DocumentTextIcon, 
+    description: 'AWS CloudFormation Template',
+    color: 'orange',
+    language: 'yaml'
+  }
+];
 
 const getDefaultValues = (provider: string, resourceType: string): ResourceValues => {
   const defaults: Record<string, Record<string, ResourceValues>> = {
@@ -82,12 +134,14 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
   onClose,
   resourceData,
 }) => {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState('config');
   const [configValues, setConfigValues] = useState<ResourceValues>(() => 
     getDefaultValues(resourceData.provider, resourceData.resourceType)
   );
+  const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  // Actualizar valores cuando cambia el recurso
+  // Update values when resource changes
   useEffect(() => {
     setConfigValues(prevValues => ({
       ...getDefaultValues(resourceData.provider, resourceData.resourceType),
@@ -95,37 +149,63 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
     }));
   }, [resourceData.provider, resourceData.resourceType, resourceData.label]);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
-  };
-
   const handleConfigChange = (values: ResourceValues) => {
-    console.log('Nuevos valores de configuración:', values); // Para debugging
     setConfigValues(values);
   };
 
   const handleSave = () => {
-    // TODO: Implementar la lógica de guardado
-    console.log('Guardando configuración:', configValues);
+    console.log('Saving configuration:', configValues);
+    // TODO: Implement save logic
   };
 
-  const handleCopyCode = () => {
-    let code = '';
-    switch (activeTab) {
-      case 1:
-        code = generateTerraformCode();
-        break;
-      case 2:
-        code = generatePulumiCode();
-        break;
-      case 3:
-        code = generateAnsibleCode();
-        break;
-      case 4:
-        code = generateCloudFormationCode();
-        break;
+  const handleCopyCode = async () => {
+    setIsGenerating(true);
+    
+    try {
+      let code = '';
+      switch (activeTab) {
+        case 'terraform':
+          code = generateTerraformCode();
+          break;
+        case 'pulumi':
+          code = generatePulumiCode();
+          break;
+        case 'ansible':
+          code = generateAnsibleCode();
+          break;
+        case 'cloudformation':
+          code = generateCloudFormationCode();
+          break;
+        default:
+          return;
+      }
+      
+      await navigator.clipboard.writeText(code);
+      setCopySuccess(activeTab);
+      setTimeout(() => setCopySuccess(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    } finally {
+      setIsGenerating(false);
     }
-    navigator.clipboard.writeText(code);
+  };
+
+  const getProviderIcon = (provider: string) => {
+    switch (provider) {
+      case 'gcp': return '🔵';
+      case 'aws': return '🟠';
+      case 'azure': return '🔷';
+      default: return '⚡';
+    }
+  };
+
+  const getResourceTypeIcon = (type: ResourceType) => {
+    switch (type) {
+      case 'compute': return '💻';
+      case 'storage': return '💾';
+      case 'sql': return '🗄️';
+      default: return '📦';
+    }
   };
 
   const generateTerraformCode = () => {
@@ -471,40 +551,76 @@ const instance = new gcp.sql.DatabaseInstance("${configValues.name}", {
     }
   };
 
+  // Helper functions for the new UI
+  const getCodeForActiveTab = () => {
+    switch (activeTab) {
+      case 'terraform':
+        return generateTerraformCode();
+      case 'pulumi':
+        return generatePulumiCode();
+      case 'ansible':
+        return generateAnsibleCode();
+      case 'cloudformation':
+        return generateCloudFormationCode();
+      default:
+        return '// Select a template type';
+    }
+  };
+
+  const getCurrentLanguage = () => {
+    const currentTab = IaC_TABS.find(tab => tab.id === activeTab);
+    return currentTab?.language || 'text';
+  };
+
   return (
     <SidePanel
       isOpen={isOpen}
       onClose={onClose}
-      title={`IaC Templates - ${resourceData.label}`}
+      title={`${getProviderIcon(resourceData.provider)} ${getResourceTypeIcon(resourceData.resourceType)} IaC Templates - ${resourceData.label}`}
       width="50%"
     >
       <div className="h-full flex flex-col">
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs 
-            value={activeTab} 
-            onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
-            sx={{
-              '& .MuiTab-root': {
-                minWidth: 120,
-                textTransform: 'none',
-                fontWeight: 500,
-              },
-            }}
-          >
-            <Tab label="Configuración" />
-            <Tab label="Terraform" />
-            <Tab label="Pulumi" />
-            <Tab label="Ansible" />
-            <Tab label="CloudFormation" />
-          </Tabs>
-        </Box>
+        {/* Enhanced Tab Navigation */}
+        <div className="border-b border-gray-200 bg-white">
+          <nav className="flex space-x-1 p-1" aria-label="Tabs">
+            {IaC_TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`
+                    group relative min-w-0 flex-1 overflow-hidden rounded-lg py-3 px-4 text-center text-sm font-medium
+                    transition-all duration-200 hover:bg-gray-50 focus:z-10 focus:outline-none focus:ring-2 focus:ring-blue-500
+                    ${isActive 
+                      ? `bg-${tab.color}-50 text-${tab.color}-700 border-${tab.color}-200 shadow-sm` 
+                      : 'text-gray-600 hover:text-gray-900'
+                    }
+                  `}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <div className="flex flex-col items-center space-y-1">
+                    <Icon className={`h-5 w-5 ${isActive ? `text-${tab.color}-600` : 'text-gray-400'}`} />
+                    <span className="text-xs font-medium">{tab.label}</span>
+                  </div>
+                  {isActive && (
+                    <span 
+                      className={`absolute inset-x-0 bottom-0 h-0.5 bg-${tab.color}-600`}
+                      aria-hidden="true" 
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
 
-        <div className="flex-1 overflow-auto">
-          {activeTab === 0 && (
+        {/* Tab Content */}
+        <div className="flex-1 overflow-auto bg-gray-50">
+          {activeTab === 'config' && (
             <div className="flex flex-col h-full">
-              <div className="flex-1 overflow-auto">
+              <div className="flex-1 overflow-auto bg-white">
                 <ResourceConfigForm
                   provider={resourceData.provider}
                   resourceType={resourceData.resourceType}
@@ -512,61 +628,108 @@ const instance = new gcp.sql.DatabaseInstance("${configValues.name}", {
                   onChange={handleConfigChange}
                 />
               </div>
-              <Divider />
-              <div className="p-4 flex justify-end space-x-2 bg-gray-50">
-                <Button
-                  variant="contained"
-                  color="primary"
-                  onClick={handleSave}
-                  className="flex items-center space-x-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                  Guardar
-                </Button>
+              
+              {/* Configuration Actions */}
+              <div className="border-t border-gray-200 bg-white px-6 py-4">
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-500">
+                    Configure your resource parameters above
+                  </div>
+                  <button
+                    onClick={handleSave}
+                    disabled={isGenerating}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md
+                             text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 
+                             focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                  >
+                    <CheckIcon className="h-4 w-4 mr-2" />
+                    {isGenerating ? 'Saving...' : 'Save Configuration'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
-          {activeTab > 0 && (
+
+          {activeTab !== 'config' && (
             <div className="flex flex-col h-full">
-              <div className="flex-1 overflow-auto">
-                <div className="p-4">
-                  <CodeBlock
-                    code={
-                      activeTab === 1
-                        ? generateTerraformCode()
-                        : activeTab === 2
-                        ? generatePulumiCode()
-                        : activeTab === 3
-                        ? generateAnsibleCode()
-                        : generateCloudFormationCode()
-                    }
-                    language={
-                      activeTab === 1
-                        ? 'hcl'
-                        : activeTab === 2
-                        ? 'typescript'
-                        : activeTab === 3
-                        ? 'yaml'
-                        : 'json'
-                    }
-                  />
+              {/* Code Display Header */}
+              <div className="bg-white border-b border-gray-200 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    {(() => {
+                      const currentTab = IaC_TABS.find(tab => tab.id === activeTab);
+                      if (!currentTab) return null;
+                      const Icon = currentTab.icon;
+                      return (
+                        <>
+                          <Icon className={`h-6 w-6 text-${currentTab.color}-600`} />
+                          <div>
+                            <h3 className="text-lg font-medium text-gray-900">{currentTab.label}</h3>
+                            <p className="text-sm text-gray-500">{currentTab.description}</p>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                  
+                  {/* Copy Success Indicator */}
+                  {copySuccess === activeTab && (
+                    <div className="flex items-center space-x-2 text-green-600 animate-fade-in">
+                      <CheckIcon className="h-5 w-5" />
+                      <span className="text-sm font-medium">Copied!</span>
+                    </div>
+                  )}
                 </div>
               </div>
-              <Divider />
-              <div className="p-4 flex justify-end space-x-2 bg-gray-50">
-                <Button
-                  variant="outlined"
-                  onClick={handleCopyCode}
-                  className="flex items-center space-x-2"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
-                    <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
-                  </svg>
-                  Copiar código
-                </Button>
+
+              {/* Code Content */}
+              <div className="flex-1 overflow-auto bg-white">
+                <div className="p-6">
+                  {isGenerating ? (
+                    <div className="flex items-center justify-center h-64">
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                        <p className="text-gray-500">Generating {activeTab} template...</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <CodeBlock
+                      code={getCodeForActiveTab()}
+                      language={getCurrentLanguage()}
+                    />
+                  )}
+                </div>
+              </div>
+              
+              {/* Code Actions */}
+              <div className="border-t border-gray-200 bg-white px-6 py-4">
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-500">
+                    Ready to deploy with {activeTab}
+                  </div>
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={handleCopyCode}
+                      disabled={isGenerating}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md
+                               text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 
+                               focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                    >
+                      <DocumentDuplicateIcon className="h-4 w-4 mr-2" />
+                      Copy Code
+                    </button>
+                    <button
+                      onClick={() => {/* Handle deploy action */}}
+                      disabled={isGenerating}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md
+                               text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 
+                               focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                    >
+                      <CodeBracketIcon className="h-4 w-4 mr-2" />
+                      Deploy
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

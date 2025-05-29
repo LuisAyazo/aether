@@ -175,6 +175,22 @@ body {
   pointer-events: all !important;
 }
 
+/* Animation for IaC Template Panel */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
 /* Adjust ReactFlow Controls position */
 .react-flow__panel.top.left {
   top: 0px !important; /* Moved 20px further up from the previous 20px */
