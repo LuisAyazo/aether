@@ -1,950 +1,181 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: transparent;
   --foreground: #171717;
   --primary: #3b82f6;
   --primary-dark: #2563eb;
   --secondary: #10b981;
-  --accent: #8b5cf6;
-  
-  /* Replace @theme with standard CSS variables */
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --primary: #4f46e5;
-    --primary-dark: #4338ca;
-    --secondary: #059669;
-    --accent: #7c3aed;
-  }
+  --accent: #d2b48c;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans, Arial, Helvetica, sans-serif);
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
-/* Custom gradient background for hero section */
-.hero-gradient {
-  background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%);
-}
-
-/* Custom card hover effect */
-.feature-card {
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.feature-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-/* Custom button styles */
-.btn-primary {
-  background-color: var(--primary);
-  color: white;
-  transition: all 0.2s;
-}
-
-.btn-primary:hover {
-  background-color: var(--primary-dark);
-}
-
-/* Animation for fade-in elements */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.fade-in {
-  animation: fadeIn 0.6s ease-out forwards;
-}
-
-/* ReactFlow personalizaciones */
+/* Node styles */
 .react-flow__node {
-  transition: all 0.3s ease;
-  /* Eliminar cualquier sombra o fondo por defecto */
-  box-shadow: none !important;
-  background-color: transparent !important;
-  pointer-events: all !important; 
-  cursor: pointer !important;
+  pointer-events: auto !important;
 }
 
-/* Fijar específicamente el fondo transparente para nodos-grupo */
+.react-flow__node * {
+  pointer-events: auto !important;
+}
+
+/* Edge styles */
+.react-flow__edge {
+  z-index: 5;
+  pointer-events: all;
+}
+
+.react-flow__edge.selected {
+  z-index: 6;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2 !important;
+}
+
+/* Handle styles */
+.react-flow__handle {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  border: 2px solid white !important;
+  background-color: currentColor !important;
+  z-index: 3 !important;
+  pointer-events: auto !important;
+}
+
+/* Group node styles - override React Flow defaults */
 .react-flow__node-group {
   background-color: transparent !important;
-  background: transparent !important;
   box-shadow: none !important;
-  background: none !important;
   border: none !important;
   padding: 0 !important;
-  margin: 0 !important;
 }
 
-div[data-id].react-flow__node {
-  background-color: transparent !important;
+.react-flow__node-group.selectable:hover {
   box-shadow: none !important;
-  border: none !important;
 }
 
-.react-flow__node > div[data-type="group"] {
-  background-color: rgba(255, 192, 203, 0.1) !important;
-}
-
-.react-flow__node.selected {
-  z-index: 10 !important;
-  box-shadow: none !important;
-  border: none !important;
-  outline: 3px solid #4f46e5 !important;
-  outline-offset: 2px !important;
-}
-
-/* Asegurar que los controles de los nodos siempre sean visibles */
-.node-controls-container:not(.group-controls) {
-  opacity: 1;
-  visibility: visible;
-  z-index: 10;
-}
-
-.node-controls {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-/* Asegurar que los nodos hijos permanezcan dentro de los límites del grupo */
-.react-flow__node[data-parent-node] {
-  max-width: calc(100% - 20px) !important;
-  max-height: calc(100% - 50px) !important; /* Considerando el espacio para la cabecera */
-}
-
-/* Mejora para la visualización en modo oscuro */
-.dark .react-flow__node {
-  color-scheme: dark;
-}
-
-/* Efectos para el modo de foco - mejorado sin opacidad en contenedor */
-.react-flow__node:not(.focused) .react-flow.focus-mode {
-  opacity: 0.3;
-  filter: grayscale(80%);
-}
-
-.react-flow__node.focused {
-  opacity: 1 !important;
-  z-index: 50 !important;
-  filter: none !important;
-  /* Eliminamos la sombra especial para el modo focus */
-}
-
-/* Asegurar que los controles sean visibles */
-.react-flow__node button {
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
-/* Asegurar que los nodos de GCP muestren correctamente sus iconos */
-.react-flow__node[data-provider="gcp"] button {
-  background-color: rgba(255, 255, 255, 0.95) !important;
-  color: #4285F4 !important;
-  border: 1px solid rgba(66, 133, 244, 0.3) !important;
-}
-
-/* Estilos especiales para grupos - mantener la transparencia pero eliminar sombras incorrectas */
-.react-flow__node[data-type="group"] {
-  background-color: transparent !important;
-  overflow: visible !important; /* Crucial to allow elements outside the group bounds */
-  z-index: 5 !important;
-}
-
-/* Corrección para nodos seleccionados - borde negro delgado */
-.react-flow__node.selected {
-  outline: 1px solid rgba(0, 0, 0, 0.5) !important;
-  box-shadow: 0 0 2px 0px rgba(0, 0, 0, 0.2) !important;
-}
-
-/* Eliminar el borde azul fuerte cuando se selecciona */
-.react-flow__node.selected .ring-2,
-.react-flow__node.selected .ring-primary {
+.react-flow__node-group.selectable.selected,
+.react-flow__node-group.selectable:focus,
+.react-flow__node-group.selectable:focus-visible {
   box-shadow: none !important;
   outline: none !important;
-  border-color: transparent !important;
 }
 
-/* Corregir el borde azul para el enfoque también */
-.react-flow__node:focus,
-.react-flow__node:focus-within {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* Corrección de redimensionamiento para eliminar sombras incorrectas pero mantener visibilidad */
-.react-flow__resize-control {
-  z-index: 20 !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  background-color: white !important;
-  border: 1px solid rgba(0, 0, 0, 0.3) !important;
-}
-
-.react-flow__resize-control.handle {
-  width: 6px !important;
-  height: 6px !important;
-  border: 1px solid rgba(0, 0, 0, 0.3);
-  background: white;
-}
-
-/* Eliminar box-shadows incorrectos solo para selectores específicos que tenían problemas */
-.react-flow__node .ring-2 {
-  box-shadow: none !important;
-}
-
-/* Asegurar que los nodos hijos ocultos realmente estén ocultos */
-.react-flow__node.hidden,
-.react-flow__node[data-hidden="true"],
-.react-flow__node[hidden] {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* Mejorar handles de conexión */
-.react-flow__handle {
-  z-index: 10;
-  background-color: var(--primary) !important;
-}
-
-/* Animación suave para transiciones */
-.react-flow__node, 
-.react-flow__edge {
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-/* Estilos especiales para nodos en listas */
-.list-node-item {
-  padding: 5px;
-  margin-bottom: 5px;
-  border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.8);
-  border-left: 3px solid var(--primary);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-/* Reset para NodeResizer - solo quitar sombras incorrectas */
-.resize-handle {
-  box-shadow: none !important;
-  border-color: var(--primary) !important;
-  background-color: white !important;
-}
-
-.resize-line {
-  box-shadow: none !important;
-  border-color: var(--primary) !important;
-}
-
-.react-flow__node-group::before,
-.react-flow__node-group::after {
-  display: none !important;
-  content: none !important;
-}
-
-.react-flow__node.nopan.selectable {
+/* Text node styles - override React Flow defaults */
+.react-flow__node-textNode {
   background: transparent !important;
-  background-color: transparent !important;
-}
-
-.react-flow__node-group > div {
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
   box-shadow: none !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: auto !important;
+  min-height: auto !important;
+}
+
+.react-flow__node-textNode.selectable:hover {
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.react-flow__node-textNode.selectable.selected,
+.react-flow__node-textNode.selectable:focus,
+.react-flow__node-textNode.selectable:focus-visible {
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Eliminar cualquier espacio fantasma en grupos minimizados */
+.react-flow__node-group[data-minimized="true"] {
+  background: transparent !important;
+  pointer-events: none !important;
   overflow: visible !important;
+  /* Reduzca el tamaño del contenedor real */
+  width: 140px !important;
+  height: 28px !important;
 }
 
-.react-flow__node.parent {
-  border: none !important;
-  background: none !important;
-  background-color: transparent !important;
-}
-
-/* Selection mode styles */
-.selection-mode {
-  cursor: crosshair !important;
-}
-
-.selection-mode .react-flow__selection {
-  border: 2px dashed var(--primary) !important;
-  border-radius: 4px;
-  background-color: rgba(var(--primary-rgb), 0.1) !important;
-}
-
-/* Enhanced selection mode styles */
-.selection-mode,
-.lasso-active {
-  cursor: crosshair !important;
-}
-
-/* Make selection area more visible */
-.react-flow__selection {
-  border: 2px dashed #4f46e5 !important; 
-  background-color: rgba(79, 70, 229, 0.1) !important;
-  border-radius: 4px;
-}
-
-/* Fix selection handles and styling */
-.react-flow .react-flow__nodesselection {
-  background-color: rgba(79, 70, 229, 0.05);
-  border: 2px dashed #4f46e5;
-}
-
-/* Fix selection styling for nodes */
-.react-flow__node.selected {
-  outline: 2px solid #4f46e5 !important;
-}
-
-/* Ensure nodes can be selected */
-.react-flow__node {
-  user-select: none !important;
-  -webkit-user-select: none !important;
-  cursor: pointer !important;
-}
-
-/* Make the selection area more visible when active */
-.lasso-active .react-flow__pane {
-  cursor: crosshair !important;
-}
-
-/* Make selection area more precise and visible */
-.react-flow__selection {
-  border: 2px dashed #4f46e5 !important; 
-  background-color: rgba(79, 70, 229, 0.15) !important;
-  border-radius: 4px;
-  /* Add a subtle shadow for better visibility */
-  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.2) !important;
-}
-
-/* Make selection box more precise */
-.react-flow .react-flow__nodesselection {
-  background-color: rgba(79, 70, 229, 0.08);
-  border: 2px dashed #4f46e5;
-}
-
-/* Make nodes easier to select with a slightly larger hit area but strict selection mode */
-.selectable-node {
-  /* Increase contrast for easier selection */
-  filter: contrast(1.02) !important;
-}
-
-/* Make nodes clearer when selected */
-.react-flow__node.selected {
-  outline: 2px solid #4f46e5 !important;
-  z-index: 5 !important;
-}
-
-/* Change to a more obvious selection cursor */
-.lasso-active .react-flow__pane {
-  cursor: cell !important;
-}
-
-/* Make the selection box drag affordance clearer */
-.lasso-active .react-flow__selection-box {
-  cursor: crosshair !important;
-}
-
-/* Improved selection styles */
-.react-flow__selection {
-  border: 2px dashed #4f46e5 !important; 
-  background-color: rgba(79, 70, 229, 0.15) !important;
-  border-radius: 4px;
-}
-
-/* Fix selection behavior for nodes - make nodes easier to select */
-.react-flow__node {
-  cursor: pointer !important;
-  /* Improve hit area for better selection */
-  position: relative;
-}
-
-/* Add specific selector to prevent selecting things that should be inside nodes */
-.react-flow__node * {
-  pointer-events: none;
-}
-
-/* But allow interactivity for buttons and form controls inside nodes */
-.react-flow__node button,
-.react-flow__node input,
-.react-flow__node textarea,
-.react-flow__node select,
-.react-flow__node .resize-handle,
-.react-flow__handle {
+.react-flow__node-group[data-minimized="true"] > div {
   pointer-events: all !important;
+  position: relative !important;
+  /* Asegurarse de que el contenedor interno también tenga el tamaño correcto */
+  width: 140px !important;
+  height: 28px !important;
 }
 
-/* Make the selection box more visible */
-.lasso-active .react-flow__selection-box {
-  border: 2px dashed #4f46e5 !important;
-  background-color: rgba(79, 70, 229, 0.1) !important;
-  border-radius: 4px;
-}
-
-/* Make selected nodes stand out more clearly */
-.react-flow__node.selected {
-  outline: 2px solid #4f46e5 !important;
-  outline-offset: 2px !important;
-}
-
-/* Fix pointer events behavior for selection */
-.react-flow__pane {
-  cursor: default;
-}
-
-/* In lasso mode, make the pane use crosshair cursor */
-.lasso-active .react-flow__pane {
+/* Estilos para el lasso select */
+.lasso-selection-mode {
   cursor: crosshair !important;
 }
 
-/* Fix selector for node contents to improve selection behavior */
-.react-flow__node * {
-  pointer-events: none;
-}
-
-/* Only enable pointer events for interactive elements */
-.react-flow__node .react-flow__handle,
-.react-flow__node button,
-.react-flow__node input,
-.react-flow__node select,
-.react-flow__node textarea,
-.react-flow__node a,
-.react-flow__node .resize-handle {
-  pointer-events: all !important;
-}
-
-/* Clear styling rules for nodes to avoid interference */
-.react-flow__node {
-  position: relative;
-  user-select: none;
-  transform-origin: 0 0;
-}
-
-/* Make selected nodes stand out more clearly */
-.react-flow__node.selected {
-  z-index: 10 !important;
-  outline: 2px solid #4f46e5 !important;
-  outline-offset: 2px !important;
-}
-
-/* Make the selection box more visible */
-.react-flow__selection {
-  border: 2px dashed #4f46e5 !important;
-  background-color: rgba(79, 70, 229, 0.1) !important;
-}
-
-/* When in selection mode, don't show the blue bounding box */
-.selection-mode .react-flow__nodesselection-rect {
-  display: none;
-}
-
-/* Improve save button appearance */
-button.bg-primary {
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  font-weight: 500;
-}
-
-/* Fix selection behavior - ensure only nodes inside the selection box are selected */
-.react-flow__selection {
-  border: 3px dashed #4f46e5 !important;
-  background-color: rgba(79, 70, 229, 0.2) !important;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3) !important;
-}
-
-/* Make the selection tool more precise */
-.selection-mode .react-flow__pane {
+.lasso-selection-mode .react-flow__pane {
   cursor: crosshair !important;
 }
 
-/* Make the selection box more visible */
-.selection-mode .react-flow__selection-box {
-  border: 3px dashed #4f46e5 !important;
-  background-color: rgba(79, 70, 229, 0.2) !important;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3) !important;
+/* Estilos para la herramienta de dibujo de área */
+.area-drawing-mode {
+  cursor: crosshair !important;
 }
 
-/* Clear all pointer-events for node children unless explicitly enabled */
-.react-flow__node * {
+.area-drawing-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
+
+.area-drawing-overlay {
+  position: absolute !important;
+  border: 2px solid rgba(59, 130, 246, 1) !important;
+  background-color: rgba(59, 130, 246, 0.2) !important;
   pointer-events: none !important;
+  z-index: 1000 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
+  transition: none !important;
 }
 
-/* Enable pointer events only for interactive elements */
-.react-flow__node .react-flow__handle,
-.react-flow__node button,
-.react-flow__node input,
-.react-flow__node select,
-.react-flow__node textarea,
-.react-flow__node a,
-.react-flow__node .resize-handle {
-  pointer-events: auto !important;
+.react-flow__selection {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  border: 2px solid rgba(59, 130, 246, 1) !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
 }
 
-/* Make nodes themselves selectable */
-.react-flow__node {
-  pointer-events: auto !important;
-  cursor: default;
+.react-flow__selection-rect {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  border: 2px solid rgba(59, 130, 246, 1) !important;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3) !important;
 }
 
-/* Fix save button appearance to ensure visibility */
-button.bg-blue-600 {
-  color: white;
-  font-weight: 500;
-  text-shadow: 0 1px 1px rgba(0,0,0,0.2);
-  border: 1px solid rgba(0,0,0,0.1);
+/* Ensure NodeResizer handles are visible and interactive */
+.react-flow__node-noteNode,
+.react-flow__node-textNode {
+  z-index: 5;
 }
 
-/* Fix the selection tool indicator appearance */
-.fixed.bottom-4 {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  max-width: 90%;
-  border: 1px solid rgba(255,255,255,0.3);
-}
-
-/* Custom selection overlay */
-.custom-selection-overlay {
-  position: fixed;
-  border: 2px dashed #4f46e5;
-  background-color: rgba(79, 70, 229, 0.15);
-  pointer-events: none;
-  z-index: 1000;
-  display: none;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-}
-
-/* Make nodes clearly selectable when in lasso mode */
-.lasso-selection-mode .react-flow__node {
-  cursor: pointer !important;
-  pointer-events: all !important;
-}
-
-/* Fix selection box appearance */
-.lasso-active .react-flow__selection {
-  display: none !important; /* Hide ReactFlow's built-in selection */
-}
-
-/* Ensure node outlines are clearly visible when selected */
-.react-flow__node.selected {
-  outline: 2px solid #4f46e5 !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
+.react-flow__resize-control {
   z-index: 10;
-}
-
-/* Clear specific pointer events issues */
-.lasso-selection-mode .react-flow__node * {
-  pointer-events: none !important;
-}
-
-.lasso-selection-mode .react-flow__node {
   pointer-events: all !important;
 }
 
-/* Make the custom selection overlay more visible */
-.custom-selection-overlay {
-  position: fixed;
-  border: 2px dashed #4f46e5;
-  background-color: rgba(79, 70, 229, 0.15);
-  pointer-events: none;
-  z-index: 10000;
-  display: none;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-}
-
-/* Fix pointer events to ensure nodes are clickable */
-.react-flow__node {
-  pointer-events: all !important; 
-  cursor: pointer !important;
-}
-
-/* Only disable pointer events on child elements inside nodes */
-.react-flow__node > * > * {
-  pointer-events: none;
-}
-
-/* But allow buttons and interactive elements to receive events */
-.react-flow__node button,
-.react-flow__node .react-flow__handle,
-.react-flow__node input,
-.react-flow__node select,
-.react-flow__node a,
-.react-flow__node .clickable-element {
+.react-flow__resize-control.top,
+.react-flow__resize-control.right,
+.react-flow__resize-control.bottom,
+.react-flow__resize-control.left,
+.react-flow__resize-control.top-left,
+.react-flow__resize-control.top-right,
+.react-flow__resize-control.bottom-left,
+.react-flow__resize-control.bottom-right {
   pointer-events: all !important;
 }
 
-/* Fix selection styling to make it more visible */
-.react-flow__node.selected {
-  z-index: 10 !important;
-  outline: 3px solid #4f46e5 !important;
-  outline-offset: 2px !important;
-}
-
-/* Ensure the quick group button is always visible and on top */
-.quick-group-button {
-  position: fixed;
-  z-index: 1000;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #4f46e5;
-  color: white;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s;
-  pointer-events: all !important;
-}
-
-/* Make group headers clickable explicitly */
-.group-header {
-  cursor: pointer !important;
-  pointer-events: all !important;
-  z-index: 50 !important;
-}
-
-/* Make title elements inside nodes explicitly clickable */
-.editable-title {
-  cursor: pointer !important;
-  pointer-events: all !important;
-  user-select: none;
-}
-
-/* Ocultar el cuadro de selección predeterminado cuando estamos en modo 'selection-hidden' */
-.selection-hidden .react-flow__selection {
-  display: none !important;
-}
-
-/* Estilos para nuestro selector personalizado */
-.custom-selection-overlay {
-  position: fixed;
-  border: 2px dashed #4f46e5;
-  background-color: rgba(79, 70, 229, 0.15);
-  pointer-events: none;
-  z-index: 1000;
-  display: none;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-}
-
-/* Ocultar cualquier recuadro de selección predeterminado */
-.react-flow__nodesselection,
-.react-flow__nodesselection-rect,
-.react-flow__selection-rect,
-.react-flow__selection {
-  display: none !important;
-  border: none !important;
-  background: none !important;
-}
-
-/* Resaltar solo los nodos seleccionados con un contorno claro */
-.react-flow__node.selected {
-  outline: 2px solid #4f46e5 !important;
-  outline-offset: 2px !important;
-  z-index: 10 !important;
-}
-
-/* Permitir que el fondo de .area-background tenga prioridad */
-.react-flow__node[data-area="true"] .area-background {
-  background-color: unset !important;
-}
-.area-background {
-  background-color: var(--area-bg, inherit) !important;
-  width: 100%;
-  height: 100%;
-  pointer-events: all !important;
-}
-
-/* Permitir que el selector personalizado sea más visible */
-.custom-selection-overlay {
-  position: fixed;
-  border: 2px dashed #4f46e5;
-  background-color: rgba(79, 70, 229, 0.15);
-  pointer-events: none;
-  z-index: 1000;
-  display: none;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-}
-
-/* Estilos para selección múltiple con Shift */
-.multi-selection-mode .react-flow__node {
-  cursor: cell !important;
-}
-
-/* Resaltar nodos seleccionados con un borde claro */
-.react-flow__node.selected {
-  outline: 2px solid #4f46e5 !important;
-  outline-offset: 2px !important;
-  z-index: 10 !important;
-}
-
-/* Estilo para el menú contextual de nodos seleccionados */
-.selection-actions {
-  position: fixed;
-  z-index: 1000;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  padding: 8px;
-}
-
-/* Botón de agrupación rápida */
-.quick-group-button {
-  position: fixed;
-  z-index: 1000;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #4f46e5;
-  color: white;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s;
-}
-
-.quick-group-button:hover {
-  transform: scale(1.1);
-}
-
-/* Estilos para los tooltips de grupos minimizados */
-.group-tooltip {
-  position: relative;
-}
-
-.group-tooltip::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 125%;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.75);
-  color: white;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  white-space: nowrap;
-  z-index: 9999;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
-}
-
-.group-tooltip:hover::after {
-  opacity: 1;
-  visibility: visible;
-}
-
-.group-tooltip::before {
-  content: '';
-  position: absolute;
-  top: -5px;
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 5px;
-  border-style: solid;
-  border-color: transparent transparent rgba(0, 0, 0, 0.75) transparent;
-  z-index: 9999;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
-}
-
-.group-tooltip:hover::before {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* Estilo para los controles de grupo con animación */
-.group-controls {
-  opacity: 0 !important; /* Prioridad máxima para ocultar */
-  transform: translateY(5px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  pointer-events: none !important;
-  visibility: hidden !important; /* Forzar ocultar */
-  position: absolute;
-  top: -28px !important; /* Force position outside group */
-  left: 0;
-  display: flex;
-  gap: 1px;
-  z-index: 1000;
-}
-
-/* Solo mostrar al hacer hover en el contenedor principal */
-div[data-type="group"]:hover .group-controls {
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: translateY(0);
-  pointer-events: all !important;
-}
-
-/* También mostrar cuando el grupo está seleccionado */
-.react-flow__node.selected .group-controls {
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: translateY(0);
-  pointer-events: all !important;
-}
-
-/* Hacer que todos los botones de control sean visibles */
-.control-button {
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
-/* Animar aparición de controles para un efecto más suave */
-.react-flow__node-group .control-button {
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.react-flow__node-group:hover .control-button {
-  transform: scale(1);
-}
-
-/* Mejorar visibilidad de los botones de control */
-.node-controls-container {
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-  padding: 3px;
-}
-
-/* Estilo para los controles de grupo con animación - versión mejorada */
-.group-controls {
-  opacity: 0;
-  transform: translateY(5px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  pointer-events: none !important;
-  visibility: hidden;
-}
-
-/* Mostrar controles solo cuando se hace hover sobre el grupo */
-.node-group:hover .group-controls {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: all !important;
-  visibility: visible;
-}
-
-/* También mostrar controles cuando el grupo está seleccionado */
-.react-flow__node.selected .group-controls {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: all !important;
-  visibility: visible;
-}
-
-/* Botones de control con efecto de aparición suave */
-.group-controls .control-button {
-  opacity: 0;
-  transform: scale(0.9);
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-/* Animar los botones de control cuando aparecen */
-.node-group:hover .group-controls .control-button,
-.react-flow__node.selected .group-controls .control-button {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* Aplicar delay en cascada para un efecto más elegante */
-.group-controls .control-button:nth-child(1) { transition-delay: 0.05s; }
-.group-controls .control-button:nth-child(2) { transition-delay: 0.1s; }
-.group-controls .control-button:nth-child(3) { transition-delay: 0.15s; }
-.group-controls .control-button:nth-child(4) { transition-delay: 0.2s; }
-.group-controls .control-button:nth-child(5) { transition-delay: 0.25s; } /* Para el nuevo botón */
-
-/* Estilo específico para el botón de abrir en ventana */
-.open-in-window-button {
-  color: #4f46e5;
-}
-.open-in-window-button:hover {
-  background-color: #ede9fe !important;
-  border-color: #c7d2fe !important;
-}
-
-/* Mejoras para la vista del grupo en pantalla completa */
-.group-view-container {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: white;
-}
-
-/* Aplicar delay en cascada para un efecto más elegante */
-.group-controls .control-button:nth-child(1) { transition-delay: 0.05s; }
-.group-controls .control-button:nth-child(2) { transition-delay: 0.1s; }
-.group-controls .control-button:nth-child(3) { transition-delay: 0.15s; }
-.group-controls .control-button:nth-child(4) { transition-delay: 0.2s; }
-
-/* Mejorar visibilidad y estilo de los controles */
-.node-controls-container {
-  background-color: rgba(255, 255, 255, 0.5);
-  border-radius: 4px;
-  padding: 3px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  z-index: 999;
-}
-
-/* Estilos para el modal de vista de grupo */
-.group-view-modal {
-  animation: fadeIn 0.2s ease-out;
-}
-
-.group-view-modal-content {
-  animation: scaleIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes scaleIn {
-  from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
-}
-
-/* Estilos específicos para áreas de fondo */
-.react-flow__node[data-area="true"] {
-  background-color: transparent; /* Inicialmente transparente */
-  overflow: visible !important; 
-  z-index: 0 !important; /* Colocarlo debajo de otros elementos pero encima del canvas */
-}
-
-/* Asegurar que el contenido dentro del área tenga el fondo correcto */
-.area-background {
-  background-color: inherit !important; /* Hereda el color de fondo establecido en el estilo inline */
-  width: 100%;
-  height: 100%;
-  pointer-events: all !important;
-}
-
-/* Asegurar que las áreas no sean afectadas por otras reglas CSS que eliminan fondos */
-.react-flow__node[data-area="true"] > div {
-  background-color: inherit !important;
-  border-color: inherit !important;
-}
-
-/* Destacar áreas seleccionadas */
-.react-flow__node[data-area="true"].selected {
-  z-index: 1 !important; /* Un poco más alto cuando se selecciona, pero aún por debajo de otros nodos */
+/* Adjust ReactFlow Controls position */
+.react-flow__panel.top.left {
+  top: 0px !important; /* Moved 20px further up from the previous 20px */
 }

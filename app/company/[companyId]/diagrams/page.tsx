@@ -3,8 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { getDiagramsByEnvironment, getEnvironments, Environment, Diagram } from '../../../services/diagramService';
+import { getDiagramsByEnvironment, getEnvironments, createEnvironment, Environment, Diagram } from '../../../services/diagramService';
 import { isAuthenticated } from '../../../services/authService';
+import { Modal, Input } from 'antd';
+const { TextArea } = Input;
 
 export default function DiagramsListPage() {
   const [loading, setLoading] = useState(true);
@@ -13,6 +15,9 @@ export default function DiagramsListPage() {
   const [error, setError] = useState('');
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string>('');
   const [selectedEnvironmentName, setSelectedEnvironmentName] = useState<string>('');
+  const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState(false);
+  const [newEnvironmentName, setNewEnvironmentName] = useState('');
+  const [newEnvironmentDescription, setNewEnvironmentDescription] = useState('');
   
   const router = useRouter();
   const params = useParams();
@@ -122,6 +127,43 @@ export default function DiagramsListPage() {
     router.push(`/company/${companyId}/diagrams/${diagram.id}?environmentId=${selectedEnvironmentId}&env=${envSlug}&diagram=${diagramSlug}`);
   };
   
+  const handleCreateEnvironment = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      // Crear nuevo ambiente
+      const newEnvironment = await createEnvironment(companyId, {
+        name: newEnvironmentName,
+        description: newEnvironmentDescription
+      });
+      
+      if (newEnvironment) {
+        setEnvironments([...environments, newEnvironment]);
+        setSelectedEnvironmentId(newEnvironment.id);
+        setSelectedEnvironmentName(newEnvironment.name);
+        
+        // Cargar diagramas del nuevo ambiente
+        const diagramsData = await getDiagramsByEnvironment(companyId, newEnvironment.id);
+        setDiagrams(diagramsData);
+        
+        // Actualizar la URL sin recargar la página
+        const envSlug = newEnvironment.name
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/\s+/g, '-');
+        
+        router.push(`/company/${companyId}/diagrams?environmentId=${newEnvironment.id}&env=${envSlug}`);
+      }
+    } catch (err: any) {
+      console.error("Error al crear nuevo ambiente:", err);
+      setError(err.message || 'Error al crear nuevo ambiente. Por favor, intenta de nuevo.');
+    } finally {
+      setLoading(false);
+      setNewEnvironmentModalVisible(false);
+    }
+  };
+  
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       <nav className="bg-white dark:bg-gray-800 shadow-sm">
@@ -180,14 +222,23 @@ export default function DiagramsListPage() {
               )}
               
               <div className="mt-8">
-                <Link
-                  href={`/company/${companyId}/diagrams/create${selectedEnvironmentId ? `?environmentId=${selectedEnvironmentId}` : ''}`}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
+                <button
+                  onClick={() => setNewEnvironmentModalVisible(true)}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none mb-4"
                 >
                   <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                   </svg>
-                  Crear Nuevo Diagrama
+                  Nuevo Ambiente
+                </button>
+                <Link
+                  href={`/company/${companyId}/diagrams/create${selectedEnvironmentId ? `?environmentId=${selectedEnvironmentId}` : ''}`}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none ml-4"
+                >
+                  <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                  </svg>
+                  Nuevo Diagrama
                 </Link>
               </div>
             </div>
@@ -279,6 +330,40 @@ export default function DiagramsListPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal para crear nuevo ambiente */}
+      <Modal
+        title="Crear Nuevo Ambiente"
+        open={newEnvironmentModalVisible}
+        onCancel={() => {
+          setNewEnvironmentModalVisible(false);
+          setNewEnvironmentName('');
+          setNewEnvironmentDescription('');
+        }}
+        onOk={handleCreateEnvironment}
+        okText="Crear"
+        cancelText="Cancelar"
+        okButtonProps={{ disabled: !newEnvironmentName.trim() }}
+      >
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Ambiente*</label>
+          <Input 
+            value={newEnvironmentName} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEnvironmentName(e.target.value)} 
+            placeholder="Ej. Desarrollo, Pruebas, Producción"
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
+          <TextArea 
+            value={newEnvironmentDescription} 
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewEnvironmentDescription(e.target.value)}
+            rows={4}
+            placeholder="Descripción del ambiente"
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

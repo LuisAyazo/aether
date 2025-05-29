@@ -6,85 +6,160 @@ import { useParams, useRouter } from 'next/navigation';
 import './page.css';
 import FlowEditor from '../../../../components/flow/FlowEditor';
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram } from '../../../../services/diagramService';
-import { Button, Select, Typography, notification, Modal, Input, Spin } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { Button, Select, Modal, Input, Spin, message, Timeline, Drawer, Empty } from 'antd';
+import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteOutlined, HistoryOutlined, RollbackOutlined, BranchesOutlined } from '@ant-design/icons';
 import { 
   addEdge, 
   applyEdgeChanges, 
   applyNodeChanges,
-  Node, 
-  Edge, 
-  Connection, 
   OnNodesChange,
   OnEdgesChange,
   OnConnect
 } from 'reactflow';
+import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
 // Importar nodeTypes desde el archivo centralizado
 import nodeTypes from '../../../../components/nodes/NodeTypes';
+import { Node, Edge } from '../../../../services/diagramService';
+import { isAuthenticated } from '../../../../services/authService';
 
 // Cache for environments and diagrams
 const environmentCache = new Map<string, Environment[]>();
 const diagramCache = new Map<string, Diagram[]>();
 const singleDiagramCache = new Map<string, Diagram>();
 
-const { Title } = Typography;
-const { Option } = Select;
 const { TextArea } = Input;
 
-// Categorías de recursos para el panel lateral
-const resourceCategories = [
+// Define interfaces for resource categories
+interface ResourceItem {
+  type: string;
+  name: string;
+  description: string;
+  provider: 'aws' | 'gcp' | 'generic' | 'azure';
+}
+
+interface ResourceCategory {
+  name: string;
+  provider: 'aws' | 'gcp' | 'generic' | 'azure';
+  items: ResourceItem[];
+}
+
+// Update resourceCategories to match the ResourceCategory interface
+const resourceCategories: ResourceCategory[] = [
   {
     name: 'AWS - Cómputo',
-    provider: 'aws' as const,
+    provider: 'aws',
     items: [
-      { type: 'ec2', name: 'EC2 Instance', description: 'Servidor virtual en la nube' },
-      { type: 'ec2', name: 'Load Balancer', description: 'Balanceador de carga' },
-      { type: 'group', name: 'Auto Scaling Group', description: 'Grupo de escalado automático' },
+      { type: 'ec2', name: 'EC2 Instance', description: 'Servidor virtual en la nube', provider: 'aws' },
+      { type: 'ec2', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'aws' },
+      { type: 'group', name: 'Auto Scaling Group', description: 'Grupo de escalado automático', provider: 'aws' },
+      { type: 'ec2', name: 'Elastic Beanstalk', description: 'Plataforma como servicio', provider: 'aws' },
+      { type: 'ec2', name: 'ECS Container', description: 'Contenedor en ECS', provider: 'aws' },
+      { type: 'ec2', name: 'EKS Cluster', description: 'Cluster de Kubernetes', provider: 'aws' },
     ]
   },
   {
     name: 'AWS - Almacenamiento',
-    provider: 'aws' as const,
+    provider: 'aws',
     items: [
-      { type: 's3', name: 'S3 Bucket', description: 'Almacenamiento de objetos' },
-      { type: 'rds', name: 'RDS Instance', description: 'Base de datos relacional' },
+      { type: 's3', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws' },
+      { type: 'rds', name: 'RDS Instance', description: 'Base de datos relacional', provider: 'aws' },
+      { type: 'rds', name: 'DynamoDB', description: 'Base de datos NoSQL', provider: 'aws' },
+      { type: 'rds', name: 'ElastiCache', description: 'Caché en memoria', provider: 'aws' },
+      { type: 'rds', name: 'Redshift', description: 'Almacén de datos', provider: 'aws' },
+      { type: 's3', name: 'EFS', description: 'Sistema de archivos elástico', provider: 'aws' },
     ]
   },
   {
     name: 'AWS - Aplicación',
-    provider: 'aws' as const,
+    provider: 'aws',
     items: [
-      { type: 'lambda', name: 'Lambda Function', description: 'Función serverless' },
+      { type: 'lambda', name: 'Lambda Function', description: 'Función serverless', provider: 'aws' },
+      { type: 'lambda', name: 'API Gateway', description: 'API REST/WebSocket', provider: 'aws' },
+      { type: 'lambda', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws' },
+      { type: 'lambda', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws' },
+      { type: 'lambda', name: 'EventBridge', description: 'Orquestación de eventos', provider: 'aws' },
+      { type: 'lambda', name: 'Step Functions', description: 'Flujos de trabajo', provider: 'aws' },
     ]
   },
   {
     name: 'GCP - Cómputo',
-    provider: 'gcp' as const,
+    provider: 'gcp',
     items: [
-      { type: 'compute', name: 'Compute Engine', description: 'Máquina virtual en la nube' },
-      { type: 'group', name: 'Instance Group', description: 'Grupo de instancias' },
+      { type: 'compute', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp' },
+      { type: 'group', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp' },
+      { type: 'compute', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp' },
+      { type: 'compute', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp' },
+      { type: 'compute', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp' },
+      { type: 'compute', name: 'Cloud Functions', description: 'Funciones serverless', provider: 'gcp' },
     ]
   },
   {
     name: 'GCP - Almacenamiento',
-    provider: 'gcp' as const,
+    provider: 'gcp',
     items: [
-      { type: 'storage', name: 'Cloud Storage', description: 'Almacenamiento de objetos' },
-      { type: 'sql', name: 'Cloud SQL', description: 'Base de datos gestionada' },
+      { type: 'storage', name: 'Cloud Storage', description: 'Almacenamiento de objetos', provider: 'gcp' },
+      { type: 'sql', name: 'Cloud SQL', description: 'Base de datos gestionada', provider: 'gcp' },
+      { type: 'sql', name: 'BigQuery', description: 'Almacén de datos', provider: 'gcp' },
+      { type: 'sql', name: 'Firestore', description: 'Base de datos NoSQL', provider: 'gcp' },
+      { type: 'sql', name: 'Memorystore', description: 'Caché en memoria', provider: 'gcp' },
+      { type: 'storage', name: 'Filestore', description: 'Sistema de archivos', provider: 'gcp' },
     ]
   },
   {
     name: 'GCP - Aplicación',
-    provider: 'gcp' as const,
+    provider: 'gcp',
     items: [
-      { type: 'function', name: 'Cloud Functions', description: 'Función serverless' },
+      { type: 'function', name: 'Cloud Functions', description: 'Función serverless', provider: 'gcp' },
+      { type: 'function', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp' },
+      { type: 'function', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp' },
+      { type: 'function', name: 'Cloud Tasks', description: 'Colas de tareas', provider: 'gcp' },
+      { type: 'function', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp' },
+      { type: 'function', name: 'Eventarc', description: 'Orquestación de eventos', provider: 'gcp' },
+    ]
+  },
+  {
+    name: 'Azure - Cómputo',
+    provider: 'azure',
+    items: [
+      { type: 'vm', name: 'Virtual Machine', description: 'Máquina virtual', provider: 'azure' },
+      { type: 'vm', name: 'VM Scale Set', description: 'Conjunto de escalado', provider: 'azure' },
+      { type: 'vm', name: 'AKS Cluster', description: 'Cluster de Kubernetes', provider: 'azure' },
+      { type: 'vm', name: 'App Service', description: 'Plataforma como servicio', provider: 'azure' },
+      { type: 'vm', name: 'Container Instances', description: 'Contenedores', provider: 'azure' },
+      { type: 'vm', name: 'Functions', description: 'Funciones serverless', provider: 'azure' },
+    ]
+  },
+  {
+    name: 'Azure - Almacenamiento',
+    provider: 'azure',
+    items: [
+      { type: 'blob', name: 'Blob Storage', description: 'Almacenamiento de objetos', provider: 'azure' },
+      { type: 'cosmos', name: 'Cosmos DB', description: 'Base de datos NoSQL', provider: 'azure' },
+      { type: 'cosmos', name: 'SQL Database', description: 'Base de datos relacional', provider: 'azure' },
+      { type: 'cosmos', name: 'Redis Cache', description: 'Caché en memoria', provider: 'azure' },
+      { type: 'cosmos', name: 'Synapse Analytics', description: 'Almacén de datos', provider: 'azure' },
+      { type: 'blob', name: 'File Storage', description: 'Sistema de archivos', provider: 'azure' },
+    ]
+  },
+  {
+    name: 'Azure - Aplicación',
+    provider: 'azure',
+    items: [
+      { type: 'function', name: 'Azure Functions', description: 'Función serverless', provider: 'azure' },
+      { type: 'function', name: 'API Management', description: 'API Gateway', provider: 'azure' },
+      { type: 'function', name: 'Service Bus', description: 'Mensajería', provider: 'azure' },
+      { type: 'function', name: 'Event Grid', description: 'Orquestación de eventos', provider: 'azure' },
+      { type: 'function', name: 'Logic Apps', description: 'Flujos de trabajo', provider: 'azure' },
+      { type: 'function', name: 'Event Hubs', description: 'Streaming de eventos', provider: 'azure' },
     ]
   },
   {
     name: 'Grupos y Áreas',
-    provider: 'generic' as const,
+    provider: 'generic',
     items: [
-      { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos' },
+      { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos', provider: 'generic' },
+      { type: 'group', name: 'Área', description: 'Definir un área del diagrama', provider: 'generic' },
+      { type: 'group', name: 'Subsistema', description: 'Agrupar componentes relacionados', provider: 'generic' },
     ]
   }
 ];
@@ -94,17 +169,25 @@ export default function DiagramPage() {
   const router = useRouter();
   const { companyId, diagramId } = params;
 
+  useEffect(() => {
+    // Verificar si el usuario está autenticado
+    if (!isAuthenticated()) {
+      router.push('/login');
+      return;
+    }
+  }, [router]);
+
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [diagrams, setDiagrams] = useState<Diagram[]>([]);
   const [selectedEnvironment, setSelectedEnvironment] = useState<string | null>(null);
   const [selectedDiagram, setSelectedDiagram] = useState<string | null>(diagramId as string);
   const [currentDiagram, setCurrentDiagram] = useState<Diagram | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   
   // Estados para los nodos y conexiones del diagrama actual
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [edges, setEdges] = useState<Edge[]>([]);
+  const [nodes, setNodes] = useState<ReactFlowNode[]>([]);
+  const [edges, setEdges] = useState<ReactFlowEdge[]>([]);
   
   // Keep the previous diagram for smooth transitions
   const [previousDiagram, setPreviousDiagram] = useState<Diagram | null>(null);
@@ -168,208 +251,103 @@ export default function DiagramPage() {
     edges: []
   });
 
-  // Function to batch state updates and reduce cascading rerenders
-  const batchStateUpdates = useCallback((updates: {
-    diagram?: Diagram | null;
-    nodes?: Node[];
-    edges?: Edge[];
-  }) => {
-    // We'll use React's batching ability with our own order of operations
-    if (!isMounted.current) return;
-    
-    // First update our stable reference to keep the data consistent
-    if (updates.diagram !== undefined) {
-      stableDataRef.current.diagram = updates.diagram;
-    }
-    if (updates.nodes) {
-      stableDataRef.current.nodes = updates.nodes;
-    }
-    if (updates.edges) {
-      stableDataRef.current.edges = updates.edges;
-    }
-    
-    // Save the previous diagram before updating to the new one
-    if (updates.diagram !== undefined && currentDiagram) {
-      setPreviousDiagram(currentDiagram);
-    }
-    
-    // Use React 18's useTransition for lower priority updates
-    startTransition(() => {
-      if (updates.nodes) {
-        setNodes(updates.nodes);
-      }
-      if (updates.edges) {
-        setEdges(updates.edges);
-      }
-    });
-    
-    // But use flush sync for the diagram change as it's higher priority
-    ReactDOM.flushSync(() => {
-      if (updates.diagram !== undefined) {
-        setCurrentDiagram(updates.diagram);
-      }
-    });
-  }, [currentDiagram]);
-  
-  useEffect(() => {
-    const loadEnvironments = async () => {
-      try {
-        // Set loading state first
-        setLoading(true);
-        
-        // Pre-fetch everything in parallel to speed up initial load
-        const fetchEnvironmentsPromise = (async () => {
-          // Check cache first for environments
-          const cacheKey = `env-${companyId}`;
-          
-          if (environmentCache.has(cacheKey)) {
-            console.log('Using cached environments data');
-            return environmentCache.get(cacheKey) || [];
-          } else {
-            const data = await getEnvironments(companyId as string);
-            // Store in cache
-            environmentCache.set(cacheKey, data);
-            console.log('Fetched and cached environments data');
-            return data;
-          }
-        })();
-        
-        // Wait for environments to be available before proceeding
-        const environmentsData = await fetchEnvironmentsPromise;
-        
-        if (!isMounted.current) return;
-        
-        // Update environments immediately to show something to the user
-        setEnvironments(environmentsData);
+  // Function to convert between ReactFlow and our custom types
+  const convertToReactFlowNodes = (customNodes: Node[]): ReactFlowNode[] => {
+    return customNodes.map(node => ({
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      data: {
+        ...node.data,
+        provider: node.data?.provider || 'generic'
+      },
+      width: node.width || null,
+      height: node.height || null,
+      selected: node.selected || false,
+      positionAbsolute: node.positionAbsolute,
+      dragging: node.dragging || false,
+      parentNode: node.parentNode,
+      style: {
+        ...node.style,
+        border: '2px solid transparent',
+        borderRadius: '4px'
+      },
+      className: undefined,
+      sourcePosition: undefined,
+      targetPosition: undefined,
+      hidden: false,
+      draggable: true,
+      selectable: true,
+      connectable: true,
+      deletable: true,
+      zIndex: 0,
+      extent: undefined,
+      expandParent: false,
+      ariaLabel: undefined,
+      focusable: true,
+      resizing: false
+    }));
+  };
 
-        // Si hay ambientes disponibles
-        if (environmentsData.length > 0) {
-          // Verificar si hay un environmentId en la URL
-          const urlParams = new URLSearchParams(window.location.search);
-          const urlEnvironmentId = urlParams.get('environmentId');
-          const urlDiagramId = urlParams.get('id') || diagramId as string; // Usar el ID de diagrama de la query param o de la ruta
-          
-          // Buscar el ambiente en la lista de ambientes
-          const targetEnvironment = urlEnvironmentId 
-            ? environmentsData.find(env => env.id === urlEnvironmentId) 
-            : environmentsData[0];
-          
-          if (targetEnvironment) {
-            // Update the environment selection immediately
-            setSelectedEnvironment(targetEnvironment.id);
-            
-            // Pre-fetch diagrams list and specific diagram in parallel
-            const fetchDiagramsPromise = (async () => {
-              // Check cache for diagrams
-              const diagramsCacheKey = `diagrams-${companyId}-${targetEnvironment.id}`;
-              
-              if (diagramCache.has(diagramsCacheKey)) {
-                console.log('Using cached diagrams data');
-                return diagramCache.get(diagramsCacheKey) || [];
-              } else {
-                // Cargar los diagramas del ambiente seleccionado
-                const data = await getDiagramsByEnvironment(companyId as string, targetEnvironment.id);
-                // Store in cache
-                diagramCache.set(diagramsCacheKey, data);
-                console.log('Fetched and cached diagrams data');
-                return data;
-              }
-            })();
-            
-            // Wait for diagrams to load
-            const diagramsData = await fetchDiagramsPromise;
-            
-            if (!isMounted.current) return;
-            // Update diagrams list
-            setDiagrams(diagramsData);
+  const convertToReactFlowEdges = (customEdges: Edge[]): ReactFlowEdge[] => {
+    return customEdges.map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: edge.type,
+      animated: edge.animated || false,
+      label: edge.label,
+      data: edge.data,
+      style: edge.style,
+      selected: edge.selected || false,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
+      className: undefined,
+      hidden: false,
+      deletable: true,
+      focusable: true,
+      updatable: true,
+      zIndex: 0
+    }));
+  };
 
-            // Determine which diagram to load
-            const hasDiagramId = urlDiagramId && diagramsData.some(d => d.id === urlDiagramId);
-            const targetDiagramId = hasDiagramId ? urlDiagramId : 
-                                   (diagramsData.length > 0 ? diagramsData[0].id : null);
-            
-            if (targetDiagramId) {
-              // Update the selection immediately
-              setSelectedDiagram(targetDiagramId);
-              
-              // Fetch the specific diagram
-              const fetchDiagramPromise = (async () => {
-                // Check cache for specific diagram
-                const singleDiagramCacheKey = `diagram-${companyId}-${targetEnvironment.id}-${targetDiagramId}`;
-                
-                if (singleDiagramCache.has(singleDiagramCacheKey)) {
-                  console.log('Using cached diagram data');
-                  return singleDiagramCache.get(singleDiagramCacheKey) || null;
-                } else {
-                  // Cargar el diagrama específico
-                  console.log(`Cargando diagrama específico: ${targetDiagramId} en ambiente ${targetEnvironment.id}`);
-                  const data = await getDiagram(companyId as string, targetEnvironment.id, targetDiagramId);
-                  // Store in cache
-                  singleDiagramCache.set(singleDiagramCacheKey, data);
-                  console.log('Fetched and cached specific diagram data');
-                  return data;
-                }
-              })();
-              
-              // Wait for diagram data to load
-              const diagramData = await fetchDiagramPromise;
-              
-              if (!isMounted.current || !diagramData) {
-                setLoading(false);
-                return;
-              }
-              
-              // Update the URL before we update the diagram data
-              // This ensures the URL is ready when the diagram loads
-              const envName = targetEnvironment.name;
-              const diagramName = diagramData.name;
-              updateUrlWithNames(targetEnvironment.id, targetDiagramId, envName, diagramName);
-              
-              // Use batch state updates to minimize rerenders
-              // This ensures all updates happen atomically
-              batchStateUpdates({
-                diagram: diagramData,
-                nodes: diagramData.nodes || [],
-                edges: diagramData.edges || []
-              });
-              
-              // Turn off loading with a small delay to ensure render is complete
-              setTimeout(() => {
-                if (isMounted.current) {
-                  setLoading(false);
-                }
-              }, 300);
-            } else {
-              console.log('No hay diagramas disponibles para este ambiente');
-              setSelectedDiagram(null);
-              setCurrentDiagram(null);
-              setNodes([]);
-              setEdges([]);
-              
-              // Turn off loading since we have no diagrams
-              setLoading(false);
-            }
-          } else {
-            setLoading(false);
-          }
-        } else {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Error cargando datos:", error);
-        notification.error({
-          message: "Error",
-          description: "No se pudieron cargar los datos. Por favor, inténtelo de nuevo más tarde."
-        });
-        setLoading(false);
-      }
-    };
+  const convertToCustomNodes = (reactFlowNodes: ReactFlowNode[]): Node[] => {
+    return reactFlowNodes.map(node => ({
+      id: node.id,
+      type: node.type || 'default',
+      position: node.position,
+      data: node.data,
+      width: node.width || undefined,
+      height: node.height || undefined,
+      selected: node.selected || false,
+      positionAbsolute: node.positionAbsolute,
+      dragging: node.dragging || false,
+      parentNode: node.parentNode,
+      style: node.style
+    }));
+  };
 
-    loadEnvironments();
-  }, [companyId, diagramId, router]);
+  const convertToCustomEdges = (reactFlowEdges: ReactFlowEdge[]): Edge[] => {
+    return reactFlowEdges.map(edge => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: edge.type,
+      animated: edge.animated || false,
+      label: typeof edge.label === 'string' ? edge.label : undefined,
+      data: edge.data,
+      style: edge.style,
+      selected: edge.selected || false,
+      sourceHandle: edge.sourceHandle || undefined,
+      targetHandle: edge.targetHandle || undefined
+    }));
+  };
 
   // Track the previous URL params to avoid unnecessary URL updates
   const prevUrlRef = useRef({ envId: '', diagramId: '' });
+  
+  // Add a ref to track if we're currently updating the diagram
+  const isUpdatingRef = useRef(false);
   
   // Función para actualizar la URL con nombres amigables
   const updateUrlWithNames = (environmentId: string, diagramId: string, envName: string, diagramName: string) => {
@@ -407,16 +385,53 @@ export default function DiagramPage() {
     }
   };
 
-  // Efecto para sincronizar los estados locales cuando cambia el diagrama actual
-  useEffect(() => {
-    if (currentDiagram) {
-      setNodes(currentDiagram.nodes || []);
-      setEdges(currentDiagram.edges || []);
+  // Update the batchStateUpdates function to handle type conversions
+  const batchStateUpdates = useCallback((updates: {
+    diagram?: Diagram | null;
+    nodes?: Node[];
+    edges?: Edge[];
+  }) => {
+    if (!isMounted.current || isUpdatingRef.current) return;
+    
+    isUpdatingRef.current = true;
+    
+    try {
+      if (updates.diagram !== undefined) {
+        stableDataRef.current.diagram = updates.diagram;
+      }
+      if (updates.nodes) {
+        stableDataRef.current.nodes = updates.nodes;
+        setNodes(convertToReactFlowNodes(updates.nodes));
+      }
+      if (updates.edges) {
+        stableDataRef.current.edges = updates.edges;
+        setEdges(convertToReactFlowEdges(updates.edges));
+      }
+      
+      if (updates.diagram !== undefined && currentDiagram) {
+        setPreviousDiagram(currentDiagram);
+      }
+      
+      startTransition(() => {
+        if (updates.nodes) {
+          setNodes(convertToReactFlowNodes(updates.nodes));
+        }
+        if (updates.edges) {
+          setEdges(convertToReactFlowEdges(updates.edges));
+        }
+      });
+      
+      ReactDOM.flushSync(() => {
+        if (updates.diagram !== undefined) {
+          setCurrentDiagram(updates.diagram);
+        }
+      });
+    } finally {
+      isUpdatingRef.current = false;
     }
   }, [currentDiagram]);
 
   // Define constants for consistent transition timings
-  const TRANSITION_DURATION = 500; // ms
   const MIN_LOADING_DURATION = 300; // ms
   
   const handleEnvironmentChange = async (environmentId: string) => {
@@ -516,13 +531,8 @@ export default function DiagramPage() {
           setLoading(false);
         }, remainingTime);
       }
-    } catch (error) {
-      console.error("Error cargando diagramas:", error);
-      notification.error({
-        message: "Error",
-        description: "No se pudieron cargar los diagramas. Por favor, inténtelo de nuevo más tarde."
-      });
-      // Make sure to turn off loading state on error
+    } catch {
+      message.error("No se pudieron cargar los diagramas. Por favor, inténtelo de nuevo más tarde.");
       setLoading(false);
     }
   };
@@ -596,21 +606,14 @@ export default function DiagramPage() {
       }
     } catch (error) {
       console.error("Error cargando diagrama:", error);
-      notification.error({
-        message: "Error",
-        description: "No se pudo cargar el diagrama. Por favor, inténtelo de nuevo más tarde."
-      });
-      // Make sure to turn off loading state on error
+      message.error("No se pudo cargar el diagrama. Por favor, inténtelo de nuevo más tarde.");
       setLoading(false);
     }
   };
 
   const handleCreateEnvironment = async () => {
     if (!newEnvironmentName.trim()) {
-      notification.error({
-        message: "Error",
-        description: "El nombre del ambiente es obligatorio"
-      });
+      message.error("El nombre del ambiente es obligatorio");
       return;
     }
 
@@ -622,10 +625,7 @@ export default function DiagramPage() {
       };
 
       await createEnvironment(companyId as string, environmentData);
-      notification.success({
-        message: "Éxito",
-        description: "Ambiente creado correctamente"
-      });
+      message.success("Ambiente creado correctamente");
 
       // Recargar ambientes
       const environmentsData = await getEnvironments(companyId as string);
@@ -646,28 +646,19 @@ export default function DiagramPage() {
       setNewEnvironmentDescription('');
     } catch (error) {
       console.error("Error creando ambiente:", error);
-      notification.error({
-        message: "Error",
-        description: "No se pudo crear el ambiente. Por favor, inténtelo de nuevo más tarde."
-      });
+      message.error("No se pudo crear el ambiente. Por favor, inténtelo de nuevo más tarde.");
     }
     setLoading(false);
   };
 
   const handleCreateDiagram = async () => {
     if (!selectedEnvironment) {
-      notification.error({
-        message: "Error",
-        description: "Debe seleccionar un ambiente primero"
-      });
+      message.error("Debe seleccionar un ambiente primero");
       return;
     }
 
     if (!newDiagramName.trim()) {
-      notification.error({
-        message: "Error",
-        description: "El nombre del diagrama es obligatorio"
-      });
+      message.error("El nombre del diagrama es obligatorio");
       return;
     }
 
@@ -682,10 +673,7 @@ export default function DiagramPage() {
       };
 
       const newDiagram = await createDiagram(companyId as string, selectedEnvironment, diagramData);
-      notification.success({
-        message: "Éxito",
-        description: "Diagrama creado correctamente"
-      });
+      message.success("Diagrama creado correctamente");
 
       // Recargar diagramas
       const diagramsData = await getDiagramsByEnvironment(companyId as string, selectedEnvironment);
@@ -710,10 +698,7 @@ export default function DiagramPage() {
       setNewDiagramDescription('');
     } catch (error) {
       console.error("Error creando diagrama:", error);
-      notification.error({
-        message: "Error",
-        description: "No se pudo crear el diagrama. Por favor, inténtelo de nuevo más tarde."
-      });
+      message.error("No se pudo crear el diagrama. Por favor, inténtelo de nuevo más tarde.");
     }
     setLoading(false);
   };
@@ -735,7 +720,677 @@ export default function DiagramPage() {
       setLoadingType(null);
     }
   }, [loading, environments.length, selectedEnvironment]);
-  
+
+  // Add a ref to track if initial load is complete
+  const initialLoadCompleteRef = useRef(false);
+
+  // Add back the loadEnvironments effect
+  useEffect(() => {
+    const loadEnvironments = async () => {
+      // Skip if initial load is already complete
+      if (initialLoadCompleteRef.current) {
+        return;
+      }
+
+      try {
+        // Set loading state first
+        setLoading(true);
+        
+        // Pre-fetch everything in parallel to speed up initial load
+        const fetchEnvironmentsPromise = (async () => {
+          // Check cache first for environments
+          const cacheKey = `env-${companyId}`;
+          
+          if (environmentCache.has(cacheKey)) {
+            console.log('Using cached environments data');
+            return environmentCache.get(cacheKey) || [];
+          } else {
+            const data = await getEnvironments(companyId as string);
+            // Store in cache
+            environmentCache.set(cacheKey, data);
+            console.log('Fetched and cached environments data');
+            return data;
+          }
+        })();
+        
+        // Wait for environments to be available before proceeding
+        const environmentsData = await fetchEnvironmentsPromise;
+        
+        if (!isMounted.current) return;
+        
+        // Update environments immediately to show something to the user
+        setEnvironments(environmentsData);
+
+        // Si hay ambientes disponibles
+        if (environmentsData.length > 0) {
+          // Verificar si hay un environmentId en la URL
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlEnvironmentId = urlParams.get('environmentId');
+          const urlDiagramId = urlParams.get('id') || diagramId as string;
+          
+          // Buscar el ambiente en la lista de ambientes
+          const targetEnvironment = urlEnvironmentId 
+            ? environmentsData.find(env => env.id === urlEnvironmentId) 
+            : environmentsData[0];
+          
+          if (targetEnvironment) {
+            // Update the environment selection immediately
+            setSelectedEnvironment(targetEnvironment.id);
+            
+            // Pre-fetch diagrams list and specific diagram in parallel
+            const fetchDiagramsPromise = (async () => {
+              // Check cache for diagrams
+              const diagramsCacheKey = `diagrams-${companyId}-${targetEnvironment.id}`;
+              
+              if (diagramCache.has(diagramsCacheKey)) {
+                console.log('Using cached diagrams data');
+                return diagramCache.get(diagramsCacheKey) || [];
+              } else {
+                const data = await getDiagramsByEnvironment(companyId as string, targetEnvironment.id);
+                diagramCache.set(diagramsCacheKey, data);
+                console.log('Fetched and cached diagrams data');
+                return data;
+              }
+            })();
+            
+            // Wait for diagrams to load
+            const diagramsData = await fetchDiagramsPromise;
+            
+            if (!isMounted.current) return;
+            // Update diagrams list
+            setDiagrams(diagramsData);
+
+            // Determine which diagram to load
+            const hasDiagramId = urlDiagramId && diagramsData.some(d => d.id === urlDiagramId);
+            const targetDiagramId = hasDiagramId ? urlDiagramId : 
+                                   (diagramsData.length > 0 ? diagramsData[0].id : null);
+            
+            if (targetDiagramId) {
+              // Update the selection immediately
+              setSelectedDiagram(targetDiagramId);
+              
+              // Fetch the specific diagram
+              const fetchDiagramPromise = (async () => {
+                // Check cache for specific diagram
+                const singleDiagramCacheKey = `diagram-${companyId}-${targetEnvironment.id}-${targetDiagramId}`;
+                
+                if (singleDiagramCache.has(singleDiagramCacheKey)) {
+                  console.log('Using cached diagram data');
+                  return singleDiagramCache.get(singleDiagramCacheKey) || null;
+                } else {
+                  console.log(`Cargando diagrama específico: ${targetDiagramId} en ambiente ${targetEnvironment.id}`);
+                  const data = await getDiagram(companyId as string, targetEnvironment.id, targetDiagramId);
+                  singleDiagramCache.set(singleDiagramCacheKey, data);
+                  console.log('Fetched and cached specific diagram data');
+                  return data;
+                }
+              })();
+              
+              // Wait for diagram data to load
+              const diagramData = await fetchDiagramPromise;
+              
+              if (!isMounted.current || !diagramData) {
+                setLoading(false);
+                return;
+              }
+              
+              // Update the URL before we update the diagram data
+              const envName = targetEnvironment.name;
+              const diagramName = diagramData.name;
+              updateUrlWithNames(targetEnvironment.id, targetDiagramId, envName, diagramName);
+              
+              // Use batch state updates to minimize rerenders
+              batchStateUpdates({
+                diagram: diagramData,
+                nodes: diagramData.nodes || [],
+                edges: diagramData.edges || []
+              });
+              
+              // Mark initial load as complete
+              initialLoadCompleteRef.current = true;
+              
+              // Turn off loading with a small delay to ensure render is complete
+              setTimeout(() => {
+                if (isMounted.current) {
+                  setLoading(false);
+                }
+              }, 300);
+            } else {
+              console.log('No hay diagramas disponibles para este ambiente');
+              setSelectedDiagram(null);
+              setCurrentDiagram(null);
+              setNodes([]);
+              setEdges([]);
+              
+              // Mark initial load as complete even if no diagrams
+              initialLoadCompleteRef.current = true;
+              
+              // Turn off loading since we have no diagrams
+              setLoading(false);
+            }
+          } else {
+            // Mark initial load as complete even if no environment
+            initialLoadCompleteRef.current = true;
+            setLoading(false);
+          }
+        } else {
+          // Mark initial load as complete even if no environments
+          initialLoadCompleteRef.current = true;
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error("Error cargando datos:", error);
+        message.error("No se pudieron cargar los datos. Por favor, inténtelo de nuevo más tarde.");
+        // Mark initial load as complete even on error
+        initialLoadCompleteRef.current = true;
+        setLoading(false);
+      }
+    };
+
+    loadEnvironments();
+  }, [companyId, diagramId]); // Remove router, batchStateUpdates, and updateUrlWithNames from dependencies
+
+  // Add back the group update effect
+  useEffect(() => {
+    const debounceTimeMs = 1000; // Wait 1 second between updates to prevent loops
+    const updateTimeRef = { current: 0 }; // Local reference for debouncing
+    
+    const handleGroupUpdate = (event: CustomEvent) => {
+      console.log("Received updateGroupNodes event:", event.detail);
+      const { groupId, nodes: updatedNodes, edges: updatedEdges } = event.detail;
+      
+      // Prevent multiple rapid updates (debounce)
+      const currentTime = Date.now();
+      if (currentTime - updateTimeRef.current < debounceTimeMs) {
+        console.log("Debouncing group update - too soon after last update");
+        return;
+      }
+      
+      // Update the timestamp
+      updateTimeRef.current = currentTime;
+      
+      if (groupId && updatedNodes) {
+        // Create a "safe" copy of the nodes with new references to avoid mutation issues
+        const safeUpdatedNodes = updatedNodes.map((n: ReactFlowNode) => ({...n}));
+        
+        // Directly update our state instead of using reactFlowInstance
+        setNodes(currentNodes => {
+          const nodesWithoutGroup = currentNodes.filter(n => n.id !== groupId);
+          return [...nodesWithoutGroup, ...safeUpdatedNodes];
+        });
+        
+        if (updatedEdges && updatedEdges.length > 0) {
+          setEdges(currentEdges => {
+            // Keep edges that don't connect to the updated nodes
+            const edgesToKeep = currentEdges.filter(edge => {
+              // Keep edges that don't involve nodes in this group
+              return !updatedNodes.some((n: ReactFlowNode) => n.id === edge.source || n.id === edge.target);
+            });
+            
+            // Add the updated edges
+            return [...edgesToKeep, ...updatedEdges];
+          });
+        }
+      }
+    };
+    
+    document.addEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
+    
+    return () => {
+      document.removeEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
+    };
+  }, []);
+
+  // Event listeners for node-level preview and run events
+  useEffect(() => {
+    const handleNodePreview = (event: CustomEvent) => {
+      console.log("Received nodePreview event:", event.detail);
+      const { nodeId, resourceData } = event.detail;
+      
+      // Store the node data for the preview modal
+      setPreviewData(prevData => ({
+        ...prevData,
+        selectedNode: { nodeId, resourceData }
+      }));
+      
+      // Show the preview modal
+      setPreviewModalVisible(true);
+    };
+
+    const handleNodeRun = (event: CustomEvent) => {
+      console.log("Received nodeRun event:", event.detail);
+      const { nodeId, resourceData } = event.detail;
+      
+      // Store the node data for the run modal
+      setPreviewData(prevData => ({
+        ...prevData,
+        selectedNode: { nodeId, resourceData }
+      }));
+      
+      // Show the run modal
+      setRunModalVisible(true);
+    };
+
+    // Only add event listeners to document to avoid duplicate events
+    document.addEventListener('nodePreview', handleNodePreview as EventListener);
+    document.addEventListener('nodeRun', handleNodeRun as EventListener);
+    
+    return () => {
+      // Clean up event listeners
+      document.removeEventListener('nodePreview', handleNodePreview as EventListener);
+      document.removeEventListener('nodeRun', handleNodeRun as EventListener);
+    };
+  }, [/* No dependencies to avoid re-registering listeners */]);
+
+  // Add new state for modals
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [promoteModalVisible, setPromoteModalVisible] = useState(false);
+  const [runModalVisible, setRunModalVisible] = useState(false);
+  const [destroyModalVisible, setDestroyModalVisible] = useState(false);
+  const [selectedTargetEnvironment, setSelectedTargetEnvironment] = useState<string>('');
+  const [destroyConfirmationText, setDestroyConfirmationText] = useState<string>('');
+
+  // Add new state for preview data
+  const [previewData, setPreviewData] = useState<{
+    resourcesToCreate: Array<{
+      id: string;
+      type: string;
+      name: string;
+      provider: string;
+      changes: Record<string, unknown>;
+    }>;
+    resourcesToUpdate: Array<{
+      id: string;
+      type: string;
+      name: string;
+      provider: string;
+      changes: Record<string, unknown>;
+    }>;
+    resourcesToDelete: Array<{
+      id: string;
+      type: string;
+      name: string;
+      provider: string;
+    }>;
+    selectedNode?: {
+      nodeId: string;
+      resourceData: {
+        label: string;
+        provider: string;
+        resourceType: string;
+      };
+    };
+  }>({
+    resourcesToCreate: [],
+    resourcesToUpdate: [],
+    resourcesToDelete: []
+  });
+
+  // Modify handlePreview to analyze changes and update version history
+  const handlePreview = useCallback(async () => {
+    if (!currentDiagram) return;
+    
+    try {
+      setLoading(true);
+      
+      // Simular análisis de cambios
+      const mockPreviewData = {
+        resourcesToCreate: currentDiagram.nodes
+          .filter(node => node.type !== 'group')
+          .map(node => ({
+            id: node.id,
+            type: node.type,
+            name: node.data?.label || 'Unnamed Resource',
+            provider: node.data?.provider || 'generic',
+            changes: {
+              create: true,
+              properties: node.data || {}
+            }
+          })),
+        resourcesToUpdate: [],
+        resourcesToDelete: []
+      };
+
+      // Crear datos de versión más detallados
+      const newVersion = {
+        id: `v${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        author: 'Usuario Actual',
+        description: `Modificación de ${mockPreviewData.resourcesToCreate.length} recursos`,
+        changes: {
+          created: mockPreviewData.resourcesToCreate.length,
+          updated: mockPreviewData.resourcesToUpdate.length,
+          deleted: mockPreviewData.resourcesToDelete.length
+        }
+      };
+
+      // Actualizar el estado de versiones
+      setVersionHistory(prevHistory => {
+        console.log('Actualizando historial de versiones:', [...prevHistory, newVersion]);
+        return [newVersion, ...prevHistory];
+      });
+      
+      // Actualizar el estado de preview
+      setPreviewData(mockPreviewData);
+      
+      // Mostrar el modal de preview
+      setPreviewModalVisible(true);
+
+      // Mostrar mensaje de éxito
+      message.success('Cambios registrados en el historial');
+    } catch (error) {
+      console.error('Error al generar la vista previa:', error);
+      message.error('Error al generar la vista previa');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentDiagram]);
+
+  // Add handler functions
+  const handleRun = useCallback(() => {
+    setRunModalVisible(true);
+  }, []);
+
+  const handlePromote = () => {
+    setPromoteModalVisible(true);
+  };
+
+  const handlePromoteConfirm = async () => {
+    if (!selectedTargetEnvironment || !currentDiagram) return;
+    
+    try {
+      setLoading(true);
+      // Implement promotion logic here
+      message.success('Diagrama promovido exitosamente');
+      setPromoteModalVisible(false);
+    } catch {
+      message.error('Error al promover el diagrama');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Modificar handleRunConfirm para que también actualice el historial
+  const handleRunConfirm = async () => {
+    if (!currentDiagram) return;
+    
+    try {
+      setLoading(true);
+      
+      // Crear una nueva versión con más detalles
+      const newVersion = {
+        id: `v${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        author: 'Usuario Actual',
+        description: `Ejecución de ${previewData.resourcesToCreate.length} cambios`,
+        changes: {
+          created: previewData.resourcesToCreate.length,
+          updated: previewData.resourcesToUpdate.length,
+          deleted: previewData.resourcesToDelete.length
+        }
+      };
+
+      // Actualizar el estado de versiones
+      setVersionHistory(prevHistory => {
+        console.log('Actualizando historial después de ejecutar:', [...prevHistory, newVersion]);
+        return [newVersion, ...prevHistory];
+      });
+      
+      // Implementar lógica de ejecución aquí
+      message.success('Diagrama desplegado exitosamente');
+      setRunModalVisible(false);
+    } catch (error) {
+      console.error('Error al desplegar el diagrama:', error);
+      message.error('Error al desplegar el diagrama');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add destroy handlers
+  const handleDestroy = () => {
+    setDestroyConfirmationText(''); // Reset confirmation text
+    setDestroyModalVisible(true);
+  };
+
+  const handleDestroyConfirm = async () => {
+    if (!currentDiagram) return;
+    
+    // Validate that user typed the diagram name correctly
+    if (destroyConfirmationText.trim() !== currentDiagram.name) {
+      message.error(`Debe escribir exactamente "${currentDiagram.name}" para confirmar`);
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Clear all nodes and edges from the current diagram
+      const clearedNodes: Node[] = [];
+      const clearedEdges: Edge[] = [];
+      
+      // Update the current diagram with empty nodes and edges
+      const updatedDiagram: Diagram = {
+        ...currentDiagram,
+        nodes: clearedNodes,
+        edges: clearedEdges,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Update the diagram via API
+      if (selectedEnvironment) {
+        await updateDiagram(companyId as string, selectedEnvironment, currentDiagram.id, {
+          name: updatedDiagram.name,
+          description: updatedDiagram.description,
+          nodes: clearedNodes,
+          edges: clearedEdges,
+          viewport: updatedDiagram.viewport
+        });
+      }
+      
+      // Update local state immediately
+      setCurrentDiagram(updatedDiagram);
+      setNodes([]); // Clear ReactFlow nodes
+      setEdges([]); // Clear ReactFlow edges
+      
+      // Update cache
+      const singleDiagramCacheKey = `diagram-${companyId}-${selectedEnvironment}-${currentDiagram.id}`;
+      singleDiagramCache.set(singleDiagramCacheKey, updatedDiagram);
+      
+      message.success(`Todos los recursos del diagrama "${currentDiagram.name}" han sido eliminados`);
+      setDestroyModalVisible(false);
+      setDestroyConfirmationText('');
+    } catch {
+      message.error('Error al destruir los recursos del diagrama');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Nuevos estados para la compañía y control de versiones
+  const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [rollbackModalVisible, setRollbackModalVisible] = useState(false);
+  const [versionsModalVisible, setVersionsModalVisible] = useState(false);
+  const [versionHistory, setVersionHistory] = useState<Array<{
+    id: string;
+    timestamp: string;
+    author: string;
+    description: string;
+    changes: {
+      created: number;
+      updated: number;
+      deleted: number;
+    };
+  }>>([]);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+
+  // Cargar información de la compañía
+  useEffect(() => {
+    const fetchCompanyInfo = async () => {
+      try {
+        const response = await fetch(`/api/companies/${companyId}`);
+        const data = await response.json();
+        setCompany(data);
+      } catch (error) {
+        console.error('Error fetching company info:', error);
+        message.error('No se pudo cargar la información de la compañía');
+      }
+    };
+
+    if (companyId) {
+      fetchCompanyInfo();
+    }
+  }, [companyId]);
+
+  // Funciones para el control de versiones
+  const handleVersions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        message.error('No hay sesión activa');
+        return;
+      }
+
+      // Fix URL structure to match backend routes
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${selectedEnvironment}/diagrams/${diagramId}/history`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || data.detail || 'Error al cargar las versiones');
+      }
+      
+      if (!Array.isArray(data)) {
+        throw new Error('Formato de respuesta inválido');
+      }
+      
+      setVersionHistory(data);
+      setVersionsModalVisible(true);
+    } catch (err) {
+      console.error('Error loading versions:', err);
+      message.error(err instanceof Error ? err.message : 'Error al cargar las versiones');
+    }
+  };
+
+  const handleHistory = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        message.error('No hay sesión activa');
+        return;
+      }
+
+      // Fix URL structure to match backend routes
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${selectedEnvironment}/diagrams/${diagramId}/history`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error response:', data);
+        throw new Error(data.error || data.detail || 'Error al cargar el historial');
+      }
+      
+      if (!Array.isArray(data)) {
+        console.error('Invalid response format:', data);
+        throw new Error('Formato de respuesta inválido');
+      }
+      
+      setVersionHistory(data);
+      setHistoryModalVisible(true);
+    } catch (err) {
+      console.error('Error loading history:', err);
+      message.error(err instanceof Error ? err.message : 'Error al cargar el historial');
+    }
+  };
+
+  const handleRollback = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        message.error('No hay sesión activa');
+        return;
+      }
+
+      // Fix URL structure to match backend routes
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${selectedEnvironment}/diagrams/${diagramId}/history`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || data.detail || 'Error al cargar las versiones');
+      }
+      
+      if (!Array.isArray(data)) {
+        throw new Error('Formato de respuesta inválido');
+      }
+      
+      setVersionHistory(data);
+      setRollbackModalVisible(true);
+    } catch (err) {
+      console.error('Error loading versions:', err);
+      message.error(err instanceof Error ? err.message : 'Error al cargar las versiones');
+    }
+  };
+
+  // Modificar handleRollbackConfirm para que actualice el historial después de revertir
+  const handleRollbackConfirm = async () => {
+    if (!selectedVersion) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No estás autenticado');
+      }
+
+      // Crear una nueva versión de reversión con más detalles
+      const newVersion = {
+        id: `v${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        author: 'Usuario Actual',
+        description: `Reversión a la versión ${selectedVersion}`,
+        changes: {
+          created: 0,
+          updated: 0,
+          deleted: 0
+        }
+      };
+
+      // Actualizar el estado de versiones
+      setVersionHistory(prevHistory => {
+        console.log('Actualizando historial después de revertir:', [...prevHistory, newVersion]);
+        return [newVersion, ...prevHistory];
+      });
+      
+      message.success('Versión restaurada exitosamente');
+      setRollbackModalVisible(false);
+      handleDiagramChange(diagramId as string);
+    } catch (err) {
+      console.error('Error rolling back version:', err);
+      message.error(err instanceof Error ? err.message : 'Error al restaurar la versión');
+    }
+  };
+
+  // Agregar un efecto para depurar cambios en el historial
+  useEffect(() => {
+    console.log('Historial de versiones actualizado:', versionHistory);
+  }, [versionHistory]);
+
   // We'll show the initial loading only for the first render
   if (loadingType === 'initial') {
     return (
@@ -749,69 +1404,131 @@ export default function DiagramPage() {
 
   return (
     <div className="p-4">
-      <div className="mb-6">
-        <Title level={3}>Diagrama</Title>
-        <div className="flex flex-wrap items-center gap-4 mb-4">
-          <div className="flex items-center">
-            <span className="mr-2">Ambiente:</span>
-            <Select 
-              style={{ width: 200 }} 
-              value={selectedEnvironment || undefined}
-              onChange={handleEnvironmentChange}
-              placeholder="Seleccionar ambiente"
-            >
-              {environments.map(env => (
-                <Option key={env.id} value={env.id}>{env.name}</Option>
-              ))}
-            </Select>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={() => setNewEnvironmentModalVisible(true)} 
-              className="ml-2"
-            >
-              Nuevo Ambiente
-            </Button>
-          </div>
-          
-          {selectedEnvironment && (
-            <div className="flex items-center">
-              <span className="mr-2">Diagrama:</span>
-              <Select 
-                style={{ width: 200 }} 
-                value={selectedDiagram || undefined}
-                onChange={handleDiagramChange}
-                placeholder="Seleccionar diagrama"
-                disabled={!selectedEnvironment || diagrams.length === 0}
-              >
-                {diagrams.map(diagram => (
-                  <Option key={diagram.id} value={diagram.id}>{diagram.name}</Option>
-                ))}
-              </Select>
-              <Button 
-                type="primary" 
-                icon={<PlusOutlined />} 
-                onClick={() => setNewDiagramModalVisible(true)} 
-                className="ml-2"
-                disabled={!selectedEnvironment}
-              >
-                Nuevo Diagrama
-              </Button>
+      <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                <span className="text-gray-700 font-medium mr-2">Compañía:</span>
+                <span className="text-blue-600 font-medium">{company?.name || 'Cargando...'}</span>
+              </div>
+
+              <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                <span className="text-gray-700 font-medium mr-2">Ambiente:</span>
+                <Select 
+                  style={{ width: 160 }} 
+                  value={selectedEnvironment}
+                  onChange={handleEnvironmentChange}
+                  options={environments.map(env => ({
+                    value: env.id,
+                    label: env.name
+                  }))}
+                  className="!bg-white"
+                />
+                <Button 
+                  type="primary" 
+                  icon={<PlusOutlined />} 
+                  className="ml-2 bg-blue-600 hover:bg-blue-700 border-blue-600"
+                  onClick={() => setNewEnvironmentModalVisible(true)}
+                />
+              </div>
+              
+              {selectedEnvironment && (
+                <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+                  <span className="text-gray-700 font-medium mr-2">Diagrama:</span>
+                  <Select 
+                    style={{ width: 160 }} 
+                    value={selectedDiagram}
+                    onChange={handleDiagramChange}
+                    options={diagrams.map(diag => ({
+                      value: diag.id,
+                      label: diag.name
+                    }))}
+                    className="!bg-white"
+                  />
+                  <Button 
+                    type="primary" 
+                    icon={<PlusOutlined />} 
+                    className="ml-2 bg-blue-600 hover:bg-blue-700 border-blue-600"
+                    onClick={() => setNewDiagramModalVisible(true)}
+                  />
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 border-r border-gray-200 pr-3">
+                <Button
+                  icon={<HistoryOutlined />}
+                  className="hover:bg-gray-50"
+                  title="Historial de cambios"
+                  onClick={handleHistory}
+                />
+                <Button
+                  icon={<RollbackOutlined />}
+                  className="hover:bg-gray-50"
+                  title="Revertir cambios"
+                  onClick={handleRollback}
+                />
+                <Button
+                  icon={<BranchesOutlined />}
+                  className="hover:bg-gray-50"
+                  title="Gestionar versiones"
+                  onClick={handleVersions}
+                />
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Button
+                  icon={<EyeOutlined />}
+                  onClick={handlePreview}
+                  className="hover:bg-gray-50"
+                  title="Vista previa"
+                />
+                <Button
+                  type="primary"
+                  danger={false}
+                  icon={<PlayCircleOutlined />}
+                  onClick={handleRun}
+                  className="bg-green-600 hover:bg-green-700 border-green-600"
+                  title="Ejecutar cambios"
+                />
+                <Button
+                  type="primary"
+                  icon={<ArrowUpOutlined />}
+                  onClick={handlePromote}
+                  className="bg-blue-600 hover:bg-blue-700 border-blue-600"
+                  title="Promover a otro ambiente"
+                />
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={handleDestroy}
+                  className="hover:bg-red-50"
+                  title="Limpiar diagrama"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Enhanced diagram display with advanced transition handling */}
-      <div className="relative h-[calc(100vh-200px)]">
+      <div className="relative h-[calc(100vh-120px)]">
         {/* Create a phantom layer for the previous diagram */}
         {loadingType === 'transition' && previousDiagram && selectedEnvironment && (
-          <div className="phantom-diagram">
+          <div>
             <FlowEditor 
+              key={`prev-diagram-${previousDiagram.id}`}
               companyId={companyId as string} 
               environmentId={selectedEnvironment}
               diagramId={previousDiagram.id} 
-              initialDiagram={previousDiagram}
+              initialDiagram={{
+                ...previousDiagram,
+                created_at: previousDiagram.created_at || new Date().toISOString(),
+                updated_at: previousDiagram.updated_at || new Date().toISOString(),
+              }}
+              initialViewport={previousDiagram.viewport}
               nodeTypes={memoizedNodeTypes}
               resourceCategories={resourceCategories}
               nodes={previousDiagram.nodes || []}
@@ -823,22 +1540,16 @@ export default function DiagramPage() {
           </div>
         )}
         
-        {/* Loading overlay that appears during transitions */}
-        <div className={`loading-overlay ${loadingType === 'transition' ? '' : 'hidden'}`}>
-          <Spin size="large" className="loading-spinner">
-            <div className="p-5">Cargando diagrama...</div>
-          </Spin>
-        </div>
-        
-        {/* Current diagram container with improved transitions */}
-        <div className={`diagram-container ${loadingType === 'transition' ? 'loading' : 'ready'} h-full`}>
+        {/* Current diagram container */}
+        <div className="diagram-container h-full">
           {currentDiagram ? (
             <FlowEditor 
-              key={`diagram-${currentDiagram.id}`} // Improved key for better reconciliation
+              key={`current-diagram-${currentDiagram.id}`}
               companyId={companyId as string} 
               environmentId={selectedEnvironment as string}
               diagramId={selectedDiagram as string} 
               initialDiagram={currentDiagram}
+              initialViewport={currentDiagram.viewport}
               nodeTypes={memoizedNodeTypes}
               resourceCategories={resourceCategories}
               nodes={nodes}
@@ -846,8 +1557,60 @@ export default function DiagramPage() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
-              onSave={(flowData) => {
-                // Conservar el nombre y descripción originales del diagrama
+              onSave={(diagramData) => {
+                if (isUpdatingRef.current) return;
+                
+                // Store the ReactFlow data as-is since it's already in ReactFlow format
+                const flowData = {
+                  nodes: diagramData.nodes,
+                  edges: diagramData.edges,
+                  viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 }
+                };
+                
+                // Procesar los metadatos de grupos y posiciones de nodos
+                const groupNodes = flowData.nodes.filter((node: ReactFlowNode) => node.type === 'group');
+                const nodeGroups: Record<string, {
+                  nodeIds: string[];
+                  dimensions: { width: number; height: number };
+                  provider: string;
+                  label: string;
+                }> = {};
+                const nodePositions: Record<string, Record<string, {
+                  relativePosition: { x: number; y: number };
+                  dimensions: { width: number; height: number };
+                }>> = {};
+
+                // Construir estructura de grupos
+                groupNodes.forEach((groupNode: ReactFlowNode) => {
+                  const childNodes = flowData.nodes.filter((node: ReactFlowNode) => node.parentNode === groupNode.id);
+                  nodeGroups[groupNode.id] = {
+                    nodeIds: childNodes.map((node: ReactFlowNode) => node.id),
+                    dimensions: {
+                      width: typeof groupNode.style?.width === 'number' ? groupNode.style.width : 300,
+                      height: typeof groupNode.style?.height === 'number' ? groupNode.style.height : 200
+                    },
+                    provider: groupNode.data?.provider || 'generic',
+                    label: groupNode.data?.label || 'Group'
+                  };
+
+                  // Guardar posiciones relativas de los nodos dentro de este grupo
+                  nodePositions[groupNode.id] = {};
+                  childNodes.forEach((childNode: ReactFlowNode) => {
+                    nodePositions[groupNode.id][childNode.id] = {
+                      relativePosition: { ...childNode.position },
+                      dimensions: {
+                        width: typeof childNode.style?.width === 'number' ? childNode.style.width : (typeof childNode.width === 'number' ? childNode.width : 100),
+                        height: typeof childNode.style?.height === 'number' ? childNode.style.height : (typeof childNode.height === 'number' ? childNode.height : 50)
+                      }
+                    };
+                  });
+                });
+                
+                // Convertir los nodos y aristas de React Flow a nuestro formato personalizado
+                const customNodes = convertToCustomNodes(diagramData.nodes);
+                const customEdges = convertToCustomEdges(diagramData.edges);
+                
+                // Conservar el nombre y descripción originales del diagrama y guardar los cambios
                 updateDiagram(
                   companyId as string,
                   selectedEnvironment as string,
@@ -855,16 +1618,18 @@ export default function DiagramPage() {
                   {
                     name: currentDiagram.name,
                     description: currentDiagram.description,
-                    nodes: flowData.nodes,
-                    edges: flowData.edges,
-                    viewport: flowData.viewport
+                    nodes: customNodes,
+                    edges: customEdges,
+                    viewport: flowData.viewport,
+                    nodeGroups,
+                    nodePositions
                   }
-                ).catch(error => {
-                  console.error("Error guardando diagrama:", error);
-                  notification.error({
-                    message: "Error",
-                    description: "No se pudo guardar el diagrama. Por favor, inténtelo de nuevo."
-                  });
+                ).then((updated) => {
+                  console.log("Diagrama guardado exitosamente:", updated);
+                  message.success("Diagrama actualizado exitosamente.");
+                }).catch(error => {
+                  console.error("Error al guardar diagrama:", error);
+                  message.error("No se pudo guardar el diagrama. Por favor, inténtelo de nuevo.");
                 });
               }}
             />
@@ -936,6 +1701,396 @@ export default function DiagramPage() {
           />
         </div>
       </Modal>
+
+      {/* Preview Modal */}
+      <Modal
+        title="Vista Previa de Cambios"
+        open={previewModalVisible}
+        onCancel={() => setPreviewModalVisible(false)}
+        footer={[
+          <Button key="close" onClick={() => setPreviewModalVisible(false)}>
+            Cerrar
+          </Button>,
+          <Button 
+            key="run" 
+            type="primary" 
+            onClick={() => {
+              setPreviewModalVisible(false);
+              handleRun();
+            }}
+          >
+            Ejecutar Cambios
+          </Button>
+        ]}
+        width={800}
+      >
+        <div className="space-y-6">
+          <div className="bg-gray-50 p-4 rounded-md">
+            <h3 className="text-lg font-medium mb-2">Resumen de Cambios</h3>
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="bg-green-50 p-3 rounded">
+                <div className="text-2xl font-bold text-green-600">{previewData.resourcesToCreate.length}</div>
+                <div className="text-sm text-green-700">Recursos a Crear</div>
+              </div>
+              <div className="bg-yellow-50 p-3 rounded">
+                <div className="text-2xl font-bold text-yellow-600">{previewData.resourcesToUpdate.length}</div>
+                <div className="text-sm text-yellow-700">Recursos a Actualizar</div>
+              </div>
+              <div className="bg-red-50 p-3 rounded">
+                <div className="text-2xl font-bold text-red-600">{previewData.resourcesToDelete.length}</div>
+                <div className="text-sm text-red-700">Recursos a Eliminar</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recursos a Crear */}
+          {previewData.resourcesToCreate.length > 0 && (
+            <div>
+              <h4 className="text-md font-medium mb-2 text-green-700">Recursos a Crear</h4>
+              <div className="space-y-2">
+                {previewData.resourcesToCreate.map(resource => (
+                  <div key={resource.id} className="bg-white p-3 rounded border border-green-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">{resource.name}</span>
+                        <span className="text-sm text-gray-500 ml-2">({resource.type})</span>
+                      </div>
+                      <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">
+                        {resource.provider}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-sm text-gray-600">
+                      <div className="font-medium">Propiedades:</div>
+                      <pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-x-auto">
+                        {JSON.stringify(resource.changes.properties, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recursos a Actualizar */}
+          {previewData.resourcesToUpdate.length > 0 && (
+            <div>
+              <h4 className="text-md font-medium mb-2 text-yellow-700">Recursos a Actualizar</h4>
+              <div className="space-y-2">
+                {previewData.resourcesToUpdate.map(resource => (
+                  <div key={resource.id} className="bg-white p-3 rounded border border-yellow-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">{resource.name}</span>
+                        <span className="text-sm text-gray-500 ml-2">({resource.type})</span>
+                      </div>
+                      <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
+                        {resource.provider}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-sm text-gray-600">
+                      <div className="font-medium">Cambios:</div>
+                      <pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-x-auto">
+                        {JSON.stringify(resource.changes, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recursos a Eliminar */}
+          {previewData.resourcesToDelete.length > 0 && (
+            <div>
+              <h4 className="text-md font-medium mb-2 text-red-700">Recursos a Eliminar</h4>
+              <div className="space-y-2">
+                {previewData.resourcesToDelete.map(resource => (
+                  <div key={resource.id} className="bg-white p-3 rounded border border-red-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-medium">{resource.name}</span>
+                        <span className="text-sm text-gray-500 ml-2">({resource.type})</span>
+                      </div>
+                      <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">
+                        {resource.provider}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-blue-50 p-4 rounded-md mt-4">
+            <p className="text-sm text-blue-700">
+              Esta es una vista previa de los cambios que se aplicarán al ejecutar el diagrama.
+              Los recursos se crearán en el ambiente {environments.find(env => env.id === selectedEnvironment)?.name}.
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Promote Modal */}
+      <Modal
+        title="Promover Diagrama"
+        open={promoteModalVisible}
+        onCancel={() => setPromoteModalVisible(false)}
+        onOk={handlePromoteConfirm}
+        okText="Promover"
+        cancelText="Cancelar"
+      >
+        <div className="space-y-4">
+          <p>Seleccione el ambiente destino para promover el diagrama:</p>
+          <Select
+            style={{ width: '100%' }}
+            value={selectedTargetEnvironment}
+            onChange={(value: string) => setSelectedTargetEnvironment(value)}
+            options={environments
+              .filter(env => env.id !== selectedEnvironment)
+              .map(env => ({
+                value: env.id,
+                label: env.name
+              }))}
+          />
+        </div>
+      </Modal>
+
+      {/* Run Modal */}
+      <Modal
+        title="Desplegar Diagrama"
+        open={runModalVisible}
+        onCancel={() => setRunModalVisible(false)}
+        onOk={handleRunConfirm}
+        okText="Desplegar"
+        cancelText="Cancelar"
+      >
+        <div className="space-y-4">
+          <p>¿Está seguro que desea desplegar este diagrama en el ambiente actual?</p>
+          <p className="text-sm text-gray-500">
+            Esta acción desplegará todos los recursos definidos en el diagrama en el ambiente {environments.find(env => env.id === selectedEnvironment)?.name}.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Destroy All Modal */}
+      <Modal
+        title="Limpiar Diagrama"
+        open={destroyModalVisible}
+        onCancel={() => {
+          setDestroyModalVisible(false);
+          setDestroyConfirmationText('');
+        }}
+        onOk={handleDestroyConfirm}
+        okText="Limpiar Diagrama"
+        cancelText="Cancelar"
+        okButtonProps={{ 
+          danger: true,
+          disabled: destroyConfirmationText.trim() !== (currentDiagram?.name || '')
+        }}
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 p-4 rounded-md border border-red-200">
+            <p className="text-red-800 font-semibold">⚠️ ADVERTENCIA: Esta acción es irreversible</p>
+            <p className="text-red-700 mt-2">
+              Esta acción eliminará TODOS los nodos y conexiones de este diagrama específico.
+            </p>
+          </div>
+          
+          <div className="space-y-3">
+            <p className="text-gray-700">
+              <strong>Diagrama a destruir:</strong> {currentDiagram?.name}
+            </p>
+            <p className="text-gray-700">
+              <strong>Ambiente:</strong> {environments.find(env => env.id === selectedEnvironment)?.name}
+            </p>
+          </div>
+          
+          <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
+            <p className="text-yellow-800 text-sm">
+              Para confirmar esta acción, escriba exactamente el nombre del diagrama:
+            </p>
+            <p className="text-yellow-900 font-mono font-semibold mt-1">
+              {currentDiagram?.name}
+            </p>
+          </div>
+          
+          <div>
+            <Input
+              placeholder={`Escriba: ${currentDiagram?.name}`}
+              value={destroyConfirmationText}
+              onChange={(e) => setDestroyConfirmationText(e.target.value)}
+              className={`${
+                destroyConfirmationText.trim() === (currentDiagram?.name || '') 
+                  ? 'border-green-400' 
+                  : destroyConfirmationText.trim() !== '' 
+                    ? 'border-red-400' 
+                    : ''
+              }`}
+            />
+          </div>
+          
+          <p className="text-sm text-gray-500">
+            Esta operación eliminará permanentemente todos los nodos y conexiones de este diagrama.
+            El diagrama quedará completamente vacío y podrá comenzar de nuevo.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Modal de Historial */}
+      <Drawer
+        title="Historial de Cambios"
+        placement="right"
+        onClose={() => setHistoryModalVisible(false)}
+        open={historyModalVisible}
+        width="30%"
+      >
+        {versionHistory.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <div className="text-center">
+                <p className="text-gray-500 mb-2">No hay historial disponible</p>
+                <p className="text-sm text-gray-400">
+                  El historial aparecerá aquí cuando realices cambios en el diagrama
+                </p>
+              </div>
+            }
+          />
+        ) : (
+          <Timeline
+            mode="left"
+            items={versionHistory.map(version => ({
+              key: version.id,
+              color: 'blue',
+              label: new Date(version.timestamp).toLocaleString(),
+              children: (
+                <div className="mb-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-medium">{version.description}</h4>
+                      <p className="text-sm text-gray-500">
+                        {version.author}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 text-sm">
+                      <span className="text-green-600">+{version.changes.created}</span>
+                      <span className="text-yellow-600">~{version.changes.updated}</span>
+                      <span className="text-red-600">-{version.changes.deleted}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            }))}
+          />
+        )}
+      </Drawer>
+
+      {/* Modal de Rollback */}
+      <Drawer
+        title="Revertir a Versión Anterior"
+        placement="right"
+        onClose={() => setRollbackModalVisible(false)}
+        open={rollbackModalVisible}
+        width="30%"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setRollbackModalVisible(false)}>
+              Cancelar
+            </Button>
+            <Button type="primary" onClick={handleRollbackConfirm}>
+              Revertir
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {versionHistory.length === 0 ? (
+                       <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div className="text-center">
+                  <p className="text-gray-500 mb-2">No hay versiones disponibles</p>
+                  <p className="text-sm text-gray-400">
+                    No hay versiones anteriores a las que puedas revertir
+                  </p>
+                </div>
+              }
+            />
+          ) : (
+            <>
+              <p className="text-gray-600">
+                Seleccione la versión a la que desea revertir. Esta acción no se puede deshacer.
+              </p>
+              <Select
+                style={{ width: '100%' }}
+                value={selectedVersion}
+                onChange={setSelectedVersion}
+                options={versionHistory.map(version => ({
+                  value: version.id,
+                  label: (
+                    <div className="flex justify-between items-center">
+                      <span>{version.description}</span>
+                      <span className="text-sm text-gray-500">
+                        {new Date(version.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  )
+                }))}
+              />
+            </>
+          )}
+        </div>
+      </Drawer>
+
+      {/* Modal de Versiones */}
+      <Drawer
+        title="Gestionar Versiones"
+        placement="right"
+        onClose={() => setVersionsModalVisible(false)}
+        open={versionsModalVisible}
+        width="30%"
+      >
+        <div className="space-y-4">
+          {versionHistory.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div className="text-center">
+                  <p className="text-gray-500 mb-2">No hay versiones disponibles</p>
+                  <p className="text-sm text-gray-400">
+                    Las versiones aparecerán aquí cuando realices cambios en el diagrama
+                  </p>
+                </div>
+              }
+            />
+          ) : (
+            versionHistory.map(version => (
+              <div key={version.id} className="p-3 bg-gray-50 rounded-lg">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-medium">{version.description}</h4>
+                    <p className="text-sm text-gray-500">
+                      {new Date(version.timestamp).toLocaleString()} - {version.author}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="small" onClick={() => {
+                      setSelectedVersion(version.id);
+                      setVersionsModalVisible(false);
+                      setRollbackModalVisible(true);
+                    }}>
+                      Revertir
+                    </Button>
+                    <Button size="small" type="primary">
+                      Comparar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 }

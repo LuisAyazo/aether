@@ -1,0 +1,219 @@
+{
+  "action": "create",
+  "resource": {
+    "name": "Compute Engine",
+    "type": "compute",
+    "provider": "gcp",
+    "changes": {
+      "properties": {
+        "description": {
+          "after": "Máquina virtual en la nube",
+          "action": "create"
+        },
+        "machine_type": {
+          "after": "e2-medium",
+          "action": "create"
+        },
+        "zone": {
+          "after": "us-central1-a",
+          "action": "create"
+        },
+        "labels": {
+          "before": "team:devops",
+          "after": "team:payments",
+          "action": "update"
+        },
+        "new_field": {
+          "after": "valor nuevo",
+          "action": "create"
+        },
+        "deprecated_field": {
+          "before": "valor viejo",
+          "action": "delete"
+        },
+        "network_interface": [
+          {
+            "network": "default",
+            "access_config": {}
+          },
+          {
+            "network": {
+              "before": "old-network",
+              "after": "new-network",
+              "action": "update"
+            },
+            "access_config": {
+              "after": {"nat_ip": "1.2.3.4"},
+              "action": "create"
+            }
+          }
+        ],
+        "simple_field": "sin cambios",
+        "array_field": [
+          1,
+          2,
+          {"before": 3, "after": 4, "action": "update"}
+        ],
+        "nested_object": {
+          "subfield": {
+            "before": "A",
+            "after": "B",
+            "action": "update"
+          },
+          "plain": "valor"
+        }
+      }
+    }
+  },
+  "estimated_cost": {
+    "monthly": 25.50,
+    "currency": "USD"
+  },
+  "dependencies": [
+    {
+      "name": "Compute Engine-boot-disk",
+      "type": "disk",
+      "action": "create",
+      "level": 1,
+      "parent": "Compute Engine",
+      "isDirectChild": true,
+      "executionOrder": 1,
+      "children": [
+        {
+          "name": "boot-disk-snapshot",
+          "type": "snapshot",
+          "action": "create",
+          "level": 2,
+          "parent": "Compute Engine-boot-disk",
+          "isDirectChild": true,
+          "executionOrder": 1,
+          "children": []
+        },
+        {
+          "name": "disk-encryption-key",
+          "type": "encryption_key",
+          "action": "create",
+          "level": 2,
+          "parent": "Compute Engine-boot-disk",
+          "isDirectChild": true,
+          "executionOrder": 2,
+          "children": [
+            {
+              "name": "encryption-key-backup",
+              "type": "backup",
+              "action": "create",
+              "level": 3,
+              "parent": "disk-encryption-key",
+              "isDirectChild": true,
+              "executionOrder": 1,
+              "children": []
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "size_gb": {
+          "before": 50,
+          "after": 100,
+          "action": "update"
+        },
+        "type": {
+          "after": "pd-standard",
+          "action": "create"
+        },
+        "zone": {
+          "after": "us-central1-a",
+          "action": "create"
+        },
+        "image": {
+          "after": "debian-cloud/debian-11",
+          "action": "create"
+        }
+      }
+    },
+    {
+      "name": "gcp-network-1",
+      "type": "google_compute_network",
+      "action": "update",
+      "level": 1,
+      "parent": "Compute Engine",
+      "isDirectChild": true,
+      "executionOrder": 2,
+      "children": [
+        {
+          "name": "network-subnet-1",
+          "type": "subnet",
+          "action": "create",
+          "level": 2,
+          "parent": "gcp-network-1",
+          "isDirectChild": true,
+          "executionOrder": 1,
+          "children": []
+        },
+        {
+          "name": "network-route-table",
+          "type": "route_table",
+          "action": "update",
+          "level": 2,
+          "parent": "gcp-network-1",
+          "isDirectChild": true,
+          "executionOrder": 2,
+          "children": []
+        }
+      ],
+      "properties": {
+        "cidr": {
+          "before": "10.0.0.0/16",
+          "after": "10.1.0.0/16",
+          "action": "update"
+        },
+        "new_cidr": {
+          "after": "10.2.0.0/16",
+          "action": "create"
+        }
+      }
+    },
+    {
+      "name": "gcp-firewall-1",
+      "type": "google_compute_firewall",
+      "action": "delete",
+      "level": 1,
+      "parent": "Compute Engine",
+      "isDirectChild": true,
+      "executionOrder": 4,
+      "children": [],
+      "properties": {}
+    },
+    {
+      "name": "gcp-disk-2",
+      "type": "google_compute_disk",
+      "action": "create",
+      "level": 1,
+      "parent": "Compute Engine",
+      "isDirectChild": true,
+      "executionOrder": 3,
+      "children": [
+        {
+          "name": "disk-backup-policy",
+          "type": "backup_policy",
+          "action": "create",
+          "level": 2,
+          "parent": "gcp-disk-2",
+          "isDirectChild": true,
+          "executionOrder": 1,
+          "children": []
+        }
+      ],
+      "properties": {
+        "size_gb": {
+          "after": 100,
+          "action": "create"
+        },
+        "type": {
+          "after": "pd-ssd",
+          "action": "create"
+        }
+      }
+    }
+  ]
+} 

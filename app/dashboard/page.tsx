@@ -152,52 +152,24 @@ export default function Dashboard() {
         
         <div className="mt-12">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Ejemplos de Infraestructura Cloud</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl">
-            {/* AWS Example Card */}
-            <div key="aws-example" className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-100 dark:border-gray-700">
-              <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-900/20 dark:to-gray-800">
-                <div className="flex items-center gap-3">
-                  <FaAws size={32} className="text-orange-500" />
-                  <h2 className="text-2xl font-bold">AWS</h2>
-                </div>
-              </div>
-              <div className="p-6">
-                <h3 className="text-xl font-semibold mb-2">Arquitectura Web en AWS</h3>
-                <p className="mb-6 text-gray-600 dark:text-gray-300">
-                  Aplicación web con balanceo de carga, servidor web redundante, base de datos RDS 
-                  y procesamiento de archivos con S3 y Lambda.
-                </p>
-                <Link 
-                  href="/examples/aws" 
-                  key="aws-example-link"
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-500 hover:bg-orange-600 focus:outline-none"
-                >
-                  Ver ejemplo
-                </Link>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="relative flex items-center space-x-3 rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2 hover:border-gray-400">
+              <div className="min-w-0 flex-1">
+                <a href="#" className="focus:outline-none">
+                  <span className="absolute inset-0" aria-hidden="true" />
+                  <p className="text-sm font-medium text-gray-900">AWS Resources</p>
+                  <p className="truncate text-sm text-gray-500">View AWS resources</p>
+                </a>
               </div>
             </div>
 
-            {/* GCP Example Card */}
-            <div key="gcp-example" className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-100 dark:border-gray-700">
-              <div className="p-6 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/20 dark:to-gray-800">
-                <div className="flex items-center gap-3">
-                  <SiGooglecloud size={32} className="text-blue-500" />
-                  <h2 className="text-2xl font-bold">Google Cloud</h2>
-                </div>
-              </div>
-              <div className="p-6">
-                <h3 className="text-xl font-semibold mb-2">Arquitectura en Google Cloud</h3>
-                <p className="mb-6 text-gray-600 dark:text-gray-300">
-                  Aplicación escalable con Google Kubernetes Engine (GKE), Cloud SQL, 
-                  Cloud Storage y Cloud Functions.
-                </p>
-                <Link 
-                  href="/examples/gcp"
-                  key="gcp-example-link" 
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-500 hover:bg-blue-600 focus:outline-none"
-                >
-                  Ver ejemplo
-                </Link>
+            <div className="relative flex items-center space-x-3 rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2 hover:border-gray-400">
+              <div className="min-w-0 flex-1">
+                <a href="#" className="focus:outline-none">
+                  <span className="absolute inset-0" aria-hidden="true" />
+                  <p className="text-sm font-medium text-gray-900">GCP Resources</p>
+                  <p className="truncate text-sm text-gray-500">View GCP resources</p>
+                </a>
               </div>
             </div>
           </div>
