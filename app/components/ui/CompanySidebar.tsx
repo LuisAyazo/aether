@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ChartBarIcon, 
@@ -17,15 +17,15 @@ import {
 } from '@heroicons/react/24/solid';
 
 interface CompanySidebarProps {
-  activeSection: 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team';
-  onSectionChange: (section: 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team') => void;
+  activeSection?: 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team';
+  onSectionChange?: (section: 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team') => void;
   companyName?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
 
 const CompanySidebar: React.FC<CompanySidebarProps> = ({
-  activeSection,
+  activeSection: propActiveSection,
   onSectionChange,
   companyName = 'Company',
   isCollapsed = false,
@@ -34,6 +34,38 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   const params = useParams();
   const router = useRouter();
   const companyId = params.companyId as string;
+
+  // Get current section from sessionStorage or default to diagrams
+  const getCurrentSection = (): 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team' => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem(`activeSection_${companyId}`);
+      if (stored && ['diagrams', 'credentials', 'deployments', 'settings', 'team'].includes(stored)) {
+        return stored as 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team';
+      }
+    }
+    return propActiveSection || 'diagrams';
+  };
+
+  const [currentActiveSection, setCurrentActiveSection] = useState<'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team'>('diagrams');
+
+  // Initialize current section on mount
+  useEffect(() => {
+    const savedSection = getCurrentSection();
+    setCurrentActiveSection(savedSection);
+    
+    // Notify parent about initial value
+    if (onSectionChange && savedSection !== propActiveSection) {
+      console.log('Notifying parent of saved section:', savedSection);
+      onSectionChange(savedSection);
+    }
+  }, [companyId]);
+
+  // Check for new prop value
+  useEffect(() => {
+    if (propActiveSection && propActiveSection !== currentActiveSection) {
+      setCurrentActiveSection(propActiveSection);
+    }
+  }, [propActiveSection]);
 
   const navigation = [
     {
@@ -79,7 +111,18 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   ];
 
   const handleSectionClick = (sectionId: typeof navigation[0]['id']) => {
-    onSectionChange(sectionId);
+    // Save to sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(`activeSection_${companyId}`, sectionId);
+    }
+    
+    // Update local state
+    setCurrentActiveSection(sectionId);
+    
+    // Call the prop callback if provided
+    if (onSectionChange) {
+      onSectionChange(sectionId);
+    }
   };
 
   return (
@@ -132,7 +175,7 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
       {/* Navigation */}
       <nav className={`flex-1 space-y-1 ${isCollapsed ? 'p-1' : 'p-2'}`}>
         {navigation.map((item) => {
-          const isActive = activeSection === item.id;
+          const isActive = currentActiveSection === item.id;
           const Icon = isActive ? item.iconSolid : item.icon;
           
           return (
