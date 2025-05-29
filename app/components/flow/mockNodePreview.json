@@ -74,6 +74,43 @@
       "name": "Compute Engine-boot-disk",
       "type": "disk",
       "action": "create",
+      "level": 1,
+      "parent": "Compute Engine",
+      "isDirectChild": true,
+      "executionOrder": 1,
+      "children": [
+        {
+          "name": "boot-disk-snapshot",
+          "type": "snapshot",
+          "action": "create",
+          "level": 2,
+          "parent": "Compute Engine-boot-disk",
+          "isDirectChild": true,
+          "executionOrder": 1,
+          "children": []
+        },
+        {
+          "name": "disk-encryption-key",
+          "type": "encryption_key",
+          "action": "create",
+          "level": 2,
+          "parent": "Compute Engine-boot-disk",
+          "isDirectChild": true,
+          "executionOrder": 2,
+          "children": [
+            {
+              "name": "encryption-key-backup",
+              "type": "backup",
+              "action": "create",
+              "level": 3,
+              "parent": "disk-encryption-key",
+              "isDirectChild": true,
+              "executionOrder": 1,
+              "children": []
+            }
+          ]
+        }
+      ],
       "properties": {
         "size_gb": {
           "before": 50,
@@ -98,6 +135,32 @@
       "name": "gcp-network-1",
       "type": "google_compute_network",
       "action": "update",
+      "level": 1,
+      "parent": "Compute Engine",
+      "isDirectChild": true,
+      "executionOrder": 2,
+      "children": [
+        {
+          "name": "network-subnet-1",
+          "type": "subnet",
+          "action": "create",
+          "level": 2,
+          "parent": "gcp-network-1",
+          "isDirectChild": true,
+          "executionOrder": 1,
+          "children": []
+        },
+        {
+          "name": "network-route-table",
+          "type": "route_table",
+          "action": "update",
+          "level": 2,
+          "parent": "gcp-network-1",
+          "isDirectChild": true,
+          "executionOrder": 2,
+          "children": []
+        }
+      ],
       "properties": {
         "cidr": {
           "before": "10.0.0.0/16",
@@ -114,12 +177,33 @@
       "name": "gcp-firewall-1",
       "type": "google_compute_firewall",
       "action": "delete",
+      "level": 1,
+      "parent": "Compute Engine",
+      "isDirectChild": true,
+      "executionOrder": 4,
+      "children": [],
       "properties": {}
     },
     {
       "name": "gcp-disk-2",
       "type": "google_compute_disk",
       "action": "create",
+      "level": 1,
+      "parent": "Compute Engine",
+      "isDirectChild": true,
+      "executionOrder": 3,
+      "children": [
+        {
+          "name": "disk-backup-policy",
+          "type": "backup_policy",
+          "action": "create",
+          "level": 2,
+          "parent": "gcp-disk-2",
+          "isDirectChild": true,
+          "executionOrder": 1,
+          "children": []
+        }
+      ],
       "properties": {
         "size_gb": {
           "after": 100,
