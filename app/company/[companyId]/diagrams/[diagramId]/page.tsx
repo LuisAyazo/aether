@@ -200,6 +200,7 @@ export default function DiagramPage() {
   // Sidebar state management
   const [activeSection, setActiveSection] = useState<'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team'>('diagrams');
   const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   
   // Memoize nodeTypes to prevent recreating on each render
   const memoizedNodeTypes = useMemo(() => nodeTypes, []);
@@ -1403,13 +1404,29 @@ export default function DiagramPage() {
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'credentials':
-        return <CredentialsPage companyId={companyId as string} />;
+        return (
+          <div className="p-4 h-full">
+            <CredentialsPage companyId={companyId as string} />
+          </div>
+        );
       case 'deployments':
-        return <DeploymentsPage companyId={companyId as string} />;
+        return (
+          <div className="p-4 h-full">
+            <DeploymentsPage companyId={companyId as string} />
+          </div>
+        );
       case 'settings':
-        return <SettingsPage companyId={companyId as string} />;
+        return (
+          <div className="p-4 h-full">
+            <SettingsPage companyId={companyId as string} />
+          </div>
+        );
       case 'team':
-        return <TeamPage companyId={companyId as string} />;
+        return (
+          <div className="p-4 h-full">
+            <TeamPage companyId={companyId as string} />
+          </div>
+        );
       case 'diagrams':
       default:
         return renderDiagramsSection();
@@ -1418,16 +1435,11 @@ export default function DiagramPage() {
 
   // Helper function to render the diagrams section (existing diagram content)
   const renderDiagramsSection = () => (
-    <>
+    <div className="p-4 h-full flex flex-col">
       <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
-                <span className="text-gray-700 font-medium mr-2">Compañía:</span>
-                <span className="text-blue-600 font-medium">{company?.name || 'Cargando...'}</span>
-              </div>
-
               <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
                 <span className="text-gray-700 font-medium mr-2">Ambiente:</span>
                 <Select 
@@ -1660,7 +1672,7 @@ export default function DiagramPage() {
           ) : null}
         </div>
       </div>
-    </>
+    </div>
   );
 
   // We'll show the initial loading only for the first render
@@ -1677,17 +1689,17 @@ export default function DiagramPage() {
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
-      <div className="w-64 bg-white shadow-lg">
-        <CompanySidebar
-          companyName={company?.name || 'Cargando...'}
-          activeSection={activeSection}
-          onSectionChange={(section) => setActiveSection(section)}
-        />
-      </div>
+      <CompanySidebar
+        companyName={company?.name || 'Cargando...'}
+        activeSection={activeSection}
+        onSectionChange={(section) => setActiveSection(section)}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col">
-        <div className="p-4">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-auto">
           {renderActiveSection()}
         </div>
       </div>
