@@ -1435,7 +1435,7 @@ export default function DiagramPage() {
 
   // Helper function to render the diagrams section (existing diagram content)
   const renderDiagramsSection = () => (
-    <div className="p-4 h-full flex flex-col">
+    <div className="h-full flex flex-col">
       <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-3">
           <div className="flex items-center justify-between">

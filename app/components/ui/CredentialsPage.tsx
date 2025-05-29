@@ -336,99 +336,102 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
 
       {/* Add Credential Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Agregar Nueva Credencial</h2>
-              <p className="text-gray-600 mt-1">Configura credenciales para tu proveedor cloud</p>
-            </div>
-            
-            <div className="p-6">
-              {/* Provider Selection */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Seleccionar Proveedor
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(Object.keys(providers) as ProviderType[]).map((provider) => (
-                    <button
-                      key={provider}
-                      onClick={() => setSelectedProvider(provider)}
-                      className={`
-                        p-4 border-2 rounded-lg text-center transition-all
-                        ${selectedProvider === provider
-                          ? `border-${providers[provider].color}-500 bg-${providers[provider].color}-50`
-                          : 'border-gray-200 hover:border-gray-300'
-                        }
-                      `}
-                    >
-                      <div className="text-2xl mb-2">{providers[provider].icon}</div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {providers[provider].name}
-                      </div>
-                    </button>
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowAddModal(false)}></div>
+            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">Agregar Nueva Credencial</h2>
+                <p className="text-gray-600 mt-1">Configura credenciales para tu proveedor cloud</p>
+              </div>
+              
+              <div className="p-6">
+                {/* Provider Selection */}
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Seleccionar Proveedor
+                  </label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(Object.keys(providers) as ProviderType[]).map((provider) => (
+                      <button
+                        key={provider}
+                        onClick={() => setSelectedProvider(provider)}
+                        className={`
+                          p-4 border-2 rounded-lg text-center transition-all
+                          ${selectedProvider === provider
+                            ? `border-${providers[provider].color}-500 bg-${providers[provider].color}-50`
+                            : 'border-gray-200 hover:border-gray-300'
+                          }
+                        `}
+                      >
+                        <div className="text-2xl mb-2">{providers[provider].icon}</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {providers[provider].name}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Credential Form */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Nombre de la credencial
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Ej: AWS Production"
+                    />
+                  </div>
+
+                  {providers[selectedProvider].fields.map((field) => (
+                    <div key={field.key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {field.label}
+                        {field.required && <span className="text-red-500 ml-1">*</span>}
+                      </label>
+                      {field.type === 'select' ? (
+                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                          <option value="">Seleccionar...</option>
+                          {field.options?.map((option: string) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </select>
+                      ) : field.type === 'file' ? (
+                        <div className="w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg text-center">
+                          <input type="file" className="hidden" id={field.key} accept=".json" />
+                          <label htmlFor={field.key} className="cursor-pointer">
+                            <span className="text-blue-600 hover:text-blue-700">Seleccionar archivo</span>
+                            <span className="text-gray-500 ml-2">o arrastra aquí</span>
+                          </label>
+                        </div>
+                      ) : (
+                        <input
+                          type={field.type}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder={`Ingrese ${field.label.toLowerCase()}`}
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
 
-              {/* Credential Form */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nombre de la credencial
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Ej: AWS Production"
-                  />
-                </div>
-
-                {providers[selectedProvider].fields.map((field) => (
-                  <div key={field.key}>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {field.label}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </label>
-                    {field.type === 'select' ? (
-                      <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <option value="">Seleccionar...</option>
-                        {field.options?.map((option: string) => (
-                          <option key={option} value={option}>{option}</option>
-                        ))}
-                      </select>
-                    ) : field.type === 'file' ? (
-                      <div className="w-full px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg text-center">
-                        <input type="file" className="hidden" id={field.key} accept=".json" />
-                        <label htmlFor={field.key} className="cursor-pointer">
-                          <span className="text-blue-600 hover:text-blue-700">Seleccionar archivo</span>
-                          <span className="text-gray-500 ml-2">o arrastra aquí</span>
-                        </label>
-                      </div>
-                    ) : (
-                      <input
-                        type={field.type}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder={`Ingrese ${field.label.toLowerCase()}`}
-                      />
-                    )}
-                  </div>
-                ))}
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Guardar Credencial
+                </button>
               </div>
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Guardar Credencial
-              </button>
             </div>
           </div>
         </div>
