@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
@@ -20,6 +20,9 @@ interface GroupNodeProps extends NodeProps<GroupNodeData> {
 
 const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
   const [isMinimized, setIsMinimized] = useState(data.isMinimized || false);
+  const [isEditingLabel, setIsEditingLabel] = useState(false);
+  const [editedLabel, setEditedLabel] = useState(data.label || 'Group');
+  const labelInputRef = useRef<HTMLInputElement>(null);
   const reactFlowInstance = useReactFlow();
   
   // Ensure DOM node size matches minimized state on mount and updates
@@ -32,17 +35,46 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
     }
   }, [id, isMinimized, data.isMinimized]);
 
+  const handleLabelSubmit = useCallback(() => {
+    setIsEditingLabel(false);
+    if (editedLabel !== data.label) {
+      reactFlowInstance.setNodes(nodes =>
+        nodes.map(node =>
+          node.id === id
+            ? { ...node, data: { ...node.data, label: editedLabel } }
+            : node
+        )
+      );
+    }
+  }, [id, editedLabel, data.label, reactFlowInstance]);
+
+  const handleLabelKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleLabelSubmit();
+    } else if (e.key === 'Escape') {
+      setEditedLabel(data.label || 'Group');
+      setIsEditingLabel(false);
+    }
+  }, [handleLabelSubmit, data.label]);
+
+  useEffect(() => {
+    if (isEditingLabel && labelInputRef.current) {
+      labelInputRef.current.focus();
+      labelInputRef.current.select();
+    }
+  }, [isEditingLabel]);
+
   // Color mapping based on cloud provider
   const getProviderColor = useCallback(() => {
     switch (data.provider) {
       case 'aws':
-        return selected ? 'border-purple-500 bg-orange-100' : 'border-orange-400 bg-orange-50';
+        return selected ? 'border-purple-500/50 bg-orange-100' : 'border-orange-400 bg-orange-50';
       case 'gcp':
-        return selected ? 'border-purple-500 bg-blue-100' : 'border-blue-400 bg-blue-50';
+        return selected ? 'border-purple-500/50 bg-blue-100' : 'border-blue-400 bg-blue-50';
       case 'azure':
-        return selected ? 'border-purple-500 bg-blue-100' : 'border-blue-300 bg-blue-50';
+        return selected ? 'border-purple-500/50 bg-blue-100' : 'border-blue-300 bg-blue-50';
       default:
-        return selected ? 'border-purple-500 bg-gray-100' : 'border-gray-400 bg-gray-50';
+        return selected ? 'border-purple-500/50 bg-gray-100' : 'border-gray-400 bg-gray-50';
     }
   }, [data.provider, selected]);
 
@@ -58,20 +90,17 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
         if (newMinimizedState) {
           nodeElement.style.width = '140px';
           nodeElement.style.height = '28px';
-          // Add data attribute for CSS targeting
           nodeElement.setAttribute('data-minimized', 'true');
         } else {
           const originalWidth = nodeElement.style.width;
           const originalHeight = nodeElement.style.height;
           nodeElement.style.width = originalWidth === '140px' ? '300px' : originalWidth;
           nodeElement.style.height = originalHeight === '28px' ? '200px' : originalHeight;
-          // Remove data attribute
           nodeElement.removeAttribute('data-minimized');
         }
       }
     }, 0);
     
-    // Update the node data and style
     reactFlowInstance.setNodes(nds => 
       nds.map(n => {
         if (n.id === id) {
@@ -85,7 +114,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
               ...n.style,
               width: newMinimizedState ? 140 : (n.style?.width || 300),
               height: newMinimizedState ? 28 : (n.style?.height || 200),
-              backgroundColor: 'transparent', // Remove gray background
+              backgroundColor: 'transparent',
             }
           };
         }
@@ -93,7 +122,6 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
       })
     );
 
-    // Hide/show child nodes
     reactFlowInstance.setNodes(nds => 
       nds.map(n => {
         if (n.parentId === id) {
@@ -111,20 +139,20 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
   const getProviderIcon = () => {
     switch (data.provider) {
       case 'aws':
-        return '☁️'; // AWS icon placeholder
+        return '☁️';
       case 'gcp':
-        return '🔵'; // GCP icon placeholder
+        return '🔵';
       case 'azure':
-        return '🔷'; // Azure icon placeholder
+        return '🔷';
       default:
-        return '📦'; // Generic icon
+        return '📦';
     }
   };
 
   if (isMinimized) {
     return (
       <div
-        className={`relative px-2 py-1 border-2 rounded-lg bg-white shadow-sm ${getProviderColor()}`}
+        className={`relative px-2 py-1 border rounded-lg bg-white shadow-sm ${getProviderColor()}`}
         style={{ 
           fontSize: '11px',
           width: '140px',
@@ -140,17 +168,38 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
       >
         <div className="flex items-center gap-1" style={{ overflow: 'hidden', maxWidth: '100px' }}>
           <span style={{ fontSize: '10px', flexShrink: 0 }}>{getProviderIcon()}</span>
-          <span 
-            className="font-medium text-gray-700" 
-            style={{ 
-              fontSize: '10px', 
-              whiteSpace: 'nowrap', 
-              overflow: 'hidden', 
-              textOverflow: 'ellipsis' 
-            }}
-          >
-            {data.label}
-          </span>
+          {isEditingLabel ? (
+            <input
+              ref={labelInputRef}
+              value={editedLabel}
+              onChange={(e) => setEditedLabel(e.target.value)}
+              onBlur={handleLabelSubmit}
+              onKeyDown={handleLabelKeyDown}
+              style={{
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontSize: '10px',
+                color: '#1F2937',
+                padding: 0,
+                width: '100%',
+              }}
+            />
+          ) : (
+            <span 
+              className="font-medium text-gray-700" 
+              style={{ 
+                fontSize: '10px', 
+                whiteSpace: 'nowrap', 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis',
+                cursor: 'pointer'
+              }}
+              onClick={() => setIsEditingLabel(true)}
+            >
+              {data.label}
+            </span>
+          )}
         </div>
         <button
           onClick={toggleMinimize}
@@ -161,7 +210,6 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
           <Squares2X2Icon className="w-2.5 h-2.5 text-gray-600" />
         </button>
         
-        {/* Handles for minimized group - positioned on edges */}
         <Handle
           type="target"
           position={Position.Top}
@@ -232,7 +280,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
 
   return (
     <div
-      className={`border-2 rounded-lg bg-white/80 shadow-lg ${getProviderColor()} relative`}
+      className={`border rounded-lg bg-white/80 shadow-lg ${getProviderColor()} relative`}
       style={{ 
         minWidth: '250px', 
         minHeight: '150px',
@@ -244,7 +292,33 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
       <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-white/50 rounded-t-lg">
         <div className="flex items-center gap-2">
           <span className="text-sm">{getProviderIcon()}</span>
-          <span className="font-semibold text-gray-800 text-sm">{data.label}</span>
+          {isEditingLabel ? (
+            <input
+              ref={labelInputRef}
+              value={editedLabel}
+              onChange={(e) => setEditedLabel(e.target.value)}
+              onBlur={handleLabelSubmit}
+              onKeyDown={handleLabelKeyDown}
+              style={{
+                border: 'none',
+                outline: 'none',
+                background: 'transparent',
+                fontSize: '14px',
+                color: '#1F2937',
+                padding: 0,
+                width: '100%',
+                fontFamily: 'inherit',
+                fontWeight: 600
+              }}
+            />
+          ) : (
+            <span 
+              className="font-semibold text-gray-800 text-sm cursor-pointer"
+              onClick={() => setIsEditingLabel(true)}
+            >
+              {data.label}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -269,13 +343,15 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
         minHeight={150}
         lineStyle={{
           borderColor: '#3b82f6',
-          borderWidth: 2,
+          borderWidth: 1,
+          opacity: 0.5
         }}
         handleStyle={{
-          width: 8,
-          height: 8,
+          width: 6,
+          height: 6,
           backgroundColor: '#3b82f6',
-          border: '2px solid white',
+          border: '1px solid white',
+          opacity: 0.8
         }}
       />
       
@@ -285,12 +361,12 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
         position={Position.Top}
         id="top"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
-          border: '2px solid white',
+          width: '6px',
+          height: '6px',
+          background: '#666',
+          border: '1px solid white',
           borderRadius: '50%',
-          top: -5,
+          top: -3,
           zIndex: 2
         }}
       />
@@ -299,12 +375,12 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
         position={Position.Bottom}
         id="bottom"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
-          border: '2px solid white',
+          width: '6px',
+          height: '6px',
+          background: '#666',
+          border: '1px solid white',
           borderRadius: '50%',
-          bottom: -5,
+          bottom: -3,
           zIndex: 2
         }}
       />
@@ -313,12 +389,12 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
         position={Position.Left}
         id="left"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
-          border: '2px solid white',
+          width: '6px',
+          height: '6px',
+          background: '#666',
+          border: '1px solid white',
           borderRadius: '50%',
-          left: -5,
+          left: -3,
           zIndex: 2
         }}
       />
@@ -327,12 +403,12 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
         position={Position.Right}
         id="right"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
-          border: '2px solid white',
+          width: '6px',
+          height: '6px',
+          background: '#666',
+          border: '1px solid white',
           borderRadius: '50%',
-          right: -5,
+          right: -3,
           zIndex: 2
         }}
       />

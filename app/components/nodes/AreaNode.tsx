@@ -69,12 +69,14 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
 
   const getShapeStyles = () => ({
     backgroundColor: data.backgroundColor || 'rgba(59, 130, 246, 0.5)',
-    border: `${data.borderWidth || 2}px solid ${data.borderColor || 'rgba(59, 130, 246, 1)'}`,
+    border: `${data.borderWidth || 1}px solid ${data.borderColor || 'rgba(59, 130, 246, 0.8)'}`,
     borderRadius: '8px',
     width: '100%',
     height: '100%',
     boxSizing: 'border-box' as const,
-    boxShadow: '0 0 0 1px rgba(59, 130, 246, 0.3)'
+    boxShadow: selected 
+      ? '0 0 0 1px rgba(59, 130, 246, 0.3)' 
+      : '0 0 0 1px rgba(59, 130, 246, 0.2)'
   });
 
   return (
@@ -92,16 +94,17 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
         minHeight={100}
         lineStyle={{
           borderColor: data.borderColor || '#3b82f6',
-          borderWidth: data.borderWidth || 2,
+          borderWidth: data.borderWidth || 1,
+          opacity: 0.5
         }}
         handleStyle={{
           backgroundColor: data.borderColor || '#3b82f6',
-          width: '8px',
-          height: '8px',
-          border: '2px solid white',
+          width: '6px',
+          height: '6px',
+          border: '1px solid white',
           borderRadius: '50%',
           transform: 'translate(-50%, -50%)',
-          opacity: 1,
+          opacity: 0.8,
           zIndex: 10,
         }}
       />
