@@ -1880,7 +1880,15 @@ export default function DiagramPage() {
                     onChange={handleDiagramChange}
                     companyId={companyId as string}
                     environmentId={selectedEnvironment as string}
-                    className="min-w-[300px]"
+                    className="min-w-[320px]"
+                    showDeleteButton={true}
+                    onDeleteDiagram={(diagramId) => {
+                      // Find the diagram by ID and confirm deletion
+                      const diagram = diagrams.find(d => d.id === diagramId);
+                      if (diagram) {
+                        confirmDeleteDiagram(diagram);
+                      }
+                    }}
                   />
                   <Button 
                     type="primary" 
@@ -1889,16 +1897,6 @@ export default function DiagramPage() {
                     onClick={() => setNewDiagramModalVisible(true)}
                     title="Crear nuevo diagrama"
                   />
-                  {selectedDiagram && currentDiagram && (
-                    <Button 
-                      type="primary" 
-                      danger
-                      icon={<DeleteOutlined />} 
-                      className="ml-2"
-                      onClick={() => confirmDeleteDiagram(currentDiagram)}
-                      title="Eliminar diagrama actual"
-                    />
-                  )}
                 </div>
               )}
             </div>

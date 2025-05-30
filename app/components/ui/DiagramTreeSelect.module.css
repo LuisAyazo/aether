@@ -4,6 +4,7 @@
   position: relative;
   width: 100%;
   user-select: none;
+  min-width: 320px; /* Increased to ensure delete icon is always visible */
 }
 
 .selector {
@@ -16,6 +17,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   min-height: 40px;
+  min-width: 320px; /* Increased minimum width to ensure delete icon is always visible */
 }
 
 .selector:hover {
@@ -38,6 +40,7 @@
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   z-index: 50;
   max-height: 400px;
+  min-width: 320px; /* Increased to match selector minimum width */
   display: flex;
   flex-direction: column;
 }
@@ -116,6 +119,7 @@
   padding: 8px 12px;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  position: relative; /* Added for positioning delete button */
 }
 
 .diagramItem:hover {
@@ -136,7 +140,7 @@
 
 .diagramInfo {
   flex: 1;
-  min-width: 0;
+  min-width: 180px; /* Added minimum width to ensure text doesn't get squished */
 }
 
 .diagramName {
@@ -218,6 +222,49 @@
   background: #a8a8a8;
 }
 
+/* Delete button styles */
+.deleteButton {
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  opacity: 0.8;
+  margin-left: 4px;
+  flex-shrink: 0; /* Prevent button from shrinking */
+  min-width: 24px; /* Ensure minimum clickable area */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deleteButton:hover {
+  color: #ef4444;
+  background-color: #fef2f2;
+  opacity: 1;
+  transform: scale(1.1); /* Slight scale on hover for better visibility */
+}
+
+/* Enhanced visibility when parent is hovered */
+.diagramItem:hover .deleteButton {
+  opacity: 1;
+  color: #ef4444;
+}
+
+/* Ensure delete button is always visible in focused state */
+.diagramItem:focus-within .deleteButton,
+.diagramItem:focus .deleteButton {
+  opacity: 1;
+  color: #6b7280;
+}
+
+/* Improved accessibility */
+.deleteButton:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
 /* Responsive adjustments */
 @media (max-width: 640px) {
   .selector {
@@ -235,5 +282,10 @@
   
   .searchInput {
     padding: 6px 10px;
+  }
+
+  .deleteButton {
+    min-width: 28px; /* Slightly larger touch target on mobile */
+    padding: 6px;
   }
 } 

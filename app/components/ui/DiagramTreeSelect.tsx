@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { FolderOutlined, ProjectOutlined, CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons';
+import { FolderOutlined, ProjectOutlined, CaretDownOutlined, CaretRightOutlined, DeleteOutlined } from '@ant-design/icons';
 import styles from './DiagramTreeSelect.module.css';
 import { updateDiagramPaths } from '@/app/services/diagramService';
 
@@ -28,6 +28,8 @@ interface DiagramTreeSelectProps {
   companyId?: string;
   environmentId?: string;
   className?: string;
+  onDeleteDiagram?: (diagramId: string) => void;
+  showDeleteButton?: boolean;
 }
 
 export default function DiagramTreeSelect({ 
@@ -39,7 +41,9 @@ export default function DiagramTreeSelect({
   onSelect, 
   companyId,
   environmentId,
-  className = ''
+  className = '',
+  onDeleteDiagram,
+  showDeleteButton = false
 }: DiagramTreeSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -340,6 +344,16 @@ export default function DiagramTreeSelect({
                     </span>
                   )}
                 </div>
+                {showDeleteButton && onDeleteDiagram && (
+                  <DeleteOutlined 
+                    className={styles.deleteButton}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteDiagram(diagram.id);
+                    }}
+                    title="Eliminar diagrama"
+                  />
+                )}
               </div>
             ))}
             
