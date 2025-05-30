@@ -2060,32 +2060,85 @@ export default function DiagramPage() {
         </div>
       </Modal>
 
+      {/* Modal de confirmación para limpiar diagrama */}
+      <Modal
+        title="Limpiar Diagrama"
+        open={destroyModalVisible}
+        onCancel={() => {
+          setDestroyModalVisible(false);
+          setDestroyConfirmationText('');
+        }}
+        onOk={handleDestroyConfirm}
+        okText="Limpiar"
+        cancelText="Cancelar"
+        okButtonProps={{ 
+          danger: true,
+          disabled: !currentDiagram || destroyConfirmationText.trim() !== currentDiagram.name
+        }}
+      >
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-4">
+            Esta acción eliminará todos los nodos y conexiones del diagrama <strong>"{currentDiagram?.name}"</strong>.
+          </p>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mb-4">
+            <p className="text-sm text-red-800 font-medium">
+              ⚠️ Esta acción no se puede deshacer
+            </p>
+            <p className="mt-1 text-sm text-red-700">
+              Todos los recursos y conexiones del diagrama serán eliminados permanentemente.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Para confirmar, escribe el nombre del diagrama: <strong>{currentDiagram?.name}</strong>
+            </label>
+            <Input 
+              value={destroyConfirmationText} 
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDestroyConfirmationText(e.target.value)}
+              placeholder={currentDiagram?.name}
+              autoFocus
+            />
+          </div>
+        </div>
+      </Modal>
+
       {/* Confirmación de eliminación de diagrama */}
       <Modal
         title="Confirmar Eliminación"
         open={deleteConfirmVisible}
-        onCancel={() => setDeleteConfirmVisible(false)}
+        onCancel={() => {
+          setDeleteConfirmVisible(false);
+          setDiagramToDelete(null);
+        }}
         onOk={handleDeleteDiagram}
         okText="Eliminar"
         cancelText="Cancelar"
-        okButtonProps={{ danger: true }}
+        okButtonProps={{ 
+          danger: true,
+          disabled: diagramToDelete?.nodes && diagramToDelete.nodes.length > 0
+        }}
       >
         <div className="mb-4">
           <p className="text-sm text-gray-600">
             ¿Estás seguro de que deseas eliminar el diagrama <strong>"{diagramToDelete?.name}"</strong>?
-          </p>
-          <p className="mt-2 text-sm text-red-600">
-            Esta acción no se puede deshacer.
           </p>
           {diagramToDelete?.path && (
             <p className="mt-1 text-xs text-gray-500">
               Ubicación: {diagramToDelete.path}
             </p>
           )}
-          {diagramToDelete?.nodes && diagramToDelete.nodes.length > 0 && (
-            <p className="mt-2 text-sm text-yellow-600">
-              ⚠️ Este diagrama contiene {diagramToDelete.nodes.length} nodo(s). 
-              Debe estar vacío para poder eliminarlo.
+          {diagramToDelete?.nodes && diagramToDelete.nodes.length > 0 ? (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800 font-medium">
+                ⚠️ No se puede eliminar el diagrama porque contiene {diagramToDelete.nodes.length} nodo(s)
+              </p>
+              <p className="mt-2 text-sm text-yellow-700">
+                Por favor, utiliza el botón "Limpiar" para eliminar todos los nodos antes de eliminar el diagrama.
+              </p>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-red-600">
+              Esta acción no se puede deshacer.
             </p>
           )}
         </div>
