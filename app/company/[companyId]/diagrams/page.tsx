@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getDiagramsByEnvironment, getEnvironments, createEnvironment, deleteDiagram, Environment, Diagram } from '../../../services/diagramService';
 import { isAuthenticated } from '../../../services/authService';
 import { Modal, Input } from 'antd';
+import EnvironmentCategorySelect from '../../../components/ui/EnvironmentCategorySelect';
 const { TextArea } = Input;
 
 export default function DiagramsListPage() {
@@ -18,6 +19,7 @@ export default function DiagramsListPage() {
   const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState('');
   const [newEnvironmentDescription, setNewEnvironmentDescription] = useState('');
+  const [newEnvironmentCategory, setNewEnvironmentCategory] = useState<string>('desarrollo');
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [diagramToDelete, setDiagramToDelete] = useState<Diagram | null>(null);
   
@@ -137,7 +139,8 @@ export default function DiagramsListPage() {
       // Crear nuevo ambiente
       const newEnvironment = await createEnvironment(companyId, {
         name: newEnvironmentName,
-        description: newEnvironmentDescription
+        description: newEnvironmentDescription,
+        category: newEnvironmentCategory
       });
       
       if (newEnvironment) {
@@ -156,13 +159,19 @@ export default function DiagramsListPage() {
           .replace(/\s+/g, '-');
         
         router.push(`/company/${companyId}/diagrams?environmentId=${newEnvironment.id}&env=${envSlug}`);
+        
+        // Reset form fields on success
+        setNewEnvironmentName('');
+        setNewEnvironmentDescription('');
+        setNewEnvironmentCategory('desarrollo');
       }
     } catch (err: any) {
       console.error("Error al crear nuevo ambiente:", err);
       setError(err.message || 'Error al crear nuevo ambiente. Por favor, intenta de nuevo.');
     } finally {
       setLoading(false);
-      setNewEnvironmentModalVisible(false);    }
+      setNewEnvironmentModalVisible(false);
+    }
   };
   
   const handleDeleteDiagram = async () => {
@@ -416,6 +425,7 @@ export default function DiagramsListPage() {
           setNewEnvironmentModalVisible(false);
           setNewEnvironmentName('');
           setNewEnvironmentDescription('');
+          setNewEnvironmentCategory('desarrollo');
         }}
         onOk={handleCreateEnvironment}
         okText="Crear"
@@ -429,6 +439,13 @@ export default function DiagramsListPage() {
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEnvironmentName(e.target.value)} 
             placeholder="Ej. Desarrollo, Pruebas, Producción"
             autoFocus
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Categoría*</label>
+          <EnvironmentCategorySelect 
+            value={newEnvironmentCategory}
+            onChange={setNewEnvironmentCategory}
           />
         </div>
         <div>

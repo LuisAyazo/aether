@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { FolderOutlined, DatabaseOutlined, CaretDownOutlined, CaretRightOutlined, CheckCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
+import { FolderOutlined, DatabaseOutlined, CaretDownOutlined, CaretRightOutlined, CheckCircleOutlined, PauseCircleOutlined, PlusOutlined, FolderAddOutlined } from '@ant-design/icons';
 import styles from './EnvironmentTreeSelect.module.css';
 import { Environment } from '../../services/diagramService';
 
@@ -9,6 +9,7 @@ interface TreeNode {
   fullPath?: string;
   children: { [key: string]: TreeNode };
   environments: Environment[];
+  category?: string;
 }
 
 interface EnvironmentTreeSelectProps {
@@ -16,13 +17,23 @@ interface EnvironmentTreeSelectProps {
   value?: string;
   onChange: (environmentId: string) => void;
   placeholder?: string;
+  showDirectorySelector?: boolean;
+  selectedDirectory?: string;
+  onDirectoryChange?: (directory: string) => void;
+  onCreateDirectory?: (directoryName: string) => void;
+  mode?: 'select' | 'directory';
 }
 
 export default function EnvironmentTreeSelect({ 
   environments, 
   value, 
   onChange,
-  placeholder = 'Selecciona un ambiente'
+  placeholder = 'Selecciona un ambiente',
+  showDirectorySelector = false,
+  selectedDirectory,
+  onDirectoryChange,
+  onCreateDirectory,
+  mode = 'select'
 }: EnvironmentTreeSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -30,33 +41,35 @@ export default function EnvironmentTreeSelect({
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedItem, setSelectedItem] = useState<Environment | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [showNewDirectoryInput, setShowNewDirectoryInput] = useState(false);
+  const [newDirectoryName, setNewDirectoryName] = useState('');
   
-  // Build environment tree structure based on naming patterns
+  // Build environment tree structure based on category/naming patterns
   const buildEnvironmentTree = (environmentItems: Environment[]): TreeNode => {
     const sortedEnvironments = [...environmentItems].sort((a, b) => {
-      // First sort by type (development, staging, production)
-      const aType = getEnvironmentType(a.name);
-      const bType = getEnvironmentType(b.name);
-      const typeOrder = ['development', 'staging', 'production', 'other'];
+      // First sort by category if available, then by type (development, staging, production)
+      const aCategory = (a as any).category || getEnvironmentType(a.name);
+      const bCategory = (b as any).category || getEnvironmentType(b.name);
+      const categoryOrder = ['desarrollo', 'development', 'pruebas', 'staging', 'producción', 'production', 'otros', 'other'];
       
-      const aTypeIndex = typeOrder.indexOf(aType);
-      const bTypeIndex = typeOrder.indexOf(bType);
+      const aCategoryIndex = categoryOrder.indexOf(aCategory);
+      const bCategoryIndex = categoryOrder.indexOf(bCategory);
       
-      if (aTypeIndex !== bTypeIndex) {
-        return aTypeIndex - bTypeIndex;
+      if (aCategoryIndex !== bCategoryIndex) {
+        return aCategoryIndex - bCategoryIndex;
       }
       
-      // Then sort alphabetically within the same type
+      // Then sort alphabetically within the same category/type
       return a.name.localeCompare(b.name);
     });
     
-    const rootTree: TreeNode = {
+        const rootTree: TreeNode = {
       type: 'root',
       children: {},
       environments: []
     };
     
-    // Group environments by type
+    // Group environments by category or type
     const groups: { [key: string]: Environment[] } = {
       'Desarrollo': [],
       'Pruebas': [],
@@ -65,19 +78,43 @@ export default function EnvironmentTreeSelect({
     };
     
     sortedEnvironments.forEach(environment => {
+      const category = (environment as any).category;
       const type = getEnvironmentType(environment.name);
-      switch (type) {
-        case 'development':
-          groups['Desarrollo'].push(environment);
-          break;
-        case 'staging':
-          groups['Pruebas'].push(environment);
-          break;
-        case 'production':
-          groups['Producción'].push(environment);
-          break;
-        default:
-          groups['Otros'].push(environment);
+      
+      // Use explicit category if available, otherwise infer from name
+      if (category) {
+        switch (category) {
+          case 'desarrollo':
+            groups['Desarrollo'].push(environment);
+            break;
+          case 'pruebas':
+            groups['Pruebas'].push(environment);
+            break;
+          case 'producción':
+            groups['Producción'].push(environment);
+            break;
+          default:
+            // Handle custom categories
+            if (!groups[category]) {
+              groups[category] = [];
+            }
+            groups[category].push(environment);
+        }
+      } else {
+        // Fallback to type-based grouping
+        switch (type) {
+          case 'development':
+            groups['Desarrollo'].push(environment);
+            break;
+          case 'staging':
+            groups['Pruebas'].push(environment);
+            break;
+          case 'production':
+            groups['Producción'].push(environment);
+            break;
+          default:
+            groups['Otros'].push(environment);
+        }
       }
     });
     
@@ -94,13 +131,30 @@ export default function EnvironmentTreeSelect({
             name: groupName,
             fullPath: groupName,
             children: {},
-            environments: envs
+            environments: envs,
+            category: getCategoryFromGroupName(groupName)
           };
         }
       }
     });
     
     return rootTree;
+  };
+  
+  // Helper function to get category from group name
+  const getCategoryFromGroupName = (groupName: string): string => {
+    switch (groupName) {
+      case 'Desarrollo':
+        return 'desarrollo';
+      case 'Pruebas':
+        return 'pruebas';
+      case 'Producción':
+        return 'producción';
+      case 'Otros':
+        return 'otros';
+      default:
+        return groupName.toLowerCase();
+    }
   };
   
   // Helper function to determine environment type from name
@@ -209,6 +263,31 @@ export default function EnvironmentTreeSelect({
     setSearchText('');
   };
 
+  // Select a directory (for directory mode)
+  const handleDirectorySelect = (directory: string) => {
+    if (onDirectoryChange) {
+      onDirectoryChange(directory);
+    }
+    setIsOpen(false);
+    setSearchText('');
+  };
+
+  // Handle new directory creation
+  const handleCreateNewDirectory = () => {
+    if (newDirectoryName.trim() && onCreateDirectory) {
+      onCreateDirectory(newDirectoryName.trim());
+      setNewDirectoryName('');
+      setShowNewDirectoryInput(false);
+      setIsOpen(false);
+    }
+  };
+
+  // Cancel new directory creation
+  const handleCancelNewDirectory = () => {
+    setNewDirectoryName('');
+    setShowNewDirectoryInput(false);
+  };
+
   // Toggle group expansion
   const toggleGroup = (path: string) => {
     setExpandedGroups(prev => {
@@ -282,18 +361,26 @@ export default function EnvironmentTreeSelect({
     const hasChildren = Object.keys(node.children).length > 0;
     const hasEnvironments = node.environments.length > 0;
     const indentSize = level * 16;
+    const isDirectoryMode = mode === 'directory';
+    const isSelected = isDirectoryMode && selectedDirectory === node.category;
     
     return (
       <div>
         {/* Group header for non-root groups */}
         {node.type === 'group' && node.name && (
           <div 
-            className={styles.groupHeader}
-            onClick={() => node.fullPath && toggleGroup(node.fullPath)}
+            className={`${styles.groupHeader} ${isDirectoryMode ? styles.selectableDirectory : ''} ${isSelected ? styles.selectedDirectory : ''}`}
+            onClick={() => {
+              if (isDirectoryMode) {
+                handleDirectorySelect(node.category || node.name || '');
+              } else {
+                node.fullPath && toggleGroup(node.fullPath);
+              }
+            }}
             style={{ paddingLeft: `${indentSize}px` }}
           >
             <span className={styles.caretIcon}>
-              {(hasChildren || hasEnvironments) ? (
+              {!isDirectoryMode && (hasChildren || hasEnvironments) ? (
                 isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />
               ) : null}
             </span>
@@ -302,11 +389,14 @@ export default function EnvironmentTreeSelect({
             <span className={styles.environmentCount}>
               {node.environments.length} ambiente{node.environments.length !== 1 ? 's' : ''}
             </span>
+            {isSelected && (
+              <CheckCircleOutlined className={styles.selectedIcon} />
+            )}
           </div>
         )}
         
-        {/* Group content - only show when expanded */}
-        {(node.type === 'root' || isExpanded) && (
+        {/* Group content - only show when expanded (not in directory mode) */}
+        {!isDirectoryMode && (node.type === 'root' || isExpanded) && (
           <div>
             {/* Render environments in this group */}
             {hasEnvironments && node.environments.map((environment: Environment) => (
@@ -353,8 +443,42 @@ export default function EnvironmentTreeSelect({
     );
   };
   
-  // Get display value for selected environment
+  // Get display value for selected environment or directory
   const getDisplayValue = () => {
+    if (mode === 'directory') {
+      if (!selectedDirectory) return placeholder;
+      
+      // Find the display name for the selected directory
+      const getDirectoryDisplayName = (category: string) => {
+        switch (category) {
+          case 'desarrollo':
+            return 'Desarrollo';
+          case 'pruebas':
+            return 'Pruebas';
+          case 'producción':
+            return 'Producción';
+          case 'otros':
+            return 'Otros';
+          default:
+            return category.charAt(0).toUpperCase() + category.slice(1);
+        }
+      };
+
+      return (
+        <div className={styles.selectedDisplay}>
+          <FolderOutlined className={styles.selectedFolderIcon} />
+          <div className={styles.selectedInfo}>
+            <span className={styles.selectedDirectoryName}>
+              {getDirectoryDisplayName(selectedDirectory)}
+            </span>
+            <span className={styles.selectedDescription}>
+              Directorio seleccionado
+            </span>
+          </div>
+        </div>
+      );
+    }
+
     if (!selectedItem) return placeholder;
     
     const typeClass = getEnvironmentTypeClass(selectedItem);
@@ -394,7 +518,7 @@ export default function EnvironmentTreeSelect({
             <input
               ref={inputRef}
               type="text"
-              placeholder="Buscar ambientes..."
+              placeholder={mode === 'directory' ? 'Buscar directorios...' : 'Buscar ambientes...'}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -403,11 +527,62 @@ export default function EnvironmentTreeSelect({
             />
           </div>
           
+          {/* Directory creation section for directory mode */}
+          {mode === 'directory' && onCreateDirectory && (
+            <div className={styles.directoryActions}>
+              {!showNewDirectoryInput ? (
+                <div 
+                  className={styles.createDirectoryButton}
+                  onClick={() => setShowNewDirectoryInput(true)}
+                >
+                  <FolderAddOutlined className={styles.addIcon} />
+                  <span>Crear nuevo directorio</span>
+                </div>
+              ) : (
+                <div className={styles.newDirectoryForm}>
+                  <input
+                    type="text"
+                    placeholder="Nombre del directorio"
+                    value={newDirectoryName}
+                    onChange={(e) => setNewDirectoryName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleCreateNewDirectory();
+                      } else if (e.key === 'Escape') {
+                        handleCancelNewDirectory();
+                      }
+                    }}
+                    className={styles.newDirectoryInput}
+                    onClick={(e) => e.stopPropagation()}
+                    autoFocus
+                  />
+                  <div className={styles.newDirectoryButtons}>
+                    <button 
+                      className={styles.confirmButton}
+                      onClick={handleCreateNewDirectory}
+                      disabled={!newDirectoryName.trim()}
+                    >
+                      Crear
+                    </button>
+                    <button 
+                      className={styles.cancelButton}
+                      onClick={handleCancelNewDirectory}
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
           <div className={styles.treeContainer}>
             {filteredTree ? (
               <EnvironmentTree node={filteredTree} />
             ) : (
-              <div className={styles.noResults}>No se encontraron ambientes</div>
+              <div className={styles.noResults}>
+                {mode === 'directory' ? 'No se encontraron directorios' : 'No se encontraron ambientes'}
+              </div>
             )}
           </div>
         </div>

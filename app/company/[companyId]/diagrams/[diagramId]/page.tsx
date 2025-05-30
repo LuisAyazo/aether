@@ -21,6 +21,7 @@ import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
 // Componentes
 import FlowEditor from '../../../../components/flow/FlowEditor';
 import EnvironmentTreeSelect from '../../../../components/ui/EnvironmentTreeSelect';
+import EnvironmentCategorySelect from '../../../../components/ui/EnvironmentCategorySelect';
 import DiagramTreeSelect from '../../../../components/ui/DiagramTreeSelect';
 import CompanySidebar from '../../../../components/ui/CompanySidebar';
 import CredentialsPage from '../../../../components/ui/CredentialsPage';
@@ -246,6 +247,7 @@ export default function DiagramPage() {
   const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState<boolean>(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState<string>('');
   const [newEnvironmentDescription, setNewEnvironmentDescription] = useState<string>('');
+  const [newEnvironmentCategory, setNewEnvironmentCategory] = useState<string>('desarrollo');
 
   const [newDiagramModalVisible, setNewDiagramModalVisible] = useState<boolean>(false);
   const [newDiagramName, setNewDiagramName] = useState<string>('');
@@ -634,7 +636,8 @@ export default function DiagramPage() {
     try {
       const environmentData = {
         name: newEnvironmentName,
-        description: newEnvironmentDescription
+        description: newEnvironmentDescription,
+        category: newEnvironmentCategory
       };
 
       await createEnvironment(companyId as string, environmentData);
@@ -657,6 +660,7 @@ export default function DiagramPage() {
       setNewEnvironmentModalVisible(false);
       setNewEnvironmentName('');
       setNewEnvironmentDescription('');
+      setNewEnvironmentCategory('desarrollo');
     } catch (error) {
       console.error("Error creando ambiente:", error);
       const errorMessage = error instanceof Error ? error.message : "No se pudo crear el ambiente. Por favor, inténtelo de nuevo más tarde.";
@@ -1946,6 +1950,7 @@ export default function DiagramPage() {
           setNewEnvironmentModalVisible(false);
           setNewEnvironmentName('');
           setNewEnvironmentDescription('');
+          setNewEnvironmentCategory('desarrollo');
         }}
         onOk={handleCreateEnvironment}
         okText="Crear"
@@ -1959,6 +1964,13 @@ export default function DiagramPage() {
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEnvironmentName(e.target.value)} 
             placeholder="Ej. Desarrollo, Pruebas, Producción"
             autoFocus
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Categoría*</label>
+          <EnvironmentCategorySelect 
+            value={newEnvironmentCategory}
+            onChange={setNewEnvironmentCategory}
           />
         </div>
         <div>

@@ -133,7 +133,7 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
   }
 };
 
-export const createEnvironment = async (companyId: string, environmentData: { name: string; description?: string }): Promise<Environment> => {
+export const createEnvironment = async (companyId: string, environmentData: { name: string; description?: string; category?: string }): Promise<Environment> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
