@@ -212,6 +212,7 @@ export default function DiagramPage() {
   const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   
+  
   // Memoize nodeTypes to prevent recreating on each render
   const memoizedNodeTypes = useMemo(() => nodeTypes, []);
   
@@ -1612,6 +1613,32 @@ export default function DiagramPage() {
   const hasCredentials = environmentCredentials.length > 0;
   const currentEnvironmentName = environments.find(env => env.id === selectedEnvironment)?.name;
 
+  // Estado para controlar la visibilidad del banner de credenciales
+  const [showCredentialsBanner, setShowCredentialsBanner] = useState<boolean>(true);
+
+  // Verificar si el usuario ha optado por no mostrar el banner permanentemente
+  useEffect(() => {
+    if (selectedEnvironment && typeof window !== 'undefined') {
+      // Comprobar si el usuario ha ocultado el banner para este ambiente específico
+      const hiddenBanners = JSON.parse(localStorage.getItem('hiddenCredentialsBanners') || '{}');
+      if (hiddenBanners[selectedEnvironment]) {
+        setShowCredentialsBanner(false);
+      } else {
+        setShowCredentialsBanner(true);
+      }
+    }
+  }, [selectedEnvironment]);
+
+  // Función para ocultar el banner permanentemente
+  const hideCredentialsBannerPermanently = () => {
+    if (selectedEnvironment && typeof window !== 'undefined') {
+      const hiddenBanners = JSON.parse(localStorage.getItem('hiddenCredentialsBanners') || '{}');
+      hiddenBanners[selectedEnvironment] = true;
+      localStorage.setItem('hiddenCredentialsBanners', JSON.stringify(hiddenBanners));
+      setShowCredentialsBanner(false);
+    }
+  };
+
   // Helper function to render different sections based on activeSection
   const renderActiveSection = () => {
     switch (activeSection) {
@@ -1793,38 +1820,56 @@ export default function DiagramPage() {
   // Rendering the diagrams section in a simplified way
   const renderDiagramsSection = () => (
     <div className="flex flex-col h-full">
-      {/* Warning Banner for missing credentials */}
-      {!hasCredentials && selectedEnvironment && (
+      {/* Warning Banner for missing credentials - With dismiss options */}
+      {!hasCredentials && selectedEnvironment && showCredentialsBanner && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 mb-4 rounded-r-lg">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400" />
-            </div>
-            <div className="ml-3 flex-1">
-              <h3 className="text-sm font-medium text-yellow-800">
-                Sin credenciales configuradas
-              </h3>
-              <div className="mt-2 text-sm text-yellow-700">
-                <p>
-                  El ambiente <strong>{currentEnvironmentName}</strong> no tiene credenciales de cloud asociadas. 
-                  No podrás crear o desplegar infraestructura hasta que configures las credenciales.
-                </p>
+          <div className="flex items-start justify-between">
+            <div className="flex items-start flex-1">
+              <div className="flex-shrink-0">
+                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400" />
               </div>
-              <div className="mt-4">
-                <button
-                  onClick={() => {
-                    if (typeof window !== 'undefined') {
-                      sessionStorage.setItem(`activeSection_${companyId}`, 'credentials');
-                    }
-                    setActiveSection('credentials');
-                  }}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-yellow-800 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors"
-                >
-                  <KeyIcon className="w-4 h-4 mr-2" />
-                  Configurar credenciales
-                </button>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Sin credenciales configuradas
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>
+                    El ambiente <strong>{currentEnvironmentName}</strong> no tiene credenciales de cloud asociadas. 
+                    No podrás crear o desplegar infraestructura hasta que configures las credenciales.
+                  </p>
+                </div>
+                <div className="mt-4 flex items-center space-x-4">
+                  <button
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        sessionStorage.setItem(`activeSection_${companyId}`, 'credentials');
+                      }
+                      setActiveSection('credentials');
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-yellow-800 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors"
+                  >
+                    <KeyIcon className="w-4 h-4 mr-2" />
+                    Configurar credenciales
+                  </button>
+                  
+                  <button
+                    onClick={hideCredentialsBannerPermanently}
+                    className="text-xs text-yellow-600 hover:text-yellow-800 underline"
+                  >
+                    No mostrar de nuevo
+                  </button>
+                </div>
               </div>
             </div>
+            <button 
+              onClick={() => setShowCredentialsBanner(false)}
+              className="text-yellow-500 hover:text-yellow-700"
+              aria-label="Cerrar"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
       )}
