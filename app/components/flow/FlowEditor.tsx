@@ -1275,24 +1275,6 @@ const FlowEditorContent = ({
     }
   }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodes, diagramId, onSave, activeDrag, activeTool]);
 
-  // Agregar función para contar recursos por proveedor
-  const getResourceCounts = useCallback(() => {
-    const counts = {
-      total: nodes.length,
-      aws: 0,
-      gcp: 0,
-      azure: 0,
-      generic: 0
-    };
-
-    nodes.forEach(node => {
-      const provider = (node.data?.provider || 'generic') as 'aws' | 'gcp' | 'azure' | 'generic';
-      counts[provider]++;
-    });
-
-    return counts;
-  }, [nodes]);
-
   // Función para guardar explícitamente el estado actual del diagrama
   const saveCurrentDiagramState = useCallback(() => {
     if (!reactFlowInstance || !onSave) return;
@@ -1712,30 +1694,6 @@ const FlowEditorContent = ({
   return (
     <div className="relative w-full h-full">
       {renderEditGroupModal()}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Total:</span>
-            <span className="text-sm text-gray-600">{getResourceCounts().total}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">AWS:</span>
-            <span className="text-sm text-gray-600">{getResourceCounts().aws}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">GCP:</span>
-            <span className="text-sm text-gray-600">{getResourceCounts().gcp}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Azure:</span>
-            <span className="text-sm text-gray-600">{getResourceCounts().azure}</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Generic:</span>
-            <span className="text-sm text-gray-600">{getResourceCounts().generic}</span>
-          </div>
-        </div>
-      </div>
       <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
         <style>
           {`

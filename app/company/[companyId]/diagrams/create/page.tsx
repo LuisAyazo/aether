@@ -9,6 +9,7 @@ import { isAuthenticated } from '../../../../services/authService';
 export default function CreateDiagramPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [path, setPath] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [environments, setEnvironments] = useState<Environment[]>([]);
@@ -110,6 +111,7 @@ export default function CreateDiagramPage() {
       const diagramData = {
         name,
         description,
+        path: path.trim() || undefined,
         nodes: [],
         edges: [],
         viewport: {
@@ -263,6 +265,24 @@ export default function CreateDiagramPage() {
                           required
                           className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                         />
+                      </div>
+                      
+                      <div className="col-span-6">
+                        <label htmlFor="path" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Ruta/Directorio (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          id="path"
+                          name="path"
+                          value={path}
+                          onChange={(e) => setPath(e.target.value)}
+                          placeholder="ej: devops/hub-and-spoke, devops/pubsub, devops/infra-full"
+                          className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          Organiza tus diagramas en directorios. Usa "/" para crear subdirectorios.
+                        </p>
                       </div>
                       
                       <div className="col-span-6">

@@ -1,0 +1,236 @@
+/* Diagram Tree Select Styles */
+
+.container {
+  position: relative;
+  width: 100%;
+  user-select: none;
+}
+
+.selector {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 40px;
+}
+
+.selector:hover {
+  border-color: #9ca3af;
+}
+
+.selector.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 50;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.searchContainer {
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.searchInput:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.treeContainer {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+/* Group header styles */
+.groupHeader {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.groupHeader:hover {
+  background-color: #f3f4f6;
+}
+
+.caretIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  color: #6b7280;
+  transition: transform 0.2s ease;
+}
+
+.folderIcon {
+  color: #6b7280;
+  margin-right: 8px;
+}
+
+.groupName {
+  flex: 1;
+  font-size: 14px;
+  color: #374151;
+}
+
+.diagramCount {
+  font-size: 12px;
+  color: #6b7280;
+  margin-left: 8px;
+}
+
+/* Diagram item styles */
+.diagramItem {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.diagramItem:hover {
+  background-color: #f3f4f6;
+}
+
+.diagramItem.selected {
+  background-color: #eff6ff;
+}
+
+.fileIcon {
+  color: #6b7280;
+  margin-right: 8px;
+  margin-top: 2px;
+}
+
+.diagramInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.diagramName {
+  display: block;
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 2px;
+}
+
+.diagramDescription {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Selected display styles */
+.selectedDisplay {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 0;
+}
+
+.selectedFileIcon {
+  color: #6b7280;
+  margin-right: 8px;
+  margin-top: 2px;
+}
+
+.selectedInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.selectedName {
+  display: block;
+  font-size: 14px;
+  color: #374151;
+  margin-bottom: 2px;
+}
+
+.selectedDescription {
+  display: block;
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* No results message */
+.noResults {
+  padding: 12px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* Scrollbar styles */
+.treeContainer::-webkit-scrollbar {
+  width: 6px;
+}
+
+.treeContainer::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.treeContainer::-webkit-scrollbar-thumb {
+  background: #c5c5c5;
+  border-radius: 3px;
+}
+
+.treeContainer::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .selector {
+    padding: 6px 10px;
+  }
+  
+  .dropdown {
+    max-height: 300px;
+  }
+  
+  .groupHeader,
+  .diagramItem {
+    padding: 6px 10px;
+  }
+  
+  .searchInput {
+    padding: 6px 10px;
+  }
+} 

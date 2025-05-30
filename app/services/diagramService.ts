@@ -57,6 +57,7 @@ export interface Diagram {
   id: string;
   name: string;
   description?: string;
+  path?: string; // Directory/path organization support (e.g., "devops/hub-and-spoke", "devops/pubsub")
   nodes: Node[];
   edges: Edge[];
   viewport?: Viewport;
@@ -297,7 +298,7 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
   }
 };
 
-export const createDiagram = async (companyId: string, environmentId: string, diagramData: { name: string; description?: string; nodes: Node[]; edges: Edge[]; viewport?: Viewport }): Promise<Diagram> => {
+export const createDiagram = async (companyId: string, environmentId: string, diagramData: { name: string; description?: string; path?: string; nodes: Node[]; edges: Edge[]; viewport?: Viewport }): Promise<Diagram> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
@@ -307,6 +308,13 @@ export const createDiagram = async (companyId: string, environmentId: string, di
   try {
     console.log(`Intentando crear diagrama para compañía ${companyId}, ambiente ${environmentId}`);
     
+    // Incluir company_id y environment_id en el payload según el esquema DiagramCreate del backend
+    const diagramPayload = {
+      ...diagramData,
+      company_id: companyId,
+      environment_id: environmentId
+    };
+    
     // Crear el diagrama usando el endpoint del backend
     const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams`, {
       method: 'POST',
@@ -314,7 +322,7 @@ export const createDiagram = async (companyId: string, environmentId: string, di
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(diagramData)
+      body: JSON.stringify(diagramPayload)
     });
 
     if (response.status === 404) {
@@ -323,9 +331,33 @@ export const createDiagram = async (companyId: string, environmentId: string, di
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-      console.error('Error al crear diagrama:', errorData);
-      throw new Error(errorData.detail || 'Error creando diagrama');
+      let errorMessage = 'Error creando diagrama';
+      try {
+        const errorData = await response.json();
+        console.error('Error al crear diagrama:', errorData);
+        if (typeof errorData === 'object' && errorData.detail) {
+          // Si detail es un array de objetos de error (como en validaciones de Pydantic)
+          if (Array.isArray(errorData.detail)) {
+            const errorMessages = errorData.detail.map((err: any) => {
+              if (typeof err === 'object' && err.msg) {
+                return `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`;
+              }
+              return err.toString();
+            }).join(', ');
+            errorMessage = errorMessages;
+          } else {
+            errorMessage = errorData.detail;
+          }
+        } else if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else {
+          errorMessage = `Error ${response.status}: ${response.statusText}`;
+        }
+      } catch (parseError) {
+        console.error('Error al parsear respuesta de error:', parseError);
+        errorMessage = `Error ${response.status}: ${response.statusText}`;
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
@@ -333,110 +365,58 @@ export const createDiagram = async (companyId: string, environmentId: string, di
     return data;
   } catch (error: any) {
     console.error('Error en createDiagram:', error);
-    throw error;
+    // Si el error ya es una instancia de Error con un mensaje personalizado, lo relanzamos
+    if (error instanceof Error) {
+      throw error;
+    }
+    // Si no, creamos un nuevo error con un mensaje más descriptivo
+    throw new Error(error?.message || 'Error desconocido al crear el diagrama');
   }
 };
 
-export const updateDiagram = async (companyId: string, environmentId: string, diagramId: string, diagramData: { 
-  name: string; 
-  description?: string; 
-  nodes: Node[]; 
-  edges: Edge[]; 
-  viewport?: Viewport;
-  nodeGroups?: Record<string, any>;
-  nodePositions?: Record<string, any>;
-}): Promise<Diagram> => {
-  if (!isAuthenticated()) {
-    throw new Error('Usuario no autenticado');
-  }
-
-  // Procesar los datos para guardar metadatos de grupos y posiciones relativas
-  const processedData = {
-    ...diagramData,
-    nodeGroups: diagramData.nodeGroups || {},
-    nodePositions: diagramData.nodePositions || {}
-  };
-  
-  // Para cada nodo en un grupo, calcular y guardar posiciones relativas si no existen
-  if (!processedData.nodePositions) {
-    processedData.nodePositions = {};
-  }
-
-  // Agrupar los nodos por su grupo padre
-  const nodesByGroup: Record<string, Node[]> = {};
-  diagramData.nodes.forEach(node => {
-    if (node.parentNode) {
-      if (!nodesByGroup[node.parentNode]) {
-        nodesByGroup[node.parentNode] = [];
-      }
-      nodesByGroup[node.parentNode].push(node);
-    }
-  });
-
-  // Para cada grupo, guardar sus datos y las posiciones relativas de sus nodos
-  Object.entries(nodesByGroup).forEach(([groupId, groupNodes]) => {
-    // Encontrar el nodo de grupo
-    const groupNode = diagramData.nodes.find(n => n.id === groupId);
-    if (!groupNode) return;
-
-    if (!processedData.nodeGroups[groupId]) {
-      processedData.nodeGroups[groupId] = {
-        nodeIds: groupNodes.map(n => n.id),
-        dimensions: {
-          width: groupNode.width || 300,
-          height: groupNode.height || 200
-        },
-        provider: groupNode.data?.provider || 'generic',
-        label: groupNode.data?.label || 'Group'
-      };
-    }
-
-    // Para cada nodo del grupo, guardar su posición relativa
-    if (!processedData.nodePositions[groupId]) {
-      processedData.nodePositions[groupId] = {};
-    }
-
-    groupNodes.forEach(node => {
-      processedData.nodePositions[groupId][node.id] = {
-        relativePosition: { ...node.position },
-        dimensions: {
-          width: node.width || 100,
-          height: node.height || 50
-        }
-      };
-    });
-  });
-
+export const updateDiagram = async (
+  companyId: string,
+  environmentId: string,
+  diagramId: string,
+  diagramData: Partial<Diagram>
+): Promise<Diagram> => {
   const token = localStorage.getItem('token');
-  
-  try {
-    console.log(`Intentando actualizar diagrama: compañía ${companyId}, ambiente ${environmentId}, diagrama ${diagramId}`);
-    const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(processedData)
-    });
+  if (!token) {
+    throw new Error('No estás autenticado');
+  }
 
-    if (response.status === 404) {
-      console.error('El endpoint para actualizar diagramas no está disponible en el backend');
-      throw new Error('El servicio para actualizar diagramas no está disponible en el backend. Contacta al administrador del sistema.');
-    }
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(diagramData)
+      }
+    );
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-      console.error('Error al actualizar diagrama:', errorData);
-      throw new Error(errorData.detail || 'Error actualizando diagrama');
+      let errorMessage = 'Error actualizando diagrama';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.detail || errorData.message || errorData.error || errorMessage;
+      } catch (e) {
+        console.error('Error parsing error response:', e);
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
-    console.log('Diagrama actualizado exitosamente:', data);
     return data;
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error en updateDiagram:', error);
-    throw error;
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Error desconocido al actualizar el diagrama');
   }
 };
 
@@ -456,13 +436,9 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
       }
     });
 
-    if (response.status === 404) {
-      console.error('El endpoint para eliminar diagramas no está disponible en el backend');
-      throw new Error('El servicio para eliminar diagramas no está disponible en el backend. Contacta al administrador del sistema.');
-    }
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+      console.error('Error eliminando diagrama:', errorData);
       throw new Error(errorData.detail || 'Error eliminando diagrama');
     }
     
@@ -472,3 +448,33 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
     throw error;
   }
 };
+
+export async function updateDiagramPaths(companyId: string, environmentId: string): Promise<Diagram[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No authentication token available');
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/update-paths`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to update diagram paths');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating diagram paths:', error);
+    throw error;
+  }
+}
