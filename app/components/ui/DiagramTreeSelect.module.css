@@ -126,10 +126,12 @@
   background-color: #eff6ff;
 }
 
+/* Diagram icon styles */
 .fileIcon {
-  color: #6b7280;
+  color: #1890ff;
   margin-right: 8px;
   margin-top: 2px;
+  font-size: 16px;
 }
 
 .diagramInfo {
@@ -162,9 +164,10 @@
 }
 
 .selectedFileIcon {
-  color: #6b7280;
+  color: #1890ff;
   margin-right: 8px;
   margin-top: 2px;
+  font-size: 16px;
 }
 
 .selectedInfo {

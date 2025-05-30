@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { FolderOutlined, FileOutlined, CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons';
+import { FolderOutlined, ProjectOutlined, CaretDownOutlined, CaretRightOutlined } from '@ant-design/icons';
 import styles from './DiagramTreeSelect.module.css';
 import { updateDiagramPaths } from '@/app/services/diagramService';
 
@@ -51,8 +51,6 @@ export default function DiagramTreeSelect({
   
   // Build diagram tree structure based on paths
   const buildDiagramTree = (diagramItems: Diagram[]): TreeNode => {
-    console.log('Diagramas recibidos:', diagramItems);
-    
     const sortedDiagrams = [...diagramItems].sort((a, b) => {
       // First sort by path
       if (a.path && b.path) {
@@ -63,8 +61,6 @@ export default function DiagramTreeSelect({
       // Then sort by name
       return a.name.localeCompare(b.name);
     });
-    
-    console.log('Diagramas ordenados:', sortedDiagrams);
     
     const rootTree: TreeNode = {
       type: 'root',
@@ -78,12 +74,6 @@ export default function DiagramTreeSelect({
     };
     
     sortedDiagrams.forEach(diagram => {
-      console.log('Procesando diagrama:', {
-        name: diagram.name,
-        path: diagram.path,
-        pathParts: diagram.path?.split('/')
-      });
-      
       if (diagram.path) {
         const pathParts = diagram.path.split('/');
         const groupName = pathParts[0];
@@ -96,8 +86,6 @@ export default function DiagramTreeSelect({
         groups['Sin categoría'].push(diagram);
       }
     });
-    
-    console.log('Grupos formados:', groups);
     
     // Create tree structure
     Object.entries(groups).forEach(([groupName, diagrams]) => {
@@ -119,25 +107,30 @@ export default function DiagramTreeSelect({
           diagrams.forEach(diagram => {
             if (diagram.path) {
               const pathParts = diagram.path.split('/');
-              console.log('Procesando subdirectorio:', {
-                diagram: diagram.name,
-                pathParts,
-                fullPath: diagram.path
-              });
               
               if (pathParts.length > 1) {
-                // Has subdirectories
-                const subPath = pathParts.slice(1).join('/');
-                if (!groupNode.children[subPath]) {
-                  groupNode.children[subPath] = {
-                    type: 'group',
-                    name: pathParts[1],
-                    fullPath: `${groupName}/${subPath}`,
-                    children: {},
-                    diagrams: []
-                  };
+                // Has subdirectories - create nested structure
+                let currentNode = groupNode;
+                
+                // Navigate/create nested structure for all path parts except the first (group name)
+                for (let i = 1; i < pathParts.length; i++) {
+                  const pathSegment = pathParts[i];
+                  const subPath = pathParts.slice(1, i + 1).join('/');
+                  
+                  if (!currentNode.children[pathSegment]) {
+                    currentNode.children[pathSegment] = {
+                      type: 'group',
+                      name: pathSegment,
+                      fullPath: `${groupName}/${subPath}`,
+                      children: {},
+                      diagrams: []
+                    };
+                  }
+                  currentNode = currentNode.children[pathSegment];
                 }
-                groupNode.children[subPath].diagrams.push(diagram);
+                
+                // Add diagram to the deepest level only
+                currentNode.diagrams.push(diagram);
               } else {
                 // No subdirectories, add to group directly
                 groupNode.diagrams.push(diagram);
@@ -150,7 +143,6 @@ export default function DiagramTreeSelect({
       }
     });
     
-    console.log('Árbol final:', rootTree);
     return rootTree;
   };
   
@@ -339,7 +331,7 @@ export default function DiagramTreeSelect({
                   paddingLeft: `${indentSize + (node.type === 'group' ? 24 : 0)}px` 
                 }}
               >
-                <FileOutlined className={styles.fileIcon} />
+                <ProjectOutlined className={styles.fileIcon} />
                 <div className={styles.diagramInfo}>
                   <span className={styles.diagramName}>{diagram.name}</span>
                   {diagram.description && (
@@ -374,7 +366,7 @@ export default function DiagramTreeSelect({
     
     return (
       <div className={styles.selectedDisplay}>
-        <FileOutlined className={styles.selectedFileIcon} />
+        <ProjectOutlined className={styles.selectedFileIcon} />
         <div className={styles.selectedInfo}>
           <span className={styles.selectedName}>
             {selectedItem.name}
@@ -442,4 +434,4 @@ export default function DiagramTreeSelect({
       )}
     </div>
   );
-} 
+}

@@ -1789,8 +1789,8 @@ export default function DiagramPage() {
       )}
 
       {/* Environment and Diagram selector */}
-      <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200 mx-4">
-        <div className="p-3">
+      <div className="mb-2 bg-white rounded-lg shadow-sm border border-gray-200 mx-2">
+        <div className="p-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
@@ -1902,16 +1902,16 @@ export default function DiagramPage() {
 
       {/* Stats Bar - Simplified but visible */}
       {currentDiagram && nodes.length > 0 && (
-        <div className="px-4 py-2 bg-white mx-4 mb-4 border-t border-gray-200 rounded-lg shadow-sm">
+        <div className="px-2 py-1 bg-white border-t border-gray-200">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-1">
                 <div className="w-2 h-2 rounded-full bg-blue-500" />
                 <span className="text-sm text-gray-700">Nodos:</span>
                 <span className="text-sm font-semibold text-gray-900">{nodes.length}</span>
               </div>
               
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1">
                 <div className="w-2 h-2 rounded-full bg-purple-500" />
                 <span className="text-sm text-gray-700">Conexiones:</span>
                 <span className="text-sm font-semibold text-gray-900">{edges.length}</span>

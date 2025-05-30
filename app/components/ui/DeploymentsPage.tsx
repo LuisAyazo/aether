@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   RocketLaunchIcon, 
   CloudIcon, 
@@ -16,6 +16,9 @@ import {
   ChevronDownIcon,
   ChevronRightIcon
 } from '@heroicons/react/24/outline';
+import { Button, Card, List, Modal, Input, message, Spin, Select, Switch, Tooltip, Typography, Space, Tag, Alert } from 'antd';
+import { GithubOutlined, LinkOutlined, DeleteOutlined, SyncOutlined, CheckCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { useParams, useRouter } from 'next/navigation';
 
 interface Deployment {
   id: string;
@@ -29,6 +32,24 @@ interface Deployment {
   cost: number;
   version: string;
   description?: string;
+}
+
+interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  html_url: string;
+  description: string;
+  default_branch: string;
+}
+
+interface Webhook {
+  id: number;
+  url: string;
+  events: string[];
+  active: boolean;
+  created_at: string;
 }
 
 const mockDeployments: Deployment[] = [
@@ -110,12 +131,136 @@ interface DeploymentsPageProps {
   companyId?: string;
 }
 
+const { Title, Text } = Typography;
+const { Option } = Select;
+
 export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
+  const params = useParams();
+  const router = useRouter();
+  const companyIdFromParams = params.companyId as string;
+  
   const [deployments, setDeployments] = useState<Deployment[]>(mockDeployments);
   const [expandedDeployment, setExpandedDeployment] = useState<string | null>(null);
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('all');
   const [selectedProvider, setSelectedProvider] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [repositories, setRepositories] = useState<GitHubRepo[]>([]);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [githubToken, setGithubToken] = useState('');
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const response = await fetch('/api/auth/github/check');
+        const data = await response.json();
+        setIsConnected(data.connected);
+        
+        if (data.connected) {
+          await fetchRepositories();
+        }
+      } catch (error) {
+        console.error('Error checking GitHub connection:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkConnection();
+  }, []);
+
+  const fetchRepositories = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/github/repositories');
+      const repos = await response.json();
+      setRepositories(repos);
+    } catch (error) {
+      console.error('Error fetching repositories:', error);
+      message.error('Error al obtener los repositorios');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRepoSelect = async (value: string) => {
+    setSelectedRepo(value);
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/github/webhooks?repo=${value}`);
+      const hooks = await response.json();
+      setWebhooks(hooks);
+    } catch (error) {
+      console.error('Error fetching webhooks:', error);
+      message.error('Error al obtener los webhooks');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateWebhook = async () => {
+    if (!selectedRepo) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch('/api/github/webhooks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          repo: selectedRepo,
+          companyId: companyIdFromParams,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create webhook');
+      }
+
+      message.success('Webhook creado exitosamente');
+      
+      // Actualizar lista de webhooks
+      const hooksResponse = await fetch(`/api/github/webhooks?repo=${selectedRepo}`);
+      const hooks = await hooksResponse.json();
+      setWebhooks(hooks);
+    } catch (error) {
+      console.error('Error creating webhook:', error);
+      message.error('Error al crear el webhook');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteWebhook = async (hookId: number) => {
+    if (!selectedRepo) return;
+
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/github/webhooks/${hookId}?repo=${selectedRepo}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete webhook');
+      }
+
+      message.success('Webhook eliminado exitosamente');
+      
+      // Actualizar lista de webhooks
+      const hooksResponse = await fetch(`/api/github/webhooks?repo=${selectedRepo}`);
+      const hooks = await hooksResponse.json();
+      setWebhooks(hooks);
+    } catch (error) {
+      console.error('Error deleting webhook:', error);
+      message.error('Error al eliminar el webhook');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredDeployments = deployments.filter(deployment => {
     const environmentMatch = selectedEnvironment === 'all' || deployment.environment === selectedEnvironment;
@@ -154,6 +299,47 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
 
   const stats = getStatusStats();
   const totalCost = getTotalCost();
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <Title level={2}>Despliegues</Title>
+        <Card>
+          <div className="flex justify-center items-center p-8">
+            <Spin size="large" />
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isConnected) {
+    return (
+      <div className="p-6">
+        <Title level={2}>Despliegues</Title>
+        <Card>
+          <Alert
+            message="No conectado a GitHub"
+            description={
+              <Space direction="vertical">
+                <Text>
+                  Para gestionar despliegues, primero necesitas conectar tu cuenta de GitHub.
+                </Text>
+                <Button
+                  type="primary"
+                  onClick={() => router.push(`/company/${companyIdFromParams}#credentials`)}
+                >
+                  Ir a Credenciales
+                </Button>
+              </Space>
+            }
+            type="warning"
+            showIcon
+          />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -460,7 +646,121 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
             </button>
           </div>
         )}
+
+        <div className="mt-6">
+          <h2 className="text-2xl font-semibold mb-4">Integración con GitHub</h2>
+          
+          <Card className="mb-6">
+            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              <div>
+                <Title level={4}>Repositorio</Title>
+                <Select
+                  style={{ width: '100%' }}
+                  placeholder="Selecciona un repositorio"
+                  onChange={handleRepoSelect}
+                  value={selectedRepo}
+                  loading={loading}
+                >
+                  {repositories.map((repo) => (
+                    <Option key={repo.id} value={repo.full_name}>
+                      {repo.full_name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+
+              {selectedRepo && (
+                <div>
+                  <Space className="mb-4">
+                    <Title level={4}>Webhooks</Title>
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={handleCreateWebhook}
+                      loading={loading}
+                    >
+                      Crear Webhook
+                    </Button>
+                  </Space>
+
+                  <List
+                    dataSource={webhooks}
+                    renderItem={(webhook) => (
+                      <List.Item
+                        actions={[
+                          <Button
+                            key="delete"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => handleDeleteWebhook(webhook.id)}
+                            loading={loading}
+                          >
+                            Eliminar
+                          </Button>
+                        ]}
+                      >
+                        <List.Item.Meta
+                          title={
+                            <Space>
+                              <LinkOutlined />
+                              <Text>{webhook.url}</Text>
+                            </Space>
+                          }
+                          description={
+                            <Space>
+                              {webhook.events.map((event) => (
+                                <Tag key={event} color="blue">
+                                  {event}
+                                </Tag>
+                              ))}
+                              {webhook.active ? (
+                                <Tag color="green">Activo</Tag>
+                              ) : (
+                                <Tag color="red">Inactivo</Tag>
+                              )}
+                            </Space>
+                          }
+                        />
+                      </List.Item>
+                    )}
+                  />
+                </div>
+              )}
+            </Space>
+          </Card>
+        </div>
       </div>
+
+      <Modal
+        title="Conectar con GitHub"
+        open={showTokenModal}
+        onCancel={() => setShowTokenModal(false)}
+        onOk={() => {
+          // Handle connect
+        }}
+        okText="Conectar"
+        cancelText="Cancelar"
+      >
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-4">
+            Para conectar con GitHub, necesitas crear un token de acceso personal:
+          </p>
+          <ol className="list-decimal list-inside text-sm text-gray-600 mb-4">
+            <li>Ve a GitHub Settings → Developer Settings → Personal Access Tokens</li>
+            <li>Crea un nuevo token con los siguientes permisos:</li>
+            <ul className="list-disc list-inside ml-4 mt-2">
+              <li>repo (todos los permisos)</li>
+              <li>admin:repo_hook</li>
+            </ul>
+            <li>Copia el token generado y pégalo aquí</li>
+          </ol>
+          <Input.Password
+            placeholder="Token de GitHub"
+            value={githubToken}
+            onChange={(e) => setGithubToken(e.target.value)}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

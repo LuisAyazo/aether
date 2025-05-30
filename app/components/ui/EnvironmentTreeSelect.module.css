@@ -3,6 +3,7 @@
 .container {
   position: relative;
   width: 100%;
+  min-width: 280px; /* Ensure minimum width for the entire container */
 }
 
 .selector {
@@ -13,6 +14,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   min-height: 42px;
+  min-width: 260px; /* Fixed minimum width for selector */
   display: flex;
   align-items: center;
 }
@@ -38,6 +40,7 @@
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   max-height: 400px;
+  min-width: 280px; /* Ensure dropdown has minimum width */
   overflow: hidden;
   margin-top: 4px;
 }
@@ -123,6 +126,7 @@
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
   position: relative;
+  min-height: 56px; /* Consistent height for all environment items */
 }
 
 .environmentItem:hover {
@@ -203,7 +207,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  min-width: 120px; /* Fixed minimum width to prevent collapse */
+  min-height: 36px; /* Increased height for better consistency */
+  justify-content: center; /* Center content vertically */
 }
 
 .environmentName {
@@ -226,6 +232,8 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  min-width: 80px; /* Ensure diagram count remains visible */
+  justify-content: flex-end; /* Align metadata to the right */
 }
 
 .diagramCount {
@@ -265,7 +273,9 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  min-width: 140px; /* Fixed minimum width to prevent selector collapse */
+  min-height: 36px; /* Increased height for better consistency */
+  justify-content: center; /* Center content vertically */
 }
 
 .selectedName {
@@ -289,6 +299,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  min-width: 24px; /* Ensure status icon area is preserved */
 }
 
 /* No results message */

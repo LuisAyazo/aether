@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import { 
   KeyIcon, 
   PlusIcon, 
@@ -11,6 +13,11 @@ import {
   DocumentArrowUpIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
+import { Card, Button, message, Typography, Space, Alert, Spin } from 'antd';
+import { GithubOutlined } from '@ant-design/icons';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
+
+const { Title, Text } = Typography;
 
 interface Credential {
   id: string;
@@ -46,6 +53,13 @@ interface ProviderConfig {
 }
 
 const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const companyIdFromParams = params.companyId as string;
+  
+  const [loading, setLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderType>('aws');
@@ -91,12 +105,60 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
     }
   };
 
+  useEffect(() => {
+    // Verificar si hay un error de autenticación
+    const error = searchParams.get('error');
+    if (error === 'auth_failed') {
+      message.error('Error al conectar con GitHub. Por favor, intenta de nuevo.');
+    }
+
+    // Verificar si el usuario está conectado
+    checkGitHubConnection();
+  }, [searchParams]);
+
+  const checkGitHubConnection = async () => {
+    try {
+      const response = await fetch('/api/auth/github/check');
+      const data = await response.json();
+      setIsConnected(data.connected);
+    } catch (error) {
+      console.error('Error checking GitHub connection:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConnect = () => {
+    router.push('/api/auth/github');
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/auth/github/disconnect', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to disconnect');
+      }
+
+      setIsConnected(false);
+      message.success('Desconectado de GitHub exitosamente');
+    } catch (error) {
+      console.error('Error disconnecting from GitHub:', error);
+      message.error('Error al desconectar de GitHub');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Cargar credenciales al montar el componente
-  React.useEffect(() => {
+  useEffect(() => {
     const loadCredentials = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`/api/companies/${companyId}/credentials`, {
+        const response = await fetch(`/api/companies/${companyIdFromParams}/credentials`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -115,14 +177,14 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
     };
 
     loadCredentials();
-  }, [companyId]);
+  }, [companyIdFromParams]);
 
   // Cargar ambientes al montar el componente
-  React.useEffect(() => {
+  useEffect(() => {
     const loadEnvironments = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`/api/companies/${companyId}/environments`, {
+        const response = await fetch(`/api/companies/${companyIdFromParams}/environments`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -140,7 +202,7 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
     };
 
     loadEnvironments();
-  }, [companyId]);
+  }, [companyIdFromParams]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -187,7 +249,7 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
   }) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/companies/${companyId}/credentials`, {
+      const response = await fetch(`/api/companies/${companyIdFromParams}/credentials`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -213,7 +275,7 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
   const handleAssignEnvironments = async (credentialId: string, environmentIds: string[]) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/companies/${companyId}/credentials/${credentialId}/environments`, {
+      const response = await fetch(`/api/companies/${companyIdFromParams}/credentials/${credentialId}/environments`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -268,8 +330,76 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
     );
   };
 
+  if (loading) {
+    return (
+      <div className="p-6">
+        <Title level={2}>Credenciales</Title>
+        <Card>
+          <div className="flex justify-center items-center p-8">
+            <Spin size="large" />
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
+      <Title level={2}>Credenciales</Title>
+      
+      <Card className="mb-6">
+        <Title level={4}>GitHub</Title>
+        <div className="mt-4">
+          {isConnected ? (
+            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              <Alert
+                message="Conectado a GitHub"
+                description="Tu cuenta de GitHub está conectada correctamente."
+                type="success"
+                showIcon
+              />
+              <Button
+                danger
+                icon={<GithubOutlined />}
+                onClick={handleDisconnect}
+                loading={loading}
+              >
+                Desconectar GitHub
+              </Button>
+            </Space>
+          ) : (
+            <Space direction="vertical" size="large" style={{ width: '100%' }}>
+              <Alert
+                message="No conectado a GitHub"
+                description={
+                  <Space direction="vertical">
+                    <Text>
+                      Para gestionar despliegues, necesitas autorizar el acceso a tu cuenta de GitHub.
+                      Esto permitirá:
+                    </Text>
+                    <ul className="list-disc list-inside">
+                      <li>Acceder a tus repositorios</li>
+                      <li>Configurar webhooks para despliegues automáticos</li>
+                      <li>Gestionar permisos de acceso</li>
+                    </ul>
+                  </Space>
+                }
+                type="warning"
+                showIcon
+              />
+              <Button
+                type="primary"
+                icon={<GithubOutlined />}
+                onClick={handleConnect}
+                loading={loading}
+              >
+                Conectar con GitHub
+              </Button>
+            </Space>
+          )}
+        </div>
+      </Card>
+
       <div className="flex justify-between items-center mb-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Credenciales</h1>
