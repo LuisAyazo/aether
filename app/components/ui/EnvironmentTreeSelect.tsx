@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { FolderOutlined, DatabaseOutlined, CaretDownOutlined, CaretRightOutlined, CheckCircleOutlined, PauseCircleOutlined, PlusOutlined, FolderAddOutlined } from '@ant-design/icons';
+import { FolderOutlined, DatabaseOutlined, CaretDownOutlined, CaretRightOutlined, CheckCircleOutlined, PauseCircleOutlined, PlusOutlined, FolderAddOutlined, DeleteOutlined } from '@ant-design/icons';
 import styles from './EnvironmentTreeSelect.module.css';
 import { Environment } from '../../services/diagramService';
 
@@ -21,7 +21,9 @@ interface EnvironmentTreeSelectProps {
   selectedDirectory?: string;
   onDirectoryChange?: (directory: string) => void;
   onCreateDirectory?: (directoryName: string) => void;
+  onDeleteEnvironment?: (environmentId: string) => void;
   mode?: 'select' | 'directory';
+  showDeleteButton?: boolean;
 }
 
 export default function EnvironmentTreeSelect({ 
@@ -33,7 +35,9 @@ export default function EnvironmentTreeSelect({
   selectedDirectory,
   onDirectoryChange,
   onCreateDirectory,
-  mode = 'select'
+  onDeleteEnvironment,
+  mode = 'select',
+  showDeleteButton = false
 }: EnvironmentTreeSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -118,14 +122,14 @@ export default function EnvironmentTreeSelect({
       }
     });
     
-    // Create tree structure
+    // Create tree structure - only include groups that have environments
     Object.entries(groups).forEach(([groupName, envs]) => {
       if (envs.length > 0) {
         if (envs.length === 1 && !hasMultipleEnvironments(environmentItems)) {
           // If there's only one environment total, don't group it
           rootTree.environments.push(...envs);
         } else {
-          // Create group node
+          // Create group node only if it has environments
           rootTree.children[groupName] = {
             type: 'group',
             name: groupName,
@@ -422,6 +426,16 @@ export default function EnvironmentTreeSelect({
                     {environment.diagrams?.length || 0} diagrama{(environment.diagrams?.length || 0) !== 1 ? 's' : ''}
                   </span>
                   {getEnvironmentStatusIcon(environment)}
+                  {showDeleteButton && onDeleteEnvironment && (
+                    <DeleteOutlined 
+                      className={styles.deleteButton}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteEnvironment(environment.id);
+                      }}
+                      title="Eliminar ambiente"
+                    />
+                  )}
                 </div>
               </div>
             ))}

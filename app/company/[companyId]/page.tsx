@@ -7,6 +7,7 @@ import { getCompany, Company, getCompanies } from '../../services/companyService
 import { getDiagramsByEnvironment, Diagram, createEnvironment, Environment, deleteEnvironment } from '../../services/diagramService';
 import { isAuthenticated, logoutUser } from '../../services/authService';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Modal } from 'antd';
 import EnvironmentCategorySelect from '../../components/ui/EnvironmentCategorySelect';
 
 export default function CompanyPage() {
@@ -170,40 +171,45 @@ export default function CompanyPage() {
 
   // Función para eliminar un ambiente
   const handleDeleteEnvironment = async (environmentId: string) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este ambiente? Esta acción no se puede deshacer y eliminará todos los diagramas asociados.')) {
-      return;
-    }
+    Modal.confirm({
+      title: 'Confirmar eliminación',
+      content: '¿Estás seguro de que deseas eliminar este ambiente? Esta acción no se puede deshacer y eliminará todos los diagramas asociados.',
+      okText: 'Eliminar',
+      okType: 'danger',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        setLoading(true);
+        setError('');
 
-    setLoading(true);
-    setError('');
-
-    try {
-      await deleteEnvironment(effectiveCompanyId, environmentId);
-      
-      // Actualizar la compañía sin el ambiente eliminado
-      if (company) {
-        const updatedEnvironments = company.environments?.filter(env => env.id !== environmentId) || [];
-        setCompany({
-          ...company,
-          environments: updatedEnvironments
-        });
-        
-        // Si se eliminó el ambiente seleccionado, seleccionar otro si existe
-        if (selectedEnvironment === environmentId && updatedEnvironments.length > 0) {
-          // Asegurarse de que el ID nunca sea undefined
-          setSelectedEnvironment(updatedEnvironments[0].id || '');
-          const diagramsData = await getDiagramsByEnvironment(effectiveCompanyId, updatedEnvironments[0].id || '');
-          setDiagrams(diagramsData);
-        } else if (updatedEnvironments.length === 0) {
-          setSelectedEnvironment(''); // Limpiar el ambiente seleccionado si no queda ninguno
-          setDiagrams([]);
+        try {
+          await deleteEnvironment(effectiveCompanyId, environmentId);
+          
+          // Actualizar la compañía sin el ambiente eliminado
+          if (company) {
+            const updatedEnvironments = company.environments?.filter(env => env.id !== environmentId) || [];
+            setCompany({
+              ...company,
+              environments: updatedEnvironments
+            });
+            
+            // Si se eliminó el ambiente seleccionado, seleccionar otro si existe
+            if (selectedEnvironment === environmentId && updatedEnvironments.length > 0) {
+              // Asegurarse de que el ID nunca sea undefined
+              setSelectedEnvironment(updatedEnvironments[0].id || '');
+              const diagramsData = await getDiagramsByEnvironment(effectiveCompanyId, updatedEnvironments[0].id || '');
+              setDiagrams(diagramsData);
+            } else if (updatedEnvironments.length === 0) {
+              setSelectedEnvironment(''); // Limpiar el ambiente seleccionado si no queda ninguno
+              setDiagrams([]);
+            }
+          }
+        } catch (err: any) {
+          setError(`Error al eliminar el ambiente: ${err.message}`);
+        } finally {
+          setLoading(false);
         }
       }
-    } catch (err: any) {
-      setError(`Error al eliminar el ambiente: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+    });
   };
   
   function handleLogout() {

@@ -3,7 +3,7 @@
 .container {
   position: relative;
   width: 100%;
-  min-width: 280px; /* Ensure minimum width for the entire container */
+  min-width: 320px; /* Increased to match selector minimum width */
 }
 
 .selector {
@@ -14,7 +14,8 @@
   cursor: pointer;
   transition: all 0.2s ease;
   min-height: 42px;
-  min-width: 260px; /* Fixed minimum width for selector */
+  min-width: 320px; /* Increased minimum width to ensure delete icon is always visible */
+  width: 100%; /* Take full available width when needed */
   display: flex;
   align-items: center;
 }
@@ -40,7 +41,7 @@
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   max-height: 400px;
-  min-width: 280px; /* Ensure dropdown has minimum width */
+  min-width: 320px; /* Increased to match selector minimum width */
   overflow: hidden;
   margin-top: 4px;
 }
@@ -208,8 +209,10 @@
   display: flex;
   flex-direction: column;
   min-width: 120px; /* Fixed minimum width to prevent collapse */
+  max-width: calc(100% - 140px); /* Ensure space for metadata and delete button */
   min-height: 36px; /* Increased height for better consistency */
   justify-content: center; /* Center content vertically */
+  overflow: hidden; /* Prevent content from overflowing */
 }
 
 .environmentName {
@@ -217,6 +220,9 @@
   font-weight: 500;
   color: #111827;
   margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .environmentDescription {
@@ -232,8 +238,9 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  min-width: 80px; /* Ensure diagram count remains visible */
+  min-width: 100px; /* Increased minimum width to accommodate delete button */
   justify-content: flex-end; /* Align metadata to the right */
+  margin-left: auto; /* Push to the right edge */
 }
 
 .diagramCount {
@@ -273,7 +280,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-width: 140px; /* Fixed minimum width to prevent selector collapse */
+  min-width: 180px; /* Increased minimum width for better content space */
   min-height: 36px; /* Increased height for better consistency */
   justify-content: center; /* Center content vertically */
 }
@@ -299,7 +306,8 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  min-width: 24px; /* Ensure status icon area is preserved */
+  min-width: 32px; /* Increased width to ensure adequate space for status icons */
+  justify-content: center; /* Center the status icon */
 }
 
 /* No results message */
@@ -342,6 +350,60 @@
   .diagramCount {
     display: none;
   }
+}
+
+/* Responsive improvements for smaller screens */
+@media (max-width: 768px) {
+  .environmentInfo {
+    max-width: calc(100% - 120px); /* More space for metadata on smaller screens */
+  }
+  
+  .diagramCount {
+    display: none; /* Hide diagram count on very small screens to prioritize delete button */
+  }
+  
+  .deleteButton {
+    min-width: 28px; /* Slightly larger touch target on mobile */
+    padding: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .environmentMeta {
+    min-width: 80px; /* Reduce metadata width on very small screens */
+  }
+  
+  .environmentInfo {
+    max-width: calc(100% - 100px); /* Even more space for metadata */
+  }
+}
+
+/* Enhanced visibility when parent is hovered */
+.environmentItem:hover .deleteButton {
+  opacity: 1;
+  color: #ef4444;
+}
+
+/* Ensure delete button is always visible in focused state */
+.environmentItem:focus-within .deleteButton,
+.environmentItem:focus .deleteButton {
+  opacity: 1;
+  color: #6b7280;
+}
+
+/* Improved accessibility */
+.deleteButton:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Prevent horizontal scrolling issues */
+.dropdown {
+  overflow-x: hidden;
+}
+
+.environmentItem {
+  overflow: hidden; /* Ensure no content spills out */
 }
 
 /* Directory mode styles */
@@ -462,4 +524,28 @@
 
 .cancelButton:hover {
   background-color: #e5e7eb;
+}
+
+/* Delete button styles */
+.deleteButton {
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  opacity: 0.8;
+  margin-left: 4px;
+  flex-shrink: 0; /* Prevent button from shrinking */
+  min-width: 24px; /* Ensure minimum clickable area */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.deleteButton:hover {
+  color: #ef4444;
+  background-color: #fef2f2;
+  opacity: 1;
+  transform: scale(1.1); /* Slight scale on hover for better visibility */
 }

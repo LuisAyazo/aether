@@ -30,7 +30,7 @@ import SettingsPage from '../../../../components/ui/SettingsPage';
 import TeamPage from '../../../../components/ui/TeamPage';
 
 // Servicios
-import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, deleteDiagram } from '../../../../services/diagramService';
+import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, deleteDiagram, deleteEnvironment } from '../../../../services/diagramService';
 import { isAuthenticated } from '../../../../services/authService';
 
 // Tipos y utilidades
@@ -667,6 +667,60 @@ export default function DiagramPage() {
       message.error(errorMessage);
     }
     setLoading(false);
+  };
+
+  const handleDeleteEnvironment = async (environmentId: string) => {
+    // Find the environment name for confirmation
+    const environmentToDelete = environments.find(env => env.id === environmentId);
+    const environmentName = environmentToDelete?.name || 'el ambiente';
+    
+    Modal.confirm({
+      title: 'Confirmar eliminación',
+      content: `¿Estás seguro de que deseas eliminar ${environmentName}? Esta acción no se puede deshacer y eliminará todos los diagramas asociados.`,
+      okText: 'Eliminar',
+      okType: 'danger',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        setLoading(true);
+        try {
+          await deleteEnvironment(companyId as string, environmentId);
+          message.success("Ambiente eliminado correctamente");
+          
+          // Reload environments
+          const environmentsData = await getEnvironments(companyId as string);
+          setEnvironments(environmentsData);
+          
+          // If the deleted environment was selected, switch to another environment or clear selection
+          if (selectedEnvironment === environmentId) {
+            if (environmentsData.length > 0) {
+              // Select the first available environment
+              setSelectedEnvironment(environmentsData[0].id);
+              // Load diagrams for the new environment
+              const diagramsData = await getDiagramsByEnvironment(companyId as string, environmentsData[0].id);
+              setDiagrams(diagramsData);
+              if (diagramsData.length > 0) {
+                setSelectedDiagram(diagramsData[0].id);
+                setCurrentDiagram(diagramsData[0]);
+              } else {
+                setSelectedDiagram(null);
+                setCurrentDiagram(null);
+              }
+            } else {
+              // No environments left
+              setSelectedEnvironment(null);
+              setDiagrams([]);
+              setSelectedDiagram(null);
+              setCurrentDiagram(null);
+            }
+          }
+        } catch (error) {
+          console.error("Error eliminando ambiente:", error);
+          const errorMessage = error instanceof Error ? error.message : "No se pudo eliminar el ambiente. Por favor, inténtelo de nuevo más tarde.";
+          message.error(errorMessage);
+        }
+        setLoading(false);
+      }
+    });
   };
 
   const handleCreateDiagram = async () => {
@@ -1804,6 +1858,8 @@ export default function DiagramPage() {
                   value={selectedEnvironment ?? undefined}
                   onChange={handleEnvironmentChange}
                   placeholder="Selecciona un ambiente"
+                  onDeleteEnvironment={handleDeleteEnvironment}
+                  showDeleteButton={true}
                 />
                 <Button 
                   type="primary" 
