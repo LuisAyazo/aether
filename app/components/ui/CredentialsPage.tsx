@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   KeyIcon, 
   PlusIcon, 
@@ -18,6 +18,19 @@ import { GithubOutlined } from '@ant-design/icons';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 
 const { Title, Text } = Typography;
+
+// Debounce utility function to prevent rapid state changes
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: any[]) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
 
 interface Credential {
   id: string;
@@ -59,7 +72,9 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
   const companyIdFromParams = params.companyId as string;
   
   const [loading, setLoading] = useState(true);
+  const [connectionLoading, setConnectionLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<ProviderType>('aws');
@@ -105,36 +120,93 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
     }
   };
 
+  // Add debouncing for connection checks to prevent rapid state changes
+  const debouncedCheckConnection = useCallback(
+    debounce(() => {
+      checkGitHubConnection();
+    }, 300),
+    []
+  );
+
   useEffect(() => {
     // Verificar si hay un error de autenticación
+    const success = searchParams.get('success');
     const error = searchParams.get('error');
+    
+    if (success === 'true') {
+      message.success('¡Conectado a GitHub exitosamente!');
+      // Reset connection loading state
+      setConnectionLoading(false);
+    }
+    
     if (error === 'auth_failed') {
       message.error('Error al conectar con GitHub. Por favor, intenta de nuevo.');
+      setConnectionLoading(false);
     }
 
-    // Verificar si el usuario está conectado
-    checkGitHubConnection();
-  }, [searchParams]);
+    // Use debounced connection check to prevent rapid state changes
+    debouncedCheckConnection();
+  }, [searchParams, debouncedCheckConnection]);
 
   const checkGitHubConnection = async () => {
     try {
       const response = await fetch('/api/auth/github/check');
       const data = await response.json();
-      setIsConnected(data.connected);
+      
+      // Batch state updates to prevent multiple re-renders
+      const updates = () => {
+        setIsConnected(data.connected);
+        setLoading(false);
+        setInitialCheckComplete(true);
+      };
+      
+      // Use React 18 automatic batching or setTimeout for older versions
+      if (typeof window !== 'undefined' && window.React && window.React.version >= '18') {
+        updates();
+      } else {
+        // For React < 18, use setTimeout to batch updates
+        setTimeout(updates, 0);
+      }
     } catch (error) {
       console.error('Error checking GitHub connection:', error);
-    } finally {
-      setLoading(false);
+      
+      // Batch error state updates
+      const errorUpdates = () => {
+        setIsConnected(false);
+        setLoading(false);
+        setInitialCheckComplete(true);
+      };
+      
+      if (typeof window !== 'undefined' && window.React && window.React.version >= '18') {
+        errorUpdates();
+      } else {
+        setTimeout(errorUpdates, 0);
+      }
     }
   };
 
   const handleConnect = () => {
-    router.push('/api/auth/github');
+    // Capture diagram context if available
+    const currentPath = window.location.pathname;
+    const environmentId = searchParams.get('environmentId');
+    const diagramMatch = currentPath.match(/\/company\/([^\/]+)\/diagrams\/([^\/]+)/);
+    
+    let authUrl = `/api/auth/github?companyId=${companyIdFromParams}`;
+    
+    // If we're in a diagram context, pass additional parameters
+    if (diagramMatch && environmentId) {
+      const [, , diagramId] = diagramMatch;
+      authUrl += `&diagramId=${diagramId}&environmentId=${environmentId}`;
+    }
+    
+    // Set loading state for connection operation
+    setConnectionLoading(true);
+    router.push(authUrl);
   };
 
   const handleDisconnect = async () => {
     try {
-      setLoading(true);
+      setConnectionLoading(true);
       const response = await fetch('/api/auth/github/disconnect', {
         method: 'POST',
       });
@@ -143,13 +215,23 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
         throw new Error('Failed to disconnect');
       }
 
-      setIsConnected(false);
+      // Batch state updates
+      const successUpdates = () => {
+        setIsConnected(false);
+        setConnectionLoading(false);
+      };
+      
+      if (typeof window !== 'undefined' && window.React && window.React.version >= '18') {
+        successUpdates();
+      } else {
+        setTimeout(successUpdates, 0);
+      }
+      
       message.success('Desconectado de GitHub exitosamente');
     } catch (error) {
       console.error('Error disconnecting from GitHub:', error);
       message.error('Error al desconectar de GitHub');
-    } finally {
-      setLoading(false);
+      setConnectionLoading(false);
     }
   };
 
@@ -203,6 +285,61 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
 
     loadEnvironments();
   }, [companyIdFromParams]);
+
+  const githubContent = useMemo(() => {
+    if (!initialCheckComplete) {
+      return (
+        <div className="flex items-center space-x-2">
+          <Spin size="small" />
+          <Text>Verificando conexión...</Text>
+        </div>
+      );
+    }
+    
+    if (isConnected) {
+      return (
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Alert
+            message="Conectado a GitHub"
+            description="Tu cuenta de GitHub está conectada correctamente."
+            type="success"
+            showIcon
+            action={
+              <Button 
+                size="small" 
+                type="link" 
+                onClick={handleDisconnect}
+                loading={connectionLoading}
+              >
+                Desconectar
+              </Button>
+            }
+          />
+        </Space>
+      );
+    }
+    
+    return (
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Alert
+          message="No conectado a GitHub"
+          description="Conecta tu cuenta de GitHub para poder realizar despliegues automáticos."
+          type="warning"
+          showIcon
+          action={
+            <Button 
+              type="primary" 
+              icon={<GithubOutlined />}
+              onClick={handleConnect}
+              loading={connectionLoading}
+            >
+              Conectar con GitHub
+            </Button>
+          }
+        />
+      </Space>
+    );
+  }, [initialCheckComplete, isConnected, connectionLoading, handleConnect, handleDisconnect]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -311,7 +448,7 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
         </span>
         <div className="flex items-center space-x-2">
           <span className="text-sm text-gray-900 font-mono">
-            {isSecret && !isVisible ? value : value}
+            {isSecret && !isVisible ? '***' : value}
           </span>
           {isSecret && (
             <button
@@ -330,10 +467,19 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
     );
   };
 
-  if (loading) {
+  if (loading && !initialCheckComplete) {
     return (
       <div className="p-6">
         <Title level={2}>Credenciales</Title>
+        <Card className="mb-6">
+          <Title level={4}>GitHub</Title>
+          <div className="mt-4">
+            <div className="flex items-center space-x-2">
+              <Spin size="small" />
+              <Text>Verificando conexión...</Text>
+            </div>
+          </div>
+        </Card>
         <Card>
           <div className="flex justify-center items-center p-8">
             <Spin size="large" />
@@ -350,53 +496,7 @@ const CredentialsPage: React.FC<CredentialsPageProps> = ({ companyId }) => {
       <Card className="mb-6">
         <Title level={4}>GitHub</Title>
         <div className="mt-4">
-          {isConnected ? (
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              <Alert
-                message="Conectado a GitHub"
-                description="Tu cuenta de GitHub está conectada correctamente."
-                type="success"
-                showIcon
-              />
-              <Button
-                danger
-                icon={<GithubOutlined />}
-                onClick={handleDisconnect}
-                loading={loading}
-              >
-                Desconectar GitHub
-              </Button>
-            </Space>
-          ) : (
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              <Alert
-                message="No conectado a GitHub"
-                description={
-                  <Space direction="vertical">
-                    <Text>
-                      Para gestionar despliegues, necesitas autorizar el acceso a tu cuenta de GitHub.
-                      Esto permitirá:
-                    </Text>
-                    <ul className="list-disc list-inside">
-                      <li>Acceder a tus repositorios</li>
-                      <li>Configurar webhooks para despliegues automáticos</li>
-                      <li>Gestionar permisos de acceso</li>
-                    </ul>
-                  </Space>
-                }
-                type="warning"
-                showIcon
-              />
-              <Button
-                type="primary"
-                icon={<GithubOutlined />}
-                onClick={handleConnect}
-                loading={loading}
-              >
-                Conectar con GitHub
-              </Button>
-            </Space>
-          )}
+          {githubContent}
         </div>
       </Card>
 

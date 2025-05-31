@@ -4,7 +4,9 @@ import { cookies } from 'next/headers';
 export async function POST() {
   try {
     // Eliminar la cookie del token
-    cookies().delete('github_token');
+    (await
+      // Eliminar la cookie del token
+      cookies()).delete('github_token');
     
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 
 export async function GET() {
   try {
-    const token = cookies().get('github_token')?.value;
+    const token = (await cookies()).get('github_token')?.value;
 
     if (!token) {
       return NextResponse.json({ connected: false });
