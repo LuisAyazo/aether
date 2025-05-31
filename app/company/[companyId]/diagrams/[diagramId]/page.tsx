@@ -2034,7 +2034,7 @@ export default function DiagramPage() {
       )}
 
       {/* Diagram Area - With fixed height and absolute positioning */}
-      <div className="relative bg-white mx-4 flex-1 rounded-lg overflow-hidden" 
+      <div className="relative bg-white flex-1 rounded-lg overflow-hidden" 
            style={{ height: "calc(100vh - 250px)" }}>
         <div className="absolute inset-0">
           {renderDiagramEditor()}

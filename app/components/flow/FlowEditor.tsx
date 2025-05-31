@@ -2928,7 +2928,7 @@ const FlowEditorContent = ({
       {/* Modal de preview de un solo nodo */}
       {showSingleNodePreview && singleNodePreview && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl mx-4 overflow-hidden border border-gray-100" style={{ maxHeight: '80vh' }}>
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl overflow-hidden border border-gray-100" style={{ maxHeight: '80vh' }}>
             {/* Header */}
             <div className="bg-white p-6 border-b border-gray-100">
               <div className="flex justify-between items-center">

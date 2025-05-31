@@ -126,7 +126,7 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   };
 
   return (
-    <div className={`bg-white border-r border-gray-200 flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-72'}`}>
+    <div className={`bg-white flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-72'}`}>
       {/* Company Header with Toggle */}
       <div className={`border-b border-gray-200 ${isCollapsed ? 'p-2' : 'p-4'}`}>
         <div className={`flex items-center ${isCollapsed ? 'flex-col space-y-2' : 'justify-between'}`}>
