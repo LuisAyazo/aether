@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs, Tab, Typography, Box, Button, TextField, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { IaCCodeService, IaCTemplateOptions } from '@/app/services/iacCodeService';
-import CodeBlock from '../ui/CodeBlock';
+import CodeBlock from './CodeBlock';
 
 interface ResourcePanelProps {
   id: string;
@@ -80,13 +80,13 @@ const ResourcePanel: React.FC<ResourcePanelProps> = ({ id, data, onClose }) => {
           options.regions = ['us-east-1', 'us-west-1', 'eu-west-1', 'ap-northeast-1'];
           
           if (data.nodeType === 'ec2') {
-            options.sizes = ['t2.micro', 't2.small', 't2.medium', 'm5.large'];
+            options.sizes = ['t2.micro', 't2.small', 't2.medium', 'm5.large', 'alomama'];
             options.images = ['ami-0c55b159cbfafe1f0', 'ami-0b5eea76982371e91'];
           }
           break;
         
         case 'gcp':
-          options.regions = ['us-central1', 'us-east1', 'europe-west1', 'asia-east1'];
+          options.regions = ['us-central1', 'us-east1', 'europe-west1', 'asia-east1', 'alomama'];
           
           if (data.nodeType === 'compute') {
             options.sizes = ['e2-micro', 'e2-small', 'e2-medium', 'n1-standard-1'];

@@ -7,6 +7,8 @@ import { getCompany, Company, getCompanies } from '../../services/companyService
 import { getDiagramsByEnvironment, Diagram, createEnvironment, Environment, deleteEnvironment } from '../../services/diagramService';
 import { isAuthenticated, logoutUser } from '../../services/authService';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Modal } from 'antd';
+import EnvironmentCategorySelect from '../../components/ui/EnvironmentCategorySelect';
 
 export default function CompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);
@@ -18,6 +20,7 @@ export default function CompanyPage() {
   const [showNewEnvironmentForm, setShowNewEnvironmentForm] = useState(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState('');
   const [newEnvironmentDescription, setNewEnvironmentDescription] = useState('');
+  const [newEnvironmentCategory, setNewEnvironmentCategory] = useState<string>('desarrollo');
   const [creatingEnvironment, setCreatingEnvironment] = useState(false);
   const [environmentError, setEnvironmentError] = useState('');
   const router = useRouter();
@@ -126,8 +129,9 @@ export default function CompanyPage() {
     
     try {
       // Usamos el tipo correcto para la creación de ambiente
-      const environmentData: {name: string; description?: string} = {
+      const environmentData: {name: string; description?: string; category: string} = {
         name: newEnvironmentName,
+        category: newEnvironmentCategory
       };
       
       // Solo añadimos la descripción si no está vacía
@@ -156,6 +160,7 @@ export default function CompanyPage() {
       
       setNewEnvironmentName('');
       setNewEnvironmentDescription('');
+      setNewEnvironmentCategory('desarrollo');
       setShowNewEnvironmentForm(false);
     } catch (err: any) {
       setEnvironmentError(err.message || 'Error al crear el ambiente');
@@ -166,40 +171,45 @@ export default function CompanyPage() {
 
   // Función para eliminar un ambiente
   const handleDeleteEnvironment = async (environmentId: string) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este ambiente? Esta acción no se puede deshacer y eliminará todos los diagramas asociados.')) {
-      return;
-    }
+    Modal.confirm({
+      title: 'Confirmar eliminación',
+      content: '¿Estás seguro de que deseas eliminar este ambiente? Esta acción no se puede deshacer y eliminará todos los diagramas asociados.',
+      okText: 'Eliminar',
+      okType: 'danger',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        setLoading(true);
+        setError('');
 
-    setLoading(true);
-    setError('');
-
-    try {
-      await deleteEnvironment(effectiveCompanyId, environmentId);
-      
-      // Actualizar la compañía sin el ambiente eliminado
-      if (company) {
-        const updatedEnvironments = company.environments?.filter(env => env.id !== environmentId) || [];
-        setCompany({
-          ...company,
-          environments: updatedEnvironments
-        });
-        
-        // Si se eliminó el ambiente seleccionado, seleccionar otro si existe
-        if (selectedEnvironment === environmentId && updatedEnvironments.length > 0) {
-          // Asegurarse de que el ID nunca sea undefined
-          setSelectedEnvironment(updatedEnvironments[0].id || '');
-          const diagramsData = await getDiagramsByEnvironment(effectiveCompanyId, updatedEnvironments[0].id || '');
-          setDiagrams(diagramsData);
-        } else if (updatedEnvironments.length === 0) {
-          setSelectedEnvironment(''); // Limpiar el ambiente seleccionado si no queda ninguno
-          setDiagrams([]);
+        try {
+          await deleteEnvironment(effectiveCompanyId, environmentId);
+          
+          // Actualizar la compañía sin el ambiente eliminado
+          if (company) {
+            const updatedEnvironments = company.environments?.filter(env => env.id !== environmentId) || [];
+            setCompany({
+              ...company,
+              environments: updatedEnvironments
+            });
+            
+            // Si se eliminó el ambiente seleccionado, seleccionar otro si existe
+            if (selectedEnvironment === environmentId && updatedEnvironments.length > 0) {
+              // Asegurarse de que el ID nunca sea undefined
+              setSelectedEnvironment(updatedEnvironments[0].id || '');
+              const diagramsData = await getDiagramsByEnvironment(effectiveCompanyId, updatedEnvironments[0].id || '');
+              setDiagrams(diagramsData);
+            } else if (updatedEnvironments.length === 0) {
+              setSelectedEnvironment(''); // Limpiar el ambiente seleccionado si no queda ninguno
+              setDiagrams([]);
+            }
+          }
+        } catch (err: any) {
+          setError(`Error al eliminar el ambiente: ${err.message}`);
+        } finally {
+          setLoading(false);
         }
       }
-    } catch (err: any) {
-      setError(`Error al eliminar el ambiente: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+    });
   };
   
   function handleLogout() {
@@ -339,7 +349,16 @@ export default function CompanyPage() {
             {/* Formulario para crear un nuevo ambiente */}
             <div className="mt-8">
               <button
-                onClick={() => setShowNewEnvironmentForm(!showNewEnvironmentForm)}
+                onClick={() => {
+                  if (showNewEnvironmentForm) {
+                    // Reset form when canceling
+                    setNewEnvironmentName('');
+                    setNewEnvironmentDescription('');
+                    setNewEnvironmentCategory('desarrollo');
+                    setEnvironmentError('');
+                  }
+                  setShowNewEnvironmentForm(!showNewEnvironmentForm);
+                }}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
               >
                 {showNewEnvironmentForm ? 'Cancelar' : 'Crear Nuevo Ambiente'}
@@ -358,6 +377,17 @@ export default function CompanyPage() {
                       onChange={(e) => setNewEnvironmentName(e.target.value)}
                       className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
+                  </div>
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Categoría
+                    </label>
+                    <div className="mt-1">
+                      <EnvironmentCategorySelect 
+                        value={newEnvironmentCategory}
+                        onChange={setNewEnvironmentCategory}
+                      />
+                    </div>
                   </div>
                   <div className="mt-4">
                     <label htmlFor="newEnvironmentDescription" className="block text-sm font-medium text-gray-700 dark:text-gray-300">

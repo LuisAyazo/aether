@@ -15,6 +15,22 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
 /* Node styles */
 .react-flow__node {
   pointer-events: auto !important;
@@ -173,6 +189,22 @@ body {
 .react-flow__resize-control.bottom-left,
 .react-flow__resize-control.bottom-right {
   pointer-events: all !important;
+}
+
+/* Animation for IaC Template Panel */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
 }
 
 /* Adjust ReactFlow Controls position */

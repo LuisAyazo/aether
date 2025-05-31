@@ -4,11 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import IaCTemplatePanel from './IaCTemplatePanel';
+import { ResourceType } from '@/app/types/resourceConfig';
 
 interface ResourceData {
   label: string;
   provider: 'aws' | 'gcp' | 'azure' | 'generic';
-  resourceType: string;
+  resourceType: ResourceType;
 }
 
 // Singleton component to manage IaC templates display globally
@@ -110,7 +111,6 @@ export default function GlobalIaCTemplatePanel() {
       <IaCTemplatePanel
         isOpen={isOpen}
         onClose={handleClose}
-        nodeId={nodeId}
         resourceData={resourceData}
       />
     </div>,

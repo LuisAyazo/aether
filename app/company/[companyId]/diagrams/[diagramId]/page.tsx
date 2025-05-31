@@ -4,30 +4,51 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useTransition
 import ReactDOM from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import './page.css';
-import FlowEditor from '../../../../components/flow/FlowEditor';
-import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram } from '../../../../services/diagramService';
 import { Button, Select, Modal, Input, Spin, message, Timeline, Drawer, Empty } from 'antd';
-import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteOutlined, HistoryOutlined, RollbackOutlined, BranchesOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteOutlined, HistoryOutlined, RollbackOutlined, BranchesOutlined, FolderOutlined, FolderOpenOutlined, FileOutlined, ClearOutlined } from '@ant-design/icons';
+import { ExclamationTriangleIcon, KeyIcon } from '@heroicons/react/24/outline';
+import ChartBarIcon from '@heroicons/react/24/solid/ChartBarIcon';
 import { 
   addEdge, 
   applyEdgeChanges, 
-  applyNodeChanges,
+  applyNodeChanges
+} from 'reactflow';
+import type { 
+  Node as ReactFlowNode, 
+  Edge as ReactFlowEdge,
   OnNodesChange,
   OnEdgesChange,
-  OnConnect
+  OnConnect,
+  NodeChange, // Importar tipos específicos para los callbacks si es necesario
+  EdgeChange, // Importar tipos específicos para los callbacks si es necesario
+  Connection // Importar tipos específicos para los callbacks si es necesario
 } from 'reactflow';
-import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
-// Importar nodeTypes desde el archivo centralizado
+
+// Componentes
+import FlowEditor from '../../../../components/flow/FlowEditor';
+import EnvironmentTreeSelect from '../../../../components/ui/EnvironmentTreeSelect';
+import EnvironmentCategorySelect from '../../../../components/ui/EnvironmentCategorySelect';
+import DiagramTreeSelect from '../../../../components/ui/DiagramTreeSelect';
+import CompanySidebar from '../../../../components/ui/CompanySidebar';
+import CredentialsPage from '../../../../components/ui/CredentialsPage';
+import DeploymentsPage from '../../../../components/ui/DeploymentsPage';
+import SettingsPage from '../../../../components/ui/SettingsPage';
+import TeamPage from '../../../../components/ui/TeamPage';
+
+// Servicios
+import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, deleteDiagram, deleteEnvironment } from '../../../../services/diagramService';
+import { isAuthenticated } from '../../../../services/authService';
+
+// Tipos y utilidades
 import nodeTypes from '../../../../components/nodes/NodeTypes';
 import { Node, Edge } from '../../../../services/diagramService';
-import { isAuthenticated } from '../../../../services/authService';
+
+const { TextArea } = Input;
 
 // Cache for environments and diagrams
 const environmentCache = new Map<string, Environment[]>();
 const diagramCache = new Map<string, Diagram[]>();
 const singleDiagramCache = new Map<string, Diagram>();
-
-const { TextArea } = Input;
 
 // Define interfaces for resource categories
 interface ResourceItem {
@@ -85,33 +106,45 @@ const resourceCategories: ResourceCategory[] = [
     name: 'GCP - Cómputo',
     provider: 'gcp',
     items: [
-      { type: 'compute', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp' },
-      { type: 'group', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp' },
-      { type: 'compute', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp' },
-      { type: 'compute', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp' },
-      { type: 'compute', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp' },
-      { type: 'compute', name: 'Cloud Functions', description: 'Funciones serverless', provider: 'gcp' },
+      { type: 'gcp_compute_instance', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp' },
+      { type: 'gcp_compute_disk', name: 'Compute Disk', description: 'Disco persistente para VMs', provider: 'gcp' },
+      { type: 'gcp_compute_instance_template', name: 'Instance Template', description: 'Plantilla para instancias de VM', provider: 'gcp' },
+      { type: 'gcp_compute_instance_group_manager', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp' },
+      { type: 'gcp_gke_cluster', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp' },
+      { type: 'gcp_cloudrun_service', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp' },
+      { type: 'gcp_appengine_app', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp' },
+      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Funciones serverless (Cómputo)', provider: 'gcp' },
+    ]
+  },
+  {
+    name: 'GCP - Redes', // Nueva o existente categoría para Network, Firewall, LB
+    provider: 'gcp',
+    items: [
+      { type: 'gcp_compute_network', name: 'VPC Network', description: 'Red Virtual Privada', provider: 'gcp' },
+      { type: 'gcp_compute_firewall', name: 'Firewall Rule', description: 'Regla de firewall VPC', provider: 'gcp' },
+      { type: 'gcp_compute_load_balancer', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'gcp' },
+      // Podríamos añadir Subnetwork aquí también si tiene su propio esquema
     ]
   },
   {
     name: 'GCP - Almacenamiento',
     provider: 'gcp',
     items: [
-      { type: 'storage', name: 'Cloud Storage', description: 'Almacenamiento de objetos', provider: 'gcp' },
-      { type: 'sql', name: 'Cloud SQL', description: 'Base de datos gestionada', provider: 'gcp' },
-      { type: 'sql', name: 'BigQuery', description: 'Almacén de datos', provider: 'gcp' },
-      { type: 'sql', name: 'Firestore', description: 'Base de datos NoSQL', provider: 'gcp' },
-      { type: 'sql', name: 'Memorystore', description: 'Caché en memoria', provider: 'gcp' },
-      { type: 'storage', name: 'Filestore', description: 'Sistema de archivos', provider: 'gcp' },
+      { type: 'gcp_cloud_storage_bucket', name: 'Cloud Storage Bucket', description: 'Almacenamiento de objetos', provider: 'gcp' },
+      { type: 'gcp_sql_instance', name: 'Cloud SQL Instance', description: 'Base de datos MySQL, PostgreSQL, SQL Server', provider: 'gcp' },
+      { type: 'gcp_bigquery_dataset', name: 'BigQuery Dataset', description: 'Conjunto de datos de BigQuery', provider: 'gcp' },
+      { type: 'gcp_firestore_database', name: 'Firestore Database', description: 'Base de datos NoSQL en modo Nativo o Datastore', provider: 'gcp' },
+      { type: 'gcp_memorystore_instance', name: 'Memorystore Instance', description: 'Servicio de caché Redis o Memcached', provider: 'gcp' },
+      { type: 'gcp_filestore_instance', name: 'Filestore Instance', description: 'Almacenamiento de archivos NFS gestionado', provider: 'gcp' },
     ]
   },
   {
     name: 'GCP - Aplicación',
     provider: 'gcp',
     items: [
-      { type: 'function', name: 'Cloud Functions', description: 'Función serverless', provider: 'gcp' },
-      { type: 'function', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp' },
-      { type: 'function', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp' },
+      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Función serverless (Aplicación)', provider: 'gcp' },
+      { type: 'gcp_api_gateway', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp' }, // Sugerencia de tipo más específico
+      { type: 'gcp_pubsub_topic', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp' }, // Sugerencia de tipo más específico
       { type: 'function', name: 'Cloud Tasks', description: 'Colas de tareas', provider: 'gcp' },
       { type: 'function', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp' },
       { type: 'function', name: 'Eventarc', description: 'Orquestación de eventos', provider: 'gcp' },
@@ -192,12 +225,18 @@ export default function DiagramPage() {
   // Keep the previous diagram for smooth transitions
   const [previousDiagram, setPreviousDiagram] = useState<Diagram | null>(null);
   
+  // Sidebar state management
+  const [activeSection, setActiveSection] = useState<'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team'>('diagrams');
+  const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  
+  
   // Memoize nodeTypes to prevent recreating on each render
   const memoizedNodeTypes = useMemo(() => nodeTypes, []);
   
   // Manejadores para cambios en nodos y conexiones
   const onNodesChange: OnNodesChange = useCallback(
-    (changes) => {
+    (changes: NodeChange[]) => { // Añadir tipo explícito
       setNodes((nds) => {
         const updatedNodes = applyNodeChanges(changes, nds);
         return updatedNodes;
@@ -207,7 +246,7 @@ export default function DiagramPage() {
   );
   
   const onEdgesChange: OnEdgesChange = useCallback(
-    (changes) => {
+    (changes: EdgeChange[]) => { // Añadir tipo explícito
       setEdges((eds) => {
         const updatedEdges = applyEdgeChanges(changes, eds);
         return updatedEdges;
@@ -217,7 +256,7 @@ export default function DiagramPage() {
   );
   
   const onConnect: OnConnect = useCallback(
-    (params) => {
+    (params: Connection) => { // Añadir tipo explícito
       setEdges((eds) => addEdge({ ...params, animated: true }, eds));
     },
     []
@@ -227,10 +266,16 @@ export default function DiagramPage() {
   const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState<boolean>(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState<string>('');
   const [newEnvironmentDescription, setNewEnvironmentDescription] = useState<string>('');
+  const [newEnvironmentCategory, setNewEnvironmentCategory] = useState<string>('desarrollo');
 
   const [newDiagramModalVisible, setNewDiagramModalVisible] = useState<boolean>(false);
   const [newDiagramName, setNewDiagramName] = useState<string>('');
   const [newDiagramDescription, setNewDiagramDescription] = useState<string>('');
+  const [newDiagramPath, setNewDiagramPath] = useState<string>('');
+
+  // Estados para eliminación de diagramas
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState<boolean>(false);
+  const [diagramToDelete, setDiagramToDelete] = useState<Diagram | null>(null);
 
   // Track if component is mounted to prevent state updates after unmount
   const isMounted = useRef(true);
@@ -516,18 +561,7 @@ export default function DiagramPage() {
           setNodes([]);
           setEdges([]);
           
-          // Si no hay diagramas, actualizar la URL solo con el ambiente
-          const sanitizedEnvName = selectedEnv.name
-            .toLowerCase()
-            .replace(/[^\w\s-]/g, '')
-            .replace(/\s+/g, '-');
-            
-          router.replace(
-            `/company/${companyId}/diagrams?environmentId=${environmentId}&env=${sanitizedEnvName}`,
-            { scroll: false }
-          );
-          
-          // Turn off loading state
+          // Turn off loading state - stay on the same page to show "no diagrams" message
           setLoading(false);
         }, remainingTime);
       }
@@ -621,7 +655,8 @@ export default function DiagramPage() {
     try {
       const environmentData = {
         name: newEnvironmentName,
-        description: newEnvironmentDescription
+        description: newEnvironmentDescription,
+        category: newEnvironmentCategory
       };
 
       await createEnvironment(companyId as string, environmentData);
@@ -644,11 +679,67 @@ export default function DiagramPage() {
       setNewEnvironmentModalVisible(false);
       setNewEnvironmentName('');
       setNewEnvironmentDescription('');
+      setNewEnvironmentCategory('desarrollo');
     } catch (error) {
       console.error("Error creando ambiente:", error);
-      message.error("No se pudo crear el ambiente. Por favor, inténtelo de nuevo más tarde.");
+      const errorMessage = error instanceof Error ? error.message : "No se pudo crear el ambiente. Por favor, inténtelo de nuevo más tarde.";
+      message.error(errorMessage);
     }
     setLoading(false);
+  };
+
+  const handleDeleteEnvironment = async (environmentId: string) => {
+    // Find the environment name for confirmation
+    const environmentToDelete = environments.find(env => env.id === environmentId);
+    const environmentName = environmentToDelete?.name || 'el ambiente';
+    
+    Modal.confirm({
+      title: 'Confirmar eliminación',
+      content: `¿Estás seguro de que deseas eliminar ${environmentName}? Esta acción no se puede deshacer y eliminará todos los diagramas asociados.`,
+      okText: 'Eliminar',
+      okType: 'danger',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        setLoading(true);
+        try {
+          await deleteEnvironment(companyId as string, environmentId);
+          message.success("Ambiente eliminado correctamente");
+          
+          // Reload environments
+          const environmentsData = await getEnvironments(companyId as string);
+          setEnvironments(environmentsData);
+          
+          // If the deleted environment was selected, switch to another environment or clear selection
+          if (selectedEnvironment === environmentId) {
+            if (environmentsData.length > 0) {
+              // Select the first available environment
+              setSelectedEnvironment(environmentsData[0].id);
+              // Load diagrams for the new environment
+              const diagramsData = await getDiagramsByEnvironment(companyId as string, environmentsData[0].id);
+              setDiagrams(diagramsData);
+              if (diagramsData.length > 0) {
+                setSelectedDiagram(diagramsData[0].id);
+                setCurrentDiagram(diagramsData[0]);
+              } else {
+                setSelectedDiagram(null);
+                setCurrentDiagram(null);
+              }
+            } else {
+              // No environments left
+              setSelectedEnvironment(null);
+              setDiagrams([]);
+              setSelectedDiagram(null);
+              setCurrentDiagram(null);
+            }
+          }
+        } catch (error) {
+          console.error("Error eliminando ambiente:", error);
+          const errorMessage = error instanceof Error ? error.message : "No se pudo eliminar el ambiente. Por favor, inténtelo de nuevo más tarde.";
+          message.error(errorMessage);
+        }
+        setLoading(false);
+      }
+    });
   };
 
   const handleCreateDiagram = async () => {
@@ -667,19 +758,19 @@ export default function DiagramPage() {
       const diagramData = {
         name: newDiagramName,
         description: newDiagramDescription,
+        path: newDiagramPath.trim() || undefined,
         nodes: [],
         edges: [],
         viewport: { x: 0, y: 0, zoom: 1 }
       };
 
       const newDiagram = await createDiagram(companyId as string, selectedEnvironment, diagramData);
-      message.success("Diagrama creado correctamente");
 
-      // Recargar diagramas
+      // Recargar diagramas y actualizar el selector
       const diagramsData = await getDiagramsByEnvironment(companyId as string, selectedEnvironment);
-      setDiagrams(diagramsData);
       
-      // Seleccionar el nuevo diagrama
+      // Actualizar el estado de diagramas y seleccionar el nuevo
+      setDiagrams(diagramsData);
       setSelectedDiagram(newDiagram.id);
       setCurrentDiagram(newDiagram);
       
@@ -696,11 +787,122 @@ export default function DiagramPage() {
       setNewDiagramModalVisible(false);
       setNewDiagramName('');
       setNewDiagramDescription('');
+      setNewDiagramPath('');
+
+      // Forzar actualización del selector
+      startTransition(() => {
+        setDiagrams([...diagramsData]);
+      });
+
+      // Mostrar mensaje de éxito después de actualizar
+      message.success("Diagrama creado correctamente");
     } catch (error) {
       console.error("Error creando diagrama:", error);
-      message.error("No se pudo crear el diagrama. Por favor, inténtelo de nuevo más tarde.");
+      const errorMessage = error instanceof Error ? error.message : "No se pudo crear el diagrama. Por favor, inténtelo de nuevo más tarde.";
+      message.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  // Función para organizar diagramas por directorios con estructura jerárquica completa
+  const organizeByDirectories = (diagrams: Diagram[]) => {
+    const organized: Record<string, Diagram[]> = {};
+    
+    diagrams.forEach(diagram => {
+      let directory = 'root'; // Usar 'root' en lugar de 'Sin categoría' para mejor manejo
+      
+      if (diagram.path && diagram.path.trim() !== '') {
+        // Dividir la ruta y tomar solo el primer nivel de directorio
+        const pathParts = diagram.path.split('/').filter(part => part.trim() !== '');
+        if (pathParts.length > 0) {
+          directory = pathParts[0];
+        }
+      }
+      
+      if (!organized[directory]) {
+        organized[directory] = [];
+      }
+      organized[directory].push(diagram);
+    });
+    
+    // Ordenar diagramas dentro de cada directorio
+    Object.keys(organized).forEach(key => {
+      organized[key].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    
+    return organized;
+  };
+
+  // These functions have been replaced by the DiagramTreeSelect component
+
+  // Función para confirmar eliminación de diagrama
+  const confirmDeleteDiagram = (diagram: Diagram) => {
+    // Verificar si el diagrama tiene nodos o conexiones
+    if (diagram.nodes && diagram.nodes.length > 0) {
+      message.error("No se puede eliminar un diagrama que contiene nodos. Por favor, limpie el diagrama primero usando el botón 'Limpiar'.");
+      return;
+    }
+    setDiagramToDelete(diagram);
+    setDeleteConfirmVisible(true);
+  };
+
+  // Función para eliminar diagrama
+  const handleDeleteDiagram = async () => {
+    if (!diagramToDelete || !selectedEnvironment) return;
+    
+    try {
+      setLoading(true);
+      
+      await deleteDiagram(companyId as string, selectedEnvironment, diagramToDelete.id);
+      
+      // Recargar diagramas y actualizar el selector
+      const diagramsData = await getDiagramsByEnvironment(companyId as string, selectedEnvironment);
+      
+      // Actualizar el estado de diagramas
+      setDiagrams(diagramsData);
+      
+      // Si el diagrama eliminado era el seleccionado, limpiar la selección
+      if (selectedDiagram === diagramToDelete.id) {
+        if (diagramsData.length > 0) {
+          // Seleccionar el primer diagrama disponible
+          const firstDiagram = diagramsData[0];
+          setSelectedDiagram(firstDiagram.id);
+          setCurrentDiagram(firstDiagram);
+          
+          // Actualizar la URL
+          const selectedEnv = environments.find(env => env.id === selectedEnvironment);
+          if (selectedEnv) {
+            updateUrlWithNames(selectedEnvironment, firstDiagram.id, selectedEnv.name, firstDiagram.name);
+          }
+        } else {
+          // No hay más diagramas
+          setSelectedDiagram(null);
+          setCurrentDiagram(null);
+          setNodes([]);
+          setEdges([]);
+          // Redirigir a la página de diagramas
+          router.push(`/company/${companyId}/diagrams`);
+        }
+      }
+      
+      // Cerrar modal
+      setDeleteConfirmVisible(false);
+      setDiagramToDelete(null);
+
+      // Forzar actualización del selector
+      startTransition(() => {
+        setDiagrams([...diagramsData]);
+      });
+
+      // Mostrar mensaje de éxito después de actualizar
+      message.success("Diagrama eliminado correctamente");
+    } catch (error: any) {
+      console.error("Error eliminando diagrama:", error);
+      message.error(error.message || "No se pudo eliminar el diagrama. Por favor, inténtelo de nuevo más tarde.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Track which type of loading is happening - initial or transition
@@ -840,6 +1042,7 @@ export default function DiagramPage() {
               updateUrlWithNames(targetEnvironment.id, targetDiagramId, envName, diagramName);
               
               // Use batch state updates to minimize rerenders
+              // This ensures all state updates happen together
               batchStateUpdates({
                 diagram: diagramData,
                 nodes: diagramData.nodes || [],
@@ -1207,8 +1410,7 @@ export default function DiagramPage() {
     }
   };
 
-  // Nuevos estados para la compañía y control de versiones
-  const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
+  // Nuevos estados para control de versiones
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [rollbackModalVisible, setRollbackModalVisible] = useState(false);
   const [versionsModalVisible, setVersionsModalVisible] = useState(false);
@@ -1391,66 +1593,372 @@ export default function DiagramPage() {
     console.log('Historial de versiones actualizado:', versionHistory);
   }, [versionHistory]);
 
-  // We'll show the initial loading only for the first render
-  if (loadingType === 'initial') {
+  // Load credentials
+  const [credentials, setCredentials] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadCredentials = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/companies/${companyId}/credentials`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setCredentials(Array.isArray(data) ? data : []);
+        } else {
+          setCredentials([]);
+        }
+      } catch (error) {
+        console.error('Error loading credentials:', error);
+        setCredentials([]);
+      }
+    };
+
+    loadCredentials();
+  }, [companyId]);
+
+  // Check if current environment has credentials
+  const getCurrentEnvironmentCredentials = () => {
+    if (!selectedEnvironment) return [];
+    return credentials.filter(cred => 
+      cred.environments && cred.environments.includes(selectedEnvironment)
+    );
+  };
+
+  const environmentCredentials = getCurrentEnvironmentCredentials();
+  const hasCredentials = environmentCredentials.length > 0;
+  const currentEnvironmentName = environments.find(env => env.id === selectedEnvironment)?.name;
+
+  // Estado para controlar la visibilidad del banner de credenciales
+  const [showCredentialsBanner, setShowCredentialsBanner] = useState<boolean>(true);
+
+  // Verificar si el usuario ha optado por no mostrar el banner permanentemente
+  useEffect(() => {
+    if (selectedEnvironment && typeof window !== 'undefined') {
+      // Comprobar si el usuario ha ocultado el banner para este ambiente específico
+      const hiddenBanners = JSON.parse(localStorage.getItem('hiddenCredentialsBanners') || '{}');
+      if (hiddenBanners[selectedEnvironment]) {
+        setShowCredentialsBanner(false);
+      } else {
+        setShowCredentialsBanner(true);
+      }
+    }
+  }, [selectedEnvironment]);
+
+  // Función para ocultar el banner permanentemente
+  const hideCredentialsBannerPermanently = () => {
+    if (selectedEnvironment && typeof window !== 'undefined') {
+      const hiddenBanners = JSON.parse(localStorage.getItem('hiddenCredentialsBanners') || '{}');
+      hiddenBanners[selectedEnvironment] = true;
+      localStorage.setItem('hiddenCredentialsBanners', JSON.stringify(hiddenBanners));
+      setShowCredentialsBanner(false);
+    }
+  };
+
+  // Helper function to render different sections based on activeSection
+  const renderActiveSection = () => {
+    switch (activeSection) {
+      case 'credentials':
+        return (
+          <div className="p-4 h-full">
+            <CredentialsPage companyId={companyId as string} />
+          </div>
+        );
+      case 'deployments':
+        return (
+          <div className="p-4 h-full">
+            <DeploymentsPage companyId={companyId as string} />
+          </div>
+        );
+      case 'settings':
+        return (
+          <div className="p-4 h-full">
+            <SettingsPage companyId={companyId as string} />
+          </div>
+        );
+      case 'team':
+        return (
+          <div className="p-4 h-full">
+            <TeamPage companyId={companyId as string} />
+          </div>
+        );
+      case 'diagrams':
+      default:
+        return renderDiagramsSection();
+    }
+  };
+
+  // Separamos el renderizado de la parte del diagrama para simplificar el código
+  const renderDiagramEditor = () => {
+    // Si hay diagrama seleccionado, lo mostramos
+    if (currentDiagram) {
+      return (
+        <div className="h-full w-full" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <FlowEditor 
+            key={`current-diagram-${currentDiagram.id}`}
+            companyId={companyId as string} 
+            environmentId={selectedEnvironment as string}
+            diagramId={selectedDiagram as string} 
+            initialDiagram={currentDiagram}
+            initialViewport={currentDiagram.viewport}
+            nodeTypes={memoizedNodeTypes}
+            resourceCategories={resourceCategories}
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onSave={(diagramData) => {
+              if (isUpdatingRef.current) return;
+              
+              // Store the ReactFlow data as-is since it's already in ReactFlow format
+              const flowData = {
+                nodes: diagramData.nodes,
+                edges: diagramData.edges,
+                viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 }
+              };
+              
+              // Procesar los metadatos de grupos y posiciones de nodos
+              const groupNodes = flowData.nodes.filter((node: ReactFlowNode) => node.type === 'group');
+              const nodeGroups: Record<string, {
+                nodeIds: string[];
+                dimensions: { width: number; height: number };
+                provider: string;
+                label: string;
+              }> = {};
+              const nodePositions: Record<string, Record<string, {
+                relativePosition: { x: number; y: number };
+                dimensions: { width: number; height: number };
+              }>> = {};
+
+              // Construir estructura de grupos
+              groupNodes.forEach((groupNode: ReactFlowNode) => {
+                const childNodes = flowData.nodes.filter((node: ReactFlowNode) => node.parentNode === groupNode.id);
+                nodeGroups[groupNode.id] = {
+                  nodeIds: childNodes.map((node: ReactFlowNode) => node.id),
+                  dimensions: {
+                    width: typeof groupNode.style?.width === 'number' ? groupNode.style.width : 300,
+                    height: typeof groupNode.style?.height === 'number' ? groupNode.style.height : 200
+                  },
+                  provider: groupNode.data?.provider || 'generic',
+                  label: groupNode.data?.label || 'Group'
+                };
+
+                // Guardar posiciones relativas de los nodos dentro de este grupo
+                nodePositions[groupNode.id] = {};
+                childNodes.forEach((childNode: ReactFlowNode) => {
+                  nodePositions[groupNode.id][childNode.id] = {
+                    relativePosition: { ...childNode.position },
+                    dimensions: {
+                      width: typeof childNode.style?.width === 'number' ? childNode.style.width : (typeof childNode.width === 'number' ? childNode.width : 100),
+                      height: typeof childNode.style?.height === 'number' ? childNode.style.height : (typeof childNode.height === 'number' ? childNode.height : 50)
+                    }
+                  };
+                });
+              });
+              
+              // Convertir los nodos y aristas de React Flow a nuestro formato personalizado
+              const customNodes = convertToCustomNodes(diagramData.nodes);
+              const customEdges = convertToCustomEdges(diagramData.edges);
+              
+              // Conservar el nombre y descripción originales del diagrama y guardar los cambios
+              updateDiagram(
+                companyId as string,
+                selectedEnvironment as string,
+                selectedDiagram as string,
+                {
+                  name: currentDiagram.name,
+                  description: currentDiagram.description,
+                  nodes: customNodes,
+                  edges: customEdges,
+                  viewport: flowData.viewport,
+                  nodeGroups,
+                  nodePositions
+                }
+              ).then((updated) => {
+                console.log("Diagrama guardado exitosamente:", updated);
+                message.success("Diagrama actualizado exitosamente.");
+              }).catch(error => {
+                console.error("Error al guardar diagrama:", error);
+                message.error("No se pudo guardar el diagrama. Por favor, inténtelo de nuevo.");
+              });
+            }}
+          />
+        </div>
+      );
+    }
+    
+    // Si no está cargando y no hay diagrama, mostramos mensaje vacío
+    if (!loading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center p-10 max-w-md">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+              <ChartBarIcon className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {!selectedEnvironment 
+                ? "Selecciona un ambiente"
+                : "No hay diagramas disponibles"
+              }
+            </h3>
+            <p className="text-gray-500 mb-6">
+              {!selectedEnvironment 
+                ? "Selecciona o crea un ambiente para empezar a trabajar con diagramas de infraestructura"
+                : "Este ambiente no tiene diagramas. Crea uno nuevo para empezar a diseñar tu infraestructura"
+              }
+            </p>
+            {selectedEnvironment && (
+              <Button 
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setNewDiagramModalVisible(true)}
+                className="bg-blue-600 hover:bg-blue-700 border-blue-600"
+              >
+                Crear Primer Diagrama
+              </Button>
+            )}
+          </div>
+        </div>
+      );
+    }
+    
+    // Estado de carga
     return (
-      <div className="flex justify-center items-center h-screen">
-        <Spin size="large">
-          <div className="p-5">Cargando...</div>
+      <div className="flex items-center justify-center h-full">
+        <Spin size="large" tip="Cargando diagrama...">
+          <div className="p-12"></div>
         </Spin>
       </div>
     );
-  }
+  };
 
-  return (
-    <div className="p-4">
-      <div className="mb-4 bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-3">
+  // Rendering the diagrams section in a simplified way
+  const renderDiagramsSection = () => (
+    <div className="flex flex-col h-full">
+      {/* Warning Banner for missing credentials - With dismiss options */}
+      {!hasCredentials && selectedEnvironment && showCredentialsBanner && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mx-4 mb-4 rounded-r-lg">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start flex-1">
+              <div className="flex-shrink-0">
+                <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400" />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  Sin credenciales configuradas
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>
+                    El ambiente <strong>{currentEnvironmentName}</strong> no tiene credenciales de cloud asociadas. 
+                    No podrás crear o desplegar infraestructura hasta que configures las credenciales.
+                  </p>
+                </div>
+                <div className="mt-4 flex items-center space-x-4">
+                  <button
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        sessionStorage.setItem(`activeSection_${companyId}`, 'credentials');
+                      }
+                      setActiveSection('credentials');
+                    }}
+                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-yellow-800 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500 transition-colors"
+                  >
+                    <KeyIcon className="w-4 h-4 mr-2" />
+                    Configurar credenciales
+                  </button>
+                  
+                  <button
+                    onClick={hideCredentialsBannerPermanently}
+                    className="text-xs text-yellow-600 hover:text-yellow-800 underline"
+                  >
+                    No mostrar de nuevo
+                  </button>
+                </div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowCredentialsBanner(false)}
+              className="text-yellow-500 hover:text-yellow-700"
+              aria-label="Cerrar"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Success Banner - when credentials are configured */}
+      {hasCredentials && selectedEnvironment && (
+        <div className="bg-green-50 border-l-4 border-green-400 p-3 mx-4 mb-4 rounded-r-lg">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <KeyIcon className="h-4 w-4 text-green-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-green-700">
+                <strong>{environmentCredentials.length}</strong> credencial(es) configuradas para{' '}
+                <strong>{currentEnvironmentName}</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Environment and Diagram selector */}
+      <div className="mb-2 bg-white rounded-lg shadow-sm border border-gray-200 mx-2">
+        <div className="p-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
-                <span className="text-gray-700 font-medium mr-2">Compañía:</span>
-                <span className="text-blue-600 font-medium">{company?.name || 'Cargando...'}</span>
-              </div>
-
-              <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
                 <span className="text-gray-700 font-medium mr-2">Ambiente:</span>
-                <Select 
-                  style={{ width: 160 }} 
-                  value={selectedEnvironment}
+                <EnvironmentTreeSelect 
+                  environments={environments} 
+                  value={selectedEnvironment ?? undefined}
                   onChange={handleEnvironmentChange}
-                  options={environments.map(env => ({
-                    value: env.id,
-                    label: env.name
-                  }))}
-                  className="!bg-white"
+                  placeholder="Selecciona un ambiente"
+                  onDeleteEnvironment={handleDeleteEnvironment}
+                  showDeleteButton={true}
                 />
                 <Button 
                   type="primary" 
                   icon={<PlusOutlined />} 
                   className="ml-2 bg-blue-600 hover:bg-blue-700 border-blue-600"
                   onClick={() => setNewEnvironmentModalVisible(true)}
+                  title="Crear nuevo ambiente"
                 />
               </div>
               
               {selectedEnvironment && (
                 <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
                   <span className="text-gray-700 font-medium mr-2">Diagrama:</span>
-                  <Select 
-                    style={{ width: 160 }} 
-                    value={selectedDiagram}
+                  <DiagramTreeSelect 
+                    key={`diagram-selector-${diagrams.length}-${selectedDiagram}`} 
+                    diagrams={diagrams} 
+                    value={selectedDiagram ?? undefined}
                     onChange={handleDiagramChange}
-                    options={diagrams.map(diag => ({
-                      value: diag.id,
-                      label: diag.name
-                    }))}
-                    className="!bg-white"
+                    companyId={companyId as string}
+                    environmentId={selectedEnvironment as string}
+                    className="min-w-[320px]"
+                    showDeleteButton={true}
+                    onDeleteDiagram={(diagramId) => {
+                      // Find the diagram by ID and confirm deletion
+                      const diagram = diagrams.find(d => d.id === diagramId);
+                      if (diagram) {
+                        confirmDeleteDiagram(diagram);
+                      }
+                    }}
                   />
                   <Button 
                     type="primary" 
                     icon={<PlusOutlined />} 
-                    className="ml-2 bg-blue-600 hover:bg-blue-700 border-blue-600"
+                    className="ml-2 bg-green-600 hover:bg-green-700 border-green-600"
                     onClick={() => setNewDiagramModalVisible(true)}
+                    title="Crear nuevo diagrama"
                   />
                 </div>
               )}
@@ -1502,10 +2010,10 @@ export default function DiagramPage() {
                 />
                 <Button
                   danger
-                  icon={<DeleteOutlined />}
+                  icon={<ClearOutlined />}
                   onClick={handleDestroy}
                   className="hover:bg-red-50"
-                  title="Limpiar diagrama"
+                  title="Limpiar todos los recursos del diagrama"
                 />
               </div>
             </div>
@@ -1513,136 +2021,41 @@ export default function DiagramPage() {
         </div>
       </div>
 
-      {/* Enhanced diagram display with advanced transition handling */}
-      <div className="relative h-[calc(100vh-120px)]">
-        {/* Create a phantom layer for the previous diagram */}
-        {loadingType === 'transition' && previousDiagram && selectedEnvironment && (
-          <div>
-            <FlowEditor 
-              key={`prev-diagram-${previousDiagram.id}`}
-              companyId={companyId as string} 
-              environmentId={selectedEnvironment}
-              diagramId={previousDiagram.id} 
-              initialDiagram={{
-                ...previousDiagram,
-                created_at: previousDiagram.created_at || new Date().toISOString(),
-                updated_at: previousDiagram.updated_at || new Date().toISOString(),
-              }}
-              initialViewport={previousDiagram.viewport}
-              nodeTypes={memoizedNodeTypes}
-              resourceCategories={resourceCategories}
-              nodes={previousDiagram.nodes || []}
-              edges={previousDiagram.edges || []}
-              onNodesChange={() => {}}
-              onEdgesChange={() => {}}
-              onConnect={() => {}}
-            />
-          </div>
-        )}
-        
-        {/* Current diagram container */}
-        <div className="diagram-container h-full">
-          {currentDiagram ? (
-            <FlowEditor 
-              key={`current-diagram-${currentDiagram.id}`}
-              companyId={companyId as string} 
-              environmentId={selectedEnvironment as string}
-              diagramId={selectedDiagram as string} 
-              initialDiagram={currentDiagram}
-              initialViewport={currentDiagram.viewport}
-              nodeTypes={memoizedNodeTypes}
-              resourceCategories={resourceCategories}
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onSave={(diagramData) => {
-                if (isUpdatingRef.current) return;
-                
-                // Store the ReactFlow data as-is since it's already in ReactFlow format
-                const flowData = {
-                  nodes: diagramData.nodes,
-                  edges: diagramData.edges,
-                  viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 }
-                };
-                
-                // Procesar los metadatos de grupos y posiciones de nodos
-                const groupNodes = flowData.nodes.filter((node: ReactFlowNode) => node.type === 'group');
-                const nodeGroups: Record<string, {
-                  nodeIds: string[];
-                  dimensions: { width: number; height: number };
-                  provider: string;
-                  label: string;
-                }> = {};
-                const nodePositions: Record<string, Record<string, {
-                  relativePosition: { x: number; y: number };
-                  dimensions: { width: number; height: number };
-                }>> = {};
-
-                // Construir estructura de grupos
-                groupNodes.forEach((groupNode: ReactFlowNode) => {
-                  const childNodes = flowData.nodes.filter((node: ReactFlowNode) => node.parentNode === groupNode.id);
-                  nodeGroups[groupNode.id] = {
-                    nodeIds: childNodes.map((node: ReactFlowNode) => node.id),
-                    dimensions: {
-                      width: typeof groupNode.style?.width === 'number' ? groupNode.style.width : 300,
-                      height: typeof groupNode.style?.height === 'number' ? groupNode.style.height : 200
-                    },
-                    provider: groupNode.data?.provider || 'generic',
-                    label: groupNode.data?.label || 'Group'
-                  };
-
-                  // Guardar posiciones relativas de los nodos dentro de este grupo
-                  nodePositions[groupNode.id] = {};
-                  childNodes.forEach((childNode: ReactFlowNode) => {
-                    nodePositions[groupNode.id][childNode.id] = {
-                      relativePosition: { ...childNode.position },
-                      dimensions: {
-                        width: typeof childNode.style?.width === 'number' ? childNode.style.width : (typeof childNode.width === 'number' ? childNode.width : 100),
-                        height: typeof childNode.style?.height === 'number' ? childNode.style.height : (typeof childNode.height === 'number' ? childNode.height : 50)
-                      }
-                    };
-                  });
-                });
-                
-                // Convertir los nodos y aristas de React Flow a nuestro formato personalizado
-                const customNodes = convertToCustomNodes(diagramData.nodes);
-                const customEdges = convertToCustomEdges(diagramData.edges);
-                
-                // Conservar el nombre y descripción originales del diagrama y guardar los cambios
-                updateDiagram(
-                  companyId as string,
-                  selectedEnvironment as string,
-                  selectedDiagram as string,
-                  {
-                    name: currentDiagram.name,
-                    description: currentDiagram.description,
-                    nodes: customNodes,
-                    edges: customEdges,
-                    viewport: flowData.viewport,
-                    nodeGroups,
-                    nodePositions
-                  }
-                ).then((updated) => {
-                  console.log("Diagrama guardado exitosamente:", updated);
-                  message.success("Diagrama actualizado exitosamente.");
-                }).catch(error => {
-                  console.error("Error al guardar diagrama:", error);
-                  message.error("No se pudo guardar el diagrama. Por favor, inténtelo de nuevo.");
-                });
-              }}
-            />
-          ) : !loading ? (
-            <div className="text-center p-10 border-2 border-dashed border-gray-300 rounded-md">
-              <p className="text-lg text-gray-500">
-                {!selectedEnvironment 
-                  ? "Seleccione o cree un ambiente para empezar"
-                  : "No hay diagramas disponibles en este ambiente. Cree uno nuevo para empezar."
-                }
-              </p>
+      {/* Stats Bar - Simplified but visible */}
+      {currentDiagram && nodes.length > 0 && (
+        <div className="px-2 py-1 bg-white border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="text-sm text-gray-700">Nodos:</span>
+                <span className="text-sm font-semibold text-gray-900">{nodes.length}</span>
+              </div>
+              
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 rounded-full bg-purple-500" />
+                <span className="text-sm text-gray-700">Conexiones:</span>
+                <span className="text-sm font-semibold text-gray-900">{edges.length}</span>
+              </div>
             </div>
-          ) : null}
+            
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs text-gray-600">
+                  {currentEnvironmentName} • Sincronizado
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Diagram Area - With fixed height and absolute positioning */}
+      <div className="relative bg-white flex-1 rounded-lg overflow-hidden" 
+           style={{ height: "calc(100vh - 250px)" }}>
+        <div className="absolute inset-0">
+          {renderDiagramEditor()}
         </div>
       </div>
 
@@ -1650,24 +2063,38 @@ export default function DiagramPage() {
       <Modal
         title="Crear Nuevo Ambiente"
         open={newEnvironmentModalVisible}
-        onCancel={() => setNewEnvironmentModalVisible(false)}
+        onCancel={() => {
+          setNewEnvironmentModalVisible(false);
+          setNewEnvironmentName('');
+          setNewEnvironmentDescription('');
+          setNewEnvironmentCategory('desarrollo');
+        }}
         onOk={handleCreateEnvironment}
         okText="Crear"
         cancelText="Cancelar"
+        okButtonProps={{ disabled: !newEnvironmentName.trim() }}
       >
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Ambiente*</label>
           <Input 
             value={newEnvironmentName} 
-            onChange={e => setNewEnvironmentName(e.target.value)} 
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEnvironmentName(e.target.value)} 
             placeholder="Ej. Desarrollo, Pruebas, Producción"
+            autoFocus
+          />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Categoría*</label>
+          <EnvironmentCategorySelect 
+            value={newEnvironmentCategory}
+            onChange={setNewEnvironmentCategory}
           />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
           <TextArea 
             value={newEnvironmentDescription} 
-            onChange={e => setNewEnvironmentDescription(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewEnvironmentDescription(e.target.value)}
             rows={4}
             placeholder="Descripción del ambiente"
           />
@@ -1678,201 +2105,91 @@ export default function DiagramPage() {
       <Modal
         title="Crear Nuevo Diagrama"
         open={newDiagramModalVisible}
-        onCancel={() => setNewDiagramModalVisible(false)}
+        onCancel={() => {
+          setNewDiagramModalVisible(false);
+          setNewDiagramName('');
+          setNewDiagramDescription('');
+          setNewDiagramPath('');
+        }}
         onOk={handleCreateDiagram}
         okText="Crear"
         cancelText="Cancelar"
+        okButtonProps={{ 
+          disabled: !newDiagramName.trim() || loading,
+          loading: loading
+        }}
       >
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Diagrama*</label>
           <Input 
             value={newDiagramName} 
-            onChange={e => setNewDiagramName(e.target.value)} 
-            placeholder="Ej. Arquitectura de microservicios"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewDiagramName(e.target.value)} 
+            placeholder="Ej. Infraestructura Web, Base de Datos"
+            autoFocus
           />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Directorio/Ruta (opcional)</label>
+          <Select
+            mode="tags"
+            style={{ width: '100%' }}
+            value={newDiagramPath ? [newDiagramPath] : []}
+            onChange={(values) => setNewDiagramPath(values[values.length - 1] || '')}
+            placeholder="Ej. devops/hub-and-spoke, infrastructure/database"
+            styles={{
+              popup: {
+                root: {
+                  maxHeight: 300,
+                  overflow: 'auto'
+                }
+              }
+            }}
+            options={(() => {
+              // Obtener directorios existentes para sugerencias
+              const existingDirs = new Set<string>();
+              diagrams.forEach(diagram => {
+                if (diagram.path && diagram.path.trim() !== '') {
+                  const pathParts = diagram.path.split('/').filter(part => part.trim() !== '');
+                  if (pathParts.length > 0) {
+                    existingDirs.add(pathParts[0]);
+                    // También agregar rutas completas comunes
+                    existingDirs.add(diagram.path);
+                  }
+                }
+              });
+              
+              return Array.from(existingDirs).map(dir => ({
+                value: dir,
+                label: (
+                  <div className="flex items-center">
+                    <FolderOutlined className="mr-2 text-orange-500" />
+                    {dir}
+                  </div>
+                )
+              }));
+            })()}
+            filterOption={(input, option) => {
+              return option?.value.toLowerCase().includes(input.toLowerCase()) || false;
+            }}
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Organiza tus diagramas en directorios. Usa "/" para crear subdirectorios. 
+            <br />
+            <strong>Ejemplos:</strong> devops, infrastructure/aws, networks/security
+          </p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
           <TextArea 
             value={newDiagramDescription} 
-            onChange={e => setNewDiagramDescription(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewDiagramDescription(e.target.value)}
             rows={4}
             placeholder="Descripción del diagrama"
           />
         </div>
       </Modal>
 
-      {/* Preview Modal */}
-      <Modal
-        title="Vista Previa de Cambios"
-        open={previewModalVisible}
-        onCancel={() => setPreviewModalVisible(false)}
-        footer={[
-          <Button key="close" onClick={() => setPreviewModalVisible(false)}>
-            Cerrar
-          </Button>,
-          <Button 
-            key="run" 
-            type="primary" 
-            onClick={() => {
-              setPreviewModalVisible(false);
-              handleRun();
-            }}
-          >
-            Ejecutar Cambios
-          </Button>
-        ]}
-        width={800}
-      >
-        <div className="space-y-6">
-          <div className="bg-gray-50 p-4 rounded-md">
-            <h3 className="text-lg font-medium mb-2">Resumen de Cambios</h3>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="bg-green-50 p-3 rounded">
-                <div className="text-2xl font-bold text-green-600">{previewData.resourcesToCreate.length}</div>
-                <div className="text-sm text-green-700">Recursos a Crear</div>
-              </div>
-              <div className="bg-yellow-50 p-3 rounded">
-                <div className="text-2xl font-bold text-yellow-600">{previewData.resourcesToUpdate.length}</div>
-                <div className="text-sm text-yellow-700">Recursos a Actualizar</div>
-              </div>
-              <div className="bg-red-50 p-3 rounded">
-                <div className="text-2xl font-bold text-red-600">{previewData.resourcesToDelete.length}</div>
-                <div className="text-sm text-red-700">Recursos a Eliminar</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recursos a Crear */}
-          {previewData.resourcesToCreate.length > 0 && (
-            <div>
-              <h4 className="text-md font-medium mb-2 text-green-700">Recursos a Crear</h4>
-              <div className="space-y-2">
-                {previewData.resourcesToCreate.map(resource => (
-                  <div key={resource.id} className="bg-white p-3 rounded border border-green-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{resource.name}</span>
-                        <span className="text-sm text-gray-500 ml-2">({resource.type})</span>
-                      </div>
-                      <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">
-                        {resource.provider}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-600">
-                      <div className="font-medium">Propiedades:</div>
-                      <pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-x-auto">
-                        {JSON.stringify(resource.changes.properties, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Recursos a Actualizar */}
-          {previewData.resourcesToUpdate.length > 0 && (
-            <div>
-              <h4 className="text-md font-medium mb-2 text-yellow-700">Recursos a Actualizar</h4>
-              <div className="space-y-2">
-                {previewData.resourcesToUpdate.map(resource => (
-                  <div key={resource.id} className="bg-white p-3 rounded border border-yellow-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{resource.name}</span>
-                        <span className="text-sm text-gray-500 ml-2">({resource.type})</span>
-                      </div>
-                      <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
-                        {resource.provider}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-600">
-                      <div className="font-medium">Cambios:</div>
-                      <pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-x-auto">
-                        {JSON.stringify(resource.changes, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Recursos a Eliminar */}
-          {previewData.resourcesToDelete.length > 0 && (
-            <div>
-              <h4 className="text-md font-medium mb-2 text-red-700">Recursos a Eliminar</h4>
-              <div className="space-y-2">
-                {previewData.resourcesToDelete.map(resource => (
-                  <div key={resource.id} className="bg-white p-3 rounded border border-red-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-medium">{resource.name}</span>
-                        <span className="text-sm text-gray-500 ml-2">({resource.type})</span>
-                      </div>
-                      <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">
-                        {resource.provider}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-blue-50 p-4 rounded-md mt-4">
-            <p className="text-sm text-blue-700">
-              Esta es una vista previa de los cambios que se aplicarán al ejecutar el diagrama.
-              Los recursos se crearán en el ambiente {environments.find(env => env.id === selectedEnvironment)?.name}.
-            </p>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Promote Modal */}
-      <Modal
-        title="Promover Diagrama"
-        open={promoteModalVisible}
-        onCancel={() => setPromoteModalVisible(false)}
-        onOk={handlePromoteConfirm}
-        okText="Promover"
-        cancelText="Cancelar"
-      >
-        <div className="space-y-4">
-          <p>Seleccione el ambiente destino para promover el diagrama:</p>
-          <Select
-            style={{ width: '100%' }}
-            value={selectedTargetEnvironment}
-            onChange={(value: string) => setSelectedTargetEnvironment(value)}
-            options={environments
-              .filter(env => env.id !== selectedEnvironment)
-              .map(env => ({
-                value: env.id,
-                label: env.name
-              }))}
-          />
-        </div>
-      </Modal>
-
-      {/* Run Modal */}
-      <Modal
-        title="Desplegar Diagrama"
-        open={runModalVisible}
-        onCancel={() => setRunModalVisible(false)}
-        onOk={handleRunConfirm}
-        okText="Desplegar"
-        cancelText="Cancelar"
-      >
-        <div className="space-y-4">
-          <p>¿Está seguro que desea desplegar este diagrama en el ambiente actual?</p>
-          <p className="text-sm text-gray-500">
-            Esta acción desplegará todos los recursos definidos en el diagrama en el ambiente {environments.find(env => env.id === selectedEnvironment)?.name}.
-          </p>
-        </div>
-      </Modal>
-
-      {/* Destroy All Modal */}
+      {/* Modal de confirmación para limpiar diagrama */}
       <Modal
         title="Limpiar Diagrama"
         open={destroyModalVisible}
@@ -1881,216 +2198,117 @@ export default function DiagramPage() {
           setDestroyConfirmationText('');
         }}
         onOk={handleDestroyConfirm}
-        okText="Limpiar Diagrama"
+        okText="Limpiar"
         cancelText="Cancelar"
         okButtonProps={{ 
           danger: true,
-          disabled: destroyConfirmationText.trim() !== (currentDiagram?.name || '')
+          disabled: !currentDiagram || destroyConfirmationText.trim() !== currentDiagram.name
         }}
       >
-        <div className="space-y-4">
-          <div className="bg-red-50 p-4 rounded-md border border-red-200">
-            <p className="text-red-800 font-semibold">⚠️ ADVERTENCIA: Esta acción es irreversible</p>
-            <p className="text-red-700 mt-2">
-              Esta acción eliminará TODOS los nodos y conexiones de este diagrama específico.
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 mb-4">
+            Esta acción eliminará todos los nodos y conexiones del diagrama <strong>"{currentDiagram?.name}"</strong>.
+          </p>
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md mb-4">
+            <p className="text-sm text-red-800 font-medium">
+              ⚠️ Esta acción no se puede deshacer
+            </p>
+            <p className="mt-1 text-sm text-red-700">
+              Todos los recursos y conexiones del diagrama serán eliminados permanentemente.
             </p>
           </div>
-          
-          <div className="space-y-3">
-            <p className="text-gray-700">
-              <strong>Diagrama a destruir:</strong> {currentDiagram?.name}
-            </p>
-            <p className="text-gray-700">
-              <strong>Ambiente:</strong> {environments.find(env => env.id === selectedEnvironment)?.name}
-            </p>
-          </div>
-          
-          <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
-            <p className="text-yellow-800 text-sm">
-              Para confirmar esta acción, escriba exactamente el nombre del diagrama:
-            </p>
-            <p className="text-yellow-900 font-mono font-semibold mt-1">
-              {currentDiagram?.name}
-            </p>
-          </div>
-          
           <div>
-            <Input
-              placeholder={`Escriba: ${currentDiagram?.name}`}
-              value={destroyConfirmationText}
-              onChange={(e) => setDestroyConfirmationText(e.target.value)}
-              className={`${
-                destroyConfirmationText.trim() === (currentDiagram?.name || '') 
-                  ? 'border-green-400' 
-                  : destroyConfirmationText.trim() !== '' 
-                    ? 'border-red-400' 
-                    : ''
-              }`}
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Para confirmar, escribe el nombre del diagrama: <strong>{currentDiagram?.name}</strong>
+            </label>
+            <Input 
+              value={destroyConfirmationText} 
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDestroyConfirmationText(e.target.value)}
+              placeholder={currentDiagram?.name}
+              autoFocus
             />
           </div>
-          
-          <p className="text-sm text-gray-500">
-            Esta operación eliminará permanentemente todos los nodos y conexiones de este diagrama.
-            El diagrama quedará completamente vacío y podrá comenzar de nuevo.
-          </p>
         </div>
       </Modal>
 
-      {/* Modal de Historial */}
-      <Drawer
-        title="Historial de Cambios"
-        placement="right"
-        onClose={() => setHistoryModalVisible(false)}
-        open={historyModalVisible}
-        width="30%"
+      {/* Confirmación de eliminación de diagrama */}
+      <Modal
+        title="Confirmar Eliminación"
+        open={deleteConfirmVisible}
+        onCancel={() => {
+          setDeleteConfirmVisible(false);
+          setDiagramToDelete(null);
+        }}
+        onOk={handleDeleteDiagram}
+        okText="Eliminar"
+        cancelText="Cancelar"
+        okButtonProps={{ 
+          danger: true,
+          disabled: diagramToDelete?.nodes && diagramToDelete.nodes.length > 0
+        }}
       >
-        {versionHistory.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <div className="text-center">
-                <p className="text-gray-500 mb-2">No hay historial disponible</p>
-                <p className="text-sm text-gray-400">
-                  El historial aparecerá aquí cuando realices cambios en el diagrama
-                </p>
-              </div>
-            }
-          />
-        ) : (
-          <Timeline
-            mode="left"
-            items={versionHistory.map(version => ({
-              key: version.id,
-              color: 'blue',
-              label: new Date(version.timestamp).toLocaleString(),
-              children: (
-                <div className="mb-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h4 className="font-medium">{version.description}</h4>
-                      <p className="text-sm text-gray-500">
-                        {version.author}
-                      </p>
-                    </div>
-                    <div className="flex gap-2 text-sm">
-                      <span className="text-green-600">+{version.changes.created}</span>
-                      <span className="text-yellow-600">~{version.changes.updated}</span>
-                      <span className="text-red-600">-{version.changes.deleted}</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            }))}
-          />
-        )}
-      </Drawer>
-
-      {/* Modal de Rollback */}
-      <Drawer
-        title="Revertir a Versión Anterior"
-        placement="right"
-        onClose={() => setRollbackModalVisible(false)}
-        open={rollbackModalVisible}
-        width="30%"
-        footer={
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => setRollbackModalVisible(false)}>
-              Cancelar
-            </Button>
-            <Button type="primary" onClick={handleRollbackConfirm}>
-              Revertir
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          {versionHistory.length === 0 ? (
-                       <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <div className="text-center">
-                  <p className="text-gray-500 mb-2">No hay versiones disponibles</p>
-                  <p className="text-sm text-gray-400">
-                    No hay versiones anteriores a las que puedas revertir
-                  </p>
-                </div>
-              }
-            />
-          ) : (
-            <>
-              <p className="text-gray-600">
-                Seleccione la versión a la que desea revertir. Esta acción no se puede deshacer.
+        <div className="mb-4">
+          <p className="text-sm text-gray-600">
+            ¿Estás seguro de que deseas eliminar el diagrama <strong>"{diagramToDelete?.name}"</strong>?
+          </p>
+          {diagramToDelete?.path && (
+            <p className="mt-1 text-xs text-gray-500">
+              Ubicación: {diagramToDelete.path}
+            </p>
+          )}
+          {diagramToDelete?.nodes && diagramToDelete.nodes.length > 0 ? (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800 font-medium">
+                ⚠️ No se puede eliminar el diagrama porque contiene {diagramToDelete.nodes.length} nodo(s)
               </p>
-              <Select
-                style={{ width: '100%' }}
-                value={selectedVersion}
-                onChange={setSelectedVersion}
-                options={versionHistory.map(version => ({
-                  value: version.id,
-                  label: (
-                    <div className="flex justify-between items-center">
-                      <span>{version.description}</span>
-                      <span className="text-sm text-gray-500">
-                        {new Date(version.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                  )
-                }))}
-              />
-            </>
-          )}
-        </div>
-      </Drawer>
-
-      {/* Modal de Versiones */}
-      <Drawer
-        title="Gestionar Versiones"
-        placement="right"
-        onClose={() => setVersionsModalVisible(false)}
-        open={versionsModalVisible}
-        width="30%"
-      >
-        <div className="space-y-4">
-          {versionHistory.length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <div className="text-center">
-                  <p className="text-gray-500 mb-2">No hay versiones disponibles</p>
-                  <p className="text-sm text-gray-400">
-                    Las versiones aparecerán aquí cuando realices cambios en el diagrama
-                  </p>
-                </div>
-              }
-            />
+              <p className="mt-2 text-sm text-yellow-700">
+                Por favor, utiliza el botón "Limpiar" para eliminar todos los nodos antes de eliminar el diagrama.
+              </p>
+            </div>
           ) : (
-            versionHistory.map(version => (
-              <div key={version.id} className="p-3 bg-gray-50 rounded-lg">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="font-medium">{version.description}</h4>
-                    <p className="text-sm text-gray-500">
-                      {new Date(version.timestamp).toLocaleString()} - {version.author}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="small" onClick={() => {
-                      setSelectedVersion(version.id);
-                      setVersionsModalVisible(false);
-                      setRollbackModalVisible(true);
-                    }}>
-                      Revertir
-                    </Button>
-                    <Button size="small" type="primary">
-                      Comparar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))
+            <p className="mt-2 text-sm text-red-600">
+              Esta acción no se puede deshacer.
+            </p>
           )}
         </div>
-      </Drawer>
+      </Modal>
+    </div>
+  );
+
+  // We'll show the initial loading only for the first render
+  if (loadingType === 'initial') {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Spin size="large">
+          <div className="p-5">Cargando...</div>
+        </Spin>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      <CompanySidebar
+        companyName={company?.name || 'Cargando...'}
+        activeSection={activeSection}
+        onSectionChange={(section) => {
+          console.log('Section changed to:', section);
+          setActiveSection(section);
+        }}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+
+      <div className="flex-1 overflow-auto">
+        {renderActiveSection()}
+      </div>
+
+      {/* Dev Debug Info - can be removed in production */}
+      <div className="fixed bottom-0 left-0 right-0 bg-red-100 text-xs p-1 text-red-900 z-50">
+        Debug: {companyId as string} | Env: {selectedEnvironment || 'none'} | Diagram: {selectedDiagram || 'none'} | 
+        Nodes: {nodes.length} | Edges: {edges.length} | Loading: {loading ? 'true' : 'false'} | 
+        DiagramExists: {currentDiagram ? 'true' : 'false'}
+      </div>
     </div>
   );
 }

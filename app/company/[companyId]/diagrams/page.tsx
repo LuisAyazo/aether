@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { getDiagramsByEnvironment, getEnvironments, createEnvironment, Environment, Diagram } from '../../../services/diagramService';
+import { getDiagramsByEnvironment, getEnvironments, createEnvironment, deleteDiagram, Environment, Diagram } from '../../../services/diagramService';
 import { isAuthenticated } from '../../../services/authService';
 import { Modal, Input } from 'antd';
+import EnvironmentCategorySelect from '../../../components/ui/EnvironmentCategorySelect';
 const { TextArea } = Input;
 
 export default function DiagramsListPage() {
@@ -18,6 +19,9 @@ export default function DiagramsListPage() {
   const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState('');
   const [newEnvironmentDescription, setNewEnvironmentDescription] = useState('');
+  const [newEnvironmentCategory, setNewEnvironmentCategory] = useState<string>('desarrollo');
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [diagramToDelete, setDiagramToDelete] = useState<Diagram | null>(null);
   
   const router = useRouter();
   const params = useParams();
@@ -135,7 +139,8 @@ export default function DiagramsListPage() {
       // Crear nuevo ambiente
       const newEnvironment = await createEnvironment(companyId, {
         name: newEnvironmentName,
-        description: newEnvironmentDescription
+        description: newEnvironmentDescription,
+        category: newEnvironmentCategory
       });
       
       if (newEnvironment) {
@@ -154,6 +159,11 @@ export default function DiagramsListPage() {
           .replace(/\s+/g, '-');
         
         router.push(`/company/${companyId}/diagrams?environmentId=${newEnvironment.id}&env=${envSlug}`);
+        
+        // Reset form fields on success
+        setNewEnvironmentName('');
+        setNewEnvironmentDescription('');
+        setNewEnvironmentCategory('desarrollo');
       }
     } catch (err: any) {
       console.error("Error al crear nuevo ambiente:", err);
@@ -164,6 +174,48 @@ export default function DiagramsListPage() {
     }
   };
   
+  const handleDeleteDiagram = async () => {
+    if (!diagramToDelete) return;
+    
+    try {
+      setLoading(true);
+      setError('');
+      
+      await deleteDiagram(companyId, selectedEnvironmentId, diagramToDelete.id);
+      
+      // Remove the deleted diagram from the list
+      setDiagrams(diagrams.filter(d => d.id !== diagramToDelete.id));
+      
+      setDeleteConfirmVisible(false);
+      setDiagramToDelete(null);
+    } catch (err: any) {
+      console.error("Error al eliminar diagrama:", err);
+      setError(err.message || 'Error al eliminar diagrama. Por favor, intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const confirmDeleteDiagram = (diagram: Diagram) => {
+    setDiagramToDelete(diagram);
+    setDeleteConfirmVisible(true);
+  };
+
+  // Group diagrams by path for organized display
+  const groupDiagramsByPath = (diagrams: Diagram[]) => {
+    const grouped: Record<string, Diagram[]> = {};
+    
+    diagrams.forEach(diagram => {
+      const path = diagram.path || 'Root';
+      if (!grouped[path]) {
+        grouped[path] = [];
+      }
+      grouped[path].push(diagram);
+    });
+    
+    return grouped;
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
       <nav className="bg-white dark:bg-gray-800 shadow-sm">
@@ -297,34 +349,68 @@ export default function DiagramsListPage() {
                 </div>
               </div>
             ) : (
-              <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
-                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {diagrams.map((diagram) => (
-                    <li key={diagram.id}>
-                      <button
-                        onClick={() => navigateToDiagram(diagram)}
-                        className="block w-full text-left hover:bg-gray-50 dark:hover:bg-gray-700 px-6 py-4"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-lg font-medium text-gray-900 dark:text-white">{diagram.name}</h4>
-                            {diagram.description && (
-                              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{diagram.description}</p>
-                            )}
-                            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                              Última actualización: {new Date(diagram.updated_at).toLocaleString()}
-                            </p>
+              <div className="space-y-6">
+                {Object.entries(groupDiagramsByPath(diagrams)).map(([path, pathDiagrams]) => (
+                  <div key={path} className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+                    <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                      <h3 className="text-sm font-medium text-gray-900 dark:text-white flex items-center">
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2V7z" />
+                        </svg>
+                        {path === 'Root' ? '📁 Raíz' : `📁 ${path}`}
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">({pathDiagrams.length})</span>
+                      </h3>
+                    </div>
+                    <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {pathDiagrams.map((diagram) => (
+                        <li key={diagram.id} className="group hover:bg-gray-50 dark:hover:bg-gray-700">
+                          <div className="flex items-center justify-between px-6 py-4">
+                            <button
+                              onClick={() => navigateToDiagram(diagram)}
+                              className="flex-1 text-left"
+                            >
+                              <div>
+                                <h4 className="text-lg font-medium text-gray-900 dark:text-white">{diagram.name}</h4>
+                                {diagram.description && (
+                                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{diagram.description}</p>
+                                )}
+                                <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                                  Última actualización: {new Date(diagram.updated_at).toLocaleString()}
+                                </p>
+                              </div>
+                            </button>
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigateToDiagram(diagram);
+                                }}
+                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                title="Abrir diagrama"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmDeleteDiagram(diagram);
+                                }}
+                                className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 dark:hover:text-red-300 transition-opacity"
+                                title="Eliminar diagrama"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
                           </div>
-                          <div className="ml-4">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </div>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -339,6 +425,7 @@ export default function DiagramsListPage() {
           setNewEnvironmentModalVisible(false);
           setNewEnvironmentName('');
           setNewEnvironmentDescription('');
+          setNewEnvironmentCategory('desarrollo');
         }}
         onOk={handleCreateEnvironment}
         okText="Crear"
@@ -354,6 +441,13 @@ export default function DiagramsListPage() {
             autoFocus
           />
         </div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Categoría*</label>
+          <EnvironmentCategorySelect 
+            value={newEnvironmentCategory}
+            onChange={setNewEnvironmentCategory}
+          />
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
           <TextArea 
@@ -362,6 +456,37 @@ export default function DiagramsListPage() {
             rows={4}
             placeholder="Descripción del ambiente"
           />
+        </div>
+      </Modal>
+
+      {/* Modal para confirmar eliminación de diagrama */}
+      <Modal
+        title="Confirmar Eliminación"
+        open={deleteConfirmVisible}
+        onCancel={() => {
+          setDeleteConfirmVisible(false);
+          setDiagramToDelete(null);
+        }}
+        onOk={handleDeleteDiagram}
+        okText="Eliminar"
+        cancelText="Cancelar"
+        okButtonProps={{ 
+          disabled: loading,
+          danger: true
+        }}
+      >
+        <div className="mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            ¿Estás seguro de que deseas eliminar el diagrama <strong>"{diagramToDelete?.name}"</strong>?
+          </p>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Esta acción no se puede deshacer.
+          </p>
+          {diagramToDelete?.path && (
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Ubicación: {diagramToDelete.path}
+            </p>
+          )}
         </div>
       </Modal>
     </div>

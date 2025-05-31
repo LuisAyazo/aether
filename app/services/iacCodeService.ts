@@ -150,32 +150,186 @@ export const {{camelResourceName}}Url = {{camelResourceName}}.websiteEndpoint;`,
     {
       id: 'tf-gcp-compute-1',
       name: 'GCP Compute Instance',
-      description: 'GCP Compute Engine VM instance',
+      description: 'GCP Compute Engine VM instance with advanced configuration',
       tool: 'terraform',
       provider: 'gcp',
       resourceType: 'compute',
-      template: `resource "google_compute_instance" "{{resourceName}}" {
-  name         = "{{resourceName}}"
+      template: `{{#if createServiceAccount}}
+# Service Account
+resource "google_service_account" "{{resourceName}}_sa" {
+  account_id   = "{{serviceAccountId}}"
+  display_name = "{{serviceAccountDisplayName}}"
+}
+{{/if}}
+
+# Compute Engine Instance
+resource "google_compute_instance" "{{resourceName}}" {
+  name         = "{{name}}"
   machine_type = "{{machineType}}"
   zone         = "{{zone}}"
+  {{#if project}}
+  project      = "{{project}}"
+  {{/if}}
+  {{#if description}}
+  description  = "{{description}}"
+  {{/if}}
 
   boot_disk {
+    auto_delete = {{bootDiskAutoDelete}}
+    {{#if bootDiskDeviceName}}
+    device_name = "{{bootDiskDeviceName}}"
+    {{/if}}
+    
     initialize_params {
-      image = "{{image}}"
+      image = "{{bootDiskImage}}"
+      size  = {{bootDiskSizeGb}}
+      type  = "{{bootDiskType}}"
+      {{#if bootDiskLabels}}
+      labels = {
+        {{#each bootDiskLabels}}
+        {{@key}} = "{{this}}"
+        {{/each}}
+      }
+      {{/if}}
     }
   }
 
+  {{#if attachedDisks}}
+  {{#each attachedDisks}}
+  attached_disk {
+    source      = "{{source}}"
+    device_name = "{{deviceName}}"
+    mode        = "{{mode}}"
+  }
+  {{/each}}
+  {{/if}}
+
+  {{#if scratchDisks}}
+  {{#each scratchDisks}}
+  scratch_disk {
+    interface = "{{interface}}"
+  }
+  {{/each}}
+  {{/if}}
+
   network_interface {
-    network = "default"
+    network    = "{{network}}"
+    {{#if subnetwork}}
+    subnetwork = "{{subnetwork}}"
+    {{/if}}
+    
+    {{#if accessConfigs}}
+    {{#each accessConfigs}}
+    access_config {
+      {{#if natIp}}
+      nat_ip = "{{natIp}}"
+      {{/if}}
+      network_tier = "{{networkTier}}"
+    }
+    {{/each}}
+    {{else}}
     access_config {
       // Ephemeral IP
     }
+    {{/if}}
   }
+
+  {{#if serviceAccount}}
+  service_account {
+    {{#if createServiceAccount}}
+    email  = google_service_account.{{resourceName}}_sa.email
+    {{else}}
+    email  = "{{serviceAccountEmail}}"
+    {{/if}}
+    scopes = [{{#each serviceAccountScopes}}"{{this}}"{{#unless @last}},{{/unless}}{{/each}}]
+  }
+  {{/if}}
+
+  {{#if tags}}
+  tags = [{{#each tags}}"{{this}}"{{#unless @last}},{{/unless}}{{/each}}]
+  {{/if}}
+
+  {{#if labels}}
+  labels = {
+    {{#each labels}}
+    {{@key}} = "{{this}}"
+    {{/each}}
+  }
+  {{/if}}
+
+  {{#if metadata}}
+  metadata = {
+    {{#each metadata}}
+    {{@key}} = "{{this}}"
+    {{/each}}
+  }
+  {{/if}}
+
+  {{#if metadataStartupScript}}
+  metadata_startup_script = <<-EOF
+{{metadataStartupScript}}
+EOF
+  {{/if}}
+
+  {{#if canIpForward}}
+  can_ip_forward = {{canIpForward}}
+  {{/if}}
+
+  {{#if deletionProtection}}
+  deletion_protection = {{deletionProtection}}
+  {{/if}}
+
+  {{#if enableDisplay}}
+  enable_display = {{enableDisplay}}
+  {{/if}}
+
+  {{#if minCpuPlatform}}
+  min_cpu_platform = "{{minCpuPlatform}}"
+  {{/if}}
+
+  {{#if scheduling}}
+  scheduling {
+    automatic_restart   = {{scheduling.automaticRestart}}
+    on_host_maintenance = "{{scheduling.onHostMaintenance}}"
+    preemptible         = {{scheduling.preemptible}}
+  }
+  {{/if}}
+
+  {{#if allowStoppingForUpdate}}
+  allow_stopping_for_update = {{allowStoppingForUpdate}}
+  {{/if}}
+
+  {{#if desiredStatus}}
+  desired_status = "{{desiredStatus}}"
+  {{/if}}
 }`,
       defaultParams: {
-        machineType: 'e2-medium',
+        name: 'my-instance',
+        machineType: 'n2-standard-2',
         zone: 'us-central1-a',
-        image: 'debian-cloud/debian-10'
+        network: 'default',
+        bootDiskImage: 'debian-cloud/debian-11',
+        bootDiskSizeGb: 20,
+        bootDiskType: 'pd-standard',
+        bootDiskAutoDelete: true,
+        createServiceAccount: true,
+        serviceAccountId: 'my-custom-sa',
+        serviceAccountDisplayName: 'Custom SA for VM Instance',
+        serviceAccountScopes: ['cloud-platform'],
+        tags: ['foo', 'bar'],
+        metadata: { foo: 'bar' },
+        metadataStartupScript: 'echo hi > /test.txt',
+        scratchDisks: [{ interface: 'NVME' }],
+        labels: { my_label: 'value' },
+        canIpForward: false,
+        deletionProtection: false,
+        scheduling: {
+          automaticRestart: true,
+          onHostMaintenance: 'MIGRATE',
+          preemptible: false
+        },
+        allowStoppingForUpdate: true,
+        desiredStatus: 'RUNNING'
       },
       createdAt: new Date(),
       updatedAt: new Date()
@@ -183,29 +337,639 @@ export const {{camelResourceName}}Url = {{camelResourceName}}.websiteEndpoint;`,
     {
       id: 'pulumi-gcp-compute-1',
       name: 'GCP Compute Instance (Pulumi)',
-      description: 'GCP Compute Engine defined with Pulumi',
+      description: 'GCP Compute Engine defined with Pulumi including service account',
       tool: 'pulumi',
       provider: 'gcp',
       resourceType: 'compute',
-      template: `const {{camelResourceName}} = new gcp.compute.Instance("{{resourceName}}", {
+      template: `import * as gcp from "@pulumi/gcp";
+
+{{#if createServiceAccount}}
+// Service Account
+const {{camelResourceName}}Sa = new gcp.serviceaccount.Account("{{serviceAccountId}}", {
+    accountId: "{{serviceAccountId}}",
+    displayName: "{{serviceAccountDisplayName}}",
+});
+{{/if}}
+
+// Compute Engine Instance
+const {{camelResourceName}} = new gcp.compute.Instance("{{name}}", {
+    name: "{{name}}",
     machineType: "{{machineType}}",
     zone: "{{zone}}",
+    {{#if project}}
+    project: "{{project}}",
+    {{/if}}
+    {{#if description}}
+    description: "{{description}}",
+    {{/if}}
+    
+    networkInterfaces: [{
+        network: "{{network}}",
+        {{#if subnetwork}}
+        subnetwork: "{{subnetwork}}",
+        {{/if}}
+        {{#if accessConfigs}}
+        accessConfigs: [
+        {{#each accessConfigs}}
+        {
+            {{#if natIp}}
+            natIp: "{{natIp}}",
+            {{/if}}
+            networkTier: "{{networkTier}}",
+        }{{#unless @last}},{{/unless}}
+        {{/each}}
+        ],
+        {{else}}
+        accessConfigs: [{}],
+        {{/if}}
+    }],
+    
     bootDisk: {
+        autoDelete: {{bootDiskAutoDelete}},
+        {{#if bootDiskDeviceName}}
+        deviceName: "{{bootDiskDeviceName}}",
+        {{/if}}
         initializeParams: {
-            image: "{{image}}",
+            image: "{{bootDiskImage}}",
+            diskSizeGb: {{bootDiskSizeGb}},
+            diskType: "{{bootDiskType}}",
+            {{#if bootDiskLabels}}
+            labels: {
+                {{#each bootDiskLabels}}
+                {{@key}}: "{{this}}",
+                {{/each}}
+            },
+            {{/if}}
         },
     },
-    networkInterfaces: [{
-        network: "default",
-        accessConfigs: [{}],
-    }],
+    
+    {{#if attachedDisks}}
+    attachedDisks: [
+    {{#each attachedDisks}}
+    {
+        source: "{{source}}",
+        {{#if deviceName}}
+        deviceName: "{{deviceName}}",
+        {{/if}}
+        mode: "{{mode}}",
+    }{{#unless @last}},{{/unless}}
+    {{/each}}
+    ],
+    {{/if}}
+    
+    {{#if scratchDisks}}
+    scratchDisks: [
+    {{#each scratchDisks}}
+    {
+        interface: "{{interface}}",
+    }{{#unless @last}},{{/unless}}
+    {{/each}}
+    ],
+    {{/if}}
+    
+    {{#if serviceAccount}}
+    serviceAccount: {
+        {{#if createServiceAccount}}
+        email: {{camelResourceName}}Sa.email,
+        {{else}}
+        email: "{{serviceAccountEmail}}",
+        {{/if}}
+        scopes: [{{#each serviceAccountScopes}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}],
+    },
+    {{/if}}
+    
+    {{#if tags}}
+    tags: [{{#each tags}}"{{this}}"{{#unless @last}}, {{/unless}}{{/each}}],
+    {{/if}}
+    
+    {{#if labels}}
+    labels: {
+        {{#each labels}}
+        {{@key}}: "{{this}}",
+        {{/each}}
+    },
+    {{/if}}
+    
+    {{#if metadata}}
+    metadata: {
+        {{#each metadata}}
+        {{@key}}: "{{this}}",
+        {{/each}}
+    },
+    {{/if}}
+    
+    {{#if metadataStartupScript}}
+    metadataStartupScript: \`{{metadataStartupScript}}\`,
+    {{/if}}
+    
+    {{#if canIpForward}}
+    canIpForward: {{canIpForward}},
+    {{/if}}
+    
+    {{#if deletionProtection}}
+    deletionProtection: {{deletionProtection}},
+    {{/if}}
+    
+    {{#if enableDisplay}}
+    enableDisplay: {{enableDisplay}},
+    {{/if}}
+    
+    {{#if minCpuPlatform}}
+    minCpuPlatform: "{{minCpuPlatform}}",
+    {{/if}}
+    
+    {{#if scheduling}}
+    scheduling: {
+        automaticRestart: {{scheduling.automaticRestart}},
+        onHostMaintenance: "{{scheduling.onHostMaintenance}}",
+        preemptible: {{scheduling.preemptible}},
+    },
+    {{/if}}
+    
+    {{#if allowStoppingForUpdate}}
+    allowStoppingForUpdate: {{allowStoppingForUpdate}},
+    {{/if}}
+    
+    {{#if desiredStatus}}
+    desiredStatus: "{{desiredStatus}}",
+    {{/if}}
 });
 
-export const {{camelResourceName}}Ip = {{camelResourceName}}.networkInterfaces[0].accessConfigs[0].natIp;`,
+export const {{camelResourceName}}Ip = {{camelResourceName}}.networkInterfaces[0].accessConfigs[0].natIp;
+export const {{camelResourceName}}InternalIp = {{camelResourceName}}.networkInterfaces[0].networkIp;
+{{#if createServiceAccount}}
+export const {{camelResourceName}}ServiceAccountEmail = {{camelResourceName}}Sa.email;
+{{/if}}`,
       defaultParams: {
-        machineType: 'e2-medium',
+        name: 'my-instance',
+        machineType: 'n2-standard-2',
         zone: 'us-central1-a',
-        image: 'debian-cloud/debian-10'
+        network: 'default',
+        bootDiskImage: 'debian-cloud/debian-11',
+        bootDiskSizeGb: 20,
+        bootDiskType: 'pd-standard',
+        bootDiskAutoDelete: true,
+        createServiceAccount: true,
+        serviceAccountId: 'my-custom-sa',
+        serviceAccountDisplayName: 'Custom SA for VM Instance',
+        serviceAccountScopes: ['cloud-platform'],
+        tags: ['foo', 'bar'],
+        metadata: { foo: 'bar' },
+        metadataStartupScript: 'echo hi > /test.txt',
+        scratchDisks: [{ interface: 'NVME' }],
+        labels: { my_label: 'value' },
+        canIpForward: false,
+        deletionProtection: false,
+        scheduling: {
+          automaticRestart: true,
+          onHostMaintenance: 'MIGRATE',
+          preemptible: false
+        },
+        allowStoppingForUpdate: true,
+        desiredStatus: 'RUNNING'
+      },
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    
+    // GCP Ansible template
+    {
+      id: 'ansible-gcp-compute-1',
+      name: 'GCP Compute Instance (Ansible)',
+      description: 'Provision GCP Compute Engine instance with Ansible',
+      tool: 'ansible',
+      provider: 'gcp',
+      resourceType: 'compute',
+      template: `---
+- name: Create GCP Compute Instance
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  
+  vars:
+    gcp_project: "{{project}}"
+    gcp_cred_kind: serviceaccount
+    gcp_cred_file: "{{credentialsFile}}"
+    zone: "{{zone}}"
+    region: "{{region}}"
+    
+  tasks:
+{{#if createServiceAccount}}
+    - name: Create service account
+      google.cloud.gcp_iam_service_account:
+        name: "{{serviceAccountId}}"
+        display_name: "{{serviceAccountDisplayName}}"
+        project: "{{ gcp_project }}"
+        auth_kind: "{{ gcp_cred_kind }}"
+        service_account_file: "{{ gcp_cred_file }}"
+        state: present
+      register: sa_result
+{{/if}}
+
+    - name: Create compute instance
+      google.cloud.gcp_compute_instance:
+        name: "{{name}}"
+        machine_type: "{{machineType}}"
+        zone: "{{ zone }}"
+        project: "{{ gcp_project }}"
+        auth_kind: "{{ gcp_cred_kind }}"
+        service_account_file: "{{ gcp_cred_file }}"
+{{#if description}}
+        description: "{{description}}"
+{{/if}}
+        
+        disks:
+          - auto_delete: {{bootDiskAutoDelete}}
+{{#if bootDiskDeviceName}}
+            device_name: "{{bootDiskDeviceName}}"
+{{/if}}
+            boot: true
+            initialize_params:
+              source_image: "{{bootDiskImage}}"
+              disk_size_gb: {{bootDiskSizeGb}}
+              disk_type: "{{bootDiskType}}"
+{{#if bootDiskLabels}}
+              labels:
+{{#each bootDiskLabels}}
+                {{@key}}: "{{this}}"
+{{/each}}
+{{/if}}
+{{#if attachedDisks}}
+{{#each attachedDisks}}
+          - source: "{{source}}"
+{{#if deviceName}}
+            device_name: "{{deviceName}}"
+{{/if}}
+            mode: "{{mode}}"
+            auto_delete: false
+{{/each}}
+{{/if}}
+{{#if scratchDisks}}
+{{#each scratchDisks}}
+          - type: "SCRATCH"
+            interface: "{{interface}}"
+            auto_delete: true
+{{/each}}
+{{/if}}
+        
+        network_interfaces:
+          - network:
+              selfLink: "global/networks/{{network}}"
+{{#if subnetwork}}
+            subnetwork:
+              selfLink: "regions/{{ region }}/subnetworks/{{subnetwork}}"
+{{/if}}
+{{#if accessConfigs}}
+            access_configs:
+{{#each accessConfigs}}
+              - name: External NAT
+                type: ONE_TO_ONE_NAT
+{{#if natIp}}
+                nat_ip: "{{natIp}}"
+{{/if}}
+                network_tier: "{{networkTier}}"
+{{/each}}
+{{else}}
+            access_configs:
+              - name: External NAT
+                type: ONE_TO_ONE_NAT
+{{/if}}
+        
+{{#if serviceAccount}}
+        service_accounts:
+          - email: "{{#if createServiceAccount}}{{ sa_result.email }}{{else}}{{serviceAccountEmail}}{{/if}}"
+            scopes:
+{{#each serviceAccountScopes}}
+              - "{{this}}"
+{{/each}}
+{{/if}}
+
+{{#if tags}}
+        tags:
+          items:
+{{#each tags}}
+            - "{{this}}"
+{{/each}}
+{{/if}}
+
+{{#if labels}}
+        labels:
+{{#each labels}}
+          {{@key}}: "{{this}}"
+{{/each}}
+{{/if}}
+
+{{#if metadata}}
+        metadata:
+{{#each metadata}}
+          {{@key}}: "{{this}}"
+{{/each}}
+{{/if}}
+
+{{#if metadataStartupScript}}
+        metadata:
+          startup-script: |
+{{metadataStartupScript}}
+{{/if}}
+
+{{#if canIpForward}}
+        can_ip_forward: {{canIpForward}}
+{{/if}}
+
+{{#if deletionProtection}}
+        deletion_protection: {{deletionProtection}}
+{{/if}}
+
+{{#if enableDisplay}}
+        enable_display: {{enableDisplay}}
+{{/if}}
+
+{{#if minCpuPlatform}}
+        min_cpu_platform: "{{minCpuPlatform}}"
+{{/if}}
+
+{{#if scheduling}}
+        scheduling:
+          automatic_restart: {{scheduling.automaticRestart}}
+          on_host_maintenance: "{{scheduling.onHostMaintenance}}"
+          preemptible: {{scheduling.preemptible}}
+{{/if}}
+
+        state: "{{#if desiredStatus}}{{#if (eq desiredStatus 'RUNNING')}}present{{else}}stopped{{/if}}{{else}}present{{/if}}"
+        
+      register: instance_result
+      
+    - name: Display instance information
+      debug:
+        msg: 
+          - "Instance created: {{ instance_result.name }}"
+          - "Internal IP: {{ instance_result.network_interfaces[0].network_ip }}"
+{{#if accessConfigs}}
+          - "External IP: {{ instance_result.network_interfaces[0].access_configs[0].nat_ip }}"
+{{/if}}`,
+      defaultParams: {
+        project: 'my-gcp-project',
+        credentialsFile: '/path/to/service-account.json',
+        name: 'my-instance',
+        machineType: 'n2-standard-2',
+        zone: 'us-central1-a',
+        region: 'us-central1',
+        network: 'default',
+        bootDiskImage: 'projects/debian-cloud/global/images/family/debian-11',
+        bootDiskSizeGb: 20,
+        bootDiskType: 'pd-standard',
+        bootDiskAutoDelete: true,
+        createServiceAccount: true,
+        serviceAccountId: 'my-custom-sa',
+        serviceAccountDisplayName: 'Custom SA for VM Instance',
+        serviceAccountScopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        tags: ['foo', 'bar'],
+        metadata: { foo: 'bar' },
+        metadataStartupScript: 'echo hi > /test.txt',
+        scratchDisks: [{ interface: 'NVME' }],
+        labels: { my_label: 'value' },
+        canIpForward: false,
+        deletionProtection: false,
+        scheduling: {
+          automaticRestart: true,
+          onHostMaintenance: 'MIGRATE',
+          preemptible: false
+        },
+        desiredStatus: 'RUNNING'
+      },
+      createdAt: new Date(),
+      updatedAt: new Date()
+    },
+    
+    // GCP CloudFormation template (using AWS CloudFormation with custom resources or scripts)
+    {
+      id: 'cf-gcp-compute-1',
+      name: 'GCP Compute Instance (CloudFormation)',
+      description: 'GCP Compute Engine instance using CloudFormation with custom resource',
+      tool: 'cloudformation',
+      provider: 'gcp',
+      resourceType: 'compute',
+      template: `AWSTemplateFormatVersion: '2010-09-09'
+Description: 'GCP Compute Engine Instance via Custom Resource'
+
+Parameters:
+  GCPProjectId:
+    Type: String
+    Default: "{{project}}"
+    Description: GCP Project ID
+    
+  InstanceName:
+    Type: String
+    Default: "{{name}}"
+    Description: Name of the GCP compute instance
+    
+  MachineType:
+    Type: String
+    Default: "{{machineType}}"
+    Description: GCP machine type
+    
+  Zone:
+    Type: String
+    Default: "{{zone}}"
+    Description: GCP zone
+    
+  BootDiskImage:
+    Type: String
+    Default: "{{bootDiskImage}}"
+    Description: Boot disk image
+    
+  BootDiskSizeGb:
+    Type: Number
+    Default: {{bootDiskSizeGb}}
+    Description: Boot disk size in GB
+    
+  BootDiskType:
+    Type: String
+    Default: "{{bootDiskType}}"
+    Description: Boot disk type
+    
+  Network:
+    Type: String
+    Default: "{{network}}"
+    Description: Network name
+
+Resources:
+{{#if createServiceAccount}}
+  GCPServiceAccount:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt GCPResourceFunction.Arn
+      ResourceType: ServiceAccount
+      Properties:
+        project: !Ref GCPProjectId
+        accountId: "{{serviceAccountId}}"
+        displayName: "{{serviceAccountDisplayName}}"
+{{/if}}
+
+  GCPComputeInstance:
+    Type: AWS::CloudFormation::CustomResource
+{{#if createServiceAccount}}
+    DependsOn: GCPServiceAccount
+{{/if}}
+    Properties:
+      ServiceToken: !GetAtt GCPResourceFunction.Arn
+      ResourceType: ComputeInstance
+      Properties:
+        project: !Ref GCPProjectId
+        name: !Ref InstanceName
+        machineType: !Ref MachineType
+        zone: !Ref Zone
+{{#if description}}
+        description: "{{description}}"
+{{/if}}
+        
+        bootDisk:
+          autoDelete: {{bootDiskAutoDelete}}
+{{#if bootDiskDeviceName}}
+          deviceName: "{{bootDiskDeviceName}}"
+{{/if}}
+          initializeParams:
+            sourceImage: !Ref BootDiskImage
+            diskSizeGb: !Ref BootDiskSizeGb
+            diskType: !Ref BootDiskType
+        
+        networkInterfaces:
+          - network: !Ref Network
+{{#if accessConfigs}}
+            accessConfigs:
+{{#each accessConfigs}}
+              - type: "ONE_TO_ONE_NAT"
+{{#if natIp}}
+                natIp: "{{natIp}}"
+{{/if}}
+                networkTier: "{{networkTier}}"
+{{/each}}
+{{else}}
+            accessConfigs:
+              - type: "ONE_TO_ONE_NAT"
+{{/if}}
+        
+{{#if serviceAccount}}
+        serviceAccounts:
+          - email: "{{serviceAccountEmail}}"
+            scopes:
+{{#each serviceAccountScopes}}
+              - "{{this}}"
+{{/each}}
+{{/if}}
+
+{{#if tags}}
+        tags:
+{{#each tags}}
+          - "{{this}}"
+{{/each}}
+{{/if}}
+
+{{#if labels}}
+        labels:
+{{#each labels}}
+          {{@key}}: "{{this}}"
+{{/each}}
+{{/if}}
+
+{{#if metadata}}
+        metadata:
+{{#each metadata}}
+          {{@key}}: "{{this}}"
+{{/each}}
+{{/if}}
+
+{{#if canIpForward}}
+        canIpForward: {{canIpForward}}
+{{/if}}
+
+{{#if deletionProtection}}
+        deletionProtection: {{deletionProtection}}
+{{/if}}
+
+{{#if scheduling}}
+        scheduling:
+          automaticRestart: {{scheduling.automaticRestart}}
+          onHostMaintenance: "{{scheduling.onHostMaintenance}}"
+          preemptible: {{scheduling.preemptible}}
+{{/if}}
+
+  # Lambda function to handle GCP resources (implementation required)
+  GCPResourceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "\${AWS::StackName}-gcp-resource-handler"
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt GCPResourceRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          # Python code for GCP resource management would go here
+          # This would include gcloud CLI commands or GCP API calls
+          # to create/update/delete GCP compute instances
+          import json
+          def handler(event, context):
+              return {'Status': 'SUCCESS'}
+
+  GCPResourceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+Outputs:
+  InstanceName:
+    Description: 'Name of the created GCP compute instance'
+    Value: !GetAtt GCPComputeInstance.name
+    
+  InternalIP:
+    Description: 'Internal IP address of the instance'
+    Value: !GetAtt GCPComputeInstance.internalIp
+    
+  ExternalIP:
+    Description: 'External IP address of the instance'
+    Value: !GetAtt GCPComputeInstance.externalIp
+    
+{{#if createServiceAccount}}
+  ServiceAccountEmail:
+    Description: 'Email of the created service account'
+    Value: !GetAtt GCPServiceAccount.email
+{{/if}}`,
+      defaultParams: {
+        project: 'my-gcp-project',
+        name: 'my-instance',
+        machineType: 'n2-standard-2',
+        zone: 'us-central1-a',
+        network: 'default',
+        bootDiskImage: 'projects/debian-cloud/global/images/family/debian-11',
+        bootDiskSizeGb: 20,
+        bootDiskType: 'pd-standard',
+        bootDiskAutoDelete: true,
+        createServiceAccount: true,
+        serviceAccountId: 'my-custom-sa',
+        serviceAccountDisplayName: 'Custom SA for VM Instance',
+        serviceAccountScopes: ['https://www.googleapis.com/auth/cloud-platform'],
+        tags: ['foo', 'bar'],
+        metadata: { foo: 'bar' },
+        metadataStartupScript: 'echo hi > /test.txt',
+        scratchDisks: [{ interface: 'NVME' }],
+        labels: { my_label: 'value' },
+        canIpForward: false,
+        deletionProtection: false,
+        scheduling: {
+          automaticRestart: true,
+          onHostMaintenance: 'MIGRATE',
+          preemptible: false
+        },
+        desiredStatus: 'RUNNING'
       },
       createdAt: new Date(),
       updatedAt: new Date()
@@ -317,7 +1081,7 @@ export const {{camelResourceName}}Ip = {{camelResourceName}}.networkInterfaces[0
     // Process camelCase resource name if needed
     if (params.resourceName) {
       const camelResourceName = params.resourceName
-        .replace(/(?:^\w|[A-Z]|\b\w)/g, (letter, index) => 
+        .replace(/(?:^\w|[A-Z]|\b\w)/g, (letter: string, index: number) => 
           index === 0 ? letter.toLowerCase() : letter.toUpperCase()
         )
         .replace(/\s+/g, '');
