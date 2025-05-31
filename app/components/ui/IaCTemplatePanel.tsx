@@ -174,18 +174,28 @@ const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
         // o el tipo simplificado necesita un ajuste final para coincidir con las claves del registro.
         // Por ejemplo, si tuviéramos gcp_kubernetes_engine_cluster y quisiéramos category: 'gke', resourceType: 'cluster'
         if (serviceCategory === 'appengine' && simplifiedResourceType === 'app') {
-          // Ya es correcto: category = 'appengine', simplifiedResourceType = 'app'
+          return { category: 'appengine', resourceType: 'app' };
         } else if (serviceCategory === 'gke' && simplifiedResourceType === 'cluster') {
-          category = 'gke'; // Asumiendo que registrarás una categoría 'gke'
-          simplifiedResourceType = 'cluster';
+          return { category: 'gke', resourceType: 'cluster' };
         } else if (serviceCategory === 'cloudfunctions' && simplifiedResourceType === 'function') {
-          category = 'functions'; // Asumiendo una categoría 'functions'
-          simplifiedResourceType = 'function';
+          return { category: 'functions', resourceType: 'function' };
         } else if (serviceCategory === 'cloudrun' && simplifiedResourceType === 'service') {
-          category = 'cloudrun'; // Asumiendo una categoría 'cloudrun'
-          simplifiedResourceType = 'service';
+          return { category: 'cloudrun', resourceType: 'service' };
+        } else if (serviceCategory === 'cloud' && simplifiedResourceType === 'storage_bucket') {
+          return { category: 'storage', resourceType: 'bucket' };
+        } else if (serviceCategory === 'sql' && simplifiedResourceType === 'instance') {
+          return { category: 'database', resourceType: 'instance' };
+        } else if (serviceCategory === 'bigquery' && simplifiedResourceType === 'dataset') {
+          return { category: 'database', resourceType: 'dataset' }; 
+        } else if (serviceCategory === 'firestore' && simplifiedResourceType === 'database') {
+          return { category: 'database', resourceType: 'firestoreDatabase' };
+        } else if (serviceCategory === 'memorystore' && simplifiedResourceType === 'instance') {
+          return { category: 'cache', resourceType: 'instance' };
+        } else if (serviceCategory === 'filestore' && simplifiedResourceType === 'instance') {
+          return { category: 'storage', resourceType: 'filestoreInstance' };
         }
-        // Para gcp_compute_instance, category='compute', simplifiedResourceType='instance', lo cual es manejado por directMatchKeys
+        // Si no es un caso especial que retorna, la categoría y el tipo simplificado ya están establecidos.
+        // Ahora se intentará con directMatchKeys y finalMappingKeys.
       } else if (parts.length === 2) { // Fallback para gcp_type como gcp_appengine (si no hay más partes)
         simplifiedResourceType = parts[1].toLowerCase();
         category = parts[1].toLowerCase(); // Asumir que el tipo es la categoría

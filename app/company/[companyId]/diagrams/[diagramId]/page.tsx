@@ -130,12 +130,12 @@ const resourceCategories: ResourceCategory[] = [
     name: 'GCP - Almacenamiento',
     provider: 'gcp',
     items: [
-      { type: 'storage', name: 'Cloud Storage', description: 'Almacenamiento de objetos', provider: 'gcp' },
-      { type: 'sql', name: 'Cloud SQL', description: 'Base de datos gestionada', provider: 'gcp' },
-      { type: 'sql', name: 'BigQuery', description: 'Almacén de datos', provider: 'gcp' },
-      { type: 'sql', name: 'Firestore', description: 'Base de datos NoSQL', provider: 'gcp' },
-      { type: 'sql', name: 'Memorystore', description: 'Caché en memoria', provider: 'gcp' },
-      { type: 'storage', name: 'Filestore', description: 'Sistema de archivos', provider: 'gcp' },
+      { type: 'gcp_cloud_storage_bucket', name: 'Cloud Storage Bucket', description: 'Almacenamiento de objetos', provider: 'gcp' },
+      { type: 'gcp_sql_instance', name: 'Cloud SQL Instance', description: 'Base de datos MySQL, PostgreSQL, SQL Server', provider: 'gcp' },
+      { type: 'gcp_bigquery_dataset', name: 'BigQuery Dataset', description: 'Conjunto de datos de BigQuery', provider: 'gcp' },
+      { type: 'gcp_firestore_database', name: 'Firestore Database', description: 'Base de datos NoSQL en modo Nativo o Datastore', provider: 'gcp' },
+      { type: 'gcp_memorystore_instance', name: 'Memorystore Instance', description: 'Servicio de caché Redis o Memcached', provider: 'gcp' },
+      { type: 'gcp_filestore_instance', name: 'Filestore Instance', description: 'Almacenamiento de archivos NFS gestionado', provider: 'gcp' },
     ]
   },
   {

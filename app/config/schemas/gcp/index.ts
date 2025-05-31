@@ -4,10 +4,11 @@ import { gcpAppEngineResources } from './appengine'; // Importar el registro de 
 import { gcpGkeResources } from './gke'; // Importar el registro de GKE
 import { gcpCloudRunResources } from './cloudrun'; // Importar el registro de Cloud Run
 import { gcpFunctionsResources } from './functions'; // Importar el registro de Functions
+import { gcpStorageResources } from './storage'; // Importar el registro de Storage
+import { gcpDatabaseResources } from './database'; // Importar el registro de Database
+import { gcpCacheResources } from './cache'; // Importar el registro de Cache
 
-// export * from './storage';     // Para futuros recursos
 // export * from './networking';  // Para futuros recursos
-// export * from './database';    // Para futuros recursos
 
 // Registry of all GCP resource types
 export const GCP_RESOURCE_REGISTRY = {
@@ -16,15 +17,10 @@ export const GCP_RESOURCE_REGISTRY = {
   gke: gcpGkeResources, // Añadir el registro de GKE
   cloudrun: gcpCloudRunResources, // Añadir el registro de Cloud Run
   functions: gcpFunctionsResources, // Añadir el registro de Functions
-  // storage: { // Ejemplo para futuros recursos de storage
-  //   bucket: {
-  //     schema: () => import('./storage/bucket').then(m => m.schema()), // Asumiendo estructura similar
-  //     fields: () => import('./storage/bucket').then(m => m.fields()),
-  //     templates: () => import('./storage/bucket').then(m => m.templates()),
-  //     defaults: () => import('./storage/bucket').then(m => m.defaults()),
-  //   },
-  // },
-  // sql: { ... } // Ejemplo para futuros recursos SQL
+  storage: gcpStorageResources, // Añadir el registro de Storage
+  database: gcpDatabaseResources, // Añadir el registro de Database
+  cache: gcpCacheResources, // Añadir el registro de Cache
+  // networking: { ... } // Ejemplo para futuros recursos de Networking
 } as const;
 
 export type GCPResourceType = keyof typeof GCP_RESOURCE_REGISTRY;

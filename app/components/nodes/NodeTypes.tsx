@@ -5,11 +5,15 @@ import {
   CircleStackIcon, 
   CpuChipIcon,
   CodeBracketIcon,
-  ShieldCheckIcon, // Para Firewall
-  RectangleStackIcon, // Para Instance Template
-  ArrowsRightLeftIcon, // Para Load Balancer
-  GlobeAltIcon, // Para Network
-  ArchiveBoxIcon // Para Disk (usando ArchiveBox como ejemplo)
+  ShieldCheckIcon, 
+  RectangleStackIcon, 
+  ArrowsRightLeftIcon, 
+  GlobeAltIcon, 
+  ArchiveBoxIcon,
+  TableCellsIcon,
+  DocumentTextIcon as FirestoreIcon,
+  BoltIcon,
+  FolderIcon as FilestoreIcon // Usando FolderIcon para Filestore
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';
@@ -139,7 +143,6 @@ export function InstanceGroupManagerNode(props: NodeProps) {
 }
 InstanceGroupManagerNode.displayName = 'InstanceGroupManagerNode';
 
-// Wrappers para los tipos de GCP Compute restantes
 export function ComputeDiskNode(props: NodeProps) {
   return (
     <BaseResourceNode
@@ -189,6 +192,46 @@ export function ComputeInstanceTemplateNode(props: NodeProps) {
   );
 }
 ComputeInstanceTemplateNode.displayName = 'ComputeInstanceTemplateNode';
+
+export function BigQueryDatasetNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <TableCellsIcon className="w-6 h-6 text-blue-600" />, label: props.data.label || 'BigQuery Dataset', resourceType: 'gcp_bigquery_dataset' }}
+    />
+  );
+}
+BigQueryDatasetNode.displayName = 'BigQueryDatasetNode';
+
+export function FirestoreDatabaseNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <FirestoreIcon className="w-6 h-6 text-orange-500" />, label: props.data.label || 'Firestore Database', resourceType: 'gcp_firestore_database' }}
+    />
+  );
+}
+FirestoreDatabaseNode.displayName = 'FirestoreDatabaseNode';
+
+export function MemorystoreInstanceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <BoltIcon className="w-6 h-6 text-red-500" />, label: props.data.label || 'Memorystore Instance', resourceType: 'gcp_memorystore_instance' }}
+    />
+  );
+}
+MemorystoreInstanceNode.displayName = 'MemorystoreInstanceNode';
+
+export function FilestoreInstanceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <FilestoreIcon className="w-6 h-6 text-teal-500" />, label: props.data.label || 'Filestore Instance', resourceType: 'gcp_filestore_instance' }}
+    />
+  );
+}
+FilestoreInstanceNode.displayName = 'FilestoreInstanceNode';
 
 // --- Generic Node ---
 export function GenericNode(props: NodeProps) {
@@ -259,6 +302,10 @@ const nodeTypes = {
   gcp_cloudfunctions_function: CloudFunctionsNode,
   gcp_cloud_storage_bucket: CloudStorageNode, 
   gcp_sql_instance: CloudSQLNode,
+  gcp_bigquery_dataset: BigQueryDatasetNode,
+  gcp_firestore_database: FirestoreDatabaseNode,
+  gcp_memorystore_instance: MemorystoreInstanceNode,
+  gcp_filestore_instance: FilestoreInstanceNode, // Añadido Filestore Instance
   
   gcp_compute_disk: ComputeDiskNode,
   gcp_compute_network: ComputeNetworkNode,

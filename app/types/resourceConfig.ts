@@ -5,7 +5,7 @@ export type ResourceType = string; // Permitir cualquier string, el mapeo se enc
 export interface FieldConfig {
   key?: string; // Field identifier for array-based configurations
   label: string;
-  type: 'text' | 'select' | 'number' | 'boolean' | 'group';
+  type: 'text' | 'select' | 'number' | 'boolean' | 'group' | 'textarea'; // Añadido 'textarea'
   placeholder?: string;
   help?: string;
   description?: string; // Alternative to help text
