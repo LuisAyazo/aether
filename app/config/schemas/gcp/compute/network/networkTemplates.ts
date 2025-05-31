@@ -1,53 +1,54 @@
-import { ResourceTemplate } from '../../../../../types/resourceConfig';
+import { GCPComputeNetworkConfig } from './network'; // Asumiremos que este tipo está en network.ts
+import { CodeTemplate } from '../../../../../types/resourceConfig';
 
+export function generateGCPComputeNetworkTemplates(config: GCPComputeNetworkConfig): CodeTemplate {
+  const resourceName = config.name.replace(/-/g, '_');
+
+  const terraform = `
+resource "google_compute_network" "${config.name}" {
+  name                    = "${config.name}"
+  project                 = "${config.project}"
+  auto_create_subnetworks = ${config.auto_create_subnetworks}
+  mtu                     = ${config.mtu}
+  routing_mode            = "${config.routing_mode}"
+  ${config.description ? `description             = "${config.description}"`: ''}
+  ${config.delete_default_routes_on_create ? `delete_default_routes_on_create = ${config.delete_default_routes_on_create}`: ''}
+}
+`;
+
+  const pulumi = `
+import * as pulumi from "@pulumi/pulumi";
+import * as gcp from "@pulumi/gcp";
+
+const ${resourceName}Network = new gcp.compute.Network("${config.name}", {
+    name: "${config.name}",
+    project: "${config.project}",
+    autoCreateSubnetworks: ${config.auto_create_subnetworks},
+    mtu: ${config.mtu},
+    routingMode: "${config.routing_mode}",
+    ${config.description ? `description: "${config.description}",`: ''}
+    ${config.delete_default_routes_on_create ? `deleteDefaultRoutesOnCreate: ${config.delete_default_routes_on_create},`: ''}
+});
+`;
+
+  return {
+    terraform,
+    pulumi,
+    ansible: `# Ansible para GCP VPC Network (requiere google.cloud collection)
+- name: Create VPC Network
+  google.cloud.gcp_compute_network:
+    name: "${config.name}"
+    project: "{{ project_id | default('${config.project}') }}"
+    auto_create_subnetworks: ${config.auto_create_subnetworks}
+    routing_mode: "${config.routing_mode}"
+    state: present
+`,
+    cloudformation: "// CloudFormation no es aplicable directamente a GCP VPC Networks.\n"
+  };
+}
+
+/*
 export const networkTemplates: ResourceTemplate[] = [
-  {
-    name: 'Auto-Mode VPC',
-    description: 'Auto-mode VPC with automatic subnet creation',
-    config: {
-      name: 'auto-vpc',
-      project: '${var.project_id}',
-      auto_create_subnetworks: true,
-      mtu: 1460,
-      routing_mode: 'REGIONAL',
-      description: 'Auto-mode VPC network'
-    }
-  },
-  {
-    name: 'Custom-Mode VPC',
-    description: 'Custom-mode VPC for manual subnet control',
-    config: {
-      name: 'custom-vpc',
-      project: '${var.project_id}',
-      auto_create_subnetworks: false,
-      mtu: 1460,
-      routing_mode: 'REGIONAL',
-      description: 'Custom-mode VPC network for manual subnet control'
-    }
-  },
-  {
-    name: 'Global VPC',
-    description: 'Global VPC network with global routing',
-    config: {
-      name: 'global-vpc',
-      project: '${var.project_id}',
-      auto_create_subnetworks: false,
-      mtu: 1500,
-      routing_mode: 'GLOBAL',
-      description: 'Global VPC network with cross-region connectivity'
-    }
-  },
-  {
-    name: 'Isolated VPC',
-    description: 'Isolated VPC without default internet gateway',
-    config: {
-      name: 'isolated-vpc',
-      project: '${var.project_id}',
-      auto_create_subnetworks: false,
-      mtu: 1460,
-      routing_mode: 'REGIONAL',
-      delete_default_routes_on_create: true,
-      description: 'Isolated VPC without internet gateway'
-    }
-  }
+ // ... (contenido anterior del array) ...
 ];
+*/

@@ -1,144 +1,113 @@
-import { ResourceTemplate } from '../../../../../types/resourceConfig';
+import { GCPComputeInstanceTemplateConfig } from './instanceTemplate'; // Asumiremos que este tipo está en instanceTemplate.ts
+import { CodeTemplate } from '../../../../../types/resourceConfig';
 
-export const instanceTemplateTemplates: ResourceTemplate[] = [
-  {
-    name: 'Web Server Template',
-    description: 'Template for auto-scaling web servers',
-    config: {
-      name: 'web-server-template',
-      project: '${var.project_id}',
-      machine_type: 'e2-medium',
-      region: 'us-central1',
-      disk: {
-        size_gb: 20,
-        type: 'pd-standard',
-        auto_delete: true
-      },
-      image: {
-        project: 'ubuntu-os-cloud',
-        family: 'ubuntu-2004-lts'
-      },
-      network_interface: {
-        network: 'default',
-        access_config: true
-      },
-      tags: 'web-server,http-server,https-server',
-      metadata: {
-        startup_script: '#!/bin/bash\napt-get update\napt-get install -y nginx\nsystemctl start nginx\nsystemctl enable nginx'
-      },
-      service_account: {
-        email: 'default',
-        scopes: 'cloud-platform'
-      },
-      labels: {
-        environment: 'prod',
-        team: 'frontend'
-      }
-    }
-  },
-  {
-    name: 'API Server Template',
-    description: 'Template for backend API servers',
-    config: {
-      name: 'api-server-template',
-      project: '${var.project_id}',
-      machine_type: 'e2-standard-2',
-      region: 'us-central1',
-      disk: {
-        size_gb: 30,
-        type: 'pd-balanced',
-        auto_delete: true
-      },
-      image: {
-        project: 'ubuntu-os-cloud',
-        family: 'ubuntu-2004-lts'
-      },
-      network_interface: {
-        network: 'default',
-        access_config: false
-      },
-      tags: 'api-server,internal',
-      metadata: {
-        startup_script: '#!/bin/bash\napt-get update\napt-get install -y docker.io\nsystemctl start docker\nsystemctl enable docker'
-      },
-      service_account: {
-        email: 'default',
-        scopes: 'cloud-platform,storage-rw'
-      },
-      labels: {
-        environment: 'prod',
-        team: 'backend'
-      }
-    }
-  },
-  {
-    name: 'Container Template',
-    description: 'Template for container-optimized instances',
-    config: {
-      name: 'container-template',
-      project: '${var.project_id}',
-      machine_type: 'e2-standard-4',
-      region: 'us-central1',
-      disk: {
-        size_gb: 50,
-        type: 'pd-ssd',
-        auto_delete: true
-      },
-      image: {
-        project: 'cos-cloud',
-        family: 'cos-stable'
-      },
-      network_interface: {
-        network: 'default',
-        access_config: true
-      },
-      tags: 'container-vm,http-server',
-      metadata: {
-        startup_script: '#cloud-config\nruncmd:\n  - docker run -d -p 80:8080 gcr.io/${var.project_id}/my-app'
-      },
-      service_account: {
-        email: 'default',
-        scopes: 'cloud-platform,storage-ro'
-      },
-      labels: {
-        environment: 'prod',
-        team: 'devops'
-      }
-    }
-  },
-  {
-    name: 'Worker Template',
-    description: 'Template for background worker instances',
-    config: {
-      name: 'worker-template',
-      project: '${var.project_id}',
-      machine_type: 'n1-standard-2',
-      region: 'us-central1',
-      disk: {
-        size_gb: 100,
-        type: 'pd-standard',
-        auto_delete: true
-      },
-      image: {
-        project: 'ubuntu-os-cloud',
-        family: 'ubuntu-2004-lts'
-      },
-      network_interface: {
-        network: 'default',
-        access_config: false
-      },
-      tags: 'worker,internal',
-      metadata: {
-        startup_script: '#!/bin/bash\napt-get update\napt-get install -y python3 python3-pip\npip3 install celery redis'
-      },
-      service_account: {
-        email: 'default',
-        scopes: 'cloud-platform,pubsub'
-      },
-      labels: {
-        environment: 'prod',
-        team: 'data'
-      }
-    }
+export function generateGCPComputeInstanceTemplateTemplates(config: GCPComputeInstanceTemplateConfig): CodeTemplate {
+  const resourceName = config.name.replace(/-/g, '_');
+
+  const terraform = `
+resource "google_compute_instance_template" "${config.name}" {
+  name_prefix  = "${config.name}-" # Terraform recomienda name_prefix para instance templates
+  project      = "${config.project}"
+  machine_type = "${config.machine_type}"
+  region       = "${config.region}" # Instance templates son recursos regionales
+
+  disk {
+    source_image = "projects/${config.image.project}/global/images/family/${config.image.family}"
+    auto_delete  = ${config.disk?.auto_delete !== undefined ? config.disk.auto_delete : true}
+    boot         = true
+    disk_size_gb = ${config.disk?.size_gb || 20}
+    disk_type    = "pd-${config.disk?.type || 'standard'}"
   }
+
+  ${config.network_interface ? `
+  network_interface {
+    network    = "${config.network_interface.network || 'default'}"
+    ${config.network_interface.subnetwork ? `subnetwork = "${config.network_interface.subnetwork}"` : ''}
+    ${config.network_interface.access_config ? `
+    access_config {
+      // Ephemeral IP
+    }` : ''}
+  }` : `
+  network_interface {
+    network = "default" 
+    access_config {} // Default to an ephemeral IP if not specified otherwise
+  }`}
+
+  ${config.service_account ? `
+  service_account {
+    email  = "${config.service_account.email || 'default'}"
+    scopes = ["${(config.service_account.scopes || 'cloud-platform').split(',').map(s => s.trim()).join('", "')}"]
+  }` : ''}
+
+  ${config.tags ? `tags = ["${config.tags.split(',').map(s => s.trim()).join('", "')}"]` : ''}
+
+  ${config.metadata?.startup_script || config.metadata?.ssh_keys ? `
+  metadata = {
+    ${config.metadata.startup_script ? `startup-script = <<-EOT\n${config.metadata.startup_script}\nEOT` : ''}
+    ${config.metadata.ssh_keys ? `ssh-keys       = "${config.metadata.ssh_keys}"` : ''}
+  }`: ''}
+  
+  labels = {
+    ${config.labels?.environment ? `environment = "${config.labels.environment}"` : ''}
+    ${config.labels?.team ? `team        = "${config.labels.team}"` : ''}
+  }
+
+  ${config.description ? `description = "${config.description}"`: ''}
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+`;
+
+  const pulumi = `
+import * as pulumi from "@pulumi/pulumi";
+import * as gcp from "@pulumi/gcp";
+
+const ${resourceName}Template = new gcp.compute.InstanceTemplate("${config.name}", {
+    namePrefix: "${config.name}-",
+    project: "${config.project}",
+    machineType: "${config.machine_type}",
+    region: "${config.region}",
+    disks: [{
+        sourceImage: \`projects/${config.image.project}/global/images/family/${config.image.family}\`,
+        autoDelete: ${config.disk?.auto_delete !== undefined ? config.disk.auto_delete : true},
+        boot: true,
+        diskSizeGb: ${config.disk?.size_gb || 20},
+        type: \`pd-${config.disk?.type || 'standard'}\`,
+    }],
+    networkInterfaces: [${config.network_interface ? `{
+        network: "${config.network_interface.network || 'default'}",
+        ${config.network_interface.subnetwork ? `subnetwork: "${config.network_interface.subnetwork}",` : ''}
+        ${config.network_interface.access_config ? `accessConfigs: [{}],` : ''}
+    }` : `{ network: "default", accessConfigs: [{}] }`}],
+    ${config.service_account ? `serviceAccount: {
+        email: "${config.service_account.email || 'default'}",
+        scopes: ["${(config.service_account.scopes || 'cloud-platform').split(',').map(s => s.trim()).join('", "')}"],
+    },` : ''}
+    ${config.tags ? `tags: ["${config.tags.split(',').map(s => s.trim()).join('", "')}"],` : ''}
+    ${config.metadata?.startup_script || config.metadata?.ssh_keys ? `metadata: {
+        ${config.metadata.startup_script ? `startupScript: \`${config.metadata.startup_script.replace(/\`/g, '\\\\`')}\`,` : ''}
+        ${config.metadata.ssh_keys ? `sshKeys: "${config.metadata.ssh_keys}",` : ''}
+    },`: ''}
+    labels: {
+        ${config.labels?.environment ? `environment: "${config.labels.environment}",` : ''}
+        ${config.labels?.team ? `team: "${config.labels.team}",` : ''}
+    },
+    ${config.description ? `description: "${config.description}",`: ''}
+});
+`;
+
+  return {
+    terraform,
+    pulumi,
+    ansible: "# Ansible para GCP Instance Template (requiere google.cloud collection)\n- name: Create Instance Template\n  google.cloud.gcp_compute_instance_template:\n    name_prefix: \"${config.name}-\"\n    project: \"{{ project_id | default('${config.project}') }}\"\n    machine_type: \"${config.machine_type}\"\n    region: \"${config.region}\"\n    disks:\n      - auto_delete: ${config.disk?.auto_delete !== undefined ? config.disk.auto_delete : true}\n        boot: true\n        initialize_params:\n          source_image: \"projects/${config.image.project}/global/images/family/${config.image.family}\"\n          disk_size_gb: ${config.disk?.size_gb || 20}\n          disk_type: \"pd-${config.disk?.type || 'standard'}\"\n    network_interfaces:\n      - network: \"${config.network_interface?.network || 'default'}\"\n        # access_configs: para IP efímera\n    state: present\n",
+    cloudformation: "// CloudFormation no es aplicable directamente a GCP Instance Templates.\n"
+  };
+}
+
+/*
+export const instanceTemplateTemplates: ResourceTemplate[] = [
+ // ... (contenido anterior del array) ...
 ];
+*/

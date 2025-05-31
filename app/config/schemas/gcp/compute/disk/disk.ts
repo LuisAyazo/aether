@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ResourceSchema } from '../../../../../types/resourceConfig';
+import { ResourceSchema, CodeTemplate, ResourceValues } from '../../../../../types/resourceConfig'; // Añadir CodeTemplate y ResourceValues
 import { diskFields } from './diskFields';
-import { diskTemplates } from './diskTemplates';
+import { generateGCPComputeDiskTemplates } from './diskTemplates'; // Cambiar import
 
 // Esquema Zod para la validación de la configuración de un disco GCP Compute
 export const gcpComputeDiskValidationSchema = z.object({
@@ -50,10 +50,10 @@ export const defaultGCPComputeDiskConfig: Partial<GCPComputeDiskConfig> = {
 };
 
 // Funciones para el registro global, esperadas por getResourceConfig
-export const schema = () => Promise.resolve(gcpComputeDiskValidationSchema);
+export const schema = (): Promise<z.ZodTypeAny> => Promise.resolve(gcpComputeDiskValidationSchema); // Añadir tipo de retorno explícito
 export const fields = () => Promise.resolve(diskFields);
-export const templates = () => Promise.resolve(diskTemplates);
-export const defaults = () => Promise.resolve(defaultGCPComputeDiskConfig);
+export const templates = (config: GCPComputeDiskConfig): Promise<CodeTemplate> => Promise.resolve(generateGCPComputeDiskTemplates(config)); // Actualizar firma y llamada
+export const defaults = (): Promise<Partial<ResourceValues>> => Promise.resolve(defaultGCPComputeDiskConfig); // Añadir tipo de retorno explícito
 
 export const diskSchema: ResourceSchema = { // Este es el descriptor para la UI, no el esquema de validación Zod directamente
   type: 'gcp_compute_disk', // Usado para identificar el tipo de nodo en el frontend
@@ -61,7 +61,7 @@ export const diskSchema: ResourceSchema = { // Este es el descriptor para la UI,
   description: 'Google Cloud Platform persistent disk resource',
   category: 'compute', // Usado para agrupar en la UI o lógica
   fields: diskFields, // Referencia a la configuración de campos para la UI
-  templates: diskTemplates, // Referencia a las plantillas de código
+  templates: [], // Proporcionar un array vacío para satisfacer ResourceSchema
   // El esquema de validación Zod y los defaults ahora se acceden a través de las funciones exportadas arriba
   documentation: {
     description: 'A persistent disk resource that can be attached to compute instances',

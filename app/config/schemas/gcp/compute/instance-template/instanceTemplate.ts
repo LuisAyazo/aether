@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ResourceSchema } from '../../../../../types/resourceConfig';
+import { ResourceSchema, CodeTemplate, ResourceValues } from '../../../../../types/resourceConfig'; // Añadir CodeTemplate y ResourceValues
 import { instanceTemplateFields } from './instanceTemplateFields';
-import { instanceTemplateTemplates } from './instanceTemplateTemplates';
+import { generateGCPComputeInstanceTemplateTemplates } from './instanceTemplateTemplates'; // Cambiar import
 
 // Sub-esquemas para Instance Template
 const diskConfigSchema = z.object({
@@ -86,10 +86,10 @@ export const defaultGCPComputeInstanceTemplateConfig: Partial<GCPComputeInstance
 };
 
 // Funciones para el registro global, esperadas por getResourceConfig
-export const schema = () => Promise.resolve(gcpComputeInstanceTemplateValidationSchema);
+export const schema = (): Promise<z.ZodTypeAny> => Promise.resolve(gcpComputeInstanceTemplateValidationSchema); // Añadir tipo de retorno explícito
 export const fields = () => Promise.resolve(instanceTemplateFields);
-export const templates = () => Promise.resolve(instanceTemplateTemplates); // instanceTemplateTemplates es un array
-export const defaults = () => Promise.resolve(defaultGCPComputeInstanceTemplateConfig);
+export const templates = (config: GCPComputeInstanceTemplateConfig): Promise<CodeTemplate> => Promise.resolve(generateGCPComputeInstanceTemplateTemplates(config)); // Actualizar firma y llamada
+export const defaults = (): Promise<Partial<ResourceValues>> => Promise.resolve(defaultGCPComputeInstanceTemplateConfig); // Añadir tipo de retorno explícito
 
 export const instanceTemplateSchema: ResourceSchema = { // Descriptor para UI
   type: 'gcp_compute_instance_template',
@@ -97,7 +97,7 @@ export const instanceTemplateSchema: ResourceSchema = { // Descriptor para UI
   description: 'Google Cloud Platform instance template for managed instance groups',
   category: 'compute',
   fields: instanceTemplateFields,
-  templates: instanceTemplateTemplates, // Referencia directa para la UI si es necesario
+  templates: [], // Proporcionar un array vacío para satisfacer ResourceSchema
   documentation: {
     description: 'Instance templates define the configuration for creating identical VM instances',
     examples: [

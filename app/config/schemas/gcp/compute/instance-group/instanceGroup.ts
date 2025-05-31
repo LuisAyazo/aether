@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ResourceSchema } from '../../../../../types/resourceConfig';
+import { ResourceSchema, CodeTemplate, ResourceValues } from '../../../../../types/resourceConfig'; // Añadir CodeTemplate y ResourceValues
 import { instanceGroupFields } from './instanceGroupFields';
-import { instanceGroupTemplates } from './instanceGroupTemplates';
+import { generateGCPInstanceGroupTemplates } from './instanceGroupTemplates'; // Cambiar import
 
 // Sub-esquemas para Instance Group Manager
 const versionSchema = z.object({
@@ -88,10 +88,10 @@ export const defaultGCPComputeInstanceGroupConfig: Partial<GCPComputeInstanceGro
 };
 
 // Funciones para el registro global, esperadas por getResourceConfig
-export const schema = () => Promise.resolve(gcpComputeInstanceGroupValidationSchema);
+export const schema = (): Promise<z.ZodTypeAny> => Promise.resolve(gcpComputeInstanceGroupValidationSchema); // Añadir tipo de retorno explícito
 export const fields = () => Promise.resolve(instanceGroupFields);
-export const templates = () => Promise.resolve(instanceGroupTemplates); // instanceGroupTemplates es un array
-export const defaults = () => Promise.resolve(defaultGCPComputeInstanceGroupConfig);
+export const templates = (config: GCPComputeInstanceGroupConfig): Promise<CodeTemplate> => Promise.resolve(generateGCPInstanceGroupTemplates(config)); // Actualizar firma y llamada
+export const defaults = (): Promise<Partial<ResourceValues>> => Promise.resolve(defaultGCPComputeInstanceGroupConfig); // Añadir tipo de retorno explícito
 
 export const instanceGroupSchema: ResourceSchema = { // Descriptor para UI
   type: 'gcp_compute_instance_group_manager',
@@ -99,7 +99,7 @@ export const instanceGroupSchema: ResourceSchema = { // Descriptor para UI
   description: 'Google Cloud Platform managed instance group for auto-scaling',
   category: 'compute',
   fields: instanceGroupFields,
-  templates: instanceGroupTemplates, // Referencia directa para la UI si es necesario
+  templates: [], // Proporcionar un array vacío para satisfacer ResourceSchema
   documentation: {
     description: 'Managed instance groups provide auto-scaling and self-healing for identical VM instances',
     examples: [

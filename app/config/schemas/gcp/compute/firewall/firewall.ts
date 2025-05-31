@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ResourceSchema } from '../../../../../types/resourceConfig';
+import { ResourceSchema, CodeTemplate, ResourceValues } from '../../../../../types/resourceConfig'; // Añadir CodeTemplate y ResourceValues
 import { firewallFields } from './firewallFields';
-import { firewallTemplates } from './firewallTemplates';
+import { generateGCPComputeFirewallTemplates } from './firewallTemplates'; // Cambiar import
 
 // Esquema Zod para la validación de la configuración de una regla de Firewall de GCP
 export const gcpComputeFirewallValidationSchema = z.object({
@@ -58,18 +58,18 @@ export const defaultGCPComputeFirewallConfig: Partial<GCPComputeFirewallConfig> 
 };
 
 // Funciones para el registro global, esperadas por getResourceConfig
-export const schema = () => Promise.resolve(gcpComputeFirewallValidationSchema);
+export const schema = (): Promise<z.ZodTypeAny> => Promise.resolve(gcpComputeFirewallValidationSchema); // Añadir tipo de retorno explícito
 export const fields = () => Promise.resolve(firewallFields);
-export const templates = () => Promise.resolve(firewallTemplates); // firewallTemplates es un array
-export const defaults = () => Promise.resolve(defaultGCPComputeFirewallConfig);
+export const templates = (config: GCPComputeFirewallConfig): Promise<CodeTemplate> => Promise.resolve(generateGCPComputeFirewallTemplates(config)); // Actualizar firma y llamada
+export const defaults = (): Promise<Partial<ResourceValues>> => Promise.resolve(defaultGCPComputeFirewallConfig); // Añadir tipo de retorno explícito
 
 export const firewallSchema: ResourceSchema = { // Descriptor para UI
   type: 'gcp_compute_firewall',
   displayName: 'Firewall Rule',
   description: 'Google Cloud Platform firewall rule for network security',
-  category: 'compute',
+  category: 'compute', // O 'networking' si se prefiere
   fields: firewallFields,
-  templates: firewallTemplates, // Referencia directa para la UI si es necesario
+  templates: [], // Proporcionar un array vacío para satisfacer ResourceSchema
   documentation: {
     description: 'Firewall rules control incoming and outgoing traffic to your instances',
     examples: [

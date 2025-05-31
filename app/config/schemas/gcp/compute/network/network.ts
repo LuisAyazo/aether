@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ResourceSchema } from '../../../../../types/resourceConfig';
+import { ResourceSchema, CodeTemplate, ResourceValues } from '../../../../../types/resourceConfig'; // Añadir CodeTemplate y ResourceValues
 import { networkFields } from './networkFields';
-import { networkTemplates } from './networkTemplates';
+import { generateGCPComputeNetworkTemplates } from './networkTemplates'; // Cambiar import
 
 // Esquema Zod para la validación de la configuración de una red VPC de GCP
 export const gcpComputeNetworkValidationSchema = z.object({
@@ -36,18 +36,18 @@ export const defaultGCPComputeNetworkConfig: Partial<GCPComputeNetworkConfig> = 
 };
 
 // Funciones para el registro global, esperadas por getResourceConfig
-export const schema = () => Promise.resolve(gcpComputeNetworkValidationSchema);
+export const schema = (): Promise<z.ZodTypeAny> => Promise.resolve(gcpComputeNetworkValidationSchema); // Añadir tipo de retorno explícito
 export const fields = () => Promise.resolve(networkFields);
-export const templates = () => Promise.resolve(networkTemplates); // networkTemplates es un array, no una función generadora
-export const defaults = () => Promise.resolve(defaultGCPComputeNetworkConfig);
+export const templates = (config: GCPComputeNetworkConfig): Promise<CodeTemplate> => Promise.resolve(generateGCPComputeNetworkTemplates(config)); // Actualizar firma y llamada
+export const defaults = (): Promise<Partial<ResourceValues>> => Promise.resolve(defaultGCPComputeNetworkConfig); // Añadir tipo de retorno explícito
 
 export const networkSchema: ResourceSchema = { // Descriptor para UI
   type: 'gcp_compute_network',
   displayName: 'VPC Network',
   description: 'Google Cloud Platform Virtual Private Cloud network',
-  category: 'compute',
+  category: 'compute', // O 'networking' si se prefiere
   fields: networkFields,
-  templates: networkTemplates, // Referencia directa para la UI si es necesario
+  templates: [], // Proporcionar un array vacío para satisfacer ResourceSchema
   documentation: {
     description: 'A VPC network provides connectivity for your compute instances',
     examples: [

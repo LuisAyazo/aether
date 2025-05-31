@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ResourceSchema } from '../../../../../types/resourceConfig';
+import { ResourceSchema, CodeTemplate, ResourceValues } from '../../../../../types/resourceConfig'; // Añadir CodeTemplate y ResourceValues
 import { loadBalancerFields } from './loadBalancerFields';
-import { loadBalancerTemplates } from './loadBalancerTemplates';
+import { generateGCPComputeLoadBalancerTemplates } from './loadBalancerTemplates'; // Cambiar import
 
 const backendServiceSchema = z.object({
   name: z.string().min(1, "El nombre del servicio backend es requerido."),
@@ -69,18 +69,18 @@ export const defaultGCPComputeLoadBalancerConfig: Partial<GCPComputeLoadBalancer
 };
 
 // Funciones para el registro global, esperadas por getResourceConfig
-export const schema = () => Promise.resolve(gcpComputeLoadBalancerValidationSchema);
+export const schema = (): Promise<z.ZodTypeAny> => Promise.resolve(gcpComputeLoadBalancerValidationSchema); // Añadir tipo de retorno explícito
 export const fields = () => Promise.resolve(loadBalancerFields);
-export const templates = () => Promise.resolve(loadBalancerTemplates); // loadBalancerTemplates es un array
-export const defaults = () => Promise.resolve(defaultGCPComputeLoadBalancerConfig);
+export const templates = (config: GCPComputeLoadBalancerConfig): Promise<CodeTemplate> => Promise.resolve(generateGCPComputeLoadBalancerTemplates(config)); // Actualizar firma y llamada
+export const defaults = (): Promise<Partial<ResourceValues>> => Promise.resolve(defaultGCPComputeLoadBalancerConfig); // Añadir tipo de retorno explícito
 
 export const loadBalancerSchema: ResourceSchema = { // Descriptor para UI
   type: 'gcp_compute_load_balancer',
   displayName: 'Load Balancer',
   description: 'Google Cloud Platform HTTP(S) Load Balancer',
-  category: 'compute',
+  category: 'compute', // O 'networking' si se prefiere
   fields: loadBalancerFields,
-  templates: loadBalancerTemplates, // Referencia directa para la UI si es necesario
+  templates: [], // Proporcionar un array vacío para satisfacer ResourceSchema
   documentation: {
     description: 'Load balancers distribute incoming requests across multiple backend instances',
     examples: [

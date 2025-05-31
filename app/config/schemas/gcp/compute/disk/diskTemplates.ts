@@ -1,68 +1,69 @@
-import { ResourceTemplate } from '../../../../../types/resourceConfig';
+import { GCPComputeDiskConfig } from './disk'; // Asumiremos que este tipo está en disk.ts
+import { CodeTemplate } from '../../../../../types/resourceConfig';
 
-export const diskTemplates: ResourceTemplate[] = [
-  {
-    name: 'Standard Boot Disk',
-    description: 'Standard persistent disk for boot volumes',
-    config: {
-      name: 'boot-disk',
-      project: '${var.project_id}',
-      zone: 'us-central1-a',
-      size: 20,
-      type: 'pd-standard',
-      image: {
-        project: 'ubuntu-os-cloud',
-        family: 'ubuntu-2004-lts'
-      },
-      labels: {
-        environment: 'dev',
-        team: 'backend'
-      }
-    }
-  },
-  {
-    name: 'SSD Data Disk',
-    description: 'High-performance SSD disk for data storage',
-    config: {
-      name: 'data-disk',
-      project: '${var.project_id}',
-      zone: 'us-central1-a',
-      size: 100,
-      type: 'pd-ssd',
-      labels: {
-        environment: 'prod',
-        team: 'data'
-      }
-    }
-  },
-  {
-    name: 'Balanced Disk',
-    description: 'Balanced persistent disk with good price/performance ratio',
-    config: {
-      name: 'balanced-disk',
-      project: '${var.project_id}',
-      zone: 'us-central1-a',
-      size: 50,
-      type: 'pd-balanced',
-      labels: {
-        environment: 'staging'
-      }
-    }
-  },
-  {
-    name: 'From Snapshot',
-    description: 'Disk created from an existing snapshot',
-    config: {
-      name: 'restored-disk',
-      project: '${var.project_id}',
-      zone: 'us-central1-a',
-      size: 20,
-      type: 'pd-standard',
-      snapshot: 'my-backup-snapshot',
-      labels: {
-        environment: 'dev',
-        restored: 'true'
-      }
-    }
+export function generateGCPComputeDiskTemplates(config: GCPComputeDiskConfig): CodeTemplate {
+  const resourceName = config.name.replace(/-/g, '_');
+
+  const terraform = `
+resource "google_compute_disk" "${config.name}" {
+  name    = "${config.name}"
+  project = "${config.project}"
+  zone    = "${config.zone}"
+  size    = ${config.size}
+  type    = "${config.type}"
+  ${config.image?.name ? `image   = "${config.image.project ? `${config.image.project}/` : ''}${config.image.family ? `${config.image.family}/` : ''}${config.image.name}"` : ''}
+  ${config.snapshot ? `snapshot = "${config.snapshot}"` : ''}
+  ${config.description ? `description = "${config.description}"`: ''}
+
+  labels = {
+    ${config.labels?.environment ? `environment = "${config.labels.environment}"` : ''}
+    ${config.labels?.team ? `team        = "${config.labels.team}"` : ''}
   }
+}
+`;
+
+  const pulumi = `
+import * as pulumi from "@pulumi/pulumi";
+import * as gcp from "@pulumi/gcp";
+
+const ${resourceName}Disk = new gcp.compute.Disk("${config.name}", {
+    name: "${config.name}",
+    project: "${config.project}",
+    zone: "${config.zone}",
+    size: ${config.size},
+    type: "${config.type}",
+    ${config.image?.name ? `image: "${config.image.project ? `${config.image.project}/` : ''}${config.image.family ? `${config.image.family}/` : ''}${config.image.name}",` : ''}
+    ${config.snapshot ? `snapshot: "${config.snapshot}",` : ''}
+    ${config.description ? `description: "${config.description}",`: ''}
+    labels: {
+        ${config.labels?.environment ? `environment: "${config.labels.environment}",` : ''}
+        ${config.labels?.team ? `team: "${config.labels.team}",` : ''}
+    },
+});
+`;
+
+  return {
+    terraform,
+    pulumi,
+    ansible: `# Ansible para GCP Compute Disk (requiere google.cloud collection)
+- name: Create Compute Disk
+  google.cloud.gcp_compute_disk:
+    name: "${config.name}"
+    project: "{{ project_id | default('${config.project}') }}"
+    zone: "${config.zone}"
+    size_gb: ${config.size}
+    type: "${config.type}"
+    state: present
+`,
+    cloudformation: "// CloudFormation no es aplicable directamente a GCP Compute Disk.\n"
+  };
+}
+
+// El array diskTemplates original con ejemplos de configuración puede eliminarse o mantenerse
+// si se usa en otro lugar para poblar el formulario con ejemplos, pero no para la generación de código IaC.
+// Por ahora, lo comentaré para evitar confusión.
+/*
+export const diskTemplates: ResourceTemplate[] = [
+  // ... (contenido anterior) ...
 ];
+*/

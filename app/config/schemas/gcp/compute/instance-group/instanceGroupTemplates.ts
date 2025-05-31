@@ -1,116 +1,97 @@
-import { ResourceTemplate } from '../../../../../types/resourceConfig';
+import { GCPComputeInstanceGroupConfig } from './instanceGroup'; // Corregido el nombre del tipo
+import { CodeTemplate } from '../../../../../types/resourceConfig';
 
-export const instanceGroupTemplates: ResourceTemplate[] = [
-  {
-    name: 'Web Server Group',
-    description: 'Auto-scaling group for web servers',
-    config: {
-      name: 'web-server-group',
-      project: '${var.project_id}',
-      zone: 'us-central1-a',
-      base_instance_name: 'web-server',
-      version: {
-        instance_template: 'web-server-template',
-        name: 'primary'
-      },
-      target_size: 3,
-      auto_healing_policies: {
-        health_check: 'web-health-check',
-        initial_delay_sec: 300
-      },
-      update_policy: {
-        type: 'ROLLING_UPDATE',
-        minimal_action: 'REPLACE',
-        max_surge_fixed: 1,
-        max_unavailable_fixed: 1
-      },
-      named_port: {
-        name: 'http',
-        port: 80
-      }
-    }
-  },
-  {
-    name: 'Regional API Group',
-    description: 'Regional instance group for high availability API servers',
-    config: {
-      name: 'api-server-group',
-      project: '${var.project_id}',
-      region: 'us-central1',
-      base_instance_name: 'api-server',
-      version: {
-        instance_template: 'api-server-template',
-        name: 'primary'
-      },
-      target_size: 5,
-      auto_healing_policies: {
-        health_check: 'api-health-check',
-        initial_delay_sec: 180
-      },
-      update_policy: {
-        type: 'ROLLING_UPDATE',
-        minimal_action: 'REPLACE',
-        max_surge_fixed: 2,
-        max_unavailable_fixed: 1
-      },
-      named_port: {
-        name: 'api',
-        port: 8080
-      }
-    }
-  },
-  {
-    name: 'Worker Group',
-    description: 'Instance group for background workers',
-    config: {
-      name: 'worker-group',
-      project: '${var.project_id}',
-      zone: 'us-central1-b',
-      base_instance_name: 'worker',
-      version: {
-        instance_template: 'worker-template',
-        name: 'primary'
-      },
-      target_size: 2,
-      auto_healing_policies: {
-        health_check: 'worker-health-check',
-        initial_delay_sec: 600
-      },
-      update_policy: {
-        type: 'OPPORTUNISTIC',
-        minimal_action: 'RESTART',
-        max_surge_fixed: 0,
-        max_unavailable_fixed: 1
-      }
-    }
-  },
-  {
-    name: 'Load Balanced Group',
-    description: 'Instance group configured for load balancer backend',
-    config: {
-      name: 'lb-backend-group',
-      project: '${var.project_id}',
-      region: 'us-central1',
-      base_instance_name: 'lb-backend',
-      version: {
-        instance_template: 'web-server-template',
-        name: 'primary'
-      },
-      target_size: 4,
-      auto_healing_policies: {
-        health_check: 'lb-health-check',
-        initial_delay_sec: 240
-      },
-      update_policy: {
-        type: 'ROLLING_UPDATE',
-        minimal_action: 'REPLACE',
-        max_surge_fixed: 2,
-        max_unavailable_fixed: 0
-      },
-      named_port: {
-        name: 'http',
-        port: 80
-      }
-    }
+export function generateGCPInstanceGroupTemplates(config: GCPComputeInstanceGroupConfig): CodeTemplate {
+  const resourceName = config.name.replace(/-/g, '_');
+  const isRegional = !!config.region; // Los grupos de instancias pueden ser zonales o regionales
+
+  const terraform = `
+resource "google_compute_${isRegional ? 'region_' : ''}instance_group_manager" "${config.name}" {
+  name               = "${config.name}"
+  project            = "${config.project}"
+  ${isRegional ? `region             = "${config.region}"` : `zone               = "${config.zone}"`}
+  base_instance_name = "${config.base_instance_name}"
+  target_size        = ${config.target_size}
+
+  version {
+    instance_template = "${config.version[0].instance_template}" # Acceder al primer elemento del array
+    name              = "${config.version[0].name || 'primary'}"   # Acceder al primer elemento del array
   }
+
+  ${config.auto_healing_policies && config.auto_healing_policies[0] ? `
+  auto_healing_policies {
+    health_check      = "${config.auto_healing_policies[0].health_check}" # Acceder al primer elemento
+    initial_delay_sec = ${config.auto_healing_policies[0].initial_delay_sec}   # Acceder al primer elemento
+  }` : ''}
+
+  ${config.update_policy ? `
+  update_policy {
+    type          = "${config.update_policy.type}"
+    minimal_action = "${config.update_policy.minimal_action}"
+    ${config.update_policy.max_surge_fixed !== undefined ? `max_surge_fixed          = ${config.update_policy.max_surge_fixed}`: ''}
+    ${config.update_policy.max_unavailable_fixed !== undefined ? `max_unavailable_fixed    = ${config.update_policy.max_unavailable_fixed}`: ''}
+    # Otras opciones como min_ready_sec, replacement_method, etc.
+  }` : ''}
+
+  ${config.named_ports && config.named_ports[0] ? `
+  named_port {
+    name = "${config.named_ports[0].name}" # Usar named_ports y acceder al primer elemento
+    port = ${config.named_ports[0].port}   # Usar named_ports y acceder al primer elemento
+  }` : ''}
+}
+`;
+
+  const pulumi = `
+import * as pulumi from "@pulumi/pulumi";
+import * as gcp from "@pulumi/gcp";
+
+const ${resourceName}InstanceGroupManager = new gcp.compute.${isRegional ? 'RegionInstanceGroupManager' : 'InstanceGroupManager'}("${config.name}", {
+    name: "${config.name}",
+    project: "${config.project}",
+    ${isRegional ? `region: "${config.region}",` : `zone: "${config.zone}",`}
+    baseInstanceName: "${config.base_instance_name}",
+    targetSize: ${config.target_size},
+    versions: [{
+        instanceTemplate: "${config.version[0].instance_template}", // Acceder al primer elemento
+        name: "${config.version[0].name || 'primary'}",           // Acceder al primer elemento
+    }],
+    ${config.auto_healing_policies && config.auto_healing_policies[0] ? `autoHealingPolicies: {
+        healthCheck: "${config.auto_healing_policies[0].health_check}", // Acceder al primer elemento
+        initialDelaySec: ${config.auto_healing_policies[0].initial_delay_sec},   // Acceder al primer elemento
+    },` : ''}
+    ${config.update_policy ? `updatePolicy: {
+        type: "${config.update_policy.type}",
+        minimalAction: "${config.update_policy.minimal_action}",
+        ${config.update_policy.max_surge_fixed !== undefined ? `maxSurgeFixed: ${config.update_policy.max_surge_fixed},`: ''}
+        ${config.update_policy.max_unavailable_fixed !== undefined ? `maxUnavailableFixed: ${config.update_policy.max_unavailable_fixed},`: ''}
+    },` : ''}
+    ${config.named_ports && config.named_ports[0] ? `namedPorts: [{
+        name: "${config.named_ports[0].name}", // Usar named_ports y acceder al primer elemento
+        port: ${config.named_ports[0].port},   // Usar named_ports y acceder al primer elemento
+    }],` : ''}
+});
+`;
+
+  return {
+    terraform,
+    pulumi,
+    ansible: `# Ansible para GCP Instance Group Manager (requiere google.cloud collection)
+- name: Create ${isRegional ? 'Regional' : 'Zonal'} Instance Group Manager
+  google.cloud.gcp_compute_${isRegional ? 'region_' : ''}instance_group_manager:
+    name: "${config.name}"
+    project: "{{ project_id | default('${config.project}') }}"
+    ${isRegional ? `region: "${config.region}"` : `zone: "${config.zone}"`}
+    base_instance_name: "${config.base_instance_name}"
+    instance_template: "${config.version[0].instance_template}" # Nombre o self_link, acceder al primer elemento
+    target_size: ${config.target_size}
+    state: present
+`,
+    cloudformation: "// CloudFormation no es aplicable directamente a GCP Instance Group Managers.\n"
+  };
+}
+
+/*
+export const instanceGroupTemplates: ResourceTemplate[] = [
+  // ... (contenido anterior del array) ...
 ];
+*/
