@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tabs, Tab, Typography, Box, Button, TextField, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { IaCCodeService, IaCTemplateOptions } from '@/app/services/iacCodeService';
-import CodeBlock from '../ui/CodeBlock';
+import CodeBlock from './CodeBlock';
 
 interface ResourcePanelProps {
   id: string;

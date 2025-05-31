@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { z } from 'zod'; // Importar z
 import SidePanel from './SidePanel';
 import ResourceConfigForm from './ResourceConfigForm';
 import CodeBlock from './CodeBlock';
@@ -6,7 +7,7 @@ import SmartBehaviorPanel from './SmartBehaviorPanel';
 import { ResourceValues, ResourceType } from '@/app/types/resourceConfig';
 import { 
   getResourceConfig, 
-  validateResourceConfig, 
+  // validateResourceConfig, // No se usa directamente aquí, se usa el schema.parse
   SupportedProvider 
 } from '@/app/config/schemas';
 import { 
@@ -57,7 +58,7 @@ interface IaCTemplatePanelProps {
   resourceData: {
     label: string;
     provider: 'aws' | 'gcp' | 'azure' | 'generic';
-    resourceType: ResourceType;
+    resourceType: ResourceType; // Este es el tipo completo del nodo, ej: gcp_compute_disk
   };
   environments?: Array<{
     id: string;
@@ -129,66 +130,77 @@ const CODE_TABS = [
   }
 ];
 
-const getDefaultValues = async (provider: string, resourceType: string): Promise<ResourceValues> => {
-  try {
-    // Map resourceType to category and specific resource
-    const mapping = mapResourceTypeToRegistry(resourceType);
-    if (!mapping) {
-      return { name: 'resource' };
-    }
-
-    const config = await getResourceConfig(
-      provider as SupportedProvider, 
-      mapping.category, 
-      mapping.resourceType
-    );
-    return config.defaults || { name: 'resource' };
-  } catch (error) {
-    console.warn('Failed to get default values:', error);
-    return { name: 'resource' };
-  }
-};
-
 // Helper function to map UI resourceType to registry structure
-const mapResourceTypeToRegistry = (resourceType: string) => {
-  const mappings: Record<string, { category: string; resourceType: string }> = {
-    // Compute resources
-    'compute': { category: 'compute', resourceType: 'instance' },
+const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
+  let simplifiedResourceType = typeof typeFromNode === 'string' ? typeFromNode : typeFromNode.toString();
+  let category = 'unknown';
+
+  if (simplifiedResourceType.includes('_')) {
+    const parts = simplifiedResourceType.split('_');
+    if (parts[0] === 'gcp') { 
+      if (parts[1] === 'compute' && parts.length > 2) {
+        category = 'compute';
+        simplifiedResourceType = parts.slice(2).join('_');
+      } else if (parts[1] === 'storage' && parts.length > 2) {
+        category = 'storage';
+        simplifiedResourceType = parts.slice(2).join('_');
+      } else if (parts[1] === 'sql' && parts.length > 2) {
+        category = 'sql';
+        simplifiedResourceType = parts.slice(2).join('_');
+      } else if (parts.length === 2) { // Fallback for gcp_type
+        simplifiedResourceType = parts[1];
+        if (['instance', 'disk', 'network', 'firewall', 'loadBalancer', 'instanceTemplate', 'instanceGroup'].includes(simplifiedResourceType)) {
+            category = 'compute';
+        } else if (['bucket'].includes(simplifiedResourceType)) {
+            category = 'storage';
+        } else {
+            category = parts[0]; 
+        }
+      }
+    }
+  }
+  
+  const specificMappings: Record<string, { category: string; resourceType: string }> = {
     'instance': { category: 'compute', resourceType: 'instance' },
     'disk': { category: 'compute', resourceType: 'disk' },
     'network': { category: 'compute', resourceType: 'network' },
     'firewall': { category: 'compute', resourceType: 'firewall' },
     'loadBalancer': { category: 'compute', resourceType: 'loadBalancer' },
+    'instance_template': { category: 'compute', resourceType: 'instanceTemplate' },
     'instanceTemplate': { category: 'compute', resourceType: 'instanceTemplate' },
+    'instance_group_manager': { category: 'compute', resourceType: 'instanceGroup' },
     'instanceGroup': { category: 'compute', resourceType: 'instanceGroup' },
-    // Add more mappings as needed
+    'bucket': { category: 'storage', resourceType: 'bucket' },
+    'compute': { category: 'compute', resourceType: 'instance' }, 
   };
+
+  if (specificMappings[simplifiedResourceType]) {
+    return specificMappings[simplifiedResourceType];
+  }
   
-  return mappings[resourceType];
+  if (category !== 'unknown' && simplifiedResourceType) {
+    return { category, resourceType: simplifiedResourceType };
+  }
+
+  console.warn(`Could not map resourceType: ${typeFromNode} to a known category/resourceType pair.`);
+  return undefined;
 };
 
 // Helper functions to get provider and resource type icons
 const getProviderIcon = (provider: string): string => {
-  const icons: Record<string, string> = {
-    aws: '☁️',
-    gcp: '🌐',
-    azure: '🔷',
-    generic: '⚙️'
-  };
+  const icons: Record<string, string> = { aws: '☁️', gcp: '🌐', azure: '🔷', generic: '⚙️' };
   return icons[provider] || icons.generic;
 };
 
 const getResourceTypeIcon = (resourceType: string): string => {
+  const simplifiedMapping = mapResourceTypeToRegistry(resourceType);
+  const typeToIcon = simplifiedMapping ? simplifiedMapping.resourceType : resourceType;
   const icons: Record<string, string> = {
-    compute: '💻',
-    storage: '💾',
-    sql: '🗄️',
-    network: '🌐',
-    security: '🔒',
-    monitoring: '📊',
-    generic: '📦'
+    instance: '💻', disk: '💾', network: '🌐', firewall: '🔒', loadBalancer: '⚖️',
+    instanceTemplate: '📄', instanceGroup: '👨‍👩‍👧‍👦',
+    compute: '💻', storage: '💾', sql: '🗄️', security: '🔒', monitoring: '📊', generic: '📦'
   };
-  return icons[resourceType] || icons.generic;
+  return icons[typeToIcon] || icons.generic;
 };
 
 const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
@@ -199,80 +211,124 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
 }) => {
   const [activeMainTab, setActiveMainTab] = useState('config');
   const [activeCodeTab, setActiveCodeTab] = useState('terraform');
-  const [configValues, setConfigValues] = useState<ResourceValues>({ name: 'resource' });
-  const [resourceConfig, setResourceConfig] = useState<any>(null);
+  const [configValues, setConfigValues] = useState<ResourceValues>({ name: resourceData.label || 'resource' });
+  const [resourceConfig, setResourceConfig] = useState<any>(null); 
+  const [validationSchema, setValidationSchema] = useState<z.ZodTypeAny | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[] | undefined>>({});
   const [smartBehavior, setSmartBehavior] = useState<SmartBehavior>({});
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
 
-  // Load resource configuration when resource changes
   useEffect(() => {
     const loadResourceConfig = async () => {
+      if (!resourceData || !resourceData.provider || !resourceData.resourceType) {
+        console.warn('IaCTemplatePanel: Missing resourceData for loading config.');
+        setIsLoadingConfig(false);
+        return;
+      }
       setIsLoadingConfig(true);
+      setValidationErrors({}); 
       try {
         const mapping = mapResourceTypeToRegistry(resourceData.resourceType);
         if (mapping && resourceData.provider) {
+          console.log(`Loading config for: provider=${resourceData.provider}, category=${mapping.category}, type=${mapping.resourceType}`);
           const config = await getResourceConfig(
             resourceData.provider as SupportedProvider, 
             mapping.category, 
             mapping.resourceType
           );
           setResourceConfig(config);
-          setConfigValues(prev => ({
-            ...config.defaults,
-            name: resourceData.label || prev.name,
-          }));
+          const schema = await config.schema(); // Resolve the promise for schema
+          setValidationSchema(schema);
+          const defaults = await config.defaults(); // Resolve the promise for defaults
+          const initialValues = {
+            ...(defaults || {}),
+            name: resourceData.label || defaults?.name || 'resource',
+          };
+          setConfigValues(initialValues);
+          validateValues(initialValues, schema);
         } else {
-          // Fallback for unmapped resource types
-          setConfigValues(prev => ({
-            name: resourceData.label || prev.name,
-          }));
+          console.warn('Mapping failed for resourceType:', resourceData.resourceType);
+          setResourceConfig(null);
+          setValidationSchema(null);
+          setConfigValues({ name: resourceData.label || 'resource' });
         }
       } catch (error) {
-        console.warn('Failed to load resource config:', error);
-        setConfigValues(prev => ({
-          name: resourceData.label || prev.name,
-        }));
+        console.error('Failed to load resource config:', error);
+        setResourceConfig(null);
+        setValidationSchema(null);
+        setConfigValues({ name: resourceData.label || 'resource' });
       } finally {
         setIsLoadingConfig(false);
       }
     };
 
-    loadResourceConfig();
-  }, [resourceData.provider, resourceData.resourceType, resourceData.label]);
+    if (isOpen && resourceData) {
+      loadResourceConfig();
+    }
+  }, [isOpen, resourceData]);
 
-  const handleConfigChange = (values: ResourceValues) => {
-    setConfigValues(values);
+  const validateValues = (values: ResourceValues, schemaToUse: z.ZodTypeAny | null): boolean => {
+    if (!schemaToUse) {
+      setValidationErrors({});
+      console.log('No validation schema present, skipping validation.');
+      return true;
+    }
+    const result = schemaToUse.safeParse(values);
+    if (!result.success) {
+      const newErrors: Record<string, string[] | undefined> = {};
+      result.error.errors.forEach((err: z.ZodIssue) => {
+        const path = err.path.join('.');
+        if (!newErrors[path]) {
+          newErrors[path] = [];
+        }
+        newErrors[path]?.push(err.message);
+      });
+      setValidationErrors(newErrors);
+      console.log('Validation errors:', newErrors);
+      return false;
+    }
+    setValidationErrors({});
+    return true;
+  };
+
+  const handleConfigChange = (newValues: ResourceValues) => {
+    setConfigValues(newValues);
+    validateValues(newValues, validationSchema);
   };
 
   const handleSave = () => {
-    console.log('Saving configuration:', configValues);
-    // TODO: Implement save logic
+    if (validateValues(configValues, validationSchema)) {
+      console.log('Saving configuration (valid):', configValues);
+      // TODO: Implement save logic 
+    } else {
+      console.log('Save prevented due to validation errors.');
+    }
   };
 
   const handleCopyCode = async () => {
     setIsGenerating(true);
-    
     try {
       let code = '';
+      // ... (resto de la lógica de handleCopyCode)
       switch (activeCodeTab) {
         case 'terraform':
-          code = generateTerraformCode();
+          code = await generateTerraformCode();
           break;
         case 'pulumi':
-          code = generatePulumiCode();
+          code = await generatePulumiCode();
           break;
         case 'ansible':
-          code = generateAnsibleCode();
+          code = await generateAnsibleCode();
           break;
         case 'cloudformation':
-          code = generateCloudFormationCode();
+          code = await generateCloudFormationCode();
           break;
         default:
+          setIsGenerating(false);
           return;
       }
-      
       await navigator.clipboard.writeText(code);
       setCopySuccess(activeCodeTab);
       setTimeout(() => setCopySuccess(null), 2000);
@@ -292,10 +348,8 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
            (smartBehavior.loops && smartBehavior.loops.length > 0);
   };
 
-  const generateCodeWithSmartBehavior = (format: string) => {
-    // Apply smart behavior to config values before generating code
+  const generateCodeWithSmartBehavior = async (format: string) => {
     const processedValues = applySmartBehavior(configValues, smartBehavior);
-    
     switch (format) {
       case 'terraform':
         return generateTerraformCode(processedValues);
@@ -311,121 +365,98 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
   };
 
   const applySmartBehavior = (values: ResourceValues, behavior: SmartBehavior): ResourceValues => {
+    // ... (código existente sin cambios significativos, asegurar que eval sea seguro o reemplazarlo)
     const processedValues = { ...values };
-    
-    // Use the first environment from provided environments, or default
     const currentEnv = environments && environments.length > 0 
       ? environments[0] 
       : { id: 'dev', name: 'Development', variables: { env: 'dev' } };
-    
     const envVars = currentEnv.variables;
-    
     behavior.conditionals?.forEach(conditional => {
       const matchingCondition = conditional.conditions.find(cond => {
         try {
-          let condition = cond.condition;
-          // Replace variables in condition with actual values
+          let conditionString = cond.condition;
           Object.entries(envVars).forEach(([key, value]) => {
             const regex = new RegExp(`\\b${key}\\b`, 'g');
-            condition = condition.replace(regex, `"${value}"`);
+            conditionString = conditionString.replace(regex, typeof value === 'string' ? `"${value}"` : String(value));
           });
-          return eval(condition);
+          // Cuidado con eval. Considerar alternativas más seguras si es posible.
+          return new Function(`return ${conditionString}`)();
         } catch (error) {
           console.warn('Error evaluating condition:', cond.condition, error);
           return false;
         }
       });
-      
       if (matchingCondition) {
         processedValues[conditional.property] = matchingCondition.value;
       } else if (conditional.default !== undefined) {
         processedValues[conditional.property] = conditional.default;
       }
     });
-    
     return processedValues;
   };
 
-  const generateTerraformCode = (values: ResourceValues = configValues) => {
-    if (!resourceConfig || !resourceConfig.templates) {
-      return '// Loading template...';
-    }
-
+  const generateTerraformCode = async (values: ResourceValues = configValues) => {
+    if (!resourceConfig || !resourceConfig.templates) return '// Loading template...';
     try {
-      // Get the template generator function
-      const templates = resourceConfig.templates(values);
-      return templates.terraform || '// No Terraform template available for this resource';
-    } catch (error) {
-      console.error('Error generating Terraform code:', error);
-      return '// Error generating template';
-    }
+      const templatesFn = await resourceConfig.templates();
+      const resolvedTemplates = typeof templatesFn === 'function' ? templatesFn(values) : templatesFn;
+      return resolvedTemplates.terraform || '// No Terraform template available';
+    } catch (error) { console.error('Error generating Terraform code:', error); return '// Error'; }
   };
 
-  const generatePulumiCode = (values: ResourceValues = configValues) => {
-    if (!resourceConfig || !resourceConfig.templates) {
-      return '// Loading template...';
-    }
-
+  const generatePulumiCode = async (values: ResourceValues = configValues) => {
+    if (!resourceConfig || !resourceConfig.templates) return '// Loading template...';
     try {
-      // Get the template generator function
-      const templates = resourceConfig.templates(values);
-      return templates.pulumi || '// No Pulumi template available for this resource';
-    } catch (error) {
-      console.error('Error generating Pulumi code:', error);
-      return '// Error generating template';
-    }
+      const templatesFn = await resourceConfig.templates();
+      const resolvedTemplates = typeof templatesFn === 'function' ? templatesFn(values) : templatesFn;
+      return resolvedTemplates.pulumi || '// No Pulumi template available';
+    } catch (error) { console.error('Error generating Pulumi code:', error); return '// Error'; }
   };
 
-  const generateAnsibleCode = (values: ResourceValues = configValues) => {
-    if (!resourceConfig || !resourceConfig.templates) {
-      return '# Loading template...';
-    }
-
+  const generateAnsibleCode = async (values: ResourceValues = configValues) => {
+    if (!resourceConfig || !resourceConfig.templates) return '# Loading template...';
     try {
-      // Get the template generator function
-      const templates = resourceConfig.templates(values);
-      return templates.ansible || '# No Ansible template available for this resource';
-    } catch (error) {
-      console.error('Error generating Ansible code:', error);
-      return '# Error generating template';
-    }
+      const templatesFn = await resourceConfig.templates();
+      const resolvedTemplates = typeof templatesFn === 'function' ? templatesFn(values) : templatesFn;
+      return resolvedTemplates.ansible || '# No Ansible template available';
+    } catch (error) { console.error('Error generating Ansible code:', error); return '# Error'; }
   };
 
-  const generateCloudFormationCode = (values: ResourceValues = configValues) => {
-    if (!resourceConfig || !resourceConfig.templates) {
-      return '// Loading template...';
-    }
-
+  const generateCloudFormationCode = async (values: ResourceValues = configValues) => {
+    if (!resourceConfig || !resourceConfig.templates) return '// Loading template...';
     try {
-      // Get the template generator function
-      const templates = resourceConfig.templates(values);
-      return templates.cloudformation || '// No CloudFormation template available for this resource';
-    } catch (error) {
-      console.error('Error generating CloudFormation code:', error);
-      return '// Error generating template';
-    }
+      const templatesFn = await resourceConfig.templates();
+      const resolvedTemplates = typeof templatesFn === 'function' ? templatesFn(values) : templatesFn;
+      return resolvedTemplates.cloudformation || '// No CloudFormation template available';
+    } catch (error) { console.error('Error generating CloudFormation code:', error); return '// Error'; }
   };
-
-  // Helper functions for the new UI
+  
   const getCodeForActiveTab = () => {
-    switch (activeCodeTab) {
-      case 'terraform':
-        return generateTerraformCode();
-      case 'pulumi':
-        return generatePulumiCode();
-      case 'ansible':
-        return generateAnsibleCode();
-      case 'cloudformation':
-        return generateCloudFormationCode();
-      default:
-        return '// Select a template type';
-    }
+    // Esta función ahora será asíncrona debido a los generadores de código
+    // Se manejará directamente en el onClick del botón de copiar o al renderizar CodeBlock
+    return "// Code generation is async";
   };
+
+  const [currentCode, setCurrentCode] = useState('// Select a template type');
+  useEffect(() => {
+    if (activeMainTab === 'code' && resourceConfig) {
+      setIsGenerating(true);
+      generateCodeWithSmartBehavior(activeCodeTab)
+        .then(code => setCurrentCode(code))
+        .catch(() => setCurrentCode("// Error generating code"))
+        .finally(() => setIsGenerating(false));
+    }
+  }, [activeMainTab, activeCodeTab, resourceConfig, configValues, smartBehavior]);
+
 
   const getCurrentLanguage = () => {
     const currentTab = CODE_TABS.find(tab => tab.id === activeCodeTab);
     return currentTab?.language || 'text';
   };
+
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <SidePanel
@@ -478,7 +509,6 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
           </nav>
         </div>
 
-        {/* Code Sub-tabs (shown only when code tab is active) */}
         {activeMainTab === 'code' && (
           <div className="border-b border-gray-100 bg-gray-50">
             <nav className="flex space-x-1 px-4 py-2" aria-label="Code Tabs">
@@ -508,7 +538,6 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
           </div>
         )}
 
-        {/* Tab Content */}
         <div className="flex-1 overflow-auto bg-gray-50">
           {activeMainTab === 'config' && (
             <div className="flex flex-col h-full">
@@ -523,10 +552,11 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
                 ) : (
                   <ResourceConfigForm
                     provider={resourceData.provider}
-                    resourceType={resourceData.resourceType}
+                    resourceType={resourceData.resourceType} 
                     values={configValues}
-                    onChange={setConfigValues}
+                    onChange={handleConfigChange} 
                     fields={resourceConfig?.fields}
+                    errors={validationErrors} 
                     isLoading={isLoadingConfig}
                   />
                 )}
@@ -535,11 +565,13 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
               <div className="border-t border-gray-200 bg-white px-6 py-4">
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-gray-500">
-                    Configure your resource parameters above
+                    {Object.keys(validationErrors).length > 0 
+                      ? <span className="text-red-600">Please fix validation errors.</span>
+                      : 'Configure your resource parameters above.'}
                   </div>
                   <button
-                    onClick={() => {}}
-                    disabled={isGenerating}
+                    onClick={handleSave} 
+                    disabled={isGenerating || Object.keys(validationErrors).length > 0}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md
                              text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 
                              focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
@@ -611,8 +643,8 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
                     </div>
                   ) : (
                     <CodeBlock
-                      code={generateCodeWithSmartBehavior(activeCodeTab)}
-                      language={CODE_TABS.find(tab => tab.id === activeCodeTab)?.language || 'text'}
+                      code={currentCode}
+                      language={getCurrentLanguage()}
                     />
                   )}
                 </div>
@@ -632,7 +664,8 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
                     <button
                       onClick={async () => {
                         try {
-                          await navigator.clipboard.writeText(generateCodeWithSmartBehavior(activeCodeTab));
+                          const codeToCopy = await generateCodeWithSmartBehavior(activeCodeTab);
+                          await navigator.clipboard.writeText(codeToCopy);
                           setCopySuccess(activeCodeTab);
                           setTimeout(() => setCopySuccess(null), 2000);
                         } catch (error) {

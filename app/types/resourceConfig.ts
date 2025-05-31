@@ -65,4 +65,5 @@ export interface ResourceConfigFormProps {
   onChange: (values: ResourceValues) => void;
   fields?: FieldConfig[] | Record<string, FieldConfig>; // Dynamic fields from schema system
   isLoading?: boolean; // Loading state
+  errors?: Record<string, string[] | undefined>; // For displaying validation errors
 }

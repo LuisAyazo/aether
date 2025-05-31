@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { ResourceSchema } from '../../../../../types/resourceConfig';
+import { ResourceSchema, ResourceValues } from '../../../../../types/resourceConfig';
 import { instanceFields } from './instanceFields';
+import { generateGCPComputeInstanceTemplates, CodeTemplate } from './instanceTemplates';
 
 // Esquema para configuración de acceso (IP externa)
 const accessConfigSchema = z.object({
@@ -213,8 +214,9 @@ export const gcpComputeInstanceResourceSchema: ResourceSchema = {
   displayName: 'Compute Engine Instance',
   description: 'Google Cloud Platform virtual machine instance',
   category: 'compute',
-  fields: instanceFields,
-  templates: [],
+  fields: instanceFields, // Para la UI, si se usa directamente este ResourceSchema
+  templates: [], // Este campo en ResourceSchema podría quedar obsoleto o usarse de otra forma.
+                 // La función templates() de abajo es la que usará getResourceConfig.
   documentation: {
     description: 'Create and manage virtual machine instances in Google Cloud',
     examples: [
@@ -224,3 +226,9 @@ export const gcpComputeInstanceResourceSchema: ResourceSchema = {
     ]
   }
 };
+
+// Funciones para el registro global, esperadas por getResourceConfig
+export const schema = (): Promise<typeof gcpComputeInstanceSchema> => Promise.resolve(gcpComputeInstanceSchema);
+export const fields = () => Promise.resolve(instanceFields);
+export const templates = (config: GCPComputeInstanceConfig): Promise<CodeTemplate> => Promise.resolve(generateGCPComputeInstanceTemplates(config));
+export const defaults = (): Promise<Partial<GCPComputeInstanceConfig>> => Promise.resolve(defaultGCPComputeInstanceConfig);

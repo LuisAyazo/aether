@@ -8,6 +8,7 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
   onChange,
   fields,
   isLoading = false,
+  errors = {}, // Destructurar errors con un valor por defecto
 }) => {
   // Use dynamic fields if available, fallback to empty state
   const fieldConfig = fields;
@@ -53,11 +54,13 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
   const renderField = (fieldName: string, config: FieldConfig, parentField?: string) => {
     const value = parentField ? values[parentField]?.[fieldName] : values[fieldName];
     const defaultValue = config.default ?? config.defaultValue;
+    const errorKey = parentField ? `${parentField}.${fieldName}` : fieldName;
+    const fieldErrors = errors[errorKey];
 
     switch (config.type) {
       case 'text':
         return (
-          <div key={fieldName} className="mb-4">
+          <div key={errorKey} className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {config.label}
               {config.required && <span className="text-red-500 ml-1">*</span>}
@@ -67,17 +70,20 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
               value={value ?? defaultValue ?? ''}
               onChange={(e) => handleChange(fieldName, e.target.value, parentField)}
               placeholder={config.placeholder}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors ? 'border-red-500' : 'border-gray-300'}`}
             />
-            {(config.help || config.description) && (
+            {(config.help || config.description) && !fieldErrors && (
               <p className="mt-1 text-sm text-gray-500">{config.help || config.description}</p>
+            )}
+            {fieldErrors && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.join(', ')}</p>
             )}
           </div>
         );
 
       case 'select':
         return (
-          <div key={fieldName} className="mb-4">
+          <div key={errorKey} className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {config.label}
               {config.required && <span className="text-red-500 ml-1">*</span>}
@@ -85,7 +91,7 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
             <select
               value={value ?? defaultValue ?? ''}
               onChange={(e) => handleChange(fieldName, e.target.value, parentField)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors ? 'border-red-500' : 'border-gray-300'}`}
             >
               {config.options?.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -93,15 +99,18 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
                 </option>
               ))}
             </select>
-            {(config.help || config.description) && (
+            {(config.help || config.description) && !fieldErrors && (
               <p className="mt-1 text-sm text-gray-500">{config.help || config.description}</p>
+            )}
+            {fieldErrors && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.join(', ')}</p>
             )}
           </div>
         );
 
       case 'number':
         return (
-          <div key={fieldName} className="mb-4">
+          <div key={errorKey} className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {config.label}
               {config.required && <span className="text-red-500 ml-1">*</span>}
@@ -112,17 +121,20 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
               onChange={(e) => handleChange(fieldName, Number(e.target.value), parentField)}
               min={config.min}
               max={config.max}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${fieldErrors ? 'border-red-500' : 'border-gray-300'}`}
             />
-            {(config.help || config.description) && (
+            {(config.help || config.description) && !fieldErrors && (
               <p className="mt-1 text-sm text-gray-500">{config.help || config.description}</p>
+            )}
+            {fieldErrors && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.join(', ')}</p>
             )}
           </div>
         );
 
       case 'boolean':
         return (
-          <div key={fieldName} className="mb-4">
+          <div key={errorKey} className="mb-4">
             <label className="flex items-center space-x-2">
               <input
                 type="checkbox"
@@ -135,15 +147,18 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
                 {config.required && <span className="text-red-500 ml-1">*</span>}
               </span>
             </label>
-            {(config.help || config.description) && (
+            {(config.help || config.description) && !fieldErrors && (
               <p className="mt-1 text-sm text-gray-500">{config.help || config.description}</p>
+            )}
+            {fieldErrors && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.join(', ')}</p>
             )}
           </div>
         );
 
       case 'group':
         return (
-          <div key={fieldName} className="mb-4 p-4 border border-gray-200 rounded-md">
+          <div key={errorKey} className="mb-4 p-4 border border-gray-200 rounded-md">
             <h3 className="text-sm font-medium text-gray-700 mb-3">
               {config.label}
               {config.required && <span className="text-red-500 ml-1">*</span>}
@@ -161,6 +176,7 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
                     </div>
                   ))
             )}
+            {/* No se muestran errores a nivel de grupo directamente aquí, se mostrarían en sus campos hijos */}
           </div>
         );
 
@@ -183,4 +199,4 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
   );
 };
 
-export default ResourceConfigForm; 
+export default ResourceConfigForm;
