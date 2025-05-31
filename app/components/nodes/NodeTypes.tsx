@@ -1,4 +1,4 @@
-import { NodeProps } from 'reactflow';
+import type { NodeProps } from 'reactflow'; // Corregido: usar import type
 import { 
   ServerIcon, 
   CloudIcon, 
@@ -89,12 +89,63 @@ export function ComputeEngineNode(props: NodeProps) {
         provider: 'gcp',
         icon: <ServerIcon className="w-6 h-6 text-blue-600" />,
         label: props.data.label || 'Compute Engine',
-        resourceType: 'compute'
+        resourceType: 'gcp_compute_instance' // Actualizado a tipo específico
       }}
     />
   );
 }
 ComputeEngineNode.displayName = 'ComputeEngineNode';
+
+// App Engine Node (Nuevo)
+export function AppEngineNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{
+        ...props.data,
+        provider: 'gcp',
+        icon: <CloudIcon className="w-6 h-6 text-purple-500" />, // Icono sugerido para App Engine
+        label: props.data.label || 'App Engine',
+        resourceType: 'gcp_appengine_app' // Tipo específico
+      }}
+    />
+  );
+}
+AppEngineNode.displayName = 'AppEngineNode';
+
+// GKE Cluster Node (Nuevo)
+export function GKENode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{
+        ...props.data,
+        provider: 'gcp',
+        icon: <CpuChipIcon className="w-6 h-6 text-blue-700" />, // Icono sugerido para GKE
+        label: props.data.label || 'GKE Cluster',
+        resourceType: 'gcp_gke_cluster' // Tipo específico
+      }}
+    />
+  );
+}
+GKENode.displayName = 'GKENode';
+
+// Cloud Run Node (Nuevo)
+export function CloudRunNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{
+        ...props.data,
+        provider: 'gcp',
+        icon: <CodeBracketIcon className="w-6 h-6 text-green-500" />, // Icono sugerido para Cloud Run
+        label: props.data.label || 'Cloud Run',
+        resourceType: 'gcp_cloudrun_service' // Tipo específico
+      }}
+    />
+  );
+}
+CloudRunNode.displayName = 'CloudRunNode';
 
 // Cloud Storage Node
 export function CloudStorageNode(props: NodeProps) {
@@ -106,7 +157,7 @@ export function CloudStorageNode(props: NodeProps) {
         provider: 'gcp',
         icon: <CloudIcon className="w-6 h-6 text-blue-600" />,
         label: props.data.label || 'Cloud Storage',
-        resourceType: 'storage'
+        resourceType: 'gcp_cloud_storage_bucket' // Actualizado a tipo específico (ejemplo)
       }}
     />
   );
@@ -123,7 +174,7 @@ export function CloudFunctionsNode(props: NodeProps) {
         provider: 'gcp',
         icon: <CodeBracketIcon className="w-6 h-6 text-blue-600" />,
         label: props.data.label || 'Cloud Functions',
-        resourceType: 'function'
+        resourceType: 'gcp_cloudfunctions_function' // Actualizado a tipo específico
       }}
     />
   );
@@ -140,12 +191,30 @@ export function CloudSQLNode(props: NodeProps) {
         provider: 'gcp',
         icon: <CircleStackIcon className="w-6 h-6 text-blue-600" />,
         label: props.data.label || 'Cloud SQL',
-        resourceType: 'sql'
+        resourceType: 'gcp_sql_instance' // Actualizado a tipo específico (ejemplo)
       }}
     />
   );
 }
 CloudSQLNode.displayName = 'CloudSQLNode';
+
+// Instance Group Manager Node (Nuevo o actualizar existente si 'group' era para esto)
+export function InstanceGroupManagerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{
+        ...props.data,
+        provider: 'gcp',
+        icon: <ServerIcon className="w-6 h-6 text-blue-400" />, // Icono similar a instance pero diferente color
+        label: props.data.label || 'Instance Group',
+        resourceType: 'gcp_compute_instance_group_manager' // Tipo específico
+      }}
+    />
+  );
+}
+InstanceGroupManagerNode.displayName = 'InstanceGroupManagerNode';
+
 
 // Generic Node
 export function GenericNode(props: NodeProps) {
@@ -238,10 +307,33 @@ const nodeTypes = {
   rds: RDSInstanceNode,
   
   // GCP nodes
-  compute: ComputeEngineNode,
-  storage: CloudStorageNode, 
-  sql: CloudSQLNode,     
-  functions: CloudFunctionsNode,
+  gcp_compute_instance: ComputeEngineNode,
+  gcp_compute_instance_group_manager: InstanceGroupManagerNode,
+  gcp_appengine_app: AppEngineNode,
+  gcp_gke_cluster: GKENode,
+  gcp_cloudrun_service: CloudRunNode,
+  gcp_cloudfunctions_function: CloudFunctionsNode,
+  gcp_cloud_storage_bucket: CloudStorageNode, 
+  gcp_sql_instance: CloudSQLNode,
+  // Para otros tipos de GCP Compute que no tienen un componente visual dedicado aún,
+  // pero sí tienen esquemas (disk, network, firewall, loadBalancer, instanceTemplate)
+  // los mapearemos a BaseResourceNode. React Flow usará el 'type' del nodo 
+  // para la lógica interna, y BaseResourceNode renderizará un nodo genérico.
+  // El IaCTemplatePanel usará el resourceType completo (ej. 'gcp_compute_disk') para cargar la config.
+  gcp_compute_disk: BaseResourceNode,
+  gcp_compute_network: BaseResourceNode,
+  gcp_compute_firewall: BaseResourceNode,
+  gcp_compute_load_balancer: BaseResourceNode,
+  gcp_compute_instance_template: BaseResourceNode,
+  // Tipos de GCP - Aplicación (ejemplos, necesitarán sus propios componentes o mapeo a BaseResourceNode)
+  gcp_api_gateway: BaseResourceNode, 
+  gcp_pubsub_topic: BaseResourceNode,
+  // Mantener los mapeos genéricos como fallback o para nodos antiguos si es necesario,
+  // pero es preferible que los nodos nuevos siempre usen los tipos específicos.
+  compute: ComputeEngineNode, // Fallback para 'compute'
+  storage: CloudStorageNode,  // Fallback para 'storage'
+  sql: CloudSQLNode,          // Fallback para 'sql'
+  functions: CloudFunctionsNode, // Fallback para 'functions' (plural)
   
   // Generic nodes
   generic: GenericNode,
@@ -250,7 +342,7 @@ const nodeTypes = {
   vm: AzureVMNode,
   blob: AzureBlobNode,
   cosmos: AzureCosmosNode,
-  function: AzureFunctionNode,
+  function: AzureFunctionNode, // Ojo: 'function' (singular) vs GCP 'functions' (plural)
   
   // Group node
   group: GroupNode,

@@ -11,12 +11,18 @@ import ChartBarIcon from '@heroicons/react/24/solid/ChartBarIcon';
 import { 
   addEdge, 
   applyEdgeChanges, 
-  applyNodeChanges,
+  applyNodeChanges
+} from 'reactflow';
+import type { 
+  Node as ReactFlowNode, 
+  Edge as ReactFlowEdge,
   OnNodesChange,
   OnEdgesChange,
-  OnConnect
+  OnConnect,
+  NodeChange, // Importar tipos específicos para los callbacks si es necesario
+  EdgeChange, // Importar tipos específicos para los callbacks si es necesario
+  Connection // Importar tipos específicos para los callbacks si es necesario
 } from 'reactflow';
-import type { Node as ReactFlowNode, Edge as ReactFlowEdge } from 'reactflow';
 
 // Componentes
 import FlowEditor from '../../../../components/flow/FlowEditor';
@@ -100,12 +106,13 @@ const resourceCategories: ResourceCategory[] = [
     name: 'GCP - Cómputo',
     provider: 'gcp',
     items: [
-      { type: 'compute', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp' },
-      { type: 'group', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp' },
-      { type: 'compute', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp' },
-      { type: 'compute', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp' },
-      { type: 'compute', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp' },
-      { type: 'compute', name: 'Cloud Functions', description: 'Funciones serverless', provider: 'gcp' },
+      { type: 'gcp_compute_instance', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp' },
+      { type: 'gcp_compute_disk', name: 'Compute Disk', description: 'Disco persistente para VMs', provider: 'gcp' },
+      { type: 'gcp_compute_instance_group_manager', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp' },
+      { type: 'gcp_gke_cluster', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp' },
+      { type: 'gcp_cloudrun_service', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp' },
+      { type: 'gcp_appengine_app', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp' },
+      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Funciones serverless (Cómputo)', provider: 'gcp' },
     ]
   },
   {
@@ -124,9 +131,9 @@ const resourceCategories: ResourceCategory[] = [
     name: 'GCP - Aplicación',
     provider: 'gcp',
     items: [
-      { type: 'function', name: 'Cloud Functions', description: 'Función serverless', provider: 'gcp' },
-      { type: 'function', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp' },
-      { type: 'function', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp' },
+      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Función serverless (Aplicación)', provider: 'gcp' },
+      { type: 'gcp_api_gateway', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp' }, // Sugerencia de tipo más específico
+      { type: 'gcp_pubsub_topic', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp' }, // Sugerencia de tipo más específico
       { type: 'function', name: 'Cloud Tasks', description: 'Colas de tareas', provider: 'gcp' },
       { type: 'function', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp' },
       { type: 'function', name: 'Eventarc', description: 'Orquestación de eventos', provider: 'gcp' },
@@ -218,7 +225,7 @@ export default function DiagramPage() {
   
   // Manejadores para cambios en nodos y conexiones
   const onNodesChange: OnNodesChange = useCallback(
-    (changes) => {
+    (changes: NodeChange[]) => { // Añadir tipo explícito
       setNodes((nds) => {
         const updatedNodes = applyNodeChanges(changes, nds);
         return updatedNodes;
@@ -228,7 +235,7 @@ export default function DiagramPage() {
   );
   
   const onEdgesChange: OnEdgesChange = useCallback(
-    (changes) => {
+    (changes: EdgeChange[]) => { // Añadir tipo explícito
       setEdges((eds) => {
         const updatedEdges = applyEdgeChanges(changes, eds);
         return updatedEdges;
@@ -238,7 +245,7 @@ export default function DiagramPage() {
   );
   
   const onConnect: OnConnect = useCallback(
-    (params) => {
+    (params: Connection) => { // Añadir tipo explícito
       setEdges((eds) => addEdge({ ...params, animated: true }, eds));
     },
     []

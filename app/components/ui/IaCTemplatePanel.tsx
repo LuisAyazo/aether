@@ -132,57 +132,105 @@ const CODE_TABS = [
 
 // Helper function to map UI resourceType to registry structure
 const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
-  let simplifiedResourceType = typeof typeFromNode === 'string' ? typeFromNode : typeFromNode.toString();
+  const inputType: string = typeof typeFromNode === 'string' ? typeFromNode : String(typeFromNode);
+  
+  // Manejo explícito para el tipo genérico 'compute'
+  if (inputType === 'compute') {
+    return { category: 'compute', resourceType: 'instance' };
+  }
+
+  let simplifiedResourceType: string = inputType;
   let category = 'unknown';
 
-  if (simplifiedResourceType.includes('_')) {
-    const parts = simplifiedResourceType.split('_');
-    if (parts[0] === 'gcp') { 
-      if (parts[1] === 'compute' && parts.length > 2) {
-        category = 'compute';
-        simplifiedResourceType = parts.slice(2).join('_');
-      } else if (parts[1] === 'storage' && parts.length > 2) {
-        category = 'storage';
-        simplifiedResourceType = parts.slice(2).join('_');
-      } else if (parts[1] === 'sql' && parts.length > 2) {
-        category = 'sql';
-        simplifiedResourceType = parts.slice(2).join('_');
-      } else if (parts.length === 2) { // Fallback for gcp_type
-        simplifiedResourceType = parts[1];
-        if (['instance', 'disk', 'network', 'firewall', 'loadBalancer', 'instanceTemplate', 'instanceGroup'].includes(simplifiedResourceType)) {
-            category = 'compute';
-        } else if (['bucket'].includes(simplifiedResourceType)) {
-            category = 'storage';
-        } else {
-            category = parts[0]; 
-        }
-      }
-    }
-  }
-  
-  const specificMappings: Record<string, { category: string; resourceType: string }> = {
+  // Primero, intentar una coincidencia directa para otros tipos ya simplificados
+  const directMatchKeys: Record<string, { category: string; resourceType: string }> = {
+    // 'compute' ya se manejó arriba
     'instance': { category: 'compute', resourceType: 'instance' },
     'disk': { category: 'compute', resourceType: 'disk' },
     'network': { category: 'compute', resourceType: 'network' },
     'firewall': { category: 'compute', resourceType: 'firewall' },
     'loadBalancer': { category: 'compute', resourceType: 'loadBalancer' },
-    'instance_template': { category: 'compute', resourceType: 'instanceTemplate' },
     'instanceTemplate': { category: 'compute', resourceType: 'instanceTemplate' },
-    'instance_group_manager': { category: 'compute', resourceType: 'instanceGroup' },
     'instanceGroup': { category: 'compute', resourceType: 'instanceGroup' },
-    'bucket': { category: 'storage', resourceType: 'bucket' },
-    'compute': { category: 'compute', resourceType: 'instance' }, 
+    'bucket': { category: 'storage', resourceType: 'bucket' }, // Ejemplo
   };
 
-  if (specificMappings[simplifiedResourceType]) {
-    return specificMappings[simplifiedResourceType];
-  }
-  
-  if (category !== 'unknown' && simplifiedResourceType) {
-    return { category, resourceType: simplifiedResourceType };
+  if (directMatchKeys[inputType]) {
+    return directMatchKeys[inputType];
   }
 
-  console.warn(`Could not map resourceType: ${typeFromNode} to a known category/resourceType pair.`);
+  // Si no hay coincidencia directa, procesar para gcp_...
+  if (inputType.includes('_')) {
+    const parts = inputType.split('_'); // Corregido: usar inputType y eliminar declaración duplicada
+    if (parts[0].toLowerCase() === 'gcp') {
+      const serviceCategory = parts[1].toLowerCase(); // ej: "compute", "appengine", "gke"
+      const typeParts = parts.slice(2); // ej: ["instance"], ["app"]
+
+      if (typeParts.length > 0) {
+        simplifiedResourceType = typeParts.join('_').toLowerCase(); // ej: "instance", "app"
+        category = serviceCategory; // ej: "compute", "appengine"
+
+        // Casos especiales donde el nombre del servicio en la ruta no es la categoría final
+        // o el tipo simplificado necesita un ajuste final para coincidir con las claves del registro.
+        // Por ejemplo, si tuviéramos gcp_kubernetes_engine_cluster y quisiéramos category: 'gke', resourceType: 'cluster'
+        if (serviceCategory === 'appengine' && simplifiedResourceType === 'app') {
+          // Ya es correcto: category = 'appengine', simplifiedResourceType = 'app'
+        } else if (serviceCategory === 'gke' && simplifiedResourceType === 'cluster') {
+          category = 'gke'; // Asumiendo que registrarás una categoría 'gke'
+          simplifiedResourceType = 'cluster';
+        } else if (serviceCategory === 'cloudfunctions' && simplifiedResourceType === 'function') {
+          category = 'functions'; // Asumiendo una categoría 'functions'
+          simplifiedResourceType = 'function';
+        } else if (serviceCategory === 'cloudrun' && simplifiedResourceType === 'service') {
+          category = 'cloudrun'; // Asumiendo una categoría 'cloudrun'
+          simplifiedResourceType = 'service';
+        }
+        // Para gcp_compute_instance, category='compute', simplifiedResourceType='instance', lo cual es manejado por directMatchKeys
+      } else if (parts.length === 2) { // Fallback para gcp_type como gcp_appengine (si no hay más partes)
+        simplifiedResourceType = parts[1].toLowerCase();
+        category = parts[1].toLowerCase(); // Asumir que el tipo es la categoría
+      }
+    }
+  } else {
+    // Si no hay guiones bajos, usar el inputType tal cual (convertido a minúsculas para el mapeo)
+    simplifiedResourceType = inputType.toLowerCase();
+    // Intentar adivinar la categoría si es un tipo simple conocido
+    if (directMatchKeys[simplifiedResourceType]) {
+        category = directMatchKeys[simplifiedResourceType].category;
+    }
+  }
+  
+  // Mapeos específicos para claves que podrían no ser idénticas después de la simplificación
+  // (e.g., instance_template -> instanceTemplate)
+  // Las claves aquí deben estar en minúsculas y ser el 'resourceType' final esperado en el registro
+  const finalMappingKeys: Record<string, { category: string; resourceType: string }> = {
+    'instance_template': { category: 'compute', resourceType: 'instanceTemplate' }, // gcp_compute_instance_template -> instanceTemplate
+    'instance_group_manager': { category: 'compute', resourceType: 'instanceGroup' }, // gcp_compute_instance_group_manager -> instanceGroup
+    'app': { category: 'appengine', resourceType: 'app' },         // gcp_appengine_app -> app
+    'cluster': { category: 'gke', resourceType: 'cluster' },       // gcp_gke_cluster -> cluster (necesitará registro GKE)
+    'function': { category: 'functions', resourceType: 'function' }, // gcp_cloudfunctions_function -> function (necesitará registro Functions)
+    'service': { category: 'cloudrun', resourceType: 'service' },   // gcp_cloudrun_service -> service
+    // Añadir otros mapeos específicos si el simplifiedResourceType no es la clave final del registro
+  };
+  
+  // Si simplifiedResourceType (después del split y toLowerCase, ej: "app" de "gcp_appengine_app") 
+  // está en finalMappingKeys, usar ese mapeo.
+  // La 'category' determinada por el split (ej: "appengine") debe coincidir con la del mapeo.
+  if (finalMappingKeys[simplifiedResourceType] && category === finalMappingKeys[simplifiedResourceType].category) {
+    return { category: category, resourceType: finalMappingKeys[simplifiedResourceType].resourceType };
+  }
+  
+  // Caso especial: si el inputType es gcp_compute_instance, simplifiedResourceType será "instance" y category "compute"
+  // y debe ser manejado por directMatchKeys o el siguiente bloque.
+
+  // Si después del split, simplifiedResourceType es una clave directa (ej: "instance" de "gcp_compute_instance")
+  // y la categoría también se determinó (ej: "compute" de "gcp_compute_instance")
+  if (category !== 'unknown' && directMatchKeys[simplifiedResourceType] && directMatchKeys[simplifiedResourceType].category === category) {
+    return { category, resourceType: simplifiedResourceType };
+  }
+  
+  // Fallback final si ninguna de las lógicas anteriores funcionó
+  console.warn(`Could not map resourceType: ${typeFromNode} to a known category/resourceType pair. Processed as: simplified='${simplifiedResourceType}', category='${category}'`);
   return undefined;
 };
 
@@ -212,7 +260,8 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
   const [activeMainTab, setActiveMainTab] = useState('config');
   const [activeCodeTab, setActiveCodeTab] = useState('terraform');
   const [configValues, setConfigValues] = useState<ResourceValues>({ name: resourceData.label || 'resource' });
-  const [resourceConfig, setResourceConfig] = useState<any>(null); 
+  const [resourceConfigDefinition, setResourceConfigDefinition] = useState<any>(null); // Almacena el objeto con las funciones
+  const [currentFields, setCurrentFields] = useState<any[] | Record<string, any> | undefined>(undefined); // Almacena los campos resueltos, undefined en lugar de null
   const [validationSchema, setValidationSchema] = useState<z.ZodTypeAny | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string[] | undefined>>({});
   const [smartBehavior, setSmartBehavior] = useState<SmartBehavior>({});
@@ -222,26 +271,49 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
 
   useEffect(() => {
     const loadResourceConfig = async () => {
+      console.log('IaCTemplatePanel: loadResourceConfig called. isOpen:', isOpen, 'resourceData:', JSON.stringify(resourceData));
       if (!resourceData || !resourceData.provider || !resourceData.resourceType) {
-        console.warn('IaCTemplatePanel: Missing resourceData for loading config.');
+        console.warn('IaCTemplatePanel: Missing or incomplete resourceData for loading config.', resourceData);
         setIsLoadingConfig(false);
+        setResourceConfigDefinition(null); // Corregido: usar setResourceConfigDefinition
+        setCurrentFields(undefined); // Corregido: usar undefined
+        setValidationSchema(null);
+        setConfigValues({ name: resourceData?.label || 'resource' });
         return;
       }
       setIsLoadingConfig(true);
       setValidationErrors({}); 
       try {
+        console.log('IaCTemplatePanel: Attempting to map resourceType:', resourceData.resourceType);
         const mapping = mapResourceTypeToRegistry(resourceData.resourceType);
+        console.log('IaCTemplatePanel: Mapping result:', mapping);
+
         if (mapping && resourceData.provider) {
-          console.log(`Loading config for: provider=${resourceData.provider}, category=${mapping.category}, type=${mapping.resourceType}`);
-          const config = await getResourceConfig(
+          console.log(`IaCTemplatePanel: Loading config for: provider=${resourceData.provider}, category=${mapping.category}, type=${mapping.resourceType}`);
+          const configObject = await getResourceConfig(
             resourceData.provider as SupportedProvider, 
             mapping.category, 
             mapping.resourceType
           );
-          setResourceConfig(config);
-          const schema = await config.schema(); // Resolve the promise for schema
+          console.log('IaCTemplatePanel: Config object from getResourceConfig:', configObject);
+
+          if (!configObject || typeof configObject.schema !== 'function' || typeof configObject.defaults !== 'function' || typeof configObject.fields !== 'function') {
+            console.error('IaCTemplatePanel: Invalid config object received from getResourceConfig:', configObject);
+            setResourceConfigDefinition(null); // Corregido: usar setResourceConfigDefinition
+            setCurrentFields(undefined); // Corregido: usar undefined
+            setValidationSchema(null);
+            setConfigValues({ name: resourceData.label || 'resource' });
+            setIsLoadingConfig(false);
+            return;
+          }
+
+          setResourceConfigDefinition(configObject); // Guardar el objeto con las funciones
+          const schema = await configObject.schema(); 
           setValidationSchema(schema);
-          const defaults = await config.defaults(); // Resolve the promise for defaults
+          const defaults = await configObject.defaults(); 
+          const fields = await configObject.fields(); // Resolver los campos
+          setCurrentFields(fields); // Guardar los campos resueltos
+
           const initialValues = {
             ...(defaults || {}),
             name: resourceData.label || defaults?.name || 'resource',
@@ -250,24 +322,34 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
           validateValues(initialValues, schema);
         } else {
           console.warn('Mapping failed for resourceType:', resourceData.resourceType);
-          setResourceConfig(null);
+          setResourceConfigDefinition(null);
+          setCurrentFields(undefined); // Corregido: usar undefined
           setValidationSchema(null);
           setConfigValues({ name: resourceData.label || 'resource' });
+          console.log('IaCTemplatePanel: Mapping failed or provider missing. resourceConfigDefinition set to null.');
         }
       } catch (error) {
-        console.error('Failed to load resource config:', error);
-        setResourceConfig(null);
+        console.error('IaCTemplatePanel: Error in loadResourceConfig:', error);
+        setResourceConfigDefinition(null);
+        setCurrentFields(undefined); // Corregido: usar undefined
         setValidationSchema(null);
         setConfigValues({ name: resourceData.label || 'resource' });
       } finally {
         setIsLoadingConfig(false);
+        console.log('IaCTemplatePanel: loadResourceConfig finished.');
       }
     };
 
     if (isOpen && resourceData) {
       loadResourceConfig();
+    } else if (!isOpen) {
+      // Optionally reset states when panel is closed if desired
+      // setResourceConfig(null);
+      // setValidationSchema(null);
+      // setConfigValues({ name: 'resource' }); // Reset to a very basic default
+      // setValidationErrors({});
     }
-  }, [isOpen, resourceData]);
+  }, [isOpen, resourceData]); // Asegúrate de que resourceData sea una dependencia estable o memoizada si es un objeto
 
   const validateValues = (values: ResourceValues, schemaToUse: z.ZodTypeAny | null): boolean => {
     if (!schemaToUse) {
@@ -369,7 +451,7 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
     const processedValues = { ...values };
     const currentEnv = environments && environments.length > 0 
       ? environments[0] 
-      : { id: 'dev', name: 'Development', variables: { env: 'dev' } };
+      : { id: 'dev', name: 'Development', variables: { env: 'dev' } }; // TODO: Permitir seleccionar entorno
     const envVars = currentEnv.variables;
     behavior.conditionals?.forEach(conditional => {
       const matchingCondition = conditional.conditions.find(cond => {
@@ -396,37 +478,39 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
   };
 
   const generateTerraformCode = async (values: ResourceValues = configValues) => {
-    if (!resourceConfig || !resourceConfig.templates) return '// Loading template...';
+    console.log('generateTerraformCode: received values:', JSON.stringify(values));
+    console.log('generateTerraformCode: resourceConfigDefinition:', resourceConfigDefinition);
+    if (!resourceConfigDefinition || !resourceConfigDefinition.templates) {
+      console.log('generateTerraformCode: No resourceConfigDefinition or templates function');
+      return '// Loading template...';
+    }
     try {
-      const templatesFn = await resourceConfig.templates();
-      const resolvedTemplates = typeof templatesFn === 'function' ? templatesFn(values) : templatesFn;
+      const resolvedTemplates = await resourceConfigDefinition.templates(values);
+      console.log('generateTerraformCode: resolvedTemplates:', resolvedTemplates);
       return resolvedTemplates.terraform || '// No Terraform template available';
     } catch (error) { console.error('Error generating Terraform code:', error); return '// Error'; }
   };
 
   const generatePulumiCode = async (values: ResourceValues = configValues) => {
-    if (!resourceConfig || !resourceConfig.templates) return '// Loading template...';
+    if (!resourceConfigDefinition || !resourceConfigDefinition.templates) return '// Loading template...';
     try {
-      const templatesFn = await resourceConfig.templates();
-      const resolvedTemplates = typeof templatesFn === 'function' ? templatesFn(values) : templatesFn;
+      const resolvedTemplates = await resourceConfigDefinition.templates(values);
       return resolvedTemplates.pulumi || '// No Pulumi template available';
     } catch (error) { console.error('Error generating Pulumi code:', error); return '// Error'; }
   };
 
   const generateAnsibleCode = async (values: ResourceValues = configValues) => {
-    if (!resourceConfig || !resourceConfig.templates) return '# Loading template...';
+    if (!resourceConfigDefinition || !resourceConfigDefinition.templates) return '# Loading template...';
     try {
-      const templatesFn = await resourceConfig.templates();
-      const resolvedTemplates = typeof templatesFn === 'function' ? templatesFn(values) : templatesFn;
+      const resolvedTemplates = await resourceConfigDefinition.templates(values);
       return resolvedTemplates.ansible || '# No Ansible template available';
     } catch (error) { console.error('Error generating Ansible code:', error); return '# Error'; }
   };
 
   const generateCloudFormationCode = async (values: ResourceValues = configValues) => {
-    if (!resourceConfig || !resourceConfig.templates) return '// Loading template...';
+    if (!resourceConfigDefinition || !resourceConfigDefinition.templates) return '// Loading template...';
     try {
-      const templatesFn = await resourceConfig.templates();
-      const resolvedTemplates = typeof templatesFn === 'function' ? templatesFn(values) : templatesFn;
+      const resolvedTemplates = await resourceConfigDefinition.templates(values);
       return resolvedTemplates.cloudformation || '// No CloudFormation template available';
     } catch (error) { console.error('Error generating CloudFormation code:', error); return '// Error'; }
   };
@@ -439,14 +523,14 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
 
   const [currentCode, setCurrentCode] = useState('// Select a template type');
   useEffect(() => {
-    if (activeMainTab === 'code' && resourceConfig) {
+    if (activeMainTab === 'code' && resourceConfigDefinition) { // Usar resourceConfigDefinition
       setIsGenerating(true);
       generateCodeWithSmartBehavior(activeCodeTab)
         .then(code => setCurrentCode(code))
         .catch(() => setCurrentCode("// Error generating code"))
         .finally(() => setIsGenerating(false));
     }
-  }, [activeMainTab, activeCodeTab, resourceConfig, configValues, smartBehavior]);
+  }, [activeMainTab, activeCodeTab, resourceConfigDefinition, configValues, smartBehavior]); // Usar resourceConfigDefinition
 
 
   const getCurrentLanguage = () => {
@@ -555,7 +639,7 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
                     resourceType={resourceData.resourceType} 
                     values={configValues}
                     onChange={handleConfigChange} 
-                    fields={resourceConfig?.fields}
+                    fields={currentFields} // Usar currentFields
                     errors={validationErrors} 
                     isLoading={isLoadingConfig}
                   />

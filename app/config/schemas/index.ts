@@ -32,21 +32,23 @@ export async function getResourceConfig(
     throw new Error(`Resource type "${resourceType}" not found in "${provider}/${category}"`);
   }
   
-  const resourceConfig = categoryRegistry[resourceType];
+  const resourceDefinition = categoryRegistry[resourceType];
   
-  // Load all resource configuration parts
-  const [schema, fields, templates, defaults] = await Promise.all([
-    resourceConfig.schema(),
-    resourceConfig.fields(),
-    resourceConfig.templates(),
-    resourceConfig.defaults(),
-  ]);
+  if (!resourceDefinition || 
+      typeof resourceDefinition.schema !== 'function' ||
+      typeof resourceDefinition.fields !== 'function' ||
+      typeof resourceDefinition.templates !== 'function' ||
+      typeof resourceDefinition.defaults !== 'function') {
+    throw new Error(`Resource definition for "${provider}/${category}/${resourceType}" is invalid.`);
+  }
   
+  // Return the definition object containing the functions, not their resolved values yet.
+  // The caller (IaCTemplatePanel) will be responsible for calling these functions.
   return {
-    schema,
-    fields,
-    templates,
-    defaults,
+    schema: resourceDefinition.schema,     // () => Promise<ZodSchema>
+    fields: resourceDefinition.fields,     // () => Promise<FieldConfig[]>
+    templates: resourceDefinition.templates, // (configValues) => Promise<CodeTemplate> OR () => Promise<ResourceTemplate[]>
+    defaults: resourceDefinition.defaults,   // () => Promise<Partial<ResourceValues>>
   };
 }
 
@@ -57,6 +59,9 @@ export async function validateResourceConfig(
   resourceType: string,
   config: any
 ) {
-  const { schema } = await getResourceConfig(provider, category, resourceType);
+  // Get the definition which contains the schema function
+  const resourceDefinition = await getResourceConfig(provider, category, resourceType);
+  // Call the schema function to get the actual Zod schema
+  const schema = await resourceDefinition.schema();
   return schema.parse(config);
 }

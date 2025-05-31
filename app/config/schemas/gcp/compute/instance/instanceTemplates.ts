@@ -1,11 +1,5 @@
 import { GCPComputeInstanceConfig } from './instance';
-
-export interface CodeTemplate {
-  terraform: string;
-  pulumi: string;
-  ansible: string;
-  cloudformation?: string;
-}
+import { CodeTemplate } from '../../../../../types/resourceConfig'; // Ruta actualizada
 
 export function generateGCPComputeInstanceTemplates(config: GCPComputeInstanceConfig): CodeTemplate {
   return {

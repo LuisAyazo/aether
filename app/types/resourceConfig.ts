@@ -1,6 +1,6 @@
 export type Provider = 'aws' | 'gcp' | 'azure' | 'generic';
 
-export type ResourceType = 'compute' | 'storage' | 'sql' | 'function' | 'database' | 'network' | 'generic';
+export type ResourceType = string; // Permitir cualquier string, el mapeo se encargará
 
 export interface FieldConfig {
   key?: string; // Field identifier for array-based configurations
@@ -66,4 +66,13 @@ export interface ResourceConfigFormProps {
   fields?: FieldConfig[] | Record<string, FieldConfig>; // Dynamic fields from schema system
   isLoading?: boolean; // Loading state
   errors?: Record<string, string[] | undefined>; // For displaying validation errors
+}
+
+// Interface for generated code templates
+export interface CodeTemplate {
+  terraform: string;
+  pulumi: string;
+  ansible: string;
+  cloudformation?: string;
+  // Potentially add other IaC tools here
 }
