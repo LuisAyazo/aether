@@ -5,6 +5,11 @@ import CodeBlock from './CodeBlock';
 import SmartBehaviorPanel from './SmartBehaviorPanel';
 import { ResourceValues, ResourceType } from '@/app/types/resourceConfig';
 import { 
+  getResourceConfig, 
+  validateResourceConfig, 
+  SupportedProvider 
+} from '@/app/config/schemas';
+import { 
   DocumentDuplicateIcon, 
   CheckIcon, 
   CommandLineIcon,
@@ -124,53 +129,42 @@ const CODE_TABS = [
   }
 ];
 
-const getDefaultValues = (provider: string, resourceType: string): ResourceValues => {
-  const defaults: Record<string, Record<string, ResourceValues>> = {
-    gcp: {
-      compute: {
-        name: 'instance',
-        projectId: '',
-        machineType: 'e2-micro',
-        zone: 'us-central1-a',
-        image: {
-          project: 'debian-cloud',
-          family: 'debian-10',
-        },
-        network: 'default',
-        bootDisk: {
-          sizeGb: 50,
-          type: 'pd-standard',
-          autoDelete: true,
-        },
-        accessConfig: {
-          name: 'External NAT',
-          type: 'ONE_TO_ONE_NAT',
-        },
-        metadata: [],
-      },
-      storage: {
-        name: 'bucket',
-        location: 'US',
-        storageClass: 'STANDARD',
-        versioning: false,
-      },
-      sql: {
-        name: 'sql-instance',
-        databaseVersion: 'MYSQL_8_0',
-        tier: 'db-f1-micro',
-        region: 'us-central1',
-        storage: {
-          sizeGb: 10,
-          type: 'SSD',
-        },
-        backup: {
-          enabled: false,
-        },
-      },
-    },
-  };
+const getDefaultValues = async (provider: string, resourceType: string): Promise<ResourceValues> => {
+  try {
+    // Map resourceType to category and specific resource
+    const mapping = mapResourceTypeToRegistry(resourceType);
+    if (!mapping) {
+      return { name: 'resource' };
+    }
 
-  return defaults[provider]?.[resourceType] || { name: 'resource' };
+    const config = await getResourceConfig(
+      provider as SupportedProvider, 
+      mapping.category, 
+      mapping.resourceType
+    );
+    return config.defaults || { name: 'resource' };
+  } catch (error) {
+    console.warn('Failed to get default values:', error);
+    return { name: 'resource' };
+  }
+};
+
+// Helper function to map UI resourceType to registry structure
+const mapResourceTypeToRegistry = (resourceType: string) => {
+  const mappings: Record<string, { category: string; resourceType: string }> = {
+    // Compute resources
+    'compute': { category: 'compute', resourceType: 'instance' },
+    'instance': { category: 'compute', resourceType: 'instance' },
+    'disk': { category: 'compute', resourceType: 'disk' },
+    'network': { category: 'compute', resourceType: 'network' },
+    'firewall': { category: 'compute', resourceType: 'firewall' },
+    'loadBalancer': { category: 'compute', resourceType: 'loadBalancer' },
+    'instanceTemplate': { category: 'compute', resourceType: 'instanceTemplate' },
+    'instanceGroup': { category: 'compute', resourceType: 'instanceGroup' },
+    // Add more mappings as needed
+  };
+  
+  return mappings[resourceType];
 };
 
 // Helper functions to get provider and resource type icons
@@ -205,19 +199,47 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
 }) => {
   const [activeMainTab, setActiveMainTab] = useState('config');
   const [activeCodeTab, setActiveCodeTab] = useState('terraform');
-  const [configValues, setConfigValues] = useState<ResourceValues>(() => 
-    getDefaultValues(resourceData.provider, resourceData.resourceType)
-  );
+  const [configValues, setConfigValues] = useState<ResourceValues>({ name: 'resource' });
+  const [resourceConfig, setResourceConfig] = useState<any>(null);
   const [smartBehavior, setSmartBehavior] = useState<SmartBehavior>({});
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false);
 
-  // Update values when resource changes
+  // Load resource configuration when resource changes
   useEffect(() => {
-    setConfigValues(prevValues => ({
-      ...getDefaultValues(resourceData.provider, resourceData.resourceType),
-      name: resourceData.label || prevValues.name,
-    }));
+    const loadResourceConfig = async () => {
+      setIsLoadingConfig(true);
+      try {
+        const mapping = mapResourceTypeToRegistry(resourceData.resourceType);
+        if (mapping && resourceData.provider) {
+          const config = await getResourceConfig(
+            resourceData.provider as SupportedProvider, 
+            mapping.category, 
+            mapping.resourceType
+          );
+          setResourceConfig(config);
+          setConfigValues(prev => ({
+            ...config.defaults,
+            name: resourceData.label || prev.name,
+          }));
+        } else {
+          // Fallback for unmapped resource types
+          setConfigValues(prev => ({
+            name: resourceData.label || prev.name,
+          }));
+        }
+      } catch (error) {
+        console.warn('Failed to load resource config:', error);
+        setConfigValues(prev => ({
+          name: resourceData.label || prev.name,
+        }));
+      } finally {
+        setIsLoadingConfig(false);
+      }
+    };
+
+    loadResourceConfig();
   }, [resourceData.provider, resourceData.resourceType, resourceData.label]);
 
   const handleConfigChange = (values: ResourceValues) => {
@@ -289,7 +311,7 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
   };
 
   const applySmartBehavior = (values: ResourceValues, behavior: SmartBehavior): ResourceValues => {
-    let processedValues = { ...values };
+    const processedValues = { ...values };
     
     // Use the first environment from provided environments, or default
     const currentEnv = environments && environments.length > 0 
@@ -325,345 +347,62 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
   };
 
   const generateTerraformCode = (values: ResourceValues = configValues) => {
-    switch (resourceData.provider) {
-      case 'gcp':
-        switch (resourceData.resourceType) {
-          case 'compute':
-            const imageProject = values.image?.project || 'debian-cloud';
-            const imageFamily = values.image?.family || 'debian-10';
-            return `resource "google_compute_instance" "${values.name}" {
-  name         = "${values.name}"
-  machine_type = "${values.machineType}"
-  zone         = "${values.zone}"
-
-  boot_disk {
-    initialize_params {
-      image = "${imageProject}/${imageFamily}"
-      size  = ${values.bootDisk?.sizeGb}
-      type  = "${values.bootDisk?.type}"
-    }
-    auto_delete = ${values.bootDisk?.autoDelete}
-  }
-
-  network_interface {
-    network = "${values.network}"
-    access_config {
-      name = "${values.accessConfig?.name}"
-      type = "${values.accessConfig?.type}"
-    }
-  }
-
-  ${values.metadata?.length ? `metadata = {
-    ${values.metadata.map((md: Metadata) => `"${md.key}" = "${md.value}"`).join('\n    ')}
-  }` : ''}
-
-  ${values.userData ? `metadata_startup_script = <<-EOF
-    ${values.userData}
-  EOF` : ''}
-}`;
-          case 'storage':
-            return `resource "google_storage_bucket" "${values.name}" {
-  name          = "${values.name}"
-  location      = "${values.location}"
-  storage_class = "${values.storageClass}"
-  force_destroy = true
-  
-  versioning {
-    enabled = ${values.versioning}
-  }
-
-  ${values.lifecycleRules?.length ? `lifecycle_rule {
-    ${values.lifecycleRules.map((rule: LifecycleRule) => `
-    condition {
-      ${rule.age ? `age = ${rule.age}` : ''}
-      ${rule.isLive ? `is_live = ${rule.isLive}` : ''}
-      ${rule.matchesStorageClass ? `matches_storage_class = ${JSON.stringify(rule.matchesStorageClass)}` : ''}
-    }
-    action {
-      ${rule.type ? `type = "${rule.type}"` : ''}
-      ${rule.storageClass ? `storage_class = "${rule.storageClass}"` : ''}
-    }`).join('\n    ')}
-  }` : ''}
-}`;
-          case 'sql':
-            return `resource "google_sql_database_instance" "${values.name}" {
-  name             = "${values.name}"
-  database_version = "${values.databaseVersion}"
-  region           = "${values.region}"
-  
-  settings {
-    tier = "${values.tier}"
-    
-    backup_configuration {
-      enabled = ${values.backup?.enabled}
-      ${values.backup?.startTime ? `start_time = "${values.backup.startTime}"` : ''}
-    }
-    
-    ip_configuration {
-      ipv4_enabled = true
+    if (!resourceConfig || !resourceConfig.templates) {
+      return '// Loading template...';
     }
 
-    ${values.storage ? `disk_size = ${values.storage.sizeGb}
-    disk_type = "${values.storage.type}"` : ''}
-  }
-}`;
-          default:
-            return '// No hay template disponible para este tipo de recurso';
-        }
-      default:
-        return '// No hay template disponible para este proveedor';
+    try {
+      // Get the template generator function
+      const templates = resourceConfig.templates(values);
+      return templates.terraform || '// No Terraform template available for this resource';
+    } catch (error) {
+      console.error('Error generating Terraform code:', error);
+      return '// Error generating template';
     }
   };
 
   const generatePulumiCode = (values: ResourceValues = configValues) => {
-    switch (resourceData.provider) {
-      case 'gcp':
-        switch (resourceData.resourceType) {
-          case 'compute':
-            return `import * as gcp from "@pulumi/gcp";
-
-const instance = new gcp.compute.Instance("${values.name}", {
-    name: "${values.name}",
-    machineType: "${values.machineType}",
-    zone: "${values.zone}",
-    bootDisk: {
-        initializeParams: {
-            image: "${values.image?.project}/${values.image?.family}",
-            size: ${values.bootDisk?.sizeGb},
-            type: "${values.bootDisk?.type}"
-        },
-        autoDelete: ${values.bootDisk?.autoDelete}
-    },
-    networkInterfaces: [{
-        network: "${values.network}",
-        accessConfigs: [{
-            name: "${values.accessConfig?.name}",
-            type: "${values.accessConfig?.type}"
-        }]
-    }],
-    ${values.metadata?.length ? `metadata: {
-        ${values.metadata.map((md: Metadata) => `"${md.key}": "${md.value}"`).join(',\n        ')}
-    },` : ''}
-    ${values.userData ? `metadataStartupScript: \`${values.userData}\`,` : ''}
-});`;
-          case 'storage':
-            return `import * as gcp from "@pulumi/gcp";
-
-const bucket = new gcp.storage.Bucket("${values.name}", {
-    name: "${values.name}",
-    location: "${values.location}",
-    storageClass: "${values.storageClass}",
-    forceDestroy: true,
-    versioning: {
-        enabled: ${values.versioning}
-    },
-    ${values.lifecycleRules?.length ? `lifecycleRules: [
-        ${values.lifecycleRules.map((rule: LifecycleRule) => `{
-            condition: {
-                ${rule.age ? `age: ${rule.age},` : ''}
-                ${rule.isLive ? `isLive: ${rule.isLive},` : ''}
-                ${rule.matchesStorageClass ? `matchesStorageClass: ${JSON.stringify(rule.matchesStorageClass)},` : ''}
-            },
-            action: {
-                ${rule.type ? `type: "${rule.type}",` : ''}
-                ${rule.storageClass ? `storageClass: "${rule.storageClass}",` : ''}
-            }
-        }`).join(',\n        ')}
-    ],` : ''}
-});`;
-          case 'sql':
-            return `import * as gcp from "@pulumi/gcp";
-
-const instance = new gcp.sql.DatabaseInstance("${values.name}", {
-    name: "${values.name}",
-    databaseVersion: "${values.databaseVersion}",
-    region: "${values.region}",
-    settings: {
-        tier: "${values.tier}",
-        backupConfiguration: {
-            enabled: ${values.backup?.enabled},
-            ${values.backup?.startTime ? `startTime: "${values.backup.startTime}",` : ''}
-        },
-        ipConfiguration: {
-            ipv4Enabled: true
-        },
-        ${values.storage ? `diskSize: ${values.storage.sizeGb},
-        diskType: "${values.storage.type}",` : ''}
+    if (!resourceConfig || !resourceConfig.templates) {
+      return '// Loading template...';
     }
-});`;
-          default:
-            return '// No hay template disponible para este tipo de recurso';
-        }
-      default:
-        return '// No hay template disponible para este proveedor';
+
+    try {
+      // Get the template generator function
+      const templates = resourceConfig.templates(values);
+      return templates.pulumi || '// No Pulumi template available for this resource';
+    } catch (error) {
+      console.error('Error generating Pulumi code:', error);
+      return '// Error generating template';
     }
   };
 
   const generateAnsibleCode = (values: ResourceValues = configValues) => {
-    switch (resourceData.provider) {
-      case 'gcp':
-        switch (resourceData.resourceType) {
-          case 'compute':
-            return `- name: Create GCP compute instance
-  google.cloud.gcp_compute_instance:
-    name: "${values.name}"
-    machine_type: "${values.machineType}"
-    zone: "${values.zone}"
-    boot_disk:
-      initialize_params:
-        image: "${values.image?.project}/${values.image?.family}"
-        size_gb: ${values.bootDisk?.sizeGb}
-        type: "${values.bootDisk?.type}"
-      auto_delete: ${values.bootDisk?.autoDelete}
-    network_interfaces:
-      - network: "${values.network}"
-        access_configs:
-          - name: "${values.accessConfig?.name}"
-            type: "${values.accessConfig?.type}"
-    ${values.metadata?.length ? `metadata:
-      ${values.metadata.map((md: Metadata) => `${md.key}: ${md.value}`).join('\n      ')}` : ''}
-    ${values.userData ? `metadata_startup_script: |
-      ${values.userData}` : ''}`;
-          case 'storage':
-            return `- name: Create GCP storage bucket
-  google.cloud.gcp_storage_bucket:
-    name: "${values.name}"
-    location: "${values.location}"
-    storage_class: "${values.storageClass}"
-    force_destroy: true
-    versioning:
-      enabled: ${values.versioning}
-    ${values.lifecycleRules?.length ? `lifecycle_rules:
-      ${values.lifecycleRules.map((rule: LifecycleRule) => `- condition:
-          ${rule.age ? `age: ${rule.age}` : ''}
-          ${rule.isLive ? `is_live: ${rule.isLive}` : ''}
-          ${rule.matchesStorageClass ? `matches_storage_class: ${JSON.stringify(rule.matchesStorageClass)}` : ''}
-        action:
-          ${rule.type ? `type: "${rule.type}"` : ''}
-          ${rule.storageClass ? `storage_class: "${rule.storageClass}"` : ''}`).join('\n      ')}` : ''}`;
-          case 'sql':
-            return `- name: Create GCP SQL instance
-  google.cloud.gcp_sql_database_instance:
-    name: "${values.name}"
-    database_version: "${values.databaseVersion}"
-    region: "${values.region}"
-    settings:
-      tier: "${values.tier}"
-      backup_configuration:
-        enabled: ${values.backup?.enabled}
-        ${values.backup?.startTime ? `start_time: "${values.backup.startTime}"` : ''}
-      ip_configuration:
-        ipv4_enabled: true
-      ${values.storage ? `disk_size: ${values.storage.sizeGb}
-      disk_type: "${values.storage.type}"` : ''}`;
-          default:
-            return '# No hay template disponible para este tipo de recurso';
-        }
-      default:
-        return '# No hay template disponible para este proveedor';
+    if (!resourceConfig || !resourceConfig.templates) {
+      return '# Loading template...';
+    }
+
+    try {
+      // Get the template generator function
+      const templates = resourceConfig.templates(values);
+      return templates.ansible || '# No Ansible template available for this resource';
+    } catch (error) {
+      console.error('Error generating Ansible code:', error);
+      return '# Error generating template';
     }
   };
 
   const generateCloudFormationCode = (values: ResourceValues = configValues) => {
-    switch (resourceData.provider) {
-      case 'gcp':
-        switch (resourceData.resourceType) {
-          case 'compute':
-            return `{
-  "Resources": {
-    "${values.name}": {
-      "Type": "Google::Compute::Instance",
-      "Properties": {
-        "name": "${values.name}",
-        "machineType": "${values.machineType}",
-        "zone": "${values.zone}",
-        "bootDisk": {
-          "initializeParams": {
-            "image": "${values.image?.project}/${values.image?.family}",
-            "sizeGb": ${values.bootDisk?.sizeGb},
-            "type": "${values.bootDisk?.type}"
-          },
-          "autoDelete": ${values.bootDisk?.autoDelete}
-        },
-        "networkInterfaces": [
-          {
-            "network": "${values.network}",
-            "accessConfigs": [
-              {
-                "name": "${values.accessConfig?.name}",
-                "type": "${values.accessConfig?.type}"
-              }
-            ]
-          }
-        ],
-        ${values.metadata?.length ? `"metadata": {
-          ${values.metadata.map((md: Metadata) => `"${md.key}": "${md.value}"`).join(',\n          ')}
-        },` : ''}
-        ${values.userData ? `"metadataStartupScript": "${values.userData}",` : ''}
-      }
+    if (!resourceConfig || !resourceConfig.templates) {
+      return '// Loading template...';
     }
-  }
-}`;
-          case 'storage':
-            return `{
-  "Resources": {
-    "${values.name}": {
-      "Type": "Google::Storage::Bucket",
-      "Properties": {
-        "name": "${values.name}",
-        "location": "${values.location}",
-        "storageClass": "${values.storageClass}",
-        "forceDestroy": true,
-        "versioning": {
-          "enabled": ${values.versioning}
-        },
-        ${values.lifecycleRules?.length ? `"lifecycleRules": [
-          ${values.lifecycleRules.map((rule: LifecycleRule) => `{
-            "condition": {
-              ${rule.age ? `"age": ${rule.age},` : ''}
-              ${rule.isLive ? `"isLive": ${rule.isLive},` : ''}
-              ${rule.matchesStorageClass ? `"matchesStorageClass": ${JSON.stringify(rule.matchesStorageClass)},` : ''}
-            },
-            "action": {
-              ${rule.type ? `"type": "${rule.type}",` : ''}
-              ${rule.storageClass ? `"storageClass": "${rule.storageClass}",` : ''}
-            }
-          }`).join(',\n          ')}
-        ],` : ''}
-      }
-    }
-  }
-}`;
-          case 'sql':
-            return `{
-  "Resources": {
-    "${values.name}": {
-      "Type": "Google::SQL::DatabaseInstance",
-      "Properties": {
-        "name": "${values.name}",
-        "databaseVersion": "${values.databaseVersion}",
-        "region": "${values.region}",
-        "settings": {
-          "tier": "${values.tier}",
-          "backupConfiguration": {
-            "enabled": ${values.backup?.enabled},
-            ${values.backup?.startTime ? `"startTime": "${values.backup.startTime}",` : ''}
-          },
-          "ipConfiguration": {
-            "ipv4Enabled": true
-          },
-          ${values.storage ? `"diskSize": ${values.storage.sizeGb},
-          "diskType": "${values.storage.type}",` : ''}
-        }
-      }
-    }
-  }
-}`;
-          default:
-            return '// No hay template disponible para este tipo de recurso';
-        }
-      default:
-        return '// No hay template disponible para este proveedor';
+
+    try {
+      // Get the template generator function
+      const templates = resourceConfig.templates(values);
+      return templates.cloudformation || '// No CloudFormation template available for this resource';
+    } catch (error) {
+      console.error('Error generating CloudFormation code:', error);
+      return '// Error generating template';
     }
   };
 
@@ -774,12 +513,23 @@ const instance = new gcp.sql.DatabaseInstance("${values.name}", {
           {activeMainTab === 'config' && (
             <div className="flex flex-col h-full">
               <div className="flex-1 overflow-auto bg-white">
-                <ResourceConfigForm
-                  provider={resourceData.provider}
-                  resourceType={resourceData.resourceType}
-                  values={configValues}
-                  onChange={setConfigValues}
-                />
+                {isLoadingConfig ? (
+                  <div className="flex items-center justify-center h-64">
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <p className="text-gray-500">Loading configuration...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <ResourceConfigForm
+                    provider={resourceData.provider}
+                    resourceType={resourceData.resourceType}
+                    values={configValues}
+                    onChange={setConfigValues}
+                    fields={resourceConfig?.fields}
+                    isLoading={isLoadingConfig}
+                  />
+                )}
               </div>
               
               <div className="border-t border-gray-200 bg-white px-6 py-4">

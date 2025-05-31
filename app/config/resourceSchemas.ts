@@ -95,18 +95,21 @@ export const resourceFieldConfigs: ResourceFieldConfigs = {
       name: {
         label: 'Nombre de la instancia',
         type: 'text',
+        required: true,
         placeholder: 'mi-instancia',
         help: 'El nombre de la instancia de Compute Engine',
       },
       projectId: {
         label: 'ID del Proyecto',
         type: 'text',
+        required: true,
         placeholder: 'mi-proyecto',
         help: 'El ID del proyecto de GCP',
       },
       machineType: {
         label: 'Tipo de máquina',
         type: 'select',
+        required: true,
         options: [
           { value: 'e2-micro', label: 'e2-micro (2 vCPU, 1 GB)' },
           { value: 'e2-small', label: 'e2-small (2 vCPU, 2 GB)' },
@@ -120,6 +123,7 @@ export const resourceFieldConfigs: ResourceFieldConfigs = {
       zone: {
         label: 'Zona',
         type: 'select',
+        required: true,
         options: [
           { value: 'us-central1-a', label: 'us-central1-a (Iowa)' },
           { value: 'us-central1-b', label: 'us-central1-b (Iowa)' },
@@ -133,10 +137,12 @@ export const resourceFieldConfigs: ResourceFieldConfigs = {
       image: {
         label: 'Imagen',
         type: 'group',
+        required: true,
         fields: {
           project: {
             label: 'Proyecto de la imagen',
             type: 'select',
+            required: true,
             options: [
               { value: 'debian-cloud', label: 'Debian Cloud' },
               { value: 'ubuntu-os-cloud', label: 'Ubuntu OS Cloud' },
@@ -147,6 +153,7 @@ export const resourceFieldConfigs: ResourceFieldConfigs = {
           family: {
             label: 'Familia de la imagen',
             type: 'select',
+            required: true,
             options: [
               { value: 'debian-10', label: 'Debian 10' },
               { value: 'debian-11', label: 'Debian 11' },
@@ -162,6 +169,7 @@ export const resourceFieldConfigs: ResourceFieldConfigs = {
       network: {
         label: 'Red',
         type: 'select',
+        required: true,
         options: [
           { value: 'default', label: 'Red por defecto' },
           { value: 'custom-network', label: 'Red personalizada' },
@@ -232,16 +240,278 @@ export const resourceFieldConfigs: ResourceFieldConfigs = {
         },
       },
     },
+    instance: {
+      name: {
+        label: 'Nombre de la instancia',
+        type: 'text',
+        required: true,
+        placeholder: 'my-instance',
+        help: 'Nombre único para la instancia',
+      },
+      machine_type: {
+        label: 'Tipo de máquina',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'e2-micro', label: 'e2-micro (2 vCPU compartidos, 1 GB RAM)' },
+          { value: 'e2-small', label: 'e2-small (2 vCPU compartidos, 2 GB RAM)' },
+          { value: 'e2-medium', label: 'e2-medium (1 vCPU, 4 GB RAM)' },
+          { value: 'e2-standard-2', label: 'e2-standard-2 (2 vCPU, 8 GB RAM)' },
+          { value: 'n2-standard-2', label: 'n2-standard-2 (2 vCPU, 8 GB RAM)' },
+        ],
+        help: 'Define la cantidad de CPU y memoria para la instancia',
+      },
+      zone: {
+        label: 'Zona',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'us-central1-a', label: 'us-central1-a (Iowa)' },
+          { value: 'us-central1-b', label: 'us-central1-b (Iowa)' },
+          { value: 'us-east1-b', label: 'us-east1-b (South Carolina)' },
+          { value: 'europe-west1-b', label: 'europe-west1-b (Belgium)' },
+        ],
+        help: 'Zona donde se desplegará la instancia',
+      },
+      image: {
+        label: 'Imagen del SO',
+        type: 'group',
+        required: true,
+        fields: {
+          project: {
+            label: 'Proyecto de la imagen',
+            type: 'text',
+            required: true,
+            default: 'debian-cloud',
+            help: 'El proyecto que contiene la imagen',
+          },
+          family: {
+            label: 'Familia de la imagen',
+            type: 'select',
+            required: true,
+            options: [
+              { value: 'debian-11', label: 'Debian 11' },
+              { value: 'ubuntu-2004-lts', label: 'Ubuntu 20.04 LTS' },
+              { value: 'ubuntu-2204-lts', label: 'Ubuntu 22.04 LTS' },
+              { value: 'centos-7', label: 'CentOS 7' },
+            ],
+            help: 'La familia de la imagen del sistema operativo',
+          },
+        },
+      },
+      network: {
+        label: 'Red',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'default', label: 'Red por defecto' },
+          { value: 'custom-network', label: 'Red personalizada' },
+        ],
+        help: 'La red a la que se conectará la instancia',
+      },
+    },
+    disk: {
+      name: {
+        label: 'Nombre del disco',
+        type: 'text',
+        required: true,
+        placeholder: 'my-disk',
+        help: 'Nombre único para el disco',
+      },
+      zone: {
+        label: 'Zona',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'us-central1-a', label: 'us-central1-a' },
+          { value: 'us-central1-b', label: 'us-central1-b' },
+          { value: 'us-east1-b', label: 'us-east1-b' },
+        ],
+        help: 'Zona donde se creará el disco',
+      },
+      size: {
+        label: 'Tamaño (GB)',
+        type: 'number',
+        required: true,
+        min: 10,
+        max: 65536,
+        default: 100,
+        help: 'Tamaño del disco en gigabytes',
+      },
+      type: {
+        label: 'Tipo de disco',
+        type: 'select',
+        options: [
+          { value: 'pd-standard', label: 'Standard HDD' },
+          { value: 'pd-ssd', label: 'SSD' },
+          { value: 'pd-balanced', label: 'Balanced SSD' },
+        ],
+        help: 'Tipo de almacenamiento del disco',
+      },
+    },
+    network: {
+      name: {
+        label: 'Nombre de la red',
+        type: 'text',
+        required: true,
+        placeholder: 'my-network',
+        help: 'Nombre único para la red VPC',
+      },
+      auto_create_subnetworks: {
+        label: 'Crear subredes automáticamente',
+        type: 'boolean',
+        default: false,
+        help: 'Si se crean subredes automáticamente en cada región',
+      },
+      routing_mode: {
+        label: 'Modo de enrutamiento',
+        type: 'select',
+        options: [
+          { value: 'REGIONAL', label: 'Regional' },
+          { value: 'GLOBAL', label: 'Global' },
+        ],
+        help: 'Modo de enrutamiento para la red',
+      },
+    },
+    firewall: {
+      name: {
+        label: 'Nombre de la regla',
+        type: 'text',
+        required: true,
+        placeholder: 'allow-http',
+        help: 'Nombre único para la regla de firewall',
+      },
+      network: {
+        label: 'Red',
+        type: 'text',
+        required: true,
+        default: 'default',
+        help: 'Nombre de la red VPC',
+      },
+      direction: {
+        label: 'Dirección',
+        type: 'select',
+        options: [
+          { value: 'INGRESS', label: 'Entrada (INGRESS)' },
+          { value: 'EGRESS', label: 'Salida (EGRESS)' },
+        ],
+        help: 'Dirección del tráfico',
+      },
+      priority: {
+        label: 'Prioridad',
+        type: 'number',
+        min: 0,
+        max: 65535,
+        default: 1000,
+        help: 'Prioridad de la regla (0-65535)',
+      },
+    },
+    loadBalancer: {
+      name: {
+        label: 'Nombre del load balancer',
+        type: 'text',
+        required: true,
+        placeholder: 'my-lb',
+        help: 'Nombre único para el load balancer',
+      },
+      region: {
+        label: 'Región',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'us-central1', label: 'us-central1' },
+          { value: 'us-east1', label: 'us-east1' },
+          { value: 'europe-west1', label: 'europe-west1' },
+        ],
+        help: 'Región donde se desplegará el load balancer',
+      },
+      backend_service: {
+        label: 'Servicio backend',
+        type: 'text',
+        required: true,
+        placeholder: 'my-backend-service',
+        help: 'Nombre del servicio backend',
+      },
+    },
+    instanceTemplate: {
+      name: {
+        label: 'Nombre del template',
+        type: 'text',
+        required: true,
+        placeholder: 'web-server-template',
+        help: 'Nombre único para el template de instancia',
+      },
+      machine_type: {
+        label: 'Tipo de máquina',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'e2-micro', label: 'e2-micro' },
+          { value: 'e2-small', label: 'e2-small' },
+          { value: 'e2-medium', label: 'e2-medium' },
+          { value: 'e2-standard-2', label: 'e2-standard-2' },
+        ],
+        help: 'Tipo de máquina para las instancias',
+      },
+      region: {
+        label: 'Región',
+        type: 'select',
+        required: true,
+        options: [
+          { value: 'us-central1', label: 'us-central1' },
+          { value: 'us-east1', label: 'us-east1' },
+          { value: 'europe-west1', label: 'europe-west1' },
+        ],
+        help: 'Región para el template',
+      },
+    },
+    instanceGroup: {
+      name: {
+        label: 'Nombre del grupo',
+        type: 'text',
+        required: true,
+        placeholder: 'web-server-group',
+        help: 'Nombre único para el grupo de instancias',
+      },
+      base_instance_name: {
+        label: 'Nombre base de instancias',
+        type: 'text',
+        required: true,
+        placeholder: 'web-server',
+        help: 'Nombre base para las instancias creadas',
+      },
+      target_size: {
+        label: 'Tamaño objetivo',
+        type: 'number',
+        required: true,
+        min: 1,
+        max: 1000,
+        default: 3,
+        help: 'Número objetivo de instancias en el grupo',
+      },
+      zone: {
+        label: 'Zona',
+        type: 'select',
+        options: [
+          { value: 'us-central1-a', label: 'us-central1-a' },
+          { value: 'us-central1-b', label: 'us-central1-b' },
+          { value: 'us-east1-b', label: 'us-east1-b' },
+        ],
+        help: 'Zona para grupos zonales (opcional para grupos regionales)',
+      },
+    },
     storage: {
       name: {
         label: 'Nombre del bucket',
         type: 'text',
+        required: true,
         placeholder: 'mi-bucket',
         help: 'El nombre del bucket de Cloud Storage',
       },
       location: {
         label: 'Ubicación',
         type: 'select',
+        required: true,
         options: [
           { value: 'US', label: 'United States' },
           { value: 'EU', label: 'Europe' },
@@ -265,6 +535,7 @@ export const resourceFieldConfigs: ResourceFieldConfigs = {
       name: {
         label: 'Nombre de la instancia',
         type: 'text',
+        required: true,
         placeholder: 'mi-instancia-sql',
         help: 'El nombre de la instancia de Cloud SQL',
       },

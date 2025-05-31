@@ -3,18 +3,22 @@ export type Provider = 'aws' | 'gcp' | 'azure' | 'generic';
 export type ResourceType = 'compute' | 'storage' | 'sql' | 'function' | 'database' | 'network' | 'generic';
 
 export interface FieldConfig {
+  key?: string; // Field identifier for array-based configurations
   label: string;
   type: 'text' | 'select' | 'number' | 'boolean' | 'group';
   placeholder?: string;
   help?: string;
+  description?: string; // Alternative to help text
   default?: any;
+  defaultValue?: any; // Alternative to default
   min?: number;
   max?: number;
+  required?: boolean;
   options?: Array<{
     value: string;
     label: string;
   }>;
-  fields?: Record<string, FieldConfig>;
+  fields?: Record<string, FieldConfig> | FieldConfig[]; // Support both structures
 }
 
 export interface ResourceConfig {
@@ -35,9 +39,30 @@ export interface ResourceValues {
   [key: string]: any;
 }
 
+export interface ResourceTemplate {
+  name: string;
+  description: string;
+  config: Record<string, any>;
+}
+
+export interface ResourceSchema {
+  type: string;
+  displayName: string;
+  description: string;
+  category: ResourceType;
+  fields: any; // Allow flexible field configuration
+  templates: Record<string, any>;
+  documentation?: {
+    description: string;
+    examples?: string[];
+  };
+}
+
 export interface ResourceConfigFormProps {
   provider: Provider;
   resourceType: ResourceType;
   values: ResourceValues;
   onChange: (values: ResourceValues) => void;
-} 
+  fields?: FieldConfig[] | Record<string, FieldConfig>; // Dynamic fields from schema system
+  isLoading?: boolean; // Loading state
+}

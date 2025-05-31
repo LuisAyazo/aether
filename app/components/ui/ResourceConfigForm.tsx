@@ -1,5 +1,4 @@
 import React from 'react';
-import { resourceFieldConfigs } from '@/app/config/resourceSchemas';
 import { ResourceConfigFormProps, FieldConfig, ResourceValues } from '@/app/types/resourceConfig';
 
 const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
@@ -7,8 +6,22 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
   resourceType,
   values,
   onChange,
+  fields,
+  isLoading = false,
 }) => {
-  const fieldConfig = resourceFieldConfigs[provider]?.[resourceType];
+  // Use dynamic fields if available, fallback to empty state
+  const fieldConfig = fields;
+
+  if (isLoading) {
+    return (
+      <div className="p-4 flex items-center justify-center h-32">
+        <div className="flex flex-col items-center space-y-2">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <p className="text-sm text-gray-500">Loading configuration...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!fieldConfig) {
     return (
@@ -39,7 +52,7 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
 
   const renderField = (fieldName: string, config: FieldConfig, parentField?: string) => {
     const value = parentField ? values[parentField]?.[fieldName] : values[fieldName];
-    const defaultValue = config.default;
+    const defaultValue = config.default ?? config.defaultValue;
 
     switch (config.type) {
       case 'text':
@@ -47,6 +60,7 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
           <div key={fieldName} className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {config.label}
+              {config.required && <span className="text-red-500 ml-1">*</span>}
             </label>
             <input
               type="text"
@@ -55,8 +69,8 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
               placeholder={config.placeholder}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            {config.help && (
-              <p className="mt-1 text-sm text-gray-500">{config.help}</p>
+            {(config.help || config.description) && (
+              <p className="mt-1 text-sm text-gray-500">{config.help || config.description}</p>
             )}
           </div>
         );
@@ -66,6 +80,7 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
           <div key={fieldName} className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {config.label}
+              {config.required && <span className="text-red-500 ml-1">*</span>}
             </label>
             <select
               value={value ?? defaultValue ?? ''}
@@ -78,8 +93,8 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
                 </option>
               ))}
             </select>
-            {config.help && (
-              <p className="mt-1 text-sm text-gray-500">{config.help}</p>
+            {(config.help || config.description) && (
+              <p className="mt-1 text-sm text-gray-500">{config.help || config.description}</p>
             )}
           </div>
         );
@@ -89,6 +104,7 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
           <div key={fieldName} className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {config.label}
+              {config.required && <span className="text-red-500 ml-1">*</span>}
             </label>
             <input
               type="number"
@@ -98,8 +114,8 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
               max={config.max}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            {config.help && (
-              <p className="mt-1 text-sm text-gray-500">{config.help}</p>
+            {(config.help || config.description) && (
+              <p className="mt-1 text-sm text-gray-500">{config.help || config.description}</p>
             )}
           </div>
         );
@@ -116,10 +132,11 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
               />
               <span className="text-sm font-medium text-gray-700">
                 {config.label}
+                {config.required && <span className="text-red-500 ml-1">*</span>}
               </span>
             </label>
-            {config.help && (
-              <p className="mt-1 text-sm text-gray-500">{config.help}</p>
+            {(config.help || config.description) && (
+              <p className="mt-1 text-sm text-gray-500">{config.help || config.description}</p>
             )}
           </div>
         );
@@ -127,12 +144,23 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
       case 'group':
         return (
           <div key={fieldName} className="mb-4 p-4 border border-gray-200 rounded-md">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">{config.label}</h3>
-            {config.fields && Object.entries(config.fields).map(([subFieldName, subConfig]) => (
-              <div key={subFieldName} className="ml-4">
-                {renderField(subFieldName, subConfig, fieldName)}
-              </div>
-            ))}
+            <h3 className="text-sm font-medium text-gray-700 mb-3">
+              {config.label}
+              {config.required && <span className="text-red-500 ml-1">*</span>}
+            </h3>
+            {config.fields && (
+              Array.isArray(config.fields) 
+                ? config.fields.map((subConfig, index) => (
+                    <div key={subConfig.key || `group_field_${index}`} className="ml-4">
+                      {renderField(subConfig.key || `group_field_${index}`, subConfig, fieldName)}
+                    </div>
+                  ))
+                : Object.entries(config.fields).map(([subFieldName, subConfig]) => (
+                    <div key={subFieldName} className="ml-4">
+                      {renderField(subFieldName, subConfig, fieldName)}
+                    </div>
+                  ))
+            )}
           </div>
         );
 
@@ -143,9 +171,14 @@ const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
 
   return (
     <div className="p-4">
-      {Object.entries(fieldConfig).map(([fieldName, config]) => (
-        renderField(fieldName, config)
-      ))}
+      {Array.isArray(fieldConfig) 
+        ? fieldConfig.map((config, index) => (
+            renderField(config.key || `field_${index}`, config)
+          ))
+        : Object.entries(fieldConfig).map(([fieldName, config]) => (
+            renderField(fieldName, config)
+          ))
+      }
     </div>
   );
 };
