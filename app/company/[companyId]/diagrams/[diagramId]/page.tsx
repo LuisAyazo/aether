@@ -1,13 +1,40 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useTransition } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useTransition, JSX } from 'react'; // Añadido JSX
 import ReactDOM from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import './page.css';
 import { Button, Select, Modal, Input, Spin, message, Timeline, Drawer, Empty } from 'antd';
 import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteOutlined, HistoryOutlined, RollbackOutlined, BranchesOutlined, FolderOutlined, FolderOpenOutlined, FileOutlined, ClearOutlined } from '@ant-design/icons';
-import { ExclamationTriangleIcon, KeyIcon } from '@heroicons/react/24/outline';
-import ChartBarIcon from '@heroicons/react/24/solid/ChartBarIcon';
+import { 
+  ExclamationTriangleIcon, 
+  KeyIcon,
+  GlobeAltIcon, // Para VNet, App Gateway
+  RectangleStackIcon, // Para Subnet
+  ShieldCheckIcon, // Para NSG, Firewall
+  ArrowsRightLeftIcon, // Para Load Balancer
+  ServerIcon, 
+  CloudIcon,
+  CircleStackIcon,
+  CpuChipIcon,
+  CodeBracketIcon,
+  ArchiveBoxIcon,
+  TableCellsIcon,
+  BoltIcon,
+  ChatBubbleOvalLeftEllipsisIcon,
+  CalendarDaysIcon,
+  AdjustmentsHorizontalIcon,
+  ListBulletIcon,
+  RectangleGroupIcon,
+  RssIcon,
+  ComputerDesktopIcon,
+  ServerStackIcon,
+  CubeIcon,
+  ChartBarIcon as SolidChartBarIcon, 
+  FolderIcon, 
+  DocumentTextIcon 
+} from '@heroicons/react/24/outline';
+import ChartBarIcon from '@heroicons/react/24/solid/ChartBarIcon'; 
 import { 
   addEdge, 
   applyEdgeChanges, 
@@ -51,6 +78,7 @@ interface ResourceItem {
   type: string;
   name: string;
   description: string;
+  icon?: JSX.Element; 
   provider: 'aws' | 'gcp' | 'generic' | 'azure';
 }
 
@@ -62,131 +90,161 @@ interface ResourceCategory {
 
 const resourceCategories: ResourceCategory[] = [
   {
-    name: 'Azure - Redes',
-    provider: 'azure',
-    items: [
-      { type: 'azurerm_virtual_network', name: 'Virtual Network', description: 'Red virtual privada', provider: 'azure' },
-      { type: 'azurerm_subnet', name: 'Subnet', description: 'Subred dentro de una VNet', provider: 'azure' },
-      { type: 'azurerm_network_security_group', name: 'Network Security Group', description: 'Reglas de seguridad de red', provider: 'azure' },
-      { type: 'azurerm_lb', name: 'Load Balancer', description: 'Balanceador de carga L4', provider: 'azure' },
-      { type: 'azurerm_application_gateway', name: 'Application Gateway', description: 'Balanceador de carga L7', provider: 'azure' },
-      { type: 'azurerm_firewall', name: 'Firewall', description: 'Firewall de red gestionado', provider: 'azure' },
-    ]
-  },
-  {
     name: 'AWS - Almacenamiento',
     provider: 'aws',
     items: [
-      { type: 'aws_s3_bucket', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws' },
-      { type: 'aws_rds_instance', name: 'RDS Instance', description: 'Base de datos relacional gestionada', provider: 'aws' },
-      { type: 'aws_dynamodb_table', name: 'DynamoDB Table', description: 'Base de datos NoSQL Key-Value y Documento', provider: 'aws' },
-      { type: 'aws_elasticache_cluster', name: 'ElastiCache Cluster', description: 'Caché en memoria (Redis/Memcached)', provider: 'aws' },
-      { type: 'aws_redshift_cluster', name: 'Redshift Cluster', description: 'Almacén de datos (Data Warehouse)', provider: 'aws' },
-      { type: 'aws_efs_file_system', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws' },
+      { type: 'aws_s3_bucket', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws', icon: <CloudIcon /> },
+      { type: 'aws_rds_instance', name: 'RDS Instance', description: 'Base de datos relacional gestionada', provider: 'aws', icon: <CircleStackIcon /> },
+      { type: 'aws_dynamodb_table', name: 'DynamoDB Table', description: 'Base de datos NoSQL Key-Value y Documento', provider: 'aws', icon: <TableCellsIcon /> },
+      { type: 'aws_elasticache_cluster', name: 'ElastiCache Cluster', description: 'Caché en memoria (Redis/Memcached)', provider: 'aws', icon: <BoltIcon /> },
+      { type: 'aws_redshift_cluster', name: 'Redshift Cluster', description: 'Almacén de datos (Data Warehouse)', provider: 'aws', icon: <CircleStackIcon /> },
+      { type: 'aws_efs_file_system', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws', icon: <FolderIcon /> },
     ]
   },
   {
     name: 'AWS - Aplicación',
     provider: 'aws',
     items: [
-      { type: 'aws_lambda_function', name: 'Lambda Function', description: 'Ejecuta código sin aprovisionar servidores', provider: 'aws' },
-      { type: 'aws_api_gateway_rest_api', name: 'API Gateway (REST)', description: 'API REST/WebSocket', provider: 'aws' },
-      { type: 'aws_sqs_queue', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws' },
-      { type: 'aws_sns_topic', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws' },
-      { type: 'aws_cloudwatch_event_rule', name: 'EventBridge Rule', description: 'Orquestación de eventos', provider: 'aws' },
-      { type: 'aws_sfn_state_machine', name: 'Step Functions State Machine', description: 'Flujos de trabajo serverless', provider: 'aws' },
+      { type: 'aws_lambda_function', name: 'Lambda Function', description: 'Ejecuta código sin aprovisionar servidores', provider: 'aws', icon: <CodeBracketIcon /> },
+      { type: 'aws_api_gateway_rest_api', name: 'API Gateway (REST)', description: 'API REST/WebSocket', provider: 'aws', icon: <GlobeAltIcon /> },
+      { type: 'aws_sqs_queue', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws', icon: <RectangleStackIcon /> },
+      { type: 'aws_sns_topic', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws', icon: <ChatBubbleOvalLeftEllipsisIcon /> },
+      { type: 'aws_cloudwatch_event_rule', name: 'EventBridge Rule', description: 'Orquestación de eventos', provider: 'aws', icon: <CalendarDaysIcon /> },
+      { type: 'aws_sfn_state_machine', name: 'Step Functions State Machine', description: 'Flujos de trabajo serverless', provider: 'aws', icon: <AdjustmentsHorizontalIcon /> },
     ]
   },
   {
-    name: 'GCP - Cómputo',
-    provider: 'gcp',
+    name: 'AWS - Cómputo',
+    provider: 'aws',
     items: [
-      { type: 'gcp_compute_instance', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp' },
-      { type: 'gcp_compute_disk', name: 'Compute Disk', description: 'Disco persistente para VMs', provider: 'gcp' },
-      { type: 'gcp_compute_instance_template', name: 'Instance Template', description: 'Plantilla para instancias de VM', provider: 'gcp' },
-      { type: 'gcp_compute_instance_group_manager', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp' },
-      { type: 'gcp_gke_cluster', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp' },
-      { type: 'gcp_cloudrun_service', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp' },
-      { type: 'gcp_appengine_app', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp' },
-      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Funciones serverless (Cómputo)', provider: 'gcp' },
+      { type: 'aws_instance', name: 'EC2 Instance', description: 'Máquina Virtual', provider: 'aws', icon: <ServerIcon /> },
+      { type: 'aws_autoscaling_group', name: 'Auto Scaling Group', description: 'Grupo de Autoescalado', provider: 'aws', icon: <ServerStackIcon /> },
+      { type: 'aws_ecs_service', name: 'ECS Service', description: 'Servicio de Contenedores ECS', provider: 'aws', icon: <CubeIcon /> },
+      { type: 'aws_eks_cluster', name: 'EKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'aws', icon: <CpuChipIcon /> },
+      { type: 'aws_elasticbeanstalk_environment', name: 'Elastic Beanstalk Env', description: 'Entorno de Elastic Beanstalk', provider: 'aws', icon: <CloudIcon /> },
     ]
   },
   {
-    name: 'GCP - Redes',
-    provider: 'gcp',
+    name: 'AWS - Redes',
+    provider: 'aws',
     items: [
-      { type: 'gcp_compute_network', name: 'VPC Network', description: 'Red Virtual Privada', provider: 'gcp' },
-      { type: 'gcp_compute_firewall', name: 'Firewall Rule', description: 'Regla de firewall VPC', provider: 'gcp' },
-      { type: 'gcp_compute_load_balancer', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'gcp' },
-    ]
-  },
-  {
-    name: 'GCP - Almacenamiento',
-    provider: 'gcp',
-    items: [
-      { type: 'gcp_cloud_storage_bucket', name: 'Cloud Storage Bucket', description: 'Almacenamiento de objetos', provider: 'gcp' },
-      { type: 'gcp_sql_instance', name: 'Cloud SQL Instance', description: 'Base de datos MySQL, PostgreSQL, SQL Server', provider: 'gcp' },
-      { type: 'gcp_bigquery_dataset', name: 'BigQuery Dataset', description: 'Conjunto de datos de BigQuery', provider: 'gcp' },
-      { type: 'gcp_firestore_database', name: 'Firestore Database', description: 'Base de datos NoSQL en modo Nativo o Datastore', provider: 'gcp' },
-      { type: 'gcp_memorystore_instance', name: 'Memorystore Instance', description: 'Servicio de caché Redis o Memcached', provider: 'gcp' },
-      { type: 'gcp_filestore_instance', name: 'Filestore Instance', description: 'Almacenamiento de archivos NFS gestionado', provider: 'gcp' },
-    ]
-  },
-  {
-    name: 'GCP - Aplicación',
-    provider: 'gcp',
-    items: [
-      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Función serverless (Aplicación)', provider: 'gcp' },
-      { type: 'gcp_api_gateway', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp' }, 
-      { type: 'gcp_pubsub_topic', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp' }, 
-      { type: 'gcp_cloud_tasks_queue', name: 'Cloud Tasks Queue', description: 'Colas de tareas', provider: 'gcp' },
-      { type: 'gcp_workflows_workflow', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp' },
-      { type: 'gcp_eventarc_trigger', name: 'Eventarc Trigger', description: 'Orquestación de eventos', provider: 'gcp' },
+      { type: 'aws_lb', name: 'Load Balancer (ALB/NLB)', description: 'Balanceador de Carga de Aplicación/Red', provider: 'aws', icon: <ArrowsRightLeftIcon /> },
     ]
   },
   {
     name: 'Azure - Cómputo',
     provider: 'azure',
     items: [
-      { type: 'azurerm_virtual_machine', name: 'Virtual Machine', description: 'Máquina virtual', provider: 'azure' },
-      { type: 'azurerm_linux_virtual_machine_scale_set', name: 'Linux VM Scale Set', description: 'Conjunto de escalado Linux', provider: 'azure' },
-      { type: 'azurerm_kubernetes_cluster', name: 'AKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'azure' },
-      { type: 'azurerm_linux_web_app', name: 'App Service (Linux)', description: 'Aplicación web PaaS en Linux', provider: 'azure' },
-      { type: 'azurerm_container_group', name: 'Container Instances', description: 'Grupo de Contenedores', provider: 'azure' },
-      { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless en Linux', provider: 'azure' },
+      { type: 'azurerm_virtual_machine', name: 'Virtual Machine', description: 'Máquina virtual', provider: 'azure', icon: <ComputerDesktopIcon /> },
+      { type: 'azurerm_linux_virtual_machine_scale_set', name: 'Linux VM Scale Set', description: 'Conjunto de escalado Linux', provider: 'azure', icon: <ServerStackIcon /> },
+      { type: 'azurerm_kubernetes_cluster', name: 'AKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'azure', icon: <CpuChipIcon /> },
+      { type: 'azurerm_linux_web_app', name: 'App Service (Linux)', description: 'Aplicación web PaaS en Linux', provider: 'azure', icon: <GlobeAltIcon /> },
+      { type: 'azurerm_container_group', name: 'Container Instances', description: 'Grupo de Contenedores', provider: 'azure', icon: <CubeIcon /> },
+      { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless en Linux', provider: 'azure', icon: <BoltIcon /> },
     ]
   },
   {
     name: 'Azure - Almacenamiento',
     provider: 'azure',
     items: [
-      { type: 'azurerm_storage_container', name: 'Storage Container (Blob)', description: 'Contenedor de Blob Storage', provider: 'azure' },
-      { type: 'azurerm_cosmosdb_account', name: 'Cosmos DB Account', description: 'Cuenta de Azure Cosmos DB (NoSQL)', provider: 'azure' },
-      { type: 'azurerm_mssql_database', name: 'SQL Database', description: 'Base de datos SQL de Azure', provider: 'azure' },
-      { type: 'azurerm_redis_cache', name: 'Cache for Redis', description: 'Caché en memoria Redis', provider: 'azure' },
-      { type: 'azurerm_synapse_workspace', name: 'Synapse Workspace', description: 'Espacio de trabajo de Azure Synapse Analytics', provider: 'azure' },
-      { type: 'azurerm_storage_share', name: 'File Share', description: 'Recurso compartido de Azure Files', provider: 'azure' },
+      { type: 'azurerm_storage_container', name: 'Storage Container (Blob)', description: 'Contenedor de Blob Storage', provider: 'azure', icon: <ArchiveBoxIcon /> },
+      { type: 'azurerm_cosmosdb_account', name: 'Cosmos DB Account', description: 'Cuenta de Azure Cosmos DB (NoSQL)', provider: 'azure', icon: <CircleStackIcon /> },
+      { type: 'azurerm_mssql_database', name: 'SQL Database', description: 'Base de datos SQL de Azure', provider: 'azure', icon: <CircleStackIcon /> },
+      { type: 'azurerm_storage_share', name: 'File Share', description: 'Recurso compartido de Azure Files', provider: 'azure', icon: <FolderIcon /> },
+    ]
+  },
+  {
+    name: 'Azure - Analytics',
+    provider: 'azure',
+    items: [
+      { type: 'azurerm_synapse_workspace', name: 'Synapse Workspace', description: 'Espacio de trabajo de Azure Synapse Analytics', provider: 'azure', icon: <SolidChartBarIcon /> },
+    ]
+  },
+  {
+    name: 'Azure - Caché',
+    provider: 'azure',
+    items: [
+      { type: 'azurerm_redis_cache', name: 'Cache for Redis', description: 'Caché en memoria Redis', provider: 'azure', icon: <BoltIcon /> },
     ]
   },
   {
     name: 'Azure - Aplicación',
     provider: 'azure',
     items: [
-      { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless en Linux', provider: 'azure' }, // Ya implementado, solo ajusto el type aquí para consistencia
-      { type: 'azurerm_api_management', name: 'API Management Service', description: 'Servicio de gestión de APIs', provider: 'azure' },
-      { type: 'azurerm_servicebus_namespace', name: 'Service Bus Namespace', description: 'Namespace para mensajería de Service Bus', provider: 'azure' },
-      { type: 'azurerm_eventgrid_topic', name: 'Event Grid Topic', description: 'Tema de Azure Event Grid', provider: 'azure' },
-      { type: 'azurerm_logic_app_workflow', name: 'Logic App Workflow', description: 'Flujo de trabajo de Logic Apps (Consumo)', provider: 'azure' },
-      { type: 'azurerm_eventhub_namespace', name: 'Event Hubs Namespace', description: 'Namespace para streaming de eventos', provider: 'azure' },
+      { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless en Linux', provider: 'azure', icon: <BoltIcon /> }, 
+      { type: 'azurerm_api_management', name: 'API Management Service', description: 'Servicio de gestión de APIs', provider: 'azure', icon: <GlobeAltIcon /> },
+      { type: 'azurerm_servicebus_namespace', name: 'Service Bus Namespace', description: 'Namespace para mensajería de Service Bus', provider: 'azure', icon: <ChatBubbleOvalLeftEllipsisIcon /> },
+      { type: 'azurerm_eventgrid_topic', name: 'Event Grid Topic', description: 'Tema de Azure Event Grid', provider: 'azure', icon: <RssIcon /> },
+      { type: 'azurerm_logic_app_workflow', name: 'Logic App Workflow', description: 'Flujo de trabajo de Logic Apps (Consumo)', provider: 'azure', icon: <RectangleGroupIcon /> },
+      { type: 'azurerm_eventhub_namespace', name: 'Event Hubs Namespace', description: 'Namespace para streaming de eventos', provider: 'azure', icon: <BoltIcon /> },
+    ]
+  },
+  {
+    name: 'Azure - Redes',
+    provider: 'azure',
+    items: [
+      { type: 'azurerm_virtual_network', name: 'Virtual Network', description: 'Red virtual privada', provider: 'azure', icon: <GlobeAltIcon /> },
+      { type: 'azurerm_subnet', name: 'Subnet', description: 'Subred dentro de una VNet', provider: 'azure', icon: <RectangleStackIcon /> },
+      { type: 'azurerm_network_security_group', name: 'Network Security Group', description: 'Reglas de seguridad de red', provider: 'azure', icon: <ShieldCheckIcon /> },
+      { type: 'azurerm_lb', name: 'Load Balancer', description: 'Balanceador de carga L4', provider: 'azure', icon: <ArrowsRightLeftIcon /> },
+      { type: 'azurerm_application_gateway', name: 'Application Gateway', description: 'Balanceador de carga L7', provider: 'azure', icon: <GlobeAltIcon /> },
+      { type: 'azurerm_firewall', name: 'Firewall', description: 'Firewall de red gestionado', provider: 'azure', icon: <ShieldCheckIcon /> },
+    ]
+  },
+  {
+    name: 'GCP - Cómputo',
+    provider: 'gcp',
+    items: [
+      { type: 'gcp_compute_instance', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp', icon: <ServerIcon /> },
+      { type: 'gcp_compute_disk', name: 'Compute Disk', description: 'Disco persistente para VMs', provider: 'gcp', icon: <ArchiveBoxIcon /> },
+      { type: 'gcp_compute_instance_template', name: 'Instance Template', description: 'Plantilla para instancias de VM', provider: 'gcp', icon: <RectangleStackIcon /> },
+      { type: 'gcp_compute_instance_group_manager', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp', icon: <ServerStackIcon /> },
+      { type: 'gcp_gke_cluster', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp', icon: <CpuChipIcon /> },
+      { type: 'gcp_cloudrun_service', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp', icon: <CodeBracketIcon /> },
+      { type: 'gcp_appengine_app', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp', icon: <CloudIcon /> },
+      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Funciones serverless (Cómputo)', provider: 'gcp', icon: <BoltIcon /> },
+    ]
+  },
+  {
+    name: 'GCP - Redes',
+    provider: 'gcp',
+    items: [
+      { type: 'gcp_compute_network', name: 'VPC Network', description: 'Red Virtual Privada', provider: 'gcp', icon: <GlobeAltIcon /> },
+      { type: 'gcp_compute_firewall', name: 'Firewall Rule', description: 'Regla de firewall VPC', provider: 'gcp', icon: <ShieldCheckIcon /> },
+      { type: 'gcp_compute_load_balancer', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'gcp', icon: <ArrowsRightLeftIcon /> },
+    ]
+  },
+  {
+    name: 'GCP - Almacenamiento',
+    provider: 'gcp',
+    items: [
+      { type: 'gcp_cloud_storage_bucket', name: 'Cloud Storage Bucket', description: 'Almacenamiento de objetos', provider: 'gcp', icon: <CloudIcon /> },
+      { type: 'gcp_sql_instance', name: 'Cloud SQL Instance', description: 'Base de datos MySQL, PostgreSQL, SQL Server', provider: 'gcp', icon: <CircleStackIcon /> },
+      { type: 'gcp_bigquery_dataset', name: 'BigQuery Dataset', description: 'Conjunto de datos de BigQuery', provider: 'gcp', icon: <TableCellsIcon /> },
+      { type: 'gcp_firestore_database', name: 'Firestore Database', description: 'Base de datos NoSQL en modo Nativo o Datastore', provider: 'gcp', icon: <DocumentTextIcon /> }, 
+      { type: 'gcp_memorystore_instance', name: 'Memorystore Instance', description: 'Servicio de caché Redis o Memcached', provider: 'gcp', icon: <BoltIcon /> },
+      { type: 'gcp_filestore_instance', name: 'Filestore Instance', description: 'Almacenamiento de archivos NFS gestionado', provider: 'gcp', icon: <FolderIcon /> },
+    ]
+  },
+  {
+    name: 'GCP - Aplicación',
+    provider: 'gcp',
+    items: [
+      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Función serverless (Aplicación)', provider: 'gcp', icon: <BoltIcon /> }, 
+      { type: 'gcp_api_gateway', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp', icon: <GlobeAltIcon /> }, 
+      { type: 'gcp_pubsub_topic', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp', icon: <ChatBubbleOvalLeftEllipsisIcon /> }, 
+      { type: 'gcp_cloud_tasks_queue', name: 'Cloud Tasks Queue', description: 'Colas de tareas', provider: 'gcp', icon: <ListBulletIcon /> },
+      { type: 'gcp_workflows_workflow', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp', icon: <RectangleGroupIcon /> },
+      { type: 'gcp_eventarc_trigger', name: 'Eventarc Trigger', description: 'Orquestación de eventos', provider: 'gcp', icon: <RssIcon /> },
     ]
   },
   {
     name: 'Grupos y Áreas',
     provider: 'generic',
     items: [
-      { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos', provider: 'generic' },
-      { type: 'group', name: 'Área', description: 'Definir un área del diagrama', provider: 'generic' },
-      { type: 'group', name: 'Subsistema', description: 'Agrupar componentes relacionados', provider: 'generic' },
+      { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos', provider: 'generic', icon: <RectangleGroupIcon /> },
+      { type: 'areaNode', name: 'Área', description: 'Definir un área visual', provider: 'generic', icon: <CubeIcon /> },
+      { type: 'group', name: 'Subsistema', description: 'Agrupar componentes relacionados', provider: 'generic', icon: <ServerStackIcon /> },
     ]
   }
 ];
@@ -870,16 +928,16 @@ export default function DiagramPage() {
   };
 
   const renderDiagramEditor = () => {
-    // Si hay diagrama seleccionado, lo mostramos
-    if (currentDiagram) {
+    // Si hay diagrama seleccionado y no estamos en loading general, lo mostramos
+    if (currentDiagram && selectedEnvironment && selectedDiagram) {
       return (
         <div className="h-full w-full" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
           <FlowEditor 
-            key={`current-diagram-${currentDiagram.id}`}
+            key={`current-diagram-${currentDiagram.id}-${selectedEnvironment}-${selectedDiagram}`}
             companyId={companyId as string} 
-            environmentId={selectedEnvironment as string}
-            diagramId={selectedDiagram as string} 
-            initialDiagram={currentDiagram}
+            environmentId={selectedEnvironment} // Ya no es null aquí
+            diagramId={selectedDiagram} // Ya no es null aquí
+            initialDiagram={currentDiagram} // currentDiagram es Diagram aquí, no Diagram | null
             initialViewport={currentDiagram.viewport}
             nodeTypes={nodeTypes} 
             resourceCategories={resourceCategories}

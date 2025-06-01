@@ -1,26 +1,5 @@
 import { message } from 'antd';
-import { 
-  Background, 
-  BackgroundVariant, 
-  Controls, 
-  Edge, 
-  EdgeTypes, 
-  MiniMap, 
-  Node, 
-  NodeTypes, 
-  OnConnect,
-  OnEdgesChange,
-  OnNodesChange,
-  Panel, 
-  ReactFlow, 
-  ReactFlowProvider, 
-  SelectionMode, 
-  Viewport,
-  useEdgesState, 
-  useNodesState, 
-  useOnSelectionChange,
-  useReactFlow 
-} from 'reactflow';
+import * as ReactFlowLibrary from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useCallback, useEffect, useRef, useState, useMemo, JSX } from 'react';
 import { 
@@ -32,13 +11,41 @@ import {
   RectangleGroupIcon,
   XMarkIcon,
   ServerIcon,
-  CurrencyDollarIcon
+  SquaresPlusIcon, // Asegurar que SquaresPlusIcon esté importado
+  CurrencyDollarIcon // Mantener CurrencyDollarIcon si se usa en otro lado
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
-import nodeTypes from '../nodes/NodeTypes';
+import nodeTypesFromFile from '../nodes/NodeTypes'; // Renamed to avoid conflict
 import { NodeExecutionState, NodeWithExecutionStatus } from '../../utils/customTypes';
 import ExecutionLog from './ExecutionLog';
+
+// Destructurar los tipos y componentes necesarios desde ReactFlowLibrary
+const { 
+  Background, 
+  Controls, 
+  Panel, 
+  ReactFlow, 
+  ReactFlowProvider, 
+  useOnSelectionChange,
+  useReactFlow,
+  MiniMap,
+  useEdgesState,
+  useNodesState,
+  BackgroundVariant,
+  SelectionMode
+} = ReactFlowLibrary;
+
+// Tipos que se usarán directamente
+type Edge = ReactFlowLibrary.Edge;
+type EdgeTypes = ReactFlowLibrary.EdgeTypes;
+type Node = ReactFlowLibrary.Node;
+type ReactFlowNodeTypes = ReactFlowLibrary.NodeTypes;
+type OnConnect = ReactFlowLibrary.OnConnect;
+type OnEdgesChange = ReactFlowLibrary.OnEdgesChange;
+type OnNodesChange = ReactFlowLibrary.OnNodesChange;
+type Viewport = ReactFlowLibrary.Viewport;
+
 
 // Add this interface at the top of the file with other interfaces
 interface SingleNodePreview {
@@ -87,7 +94,7 @@ interface ResourceItem {
   type: string;
   name: string;
   description: string;
-  icon?: React.ReactNode;
+  icon?: JSX.Element; // Cambiado a JSX.Element para mayor especificidad
   provider: 'aws' | 'gcp' | 'azure' | 'generic' // Added provider
 }
 
@@ -118,14 +125,14 @@ interface FlowEditorProps {
   onNodesChange?: OnNodesChange;
   onEdgesChange?: OnEdgesChange;
   onConnect?: OnConnect;
-  nodeTypes?: NodeTypes;
+  nodeTypes?: ReactFlowNodeTypes; 
   edgeTypes?: EdgeTypes;
   resourceCategories?: ResourceCategory[];
   
   initialNodes?: Node[];
   initialEdges?: Edge[];
   initialViewport?: Viewport;
-  onSave?: (diagramData: { nodes: Node[]; edges: Edge[]; viewport?: Viewport }) => void; // More specific type for diagramData
+  onSave?: (diagramData: { nodes: Node[]; edges: Edge[]; viewport?: Viewport }) => void; 
   
   companyId?: string;
   environmentId?: string;
@@ -180,22 +187,9 @@ function throttle<T extends (...args: unknown[]) => void>(func: T, limit: number
       func.apply(this, lastArgs);
       setTimeout(() => {
         inThrottle = false;
-        // If there were calls during the throttle period, execute the last one
-        // This part is optional and makes it behave more like a debounced throttle at the end
-        // if (lastArgs) {
-        //   func.apply(this, lastArgs);
-        //   lastArgs = null; 
-        // }
       }, limit);
     }
   };
-
-  // Optional: Add a cancel method to the throttled function
-  // (throttled as T & { cancel: () => void }).cancel = () => {
-  //   if (timeoutId) clearTimeout(timeoutId);
-  //   inThrottle = false;
-  //   lastArgs = null;
-  // };
 
   return throttled;
 }
@@ -310,7 +304,7 @@ const EdgeDeleteButton = ({ edge, onEdgeDelete }: { edge: Edge; onEdgeDelete: (e
         userSelect: 'none',
         boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
       }}
-      onClick={(e) => {
+      onClick={(e: React.MouseEvent) => { 
         e.stopPropagation();
         onEdgeDelete(edge);
       }}
@@ -340,15 +334,12 @@ const FlowEditorContent = ({
   environmentId
 }: FlowEditorProps): JSX.Element => {
   
-  // Combinar los tipos de nodos externos con los tipos de nodos definidos en NodeTypes.tsx
-  const memoizedNodeTypes = useMemo(() => {
-    // Add explicit mapping for note and text nodes
+  const memoizedNodeTypes: ReactFlowNodeTypes = useMemo(() => { 
     const combinedNodeTypes = {
-      ...nodeTypes,         // Incluye noteNode y textNode
-      ...externalNodeTypes,  // Tipos de nodos proporcionados externamente
-      // Add explicit mappings for note and text
-      note: nodeTypes.noteNode,
-      text: nodeTypes.textNode
+      ...nodeTypesFromFile, // Use renamed import         
+      ...externalNodeTypes,  
+      note: nodeTypesFromFile.noteNode, // Use renamed import
+      text: nodeTypesFromFile.textNode // Use renamed import
     };
     
     console.log('Available node types:', Object.keys(combinedNodeTypes));
@@ -356,10 +347,11 @@ const FlowEditorContent = ({
   }, [externalNodeTypes]);
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes] = useNodesState(propNodes || initialNodes);
-  const [edges, setEdges] = useEdgesState(propEdges || initialEdges);
+  const [nodes, setNodesHook] = useNodesState((propNodes || initialNodes) as Node[]); // Cast to Node[]
+  const [edges, setEdgesHook] = useEdgesState((propEdges || initialEdges) as Edge[]); // Cast to Edge[]
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [searchTerm, setSearchTerm] = useState<string>(''); 
   const [activeDrag, setActiveDrag] = useState<{ 
     item: ResourceItem, 
     offset: { x: number, y: number },
@@ -369,7 +361,6 @@ const FlowEditorContent = ({
   const [selectedNodes, setSelectedNodes] = useState<Node[]>([]);
   const [activeTool, setActiveTool] = useState<ToolType>('select');
   
-  // Estados para la herramienta de área
   const [isDrawingArea, setIsDrawingArea] = useState(false);
   const [areaStartPos, setAreaStartPos] = useState<{ x: number; y: number } | null>(null);
   const [currentArea, setCurrentArea] = useState<{
@@ -379,7 +370,6 @@ const FlowEditorContent = ({
     height: number;
   } | null>(null);
   
-  // Add a ref to store the last viewport state
   const lastViewportRef = useRef<Viewport | null>(null);
   
   const [contextMenu, setContextMenu] = useState<ContextMenu>({
@@ -405,7 +395,7 @@ const FlowEditorContent = ({
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
 
-  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+  const onEdgeClick = useCallback((event: ReactMouseEvent, edge: Edge) => {
     event.stopPropagation();
     console.log('Edge clicked:', edge);
     setSelectedEdge(edge);
@@ -417,29 +407,22 @@ const FlowEditorContent = ({
     setSelectedEdge(null);
   }, [onEdgesChange]);
 
-  const handlePaneClick = useCallback((event: React.MouseEvent) => {
+  const handlePaneClick = useCallback((event: ReactMouseEvent) => {
     setSelectedEdge(null);
     setContextMenu(prev => ({...prev, visible: false}));
     
-    // Si estamos en modo lasso, no realizar ninguna acción al hacer clic
     if (activeTool === 'lasso') {
       return;
     }
 
-    // Crear nodo de nota cuando la herramienta de nota está activa
     if (activeTool === 'note' && reactFlowInstance) {
       event.preventDefault();
       event.stopPropagation();
-      
-      // Mantener el cursor crosshair durante la creación
       document.body.style.cursor = 'crosshair';
-      
-      // Usar el método oficial de React Flow para convertir coordenadas de pantalla a flow
       const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY
       });
-      
       const newNode: Node = {
         id: `note-${Date.now()}`,
         type: 'noteNode',
@@ -454,28 +437,20 @@ const FlowEditorContent = ({
         draggable: true,
         selectable: true
       };
-      
       if (onNodesChange) {
         onNodesChange([{ type: 'add', item: newNode }]);
       }
-      
       return;
     }
 
-    // Crear nodo de texto cuando la herramienta de texto está activa
     if (activeTool === 'text' && reactFlowInstance) {
       event.preventDefault();
       event.stopPropagation();
-      
-      // Mantener el cursor crosshair durante la creación
       document.body.style.cursor = 'crosshair';
-      
-      // Usar el método oficial de React Flow para convertir coordenadas de pantalla a flow
       const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY
       });
-      
       const newNode: Node = {
         id: `text-${Date.now()}`,
         type: 'textNode',
@@ -493,72 +468,59 @@ const FlowEditorContent = ({
         draggable: true,
         selectable: true
       };
-      
       if (onNodesChange) {
         onNodesChange([{ type: 'add', item: newNode }]);
       }
-      
       return;
     }
-    
-    // Restaurar el cursor por defecto después de la creación
     document.body.style.cursor = 'default';
   }, [activeTool, reactFlowInstance, onNodesChange]);
 
-  // Listener para actualizaciones del AreaNode
   useEffect(() => {
-    const handleAreaNodeUpdate = (event: CustomEvent) => {
-      const { nodeId, data: newData } = event.detail;
-      reactFlowInstance.setNodes(nodes => 
-        nodes.map(node => 
+    const handleAreaNodeUpdate = (event: Event): void => { 
+      const customEvent = event as CustomEvent<{ nodeId: string; data: any }>;
+      const { nodeId, data: newData } = customEvent.detail;
+      reactFlowInstance.setNodes((nodes: Node[]) => 
+        nodes.map((node: Node) => 
           node.id === nodeId 
             ? { ...node, data: { ...node.data, ...newData } }
             : node
         )
       );
     };
-
-    window.addEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener);
-    
+    window.addEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener); // Cast to EventListener
     return () => {
-      window.removeEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener);
+      window.removeEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener); // Cast to EventListener
     };
   }, [reactFlowInstance]);
 
-  // Listener for showContextMenu events from nodes
   useEffect(() => {
-    const handleShowContextMenu = (event: CustomEvent) => {
-      const { x, y, items } = event.detail;
-      
-      // Create a custom context menu with the items from the node
+    const handleShowContextMenu = (event: Event): void => { 
+      const customEvent = event as CustomEvent<{ x: number; y: number; items: Array<{ label: string; icon: React.ReactNode; onClick: () => void; }> }>;
+      const { x, y, items } = customEvent.detail;
       setContextMenu({
         visible: true,
         x,
         y,
-        nodeId: null, // This will be handled by the menu items themselves
+        nodeId: null, 
         nodeType: null,
         isPane: false,
         parentInfo: null,
-        customItems: items // Store the custom items
+        customItems: items 
       });
     };
-
-    document.addEventListener('showContextMenu', handleShowContextMenu as EventListener);
-    
+    document.addEventListener('showContextMenu', handleShowContextMenu as EventListener); // Cast to EventListener
     return () => {
-      document.removeEventListener('showContextMenu', handleShowContextMenu as EventListener);
+      document.removeEventListener('showContextMenu', handleShowContextMenu as EventListener); // Cast to EventListener
     };
   }, []);
 
-  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+  const handleNodeContextMenu = useCallback((event: ReactMouseEvent, node: Node) => {
     event.preventDefault();
     event.stopPropagation();
-    
-    // Solo mostrar el menú contextual si el nodo está seleccionado
     if (!node.selected) {
       return;
     }
-    
     setContextMenu({
       visible: true,
       x: event.clientX,
@@ -570,19 +532,14 @@ const FlowEditorContent = ({
     });
   }, []);
 
-  const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
+  const handlePaneContextMenu = useCallback((event: ReactMouseEvent) => {
     event.preventDefault();
-    // Deshabilitar completamente el menú contextual del stage
     setContextMenu(prev => ({...prev, visible: false}));
   }, []);
 
-  // 🔒 Critical code below – do not edit or delete
   useEffect(() => {
     if (initialViewport && reactFlowInstance) {
-      // Guardar el viewport inicial en lastViewportRef para que se use en los guardados
       lastViewportRef.current = initialViewport;
-      
-      // Establecer el viewport con un pequeño retraso para asegurar que ReactFlow esté listo
       setTimeout(() => {
         reactFlowInstance.setViewport(initialViewport);
       }, 100);
@@ -590,8 +547,8 @@ const FlowEditorContent = ({
   }, [initialViewport, reactFlowInstance]);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const previousNodesRef = useRef<string>(JSON.stringify(propNodes || initialNodes)); // Initialize with current nodes
-  const previousEdgesRef = useRef<string>(JSON.stringify(propEdges || initialEdges)); // Initialize with current edges
+  const previousNodesRef = useRef<string>(JSON.stringify(propNodes || initialNodes)); 
+  const previousEdgesRef = useRef<string>(JSON.stringify(propEdges || initialEdges)); 
   
   useEffect(() => {
     const currentNodes = reactFlowInstance.getNodes();
@@ -602,20 +559,16 @@ const FlowEditorContent = ({
     if (onSave && reactFlowInstance && 
         (currentNodesJSON !== previousNodesRef.current || 
          currentEdgesJSON !== previousEdgesRef.current)) {
-      
       previousNodesRef.current = currentNodesJSON;
       previousEdgesRef.current = currentEdgesJSON;
-      
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
-      
       saveTimeoutRef.current = setTimeout(() => {
         const flow = reactFlowInstance.toObject();
-        onSave?.(flow); // flow already contains nodes, edges, viewport
+        onSave?.(flow); 
       }, 1000);
     }
-    
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -637,108 +590,45 @@ const FlowEditorContent = ({
 
   const saveGroupName = useCallback((newName: string) => {
     if (!editingGroup) return;
-    
-    reactFlowInstance.setNodes(nodes => 
-      nodes.map(node => 
+    reactFlowInstance.setNodes((nodes: Node[]) => 
+      nodes.map((node: Node) => 
         node.id === editingGroup.id 
           ? { ...node, data: { ...node.data, label: newName } } 
           : node
       )
     );
-    setContextMenu(prev => ({...prev, visible: false})); // Close context menu after saving
+    setContextMenu(prev => ({...prev, visible: false})); 
     setEditingGroup(null);
   }, [editingGroup, reactFlowInstance]);
 
   useOnSelectionChange({
-    onChange: ({ nodes: selected }) => {
-      // Update selected nodes state
-      setSelectedNodes(selected);
+    onChange: ({ nodes: selectedNodesFromCallback }: { nodes: Node[] }) => { 
+      setSelectedNodes(selectedNodesFromCallback);
     },
   });
 
   useEffect(() => {
-    const handleNodeFocus = (event: Event) => { // Use generic Event type
-      const customEvent = event as CustomEvent<{ nodeId: string; isFocused: boolean }>; // Type assertion
+    const handleNodeFocus = (event: Event): void => { 
+      const customEvent = event as CustomEvent<{ nodeId: string; isFocused: boolean }>; 
       const { nodeId, isFocused } = customEvent.detail;
       setFocusedNodeId(isFocused ? nodeId : null);
     };
-    
-    window.addEventListener('nodeGroupFocus', handleNodeFocus);
+    window.addEventListener('nodeGroupFocus', handleNodeFocus as EventListener); // Cast to EventListener
     return () => {
-      window.removeEventListener('nodeGroupFocus', handleNodeFocus);
     };
   }, []);
 
-  // Removed centerNodesInViewport and fitView functions to eliminate zoom reset functionality
-  
-  // Removed useEffect for automatic fitView on component mount
-
-  // DISABLED: Auto-centering nodes in viewport to fix drag-and-drop positioning issues
-  // This was causing the viewport to automatically center when dropping nodes near edges
-  // useEffect(() => {
-  //   if (!reactFlowInstance || !nodes.length) return;
-  //   
-  //   // Wait for nodes to be rendered
-  //   setTimeout(() => {
-  //     // Calculate nodes bounding box
-  //     let minX = Infinity, minY = Infinity;
-  //     let maxX = -Infinity, maxY = -Infinity;
-  //     
-  //     reactFlowInstance.getNodes().forEach(node => {
-  //       if (!node.hidden) {
-  //         const nodeWidth = node.width || 150;
-  //         const nodeHeight = node.height || 80;
-  //         
-  //         minX = Math.min(minX, node.position.x);
-  //         minY = Math.min(minY, node.position.y);
-  //         maxX = Math.max(maxX, node.position.x + nodeWidth);
-  //         maxY = Math.max(maxY, node.position.y + nodeHeight);
-  //       }
-  //     });
-
-  //     // Skip if no nodes are visible or bounding box calculation failed
-  //     if (minX === Infinity || minY === Infinity) return;
-  //     
-  //     // Calculate center of nodes
-  //     const nodesWidth = maxX - minX;
-  //     const nodesHeight = maxY - minY;
-  //     const nodesCenterX = minX + nodesWidth / 2;
-  //     const nodesCenterY = minY + nodesHeight / 2;
-  //     
-  //     // Get viewport dimensions
-  //     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 600 };
-  //     const viewportCenterX = width / 2;
-  //     const viewportCenterY = height / 2;
-  //     
-  //     // Calculate the translation needed to center nodes
-  //     const zoom = 1; // Keep zoom level fixed at 1
-  //     const translateX = viewportCenterX - nodesCenterX * zoom;
-  //     const translateY = viewportCenterY - nodesCenterY * zoom;
-  //     
-  //     // Set viewport to center nodes without animation
-  //     reactFlowInstance.setViewport({ 
-  //       x: translateX, 
-  //       y: translateY, 
-  //       zoom 
-  //     });
-  //   }, 200); // Small delay to ensure nodes are rendered
-  // }, [reactFlowInstance, nodes.length, reactFlowWrapper]);
-
   const createEmptyGroup = useCallback((provider: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic') => {
     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 800 };
-
     const position = reactFlowInstance.screenToFlowPosition({ x: width / 2, y: height / 2 });
     const timestamp = Date.now();
     const newGroupId = `group-${timestamp}`;
-
     const newGroup: Node = {
       id: newGroupId, type: 'group', position,
       data: { label: 'New Group', provider, isCollapsed: false, isMinimized: false },
       style: { width: 300, height: 200 }
     };
-
     onNodesChange?.([{ type: 'add', item: newGroup }]);
-    
     setTimeout(() => {
       const event = new CustomEvent('nodesChanged', { detail: { action: 'nodeAdded', nodeIds: [newGroupId] } });
       document.dispatchEvent(event);
@@ -746,50 +636,39 @@ const FlowEditorContent = ({
     return newGroupId;
   }, [reactFlowInstance, onNodesChange, reactFlowWrapper]);
 
-  // 🔒 Critical code below – do not edit or delete
   const optimizeNodesInGroup = useCallback((groupId: string) => {
     const group = reactFlowInstance.getNode(groupId);
     if (!group) return;
-  
-    // Don't attempt to optimize nodes if the group is minimized
     if (group.data?.isMinimized) return;
-    
     const childNodes = reactFlowInstance.getNodes().filter((n: Node) => n.parentId === groupId);
     if (childNodes.length === 0) return;
-  
     const groupWidth = (group.style?.width as number) || 300;
-    
     const headerHeight = 40;
     const verticalMargin = 20;
     const horizontalMargin = 20;
     const nodeSpacing = 8;
-    
     const availableWidth = groupWidth - 2 * horizontalMargin;
-    const sortedChildNodes = [...childNodes].sort((a, b) => a.id.localeCompare(b.id));      const updatedNodes = reactFlowInstance.getNodes().map(node => {
+    const sortedChildNodes = [...childNodes].sort((a, b) => a.id.localeCompare(b.id));      
+    const updatedNodes = reactFlowInstance.getNodes().map((node: Node) => {
       if (node.parentId !== groupId) return node;
       const idx = sortedChildNodes.findIndex((n: Node) => n.id === node.id);
       const y = headerHeight + verticalMargin + idx * (40 + nodeSpacing);
-      
-      // Asegurar que los nodos sean arrastrables dentro del grupo
-      // y preservar cualquier estilo existente
       const nodeStyle = {
         ...node.style,
         width: availableWidth, 
         height: 40, 
         transition: 'none'
       };
-      
       return { 
         ...node, 
         position: { x: horizontalMargin, y }, 
         style: nodeStyle,
-        draggable: true, // Asegurarse de que sea arrastrable
-        selectable: true  // Asegurarse de que sea seleccionable
+        draggable: true, 
+        selectable: true  
       };
     });
-    
     console.log(`Optimizando ${childNodes.length} nodos en el grupo ${groupId}`);
-    reactFlowInstance.setNodes(updatedNodes);
+    reactFlowInstance.setNodes(updatedNodes as Node[]); 
   }, [reactFlowInstance]);
 
   const groupSelectedNodes = useCallback(() => {
@@ -798,11 +677,9 @@ const FlowEditorContent = ({
       console.warn("Se necesitan al menos 2 nodos para agrupar");
       return;
     }
-
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     const providerCounts: Record<string, number> = {};
-    
-    selectedNodes.forEach(node => {
+    selectedNodes.forEach((node: Node) => { 
       const nodeWidth = (node.width || 150);
       const nodeHeight = (node.height || 80);
       minX = Math.min(minX, node.position.x);
@@ -812,22 +689,19 @@ const FlowEditorContent = ({
       const provider = node.data?.provider || 'generic';
       providerCounts[provider] = (providerCounts[provider] || 0) + 1;
     });
-    
     let mostCommonProvider: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic';
     let maxCount = 0;
     Object.entries(providerCounts).forEach(([provider, count]) => {
       if (count > maxCount) {
-        mostCommonProvider = provider as 'aws' | 'gcp' | 'azure' | 'generic'; // Cast to specific type
+        mostCommonProvider = provider as 'aws' | 'gcp' | 'azure' | 'generic'; 
         maxCount = count;
       }
     });
-
     const paddingHorizontal = 50, paddingVerticalTop = 60, paddingVerticalBottom = 40;
     minX -= paddingHorizontal; minY -= paddingVerticalTop; 
     maxX += paddingHorizontal; maxY += paddingVerticalBottom;
     const width = Math.max(250, maxX - minX);
     const height = Math.max(180, maxY - minY);
-    
     const timestamp = Date.now();
     const newGroupId = `group-${timestamp}`;
     const newGroup: Node = {
@@ -835,8 +709,7 @@ const FlowEditorContent = ({
       data: { label: 'Grupo', provider: mostCommonProvider, isCollapsed: false, isMinimized: false },
       style: { width, height }
     };
-    
-    const updatedNodes = reactFlowInstance.getNodes().map(node => {
+    const updatedNodes = reactFlowInstance.getNodes().map((node: Node) => { 
       if (selectedNodes.some(selectedNode => selectedNode.id === node.id)) {
         return {
           ...node, parentId: newGroupId, extent: 'parent' as const,
@@ -846,40 +719,34 @@ const FlowEditorContent = ({
       }
       return node;
     });
-    
-    reactFlowInstance.setNodes([...updatedNodes, newGroup]);
+    reactFlowInstance.setNodes([...updatedNodes, newGroup] as Node[]); 
     setTimeout(() => optimizeNodesInGroup(newGroupId), 50);
     return newGroupId;
   }, [selectedNodes, reactFlowInstance, optimizeNodesInGroup]);
 
-  // 🔒 Critical code below – do not edit or delete
   const ungroupNodes = useCallback(() => {
-    const selectedGroupNodes = selectedNodes.filter(node => node.type === 'group');
-    const allNodes = reactFlowInstance.getNodes(); // Get all nodes once
-    
+    const selectedGroupNodes = selectedNodes.filter((node: Node) => node.type === 'group'); 
+    const allNodes = reactFlowInstance.getNodes(); 
     let groupsToProcess: string[] = [];
-
     if (selectedGroupNodes.length > 0) {
-      groupsToProcess = selectedGroupNodes.map(group => group.id);
+      groupsToProcess = selectedGroupNodes.map((group: Node) => group.id); 
     } else {
-      const nodesInGroups = selectedNodes.filter(node => node.parentId);
+      const nodesInGroups = selectedNodes.filter((node: Node) => node.parentId); 
       if (nodesInGroups.length > 0) {
-        groupsToProcess = [...new Set(nodesInGroups.map(node => node.parentId))].filter(Boolean) as string[];
+        groupsToProcess = [...new Set(nodesInGroups.map((node: Node) => node.parentId))].filter(Boolean) as string[]; 
       } else {
         console.warn("No hay grupos o nodos en grupos seleccionados para desagrupar");
         return;
       }
     }
-    
     if (groupsToProcess.length === 0) {
         console.warn("No se encontraron grupos para desagrupar basado en la selección.");
         return;
     }
     console.log("Grupos a desagrupar/procesar:", groupsToProcess);
-
-    const finalNodes = allNodes.map(node => {
+    const finalNodes = allNodes.map((node: Node) => { 
       if (node.parentId && groupsToProcess.includes(node.parentId)) {
-        const parentGroup = allNodes.find(n => n.id === node.parentId);
+        const parentGroup = allNodes.find((n: Node) => n.id === node.parentId); 
         if (parentGroup) {
           return {
             ...node, parentId: undefined, extent: undefined,
@@ -887,10 +754,9 @@ const FlowEditorContent = ({
           };
         }
       }
-      if (groupsToProcess.includes(node.id)) return null; // Remove the group itself
+      if (groupsToProcess.includes(node.id)) return null; 
       return node;
     }).filter(Boolean) as Node[];
-    
     reactFlowInstance.setNodes(finalNodes);
   }, [selectedNodes, reactFlowInstance]);
 
@@ -898,140 +764,99 @@ const FlowEditorContent = ({
     if (tool === activeTool && tool !== 'lasso' && tool !== 'area') return;
     document.body.classList.remove('lasso-selection-mode');
     document.body.classList.remove('area-drawing-mode');
-
-    // Handle tool-specific actions
     if (tool === 'lasso') {
       document.body.classList.add('lasso-selection-mode');
-      
-      // Limpiar selección actual cuando se activa la herramienta lasso pero mantener selectable
-      reactFlowInstance.setNodes(nodes => nodes.map(node => ({ 
+      reactFlowInstance.setNodes((nodes: Node[]) => nodes.map((node: Node) => ({ 
         ...node, 
         selected: false, 
         selectable: true 
       })));
     } else if (tool === 'area') {
       document.body.classList.add('area-drawing-mode');
-      
-      // Clear any current selection when activating area tool
-      reactFlowInstance.setNodes(nodes => nodes.map(node => ({ 
+      reactFlowInstance.setNodes((nodes: Node[]) => nodes.map((node: Node) => ({ 
         ...node, 
         selected: false 
       })));
     }
-    
-    // Simplemente establecer la herramienta activa sin agregar nodos inmediatamente
-    // Los nodos se agregarán cuando se haga clic en el canvas (en el evento paneClick)
-    
     setActiveTool(tool);
-    
-    // Asegurarnos de que los nodos se mantengan interactuables para el clic derecho
     const lassoSelectStyle = document.createElement('style');
     lassoSelectStyle.id = 'lasso-select-compatibility';
     lassoSelectStyle.innerHTML = `
       .react-flow__node {
         pointer-events: all !important;
       }
-      
       .lasso-selection-mode .react-flow__pane {
         cursor: crosshair !important;
       }
     `;
-    
-    // Eliminar estilo anterior si existe
     const existingStyle = document.getElementById('lasso-select-compatibility');
     if (existingStyle) {
       existingStyle.remove();
     }
-    
-    // Agregar estilo solo si está en modo lasso
     if (tool === 'lasso') {
       document.head.appendChild(lassoSelectStyle);
     }
   }, [activeTool, reactFlowInstance]);
 
   useEffect(() => {
-    // Removed all cursor and space bar pan mode functionalitycc
   }, []);
 
   const isInsideGroup = (position: { x: number, y: number }, group: Node) => {
-    if (group.data?.isMinimized) return false; // No permitir drop en grupos minimizados
-    
+    if (group.data?.isMinimized) return false; 
     const groupX = group.position.x;
     const groupY = group.position.y;
     const groupWidth = (group.style?.width as number) || 200;
     const groupHeight = (group.style?.height as number) || 150;
-    
-    // Área de detección ligeramente mayor que el grupo para facilitar el drop
-    // Agregamos un margen positivo para facilitar la detección al acercarse a los bordes
     const margin = 5;
-    
     const isInside = (
       position.x >= groupX - margin && position.x <= groupX + groupWidth + margin &&
       position.y >= groupY - margin && position.y <= groupY + groupHeight + margin
     );
-    
     console.log(`Drop position check: (${position.x}, ${position.y}) inside group at (${groupX}, ${groupY}) with size ${groupWidth}x${groupHeight}: ${isInside}`);
     return isInside;
   };
 
   const onDragStartSidebar = (event: React.DragEvent, itemData: ResourceItem) => {
-    // Prevent dragging when area or text tool is active
     if (activeTool === 'area' || activeTool === 'text') {
       event.preventDefault();
       return;
     }
-    
     event.dataTransfer.setData('application/reactflow', JSON.stringify(itemData));
     event.dataTransfer.effectAllowed = 'move';
     const dragElement = event.currentTarget as HTMLDivElement;
     const rect = dragElement.getBoundingClientRect();
-    
-    // More precise offset calculation - get exact click position within element
     const offsetX = event.clientX - rect.left;
     const offsetY = event.clientY - rect.top;
-    
-    // Store both the element dimensions and click offset for more accurate positioning
     setActiveDrag({ 
       item: itemData, 
       offset: { x: offsetX, y: offsetY },
       elementSize: { width: rect.width, height: rect.height }
     });
-
-    // Cambiar el cursor durante el arrastre
     document.body.style.cursor = 'crosshair';
   };
 
-  // Estado para rastrear el grupo sobre el cual se está arrastrando un nodo
   const [highlightedGroupId, setHighlightedGroupId] = useState<string | null>(null);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
-    // Prevent drag over when area or text tool is active
     if (activeTool === 'area' || activeTool === 'text') {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'none';
       return;
     }
-    
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    
-    // Mantener el cursor crosshair durante el arrastre
     document.body.style.cursor = 'crosshair';
-    
-    // Comprobar si estamos arrastrando sobre un grupo para dar feedback visual
     if (reactFlowInstance) {
       const position = reactFlowInstance.screenToFlowPosition({ 
         x: event.clientX, 
         y: event.clientY 
       });
-      
-      const groups = reactFlowInstance.getNodes().filter(n => n.type === 'group' && !n.data?.isMinimized);
+      const groups = reactFlowInstance.getNodes().filter((n: Node) => n.type === 'group' && !n.data?.isMinimized); 
       const sortedGroups = [...groups].sort((a, b) => {
         const areaA = (a.style?.width as number || 200) * (a.style?.height as number || 150);
         const areaB = (b.style?.width as number || 200) * (b.style?.height as number || 150);
         return areaA - areaB;
       });
-      
       let foundGroup = false;
       for (const group of sortedGroups) {
         if (isInsideGroup(position, group)) {
@@ -1040,30 +865,24 @@ const FlowEditorContent = ({
           break;
         }
       }
-      
       if (!foundGroup && highlightedGroupId) {
         setHighlightedGroupId(null);
       }
     }
   }, [reactFlowInstance, isInsideGroup, highlightedGroupId, activeTool]);
   
-  // Resetear el grupo resaltado cuando termina el arrastre
   const onDragEnd = useCallback(() => {
     setHighlightedGroupId(null);
     setActiveDrag(null);
-    // Restaurar el cursor por defecto
     document.body.style.cursor = 'default';
   }, [setActiveDrag]);
 
-  // Efecto para sincronizar los nodos cuando cambian las props o el diagramId
   useEffect(() => {
     if (propNodes) {
       const currentNodesJSON = JSON.stringify(reactFlowInstance.getNodes());
       const propNodesJSON = JSON.stringify(propNodes);
-      
-      // Solo actualizar si hay diferencias reales
       if (currentNodesJSON !== propNodesJSON) {
-        const updatedNodes = propNodes.map(node => ({
+        const updatedNodes = propNodes.map((node: Node) => ({ 
           ...node,
           draggable: true,
           selectable: true,
@@ -1074,27 +893,24 @@ const FlowEditorContent = ({
             height: node.height || 100
           }
         }));
-        setNodes(updatedNodes);
+        setNodesHook(updatedNodes as Node[]); 
       }
     }
-  }, [propNodes, setNodes, diagramId, reactFlowInstance]);
+  }, [propNodes, setNodesHook, diagramId, reactFlowInstance]); // Changed setNodes to setNodesHook
 
-  // Efecto para sincronizar los edges cuando cambian las props o el diagramId
   useEffect(() => {
     if (propEdges) {
       const currentEdgesJSON = JSON.stringify(reactFlowInstance.getEdges());
       const propEdgesJSON = JSON.stringify(propEdges);
-      
-      // Solo actualizar si hay diferencias reales
       if (currentEdgesJSON !== propEdgesJSON) {
-        setEdges(propEdges);
+        setEdgesHook(propEdges as Edge[]); 
       }
     }
-  }, [propEdges, setEdges, diagramId, reactFlowInstance]);
+  }, [propEdges, setEdgesHook, diagramId, reactFlowInstance]); // Changed setEdges to setEdgesHook
 
   const findGroupAtPosition = useCallback((position: { x: number; y: number }) => {
     const currentNodes = reactFlowInstance.getNodes();
-    return currentNodes.find(node => 
+    return currentNodes.find((node: Node) => 
       node.type === 'group' && 
       !node.data?.isMinimized &&
       position.x >= node.position.x &&
@@ -1106,30 +922,18 @@ const FlowEditorContent = ({
 
   const onDrop = useCallback((event: React.DragEvent) => {
     event.preventDefault();
-
-    // Prevent dropping when area tool is active
     if (activeTool === 'area') {
       return;
     }
-
     const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
     if (!reactFlowBounds || !reactFlowInstance) return;
-
     try {
       const dataStr = event.dataTransfer.getData('application/reactflow');
       if (!dataStr) return;
-      
       const transferredData = JSON.parse(dataStr) as ResourceItem;
-      
-      // Use screenToFlowPosition to get the precise position in flow coordinates
-      // Account for the exact drag offset so the node appears exactly where the cursor is
       const dragOffset = activeDrag?.offset || { x: 0, y: 0 };
-      
-      // Get node dimensions for group boundary calculations
       let nodeWidth = 200;
       let nodeHeight = 100;
-      
-      // Adjust dimensions for specific node types
       if (transferredData.type === 'note') {
         nodeWidth = 200;
         nodeHeight = 120;
@@ -1140,22 +944,13 @@ const FlowEditorContent = ({
         nodeWidth = 300;
         nodeHeight = 200;
       }
-      
-      // Precise positioning: 
-      // 1. Start with mouse position
-      // 2. Subtract where user clicked within the dragged element (dragOffset)
-      // This ensures the node appears exactly where the mouse cursor is
       const adjustedX = event.clientX - dragOffset.x;
       const adjustedY = event.clientY - dragOffset.y;
-      
       const position = reactFlowInstance.screenToFlowPosition({
         x: adjustedX,
         y: adjustedY
       });
-
       let newNode: Node;
-
-      // Handle specific node types with their required data structures
       if (transferredData.type === 'note') {
         newNode = {
           id: `note-${Date.now()}`,
@@ -1163,7 +958,7 @@ const FlowEditorContent = ({
           position: { ...position },
           data: {
             text: 'Click to edit',
-            backgroundColor: '#FEF08A', // Amarillo por defecto
+            backgroundColor: '#FEF08A', 
             textColor: '#1F2937',
             fontSize: 14
           },
@@ -1188,7 +983,6 @@ const FlowEditorContent = ({
           selectable: true
         };
       } else {
-        // Default handling for other node types
         newNode = {
           id: `${transferredData.type}-${Date.now()}`,
           type: transferredData.type,
@@ -1207,60 +1001,41 @@ const FlowEditorContent = ({
           }
         };
       }
-
-      // Check if the node is dropped within a group
       const groupNode = findGroupAtPosition(position);
       if (groupNode) {
         const parentGroup = reactFlowInstance.getNode(groupNode.id);
         if (parentGroup) {
-          // Calculate the position relative to the group
           const groupPosition = { ...parentGroup.position };
           const relativePosition = {
             x: position.x - groupPosition.x,
             y: position.y - groupPosition.y
           };
-
-          // Ensure the node stays within the group's boundaries
           const groupWidth = parentGroup.width || 300;
           const groupHeight = parentGroup.height || 200;
           const margin = 20;
-
-          // Calculate safe limits
           const maxX = groupWidth - nodeWidth - margin;
           const maxY = groupHeight - nodeHeight - margin;
           const minX = margin;
           const minY = margin + 40;
-
-          // Clamp the position within the group's boundaries
           const clampedPosition = {
             x: Math.max(minX, Math.min(maxX, relativePosition.x)),
             y: Math.max(minY, Math.min(maxY, relativePosition.y))
           };
-
-          // Update the node's position and parent
           newNode.position = { ...clampedPosition };
           newNode.parentId = groupNode.id;
           newNode.extent = 'parent' as const;
         }
       }
-
-      // Add the new node to the flow without any viewport manipulation
       const updatedNodes = [...reactFlowInstance.getNodes(), newNode];
-      setNodes(updatedNodes);
-      
-      // Notify parent component if needed
+      setNodesHook(updatedNodes as Node[]); 
       if (onNodesChange) {
         onNodesChange([{ type: 'add', item: newNode }]);
       }
-      
-      // If node is added to a group, optimize the group layout
       if (newNode.parentId) {
         setTimeout(() => {
           optimizeNodesInGroup(newNode.parentId!);
         }, 0);
       }
-
-      // Save the diagram if needed
       if (diagramId && onSave) {
         const currentViewport = reactFlowInstance.getViewport();
         onSave({
@@ -1269,64 +1044,43 @@ const FlowEditorContent = ({
           viewport: currentViewport
         });
       }
-
     } catch (error) {
       console.error("Error handling node drop:", error);
     }
-  }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodes, diagramId, onSave, activeDrag, activeTool]);
+  }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodesHook, diagramId, onSave, activeDrag, activeTool]); // Changed setNodes to setNodesHook
 
-  // Función para guardar explícitamente el estado actual del diagrama
   const saveCurrentDiagramState = useCallback(() => {
     if (!reactFlowInstance || !onSave) return;
-    
-    // Obtener el estado actual del diagrama
     const currentNodes = reactFlowInstance.getNodes();
     const currentEdges = reactFlowInstance.getEdges();
-    
-    // Obtener el viewport actual (zoom y posición)
     const currentViewport = reactFlowInstance.getViewport();
     console.log('Guardando viewport explícitamente:', currentViewport);
-    
-    // Actualizar la referencia al viewport
     lastViewportRef.current = currentViewport;
-    
-    // Crear el objeto de flujo completo
     const flow = reactFlowInstance.toObject();
-    
-    // Guardar el diagrama con el viewport actual
     onSave({
       ...flow,
       viewport: currentViewport
     });
-    
-    // Actualizar las referencias para comparaciones futuras
     previousNodesRef.current = JSON.stringify(currentNodes);
     previousEdgesRef.current = JSON.stringify(currentEdges);
-    
     console.log('Diagrama guardado con viewport:', currentViewport);
   }, [reactFlowInstance, onSave]);
   
-  // Efecto para guardar automáticamente cuando cambian los nodos o bordes
   useEffect(() => {
     if (!reactFlowInstance || !onSave) return;
-    
     const currentNodes = reactFlowInstance.getNodes();
     const currentEdges = reactFlowInstance.getEdges();
     const currentNodesJSON = JSON.stringify(currentNodes);
     const currentEdgesJSON = JSON.stringify(currentEdges);
-    
     if (currentNodesJSON !== previousNodesRef.current || 
         currentEdgesJSON !== previousEdgesRef.current) {
-      
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
-      
       saveTimeoutRef.current = setTimeout(() => {
         saveCurrentDiagramState();
       }, 1000);
     }
-    
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -1334,10 +1088,8 @@ const FlowEditorContent = ({
     };
   }, [onSave, reactFlowInstance, propNodes, propEdges, saveCurrentDiagramState]);
 
-  // Keyboard shortcuts handler
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore keyboard shortcuts when typing in input fields
       if (
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement ||
@@ -1345,47 +1097,41 @@ const FlowEditorContent = ({
       ) {
         return;
       }
-
-      // Keyboard shortcuts for tools
       switch (event.key.toLowerCase()) {
-        case 'v': // Select tool
+        case 'v': 
           handleToolClick('select');
           break;
-        case 'n': // Note tool
+        case 'n': 
           handleToolClick('note');
           break;
-        case 't': // Text tool
+        case 't': 
           handleToolClick('text');
           break;
-        case 'a': // Area tool
+        case 'a': 
           if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
             handleToolClick('area');
           }
           break;
-        case 'g': // Create group
+        case 'g': 
           if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
             createEmptyGroup();
           }
           break;
-        case 's': // Lasso select
+        case 's': 
           if (event.shiftKey) {
             handleToolClick('lasso');
           }
           break;
       }
     };
-
     document.addEventListener('keydown', handleKeyDown);
-    
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleToolClick, createEmptyGroup]);
 
-  // Add a modal for editing group name
   const renderEditGroupModal = () => {
     if (!editingGroup) return null;
-    
     return (
       <div 
         style={{
@@ -1410,7 +1156,7 @@ const FlowEditorContent = ({
             width: '300px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           }}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e: React.MouseEvent) => e.stopPropagation()} 
         >
           <h3 style={{marginTop: 0, marginBottom: '16px', fontSize: '16px'}}>Edit Group Name</h3>
           <input
@@ -1425,7 +1171,7 @@ const FlowEditorContent = ({
               marginBottom: '16px'
             }}
             autoFocus
-            onKeyDown={(e) => {
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { 
               if (e.key === 'Enter') {
                 const input = e.target as HTMLInputElement;
                 saveGroupName(input.value);
@@ -1450,7 +1196,7 @@ const FlowEditorContent = ({
               Cancel
             </button>
             <button
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => { 
                 const input = e.currentTarget.parentElement?.querySelector('input') as HTMLInputElement;
                 saveGroupName(input.value);
               }}
@@ -1472,41 +1218,34 @@ const FlowEditorContent = ({
     );
   };
 
-  // Modificar la función para mover nodos hacia atrás
   const moveNodesToBack = useCallback((nodeIds: string[]) => {
-    const nodes = reactFlowInstance.getNodes();
+    const currentNodes = reactFlowInstance.getNodes(); 
     const selectedIds = new Set(nodeIds);
-    
-    // Encontrar el zIndex más bajo actual
-    const minZIndex = Math.min(...nodes.map(n => n.zIndex || 0));
-    
-    // Actualizar los nodos seleccionados con un zIndex más bajo
-    const updatedNodes = nodes.map(node => {
+    const minZIndex = Math.min(...currentNodes.map((n: Node) => n.zIndex || 0)); 
+    const updatedNodes = currentNodes.map((node: Node) => { 
       if (selectedIds.has(node.id)) {
         return { ...node, zIndex: minZIndex - 1 };
       }
       return node;
     });
-    
-    reactFlowInstance.setNodes(updatedNodes);
+    reactFlowInstance.setNodes(updatedNodes as Node[]); 
   }, [reactFlowInstance]);
 
-  // Función para simular la ejecución de un nodo
   const simulateNodeExecution = async (node: NodeWithExecutionStatus, state: NodeExecutionState) => {
-    const message = getExecutionMessage(node, state);
-    setExecutionLogs(prev => [...prev, message]);
+    const messageText = getExecutionMessage(node, state); 
+    setExecutionLogs(prev => [...prev, messageText]);
     await new Promise(resolve => setTimeout(resolve, 1000));
   };
 
   const getExecutionMessage = (node: NodeWithExecutionStatus, state: NodeExecutionState): string => {
-    const nodeName = node.data?.label || 'Unnamed Resource';
+    const nodeAsNode = node as Node; 
+    const nodeName = nodeAsNode.data?.label || 'Unnamed Resource';
     const getResourceDetails = () => {
       const details = [];
-      if (node.data?.provider) details.push(`Provider: ${node.data.provider}`);
-      if (node.data?.resourceType) details.push(`Type: ${node.data.resourceType}`);
+      if (nodeAsNode.data?.provider) details.push(`Provider: ${nodeAsNode.data.provider}`);
+      if (nodeAsNode.data?.resourceType) details.push(`Type: ${nodeAsNode.data.resourceType}`);
       return details.length > 0 ? ` (${details.join(', ')})` : '';
     };
-
     switch (state) {
       case 'creating':
         return `Iniciando creación de ${nodeName}${getResourceDetails()}...`;
@@ -1523,52 +1262,35 @@ const FlowEditorContent = ({
     }
   };
 
-  // Modificar el handlePreview para incluir la simulación
   const handlePreview = useCallback(() => {
     if (!currentDiagram) return;
-    
     try {
       setIsExecutionLogVisible(true);
       setExecutionLogs([]);
-
-      // Obtener nodos que no son grupos
       const executionNodes = currentDiagram.nodes.filter((node) => node.type !== 'group');
-
-      // Simular ejecución secuencial
       const simulateExecution = async () => {
         for (const node of executionNodes) {
           let state: NodeExecutionState;
-          
-          // Determinar el estado basado en las propiedades reales del nodo
-          if (node.data?.status === 'creating' || node.data?.status === 'new' || (!node.data?.status && node.data?.isNew)) {
+          const nodeData = (node as Node).data; 
+          if (nodeData?.status === 'creating' || nodeData?.status === 'new' || (!nodeData?.status && nodeData?.isNew)) {
             state = 'creating';
-          } else if (node.data?.status === 'updating' || node.data?.status === 'modified' || node.data?.hasChanges) {
+          } else if (nodeData?.status === 'updating' || nodeData?.status === 'modified' || nodeData?.hasChanges) {
             state = 'updating';
-          } else if (node.data?.status === 'deleting' || node.data?.status === 'toDelete' || node.data?.markedForDeletion) {
+          } else if (nodeData?.status === 'deleting' || nodeData?.status === 'toDelete' || nodeData?.markedForDeletion) {
             state = 'deleting';
           } else {
-            state = 'creating';
+            state = 'creating'; 
           }
-
-          const nodeName = node.data?.label || 'Unnamed Resource';
-          
-          // Logs de procesamiento
+          const nodeName = nodeData?.label || 'Unnamed Resource';
           const processingLog = `Procesando ${state} para ${nodeName}...`;
           const successLog = `${state} completado para ${nodeName}`;
-          const costLog = `Costo estimado para ${nodeName}: $${node.data?.estimated_cost?.monthly || 0} USD/mes`;
-
-          // Agregar logs
+          const costLog = `Costo estimado para ${nodeName}: $${nodeData?.estimated_cost?.monthly || 0} USD/mes`;
           setExecutionLogs(prev => [...prev, processingLog]);
-          
-          // Simular tiempo de ejecución
           await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Agregar logs de éxito y costo
           setExecutionLogs(prev => [...prev, successLog]);
           setExecutionLogs(prev => [...prev, costLog]);
         }
       };
-
       simulateExecution();
     } catch (err) {
       console.error('Error al ejecutar el preview:', err);
@@ -1576,51 +1298,34 @@ const FlowEditorContent = ({
     }
   }, [currentDiagram]);
 
-  // Modificar el handleRun para incluir la simulación
   const handleRun = useCallback(() => {
     if (!currentDiagram) return;
-    
     try {
       setIsExecutionLogVisible(true);
       setExecutionLogs([]);
-
-      // Obtener nodos que no son grupos
       const executionNodes = currentDiagram.nodes.filter((node) => node.type !== 'group');
-
-      // Simular ejecución secuencial
       const simulateExecution = async () => {
         for (const node of executionNodes) {
           let state: NodeExecutionState;
-          
-          // Determinar el estado basado en las propiedades reales del nodo
-          if (node.data?.status === 'creating' || node.data?.status === 'new' || (!node.data?.status && node.data?.isNew)) {
+          const nodeData = (node as Node).data; 
+          if (nodeData?.status === 'creating' || nodeData?.status === 'new' || (!nodeData?.status && nodeData?.isNew)) {
             state = 'creating';
-          } else if (node.data?.status === 'updating' || node.data?.status === 'modified' || node.data?.hasChanges) {
+          } else if (nodeData?.status === 'updating' || nodeData?.status === 'modified' || nodeData?.hasChanges) {
             state = 'updating';
-          } else if (node.data?.status === 'deleting' || node.data?.status === 'toDelete' || node.data?.markedForDeletion) {
+          } else if (nodeData?.status === 'deleting' || nodeData?.status === 'toDelete' || nodeData?.markedForDeletion) {
             state = 'deleting';
           } else {
-            state = 'creating';
+            state = 'creating'; 
           }
-
-          const nodeName = node.data?.label || 'Unnamed Resource';
-          
-          // Logs de procesamiento
+          const nodeName = nodeData?.label || 'Unnamed Resource';
           const processingLog = `Procesando ${state} para ${nodeName}...`;
           const successLog = `${state} completado para ${nodeName}`;
-          const costLog = `Costo estimado para ${nodeName}: $${node.data?.estimated_cost?.monthly || 0} USD/mes`;
-
-          // Agregar logs
+          const costLog = `Costo estimado para ${nodeName}: $${nodeData?.estimated_cost?.monthly || 0} USD/mes`;
           setExecutionLogs(prev => [...prev, processingLog]);
-          
-          // Simular tiempo de ejecución
           await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          // Agregar logs de éxito y costo
           setExecutionLogs(prev => [...prev, successLog, costLog]);
         }
       };
-
       simulateExecution();
     } catch (err) {
       console.error('Error al ejecutar el diagrama:', err);
@@ -1629,54 +1334,41 @@ const FlowEditorContent = ({
   }, [currentDiagram]);
 
   useEffect(() => {
-    const handler = (event: CustomEvent<SingleNodePreview>) => {
-      setSingleNodePreview(event.detail);
+    const handler = (event: Event) => { 
+      const customEvent = event as CustomEvent<SingleNodePreview>;
+      setSingleNodePreview(customEvent.detail);
       setShowSingleNodePreview(true);
     };
-    window.addEventListener('showSingleNodePreview', handler as EventListener);
-    return () => window.removeEventListener('showSingleNodePreview', handler as EventListener);
+    window.addEventListener('showSingleNodePreview', handler); 
+    return () => window.removeEventListener('showSingleNodePreview', handler); 
   }, []);
 
   const handleApplyChanges = async () => {
     if (!singleNodePreview) return;
-    
     try {
       setLoading(true);
-      setShowLogs(true); // Asegurar que los logs se muestren
-      setExecutionLogs([]); // Limpiar logs anteriores
-      
-      // Procesar el recurso principal
+      setShowLogs(true); 
+      setExecutionLogs([]); 
       const processingLog = `Procesando ${singleNodePreview.action} del recurso ${singleNodePreview.resource.name}`;
       setExecutionLogs(prev => [...prev, processingLog]);
-
-      // Simular procesamiento del recurso principal
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Log de éxito final
       const successLog = `Recurso ${singleNodePreview.resource.name} ${singleNodePreview.action === 'create' ? 'creado' : 
               singleNodePreview.action === 'update' ? 'actualizado' : 'eliminado'} exitosamente`;
       setExecutionLogs(prev => [...prev, successLog]);
-
-      // Si hay costo estimado, mostrarlo
       if (singleNodePreview.estimated_cost) {
         const costLog = `Costo estimado: ${singleNodePreview.estimated_cost.currency} ${singleNodePreview.estimated_cost.monthly.toFixed(2)}`;
         setExecutionLogs(prev => [...prev, costLog]);
       }
-
-      // Procesar dependencias si existen
       if (singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0) {
         setExecutionLogs(prev => [...prev, `Procesando ${singleNodePreview.dependencies.length} dependencias...`]);
-        
         for (const dep of singleNodePreview.dependencies) {
           const depLog = `Procesando dependencia: ${dep.name} (${dep.type}) - ${dep.action === 'create' ? 'Creando' : dep.action === 'update' ? 'Actualizando' : 'Eliminando'}`;
           setExecutionLogs(prev => [...prev, depLog]);
           await new Promise(resolve => setTimeout(resolve, 500));
-          
           const depSuccessLog = `Dependencia ${dep.name} procesada exitosamente`;
           setExecutionLogs(prev => [...prev, depSuccessLog]);
         }
       }
-
       setLoading(false);
       setShowSingleNodePreview(false);
       setSingleNodePreview(null);
@@ -1688,8 +1380,6 @@ const FlowEditorContent = ({
       setLoading(false);
     }
   };
-
-  
 
   return (
     <div className="relative w-full h-full">
@@ -1772,34 +1462,27 @@ const FlowEditorContent = ({
           onPaneClick={handlePaneClick}
           onEdgeClick={onEdgeClick}
           onNodeContextMenu={handleNodeContextMenu}
-          onPaneContextMenu={handlePaneContextMenu}          onMouseDown={(event) => {
+          onPaneContextMenu={handlePaneContextMenu}          
+          onMouseDown={(event: React.MouseEvent) => { 
             if (activeTool === 'area' && reactFlowInstance) {
-              // Check if we clicked on a node, edge, or other interactive element
               const target = event.target as HTMLElement;
               const nodeElement = target.closest('.react-flow__node');
               const edgeElement = target.closest('.react-flow__edge');
               const handleElement = target.closest('.react-flow__handle');
               const controlElement = target.closest('.react-flow__controls');
-              
-              // If we clicked on any interactive element, don't start area drawing
               if (nodeElement || edgeElement || handleElement || controlElement) {
                 return;
               }
-              
-              // Only start area drawing if clicking on the pane itself
               const paneElement = target.closest('.react-flow__pane');
               if (!paneElement) {
                 return;
               }
-              
               event.preventDefault();
               event.stopPropagation();
-              
               const position = reactFlowInstance.screenToFlowPosition({
                 x: event.clientX,
                 y: event.clientY
               });
-              
               setIsDrawingArea(true);
               setAreaStartPos(position);
               setCurrentArea({
@@ -1808,29 +1491,24 @@ const FlowEditorContent = ({
                 width: 0,
                 height: 0
               });
-              
-              // Añadir clase al body para el cursor
               document.body.classList.add('area-drawing-mode');
             }
           }}
-          onMouseMove={(event) => {
+          onMouseMove={(event: React.MouseEvent) => { 
             if (isDrawingArea && areaStartPos && reactFlowInstance) {
               const currentPos = reactFlowInstance.screenToFlowPosition({
                 x: event.clientX,
                 y: event.clientY
               });
-
               const width = Math.abs(currentPos.x - areaStartPos.x);
               const height = Math.abs(currentPos.y - areaStartPos.y);
               const x = Math.min(areaStartPos.x, currentPos.x);
               const y = Math.min(areaStartPos.y, currentPos.y);
-
               setCurrentArea({ x, y, width, height });
             }
           }}
           onMouseUp={() => {
             if (isDrawingArea && currentArea && reactFlowInstance) {
-              // Solo crear el área si tiene un tamaño mínimo
               if (currentArea.width > 20 && currentArea.height > 20) {
                 const newAreaNode: Node = {
                   id: `area-${Date.now()}`,
@@ -1853,13 +1531,10 @@ const FlowEditorContent = ({
                   draggable: true,
                   selectable: true
                 };
-
                 if (onNodesChange) {
                   onNodesChange([{ type: 'add', item: newAreaNode }]);
                 }
               }
-
-              // Resetear estado de dibujo
               setIsDrawingArea(false);
               setAreaStartPos(null);
               setCurrentArea(null);
@@ -1903,7 +1578,6 @@ const FlowEditorContent = ({
             style={{ bottom: 20, left: 20 }}
           />
           
-          {/* Overlay visual para el dibujo de área */}
           {isDrawingArea && currentArea && reactFlowInstance && (
             <div
               className="area-drawing-overlay"
@@ -1934,8 +1608,8 @@ const FlowEditorContent = ({
                 minWidth: '180px', overflow: 'hidden',
                 transform: 'translate(8px, 8px)'
               }}
-              onClick={(e) => e.stopPropagation()} 
-              onContextMenu={(e) => e.preventDefault()} 
+              onClick={(e: React.MouseEvent) => e.stopPropagation()} 
+              onContextMenu={(e: React.MouseEvent) => e.preventDefault()} 
             >
               <div style={{ padding: '8px 12px', backgroundColor: '#f7f7f7', borderBottom: '1px solid #eee' }}>
                 {!contextMenu.isPane && contextMenu.nodeId && (
@@ -1955,7 +1629,7 @@ const FlowEditorContent = ({
                 {contextMenu.isPane && (
                   <>
                     {(() => {
-                      const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                      const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                       return currentSelectedNodes.length > 0 ? (
                         <p style={{margin: 0, fontSize: '13px', fontWeight: 'bold'}}>
                           {currentSelectedNodes.length} nodos seleccionados
@@ -1971,17 +1645,14 @@ const FlowEditorContent = ({
               <div>
                 {!contextMenu.isPane && contextMenu.nodeId && (
                   <>
-                    {/* Verificar si hay múltiples nodos seleccionados y el nodo actual está entre ellos */}
                     {(() => {
-                      const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
-                      return currentSelectedNodes.length > 1 && currentSelectedNodes.some(n => n.id === contextMenu.nodeId);
+                      const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
+                      return currentSelectedNodes.length > 1 && currentSelectedNodes.some((n: Node) => n.id === contextMenu.nodeId); 
                     })() ? (
                       <>
                         <button 
                           onClick={() => {
-                            // Actualizar para asegurarnos de que usamos los nodos que están seleccionados en este momento
-
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             console.log("Agrupando nodos seleccionados:", currentSelectedNodes.length);
                             if (currentSelectedNodes.length > 0) {
                               groupSelectedNodes();
@@ -1995,21 +1666,21 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           📦 Group Selected Nodes ({(() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             return currentSelectedNodes.length;
                           })()})
                         </button>
                         <button 
                           onClick={() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
-                            console.log("Eliminando nodos seleccionados:", currentSelectedNodes.length, currentSelectedNodes.map(n => n.id));
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
+                            console.log("Eliminando nodos seleccionados:", currentSelectedNodes.length, currentSelectedNodes.map((n: Node) => n.id)); 
                             if (currentSelectedNodes.length > 0) {
-                              const nodeIds = currentSelectedNodes.map(node => node.id);
-                              onNodesChange?.(nodeIds.map(id => ({ type: 'remove', id })));
+                              const nodeIds = currentSelectedNodes.map((node: Node) => node.id); 
+                              onNodesChange?.(nodeIds.map((id: string) => ({ type: 'remove', id }))); 
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2020,27 +1691,27 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#ff3333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#fff0f0')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           🗑 Delete Selected Nodes ({(() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             return currentSelectedNodes.length;
                           })()})
                         </button>
                         <button 
                           onClick={() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             if (currentSelectedNodes.length > 0) {
-                              const nodes = reactFlowInstance.getNodes();
-                              const selectedIds = new Set(currentSelectedNodes.map(node => node.id));
-                              const updatedNodes = nodes.map(node => {
+                              const allNodes = reactFlowInstance.getNodes(); 
+                              const selectedIds = new Set(currentSelectedNodes.map((node: Node) => node.id)); 
+                              const updatedNodes = allNodes.map((node: Node) => { 
                                 if (selectedIds.has(node.id)) {
                                   return { ...node, zIndex: (node.zIndex || 0) - 1 };
                                 }
                                 return node;
                               });
-                              reactFlowInstance.setNodes(updatedNodes);
+                              reactFlowInstance.setNodes(updatedNodes as Node[]); 
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2051,13 +1722,13 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           ⬇️ Move Selected to Back
                         </button>
                       </>
-                    ) : reactFlowInstance.getNode(contextMenu.nodeId)?.type === 'group' ? (
+                    ) : reactFlowInstance.getNode(contextMenu.nodeId!)?.type === 'group' ? ( 
                       <>
                         <button 
                           onClick={() => {
@@ -2074,16 +1745,16 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           ✏️ Edit Group Name
                         </button>
                         <button 
                           onClick={() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             if (currentSelectedNodes.length > 0) {
-                              moveNodesToBack(currentSelectedNodes.map(node => node.id));
+                              moveNodesToBack(currentSelectedNodes.map((node: Node) => node.id)); 
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2094,8 +1765,8 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           ⬇️ Move Selected to Back
                         </button>
@@ -2111,8 +1782,8 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           📂 Ungroup Nodes
                         </button>
@@ -2138,8 +1809,8 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           ▶️ Run Node
                         </button>
@@ -2147,9 +1818,8 @@ const FlowEditorContent = ({
                           onClick={() => {
                             const node = reactFlowInstance.getNode(contextMenu.nodeId || '');
                             if (node) {
-                              // Crear el objeto de preview para el nodo
                               const nodePreview: SingleNodePreview = {
-                                action: 'create',
+                                action: 'create', 
                                 resource: {
                                   name: node.data?.label || 'Unnamed Resource',
                                   type: node.type || 'unknown',
@@ -2186,7 +1856,7 @@ const FlowEditorContent = ({
                                 dependencies: node.data?.dependencies?.map((dep: Dependency) => ({
                                   name: dep.name,
                                   type: dep.type,
-                                  action: 'create',
+                                  action: 'create', 
                                   properties: {
                                     ...Object.entries(dep).reduce((acc: Record<string, any>, [key, value]) => {
                                       if (key !== 'name' && key !== 'type') {
@@ -2201,7 +1871,6 @@ const FlowEditorContent = ({
                                 })) || [],
                                 estimated_cost: node.data?.estimated_cost
                               };
-                              
                               setSingleNodePreview(nodePreview);
                               setShowSingleNodePreview(true);
                             }
@@ -2214,8 +1883,8 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           👁️ Preview
                         </button>
@@ -2234,7 +1903,7 @@ const FlowEditorContent = ({
                                 }
                               });
                               window.dispatchEvent(event);
-                              document.dispatchEvent(event);
+                              document.dispatchEvent(event); 
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2245,15 +1914,14 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           ⚙️ Configuración
                         </button>
                       </>
                     )}
                     
-                    {/* Botón para eliminar un nodo individual si no hay múltiples seleccionados */}
                     {!(selectedNodes.length > 1 && selectedNodes.some(n => n.id === contextMenu.nodeId)) && (
                       <button 
                         onClick={() => {
@@ -2269,8 +1937,8 @@ const FlowEditorContent = ({
                           background: 'white', fontSize: '13px',
                           color: '#ff3333', transition: 'background-color 0.2s'
                         }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#fff0f0')} 
+                        onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                       >
                         🗑 Delete Node
                       </button>
@@ -2280,13 +1948,13 @@ const FlowEditorContent = ({
                 {contextMenu.isPane && (
                   <>
                     {(() => {
-                      const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                      const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                       return currentSelectedNodes.length > 0;
                     })() ? (
                       <>
                         <button 
                           onClick={() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             if (currentSelectedNodes.length > 0) {
                               groupSelectedNodes();
                             }
@@ -2299,20 +1967,20 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           📦 Group Selected Nodes ({(() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             return currentSelectedNodes.length;
                           })()})
                         </button>
                         <button 
                           onClick={() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             if (currentSelectedNodes.length > 0) {
-                              const nodeIds = currentSelectedNodes.map(node => node.id);
-                              onNodesChange?.(nodeIds.map(id => ({ type: 'remove', id })));
+                              const nodeIds = currentSelectedNodes.map((node: Node) => node.id); 
+                              onNodesChange?.(nodeIds.map((id: string) => ({ type: 'remove', id }))); 
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2323,27 +1991,27 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#ff3333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#fff0f0')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#fff0f0')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           🗑 Delete Selected Nodes ({(() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             return currentSelectedNodes.length;
                           })()})
                         </button>
                         <button 
                           onClick={() => {
-                            const currentSelectedNodes = reactFlowInstance.getNodes().filter(node => node.selected);
+                            const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             if (currentSelectedNodes.length > 0) {
-                              const nodes = reactFlowInstance.getNodes();
-                              const selectedIds = new Set(currentSelectedNodes.map(node => node.id));
-                              const updatedNodes = nodes.map(node => {
+                              const allNodes = reactFlowInstance.getNodes(); 
+                              const selectedIds = new Set(currentSelectedNodes.map((node: Node) => node.id)); 
+                              const updatedNodes = allNodes.map((node: Node) => { 
                                 if (selectedIds.has(node.id)) {
                                   return { ...node, zIndex: (node.zIndex || 0) - 1 };
                                 }
                                 return node;
                               });
-                              reactFlowInstance.setNodes(updatedNodes);
+                              reactFlowInstance.setNodes(updatedNodes as Node[]); 
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2354,8 +2022,8 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           ⬇️ Move Selected to Back
                         </button>
@@ -2374,8 +2042,8 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           📦 Create Empty Group
                         </button>
@@ -2391,8 +2059,8 @@ const FlowEditorContent = ({
                             background: 'white', fontSize: '13px',
                             color: '#333', transition: 'background-color 0.2s'
                           }}
-                          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                          onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                          onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                         >
                           📚 Show Resources Panel
                         </button>
@@ -2401,7 +2069,6 @@ const FlowEditorContent = ({
                   </>
                 )}
                 
-                {/* Render custom items from nodes */}
                 {contextMenu.customItems && (
                   <>
                     {contextMenu.customItems.map((item, index) => (
@@ -2426,8 +2093,8 @@ const FlowEditorContent = ({
                           color: '#333', 
                           transition: 'background-color 0.2s'
                         }}
-                        onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                        onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'white')}
+                        onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#f5f5f5')} 
+                        onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'white')} 
                       >
                         {item.icon}
                         {item.label}
@@ -2500,12 +2167,11 @@ const FlowEditorContent = ({
               </button>
               <button 
                 onClick={() => handleToolClick('note')} 
-                onMouseDown={(e) => {
-                  // Permitir tanto click como drag
+                onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => { 
                   e.preventDefault();
                 }}
                 draggable
-                onDragStart={(e) => {
+                onDragStart={(e: React.DragEvent<HTMLButtonElement>) => { 
                   e.stopPropagation();
                   onDragStartSidebar(e, {type: 'note', name: 'New Note', description: 'Add a note', provider: 'generic'});
                 }}
@@ -2527,12 +2193,11 @@ const FlowEditorContent = ({
               </button>
               <button 
                 onClick={() => handleToolClick('text')} 
-                onMouseDown={(e) => {
-                  // Permitir tanto click como drag
+                onMouseDown={(e: React.MouseEvent<HTMLButtonElement>) => { 
                   e.preventDefault();
                 }}
                 draggable
-                onDragStart={(e) => {
+                onDragStart={(e: React.DragEvent<HTMLButtonElement>) => { 
                   e.stopPropagation();
                   onDragStartSidebar(e, {type: 'text', name: 'New Text', description: 'Add text', provider: 'generic'});
                 }}
@@ -2591,89 +2256,109 @@ const FlowEditorContent = ({
             </div>
           </Panel>
 
-          {/* Botón para mostrar el sidebar cuando está oculto */}
           {!sidebarOpen && (
             <Panel position="top-right">
-              <div 
+              <button // Changed div to button for better semantics and accessibility
                 style={{ 
-                  padding: '8px', 
-                  background: 'rgba(255,255,255,0.9)', 
+                  padding: '10px 14px', // Increased padding
+                  background: 'rgba(255,255,255,0.95)', // Slightly more opaque
                   borderRadius: '8px',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  gap: '8px', // Increased gap
+                  border: '1px solid rgba(0,0,0,0.05)', // Subtle border
+                  transition: 'background-color 0.2s, box-shadow 0.2s', // Added transition
                 }}
                 onClick={() => setSidebarOpen(true)}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(245,245,245,0.95)';
+                  e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.15)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.95)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                }}
                 title="Show Resources Panel"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
-                  <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
-                </svg>
-                <span style={{fontSize: '14px'}}>Resources</span>
-              </div>
+                <SquaresPlusIcon className="h-5 w-5 text-gray-700" /> {/* Changed icon */}
+                <span style={{fontSize: '14px', fontWeight: 500, color: '#333'}}>Resources</span> {/* Adjusted font weight and color */}
+              </button>
             </Panel>
           )}
 
           {sidebarOpen && (
             <Panel position="top-right" style={{ 
-              width: '280px', 
-              background: 'rgba(255,255,255,0.85)', 
+              width: '360px', 
+              background: 'rgba(255,255,255,0.9)', 
               padding: '0', 
-              borderRadius: '8px', 
-              maxHeight: '75vh',
-              height: 'auto',
-              overflow: 'visible',
-              boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
+              borderRadius: '12px 0 0 12px', 
+              height: '100%', 
+              overflow: 'hidden', 
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', 
               display: 'flex', 
               flexDirection: 'column',
               position: 'fixed',
-              top: '50%',
-              right: '20px',
+              top: '0px', 
+              right: '0px', 
+              bottom: '0px', 
               zIndex: 9999,
-              // Use CSS transform with transition instead of animation to avoid TypeScript parsing issues
-              transform: 'translateY(-50%)',
-              transition: 'transform 0.3s ease-out, opacity 0.3s ease-out',
-              backdropFilter: 'blur(8px)'
+              transform: 'none', 
+              transition: 'transform 0.3s ease-out, opacity 0.3s ease-out, width 0.3s ease-out',
+              backdropFilter: 'blur(10px)'
             }}>
               <div style={{
                 display: 'flex', 
                 justifyContent: 'space-between', 
                 alignItems: 'center', 
                 padding: '12px 16px', 
-                borderBottom: '1px solid rgba(238, 238, 238, 0.8)', 
+                borderBottom: '1px solid rgba(230, 230, 230, 0.9)', 
                 flexShrink: 0,
-                minHeight: '48px',
-                backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                position: 'relative',
-                zIndex: 10000,
-                backdropFilter: 'blur(8px)'
+                minHeight: '56px', 
+                backgroundColor: 'rgba(250, 250, 250, 0.95)', 
+                borderTopLeftRadius: '12px',
+                borderTopRightRadius: '12px',
               }}>
-                  <h4 style={{margin: 0, fontSize: '16px', fontWeight: 'bold'}}>Resources</h4>
+                  <h4 style={{margin: 0, fontSize: '16px', fontWeight: '600', color: '#333'}}>Resources</h4>
                   <button 
                     onClick={() => setSidebarOpen(false)} 
                     style={{
                       border: 'none', 
                       background: 'transparent', 
                       cursor: 'pointer',
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '4px',
+                      width: '28px', 
+                      height: '28px',
+                      borderRadius: '6px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      transition: 'background 0.2s'
+                      transition: 'background-color 0.2s',
+                      color: '#555'
                     }}
                     title="Hide Resources Panel"
-                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    onMouseOver={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = '#e9e9e9')} 
+                    onMouseOut={(e: React.MouseEvent<HTMLButtonElement>) => (e.currentTarget.style.backgroundColor = 'transparent')} 
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                      <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
-                    </svg>
+                    <XMarkIcon className="w-5 h-5" />
                   </button>
+              </div>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(230, 230, 230, 0.9)', backgroundColor: 'rgba(250, 250, 250, 0.95)' }}>
+                <input
+                  type="text"
+                  placeholder="Buscar recursos..."
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)} 
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #ddd',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.075)'
+                  }}
+                />
               </div>
               <div style={{
                 overflowY: 'auto', 
@@ -2681,15 +2366,23 @@ const FlowEditorContent = ({
                 flexGrow: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
                 paddingBottom: '16px',
-                maxHeight: 'calc(75vh - 48px)',
+                height: 'calc(100% - 56px - 57px)', 
                 scrollbarWidth: 'thin',
                 scrollbarColor: '#ccc #f1f1f1',
-                backdropFilter: 'blur(8px)'
               }}>
-                {resourceCategories.map(category => (
-                  <div key={category.name} style={{borderBottom: '1px solid #f5f5f5'}}>
+                {resourceCategories
+                  .map(category => ({
+                    ...category,
+                    items: category.items.filter(item =>
+                      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      item.description.toLowerCase().includes(searchTerm.toLowerCase())
+                    ),
+                  }))
+                  .filter(category => category.items.length > 0) 
+                  .map(category => (
+                  <div key={category.name} style={{borderBottom: '1px solid #f0f0f0'}}>
                     <h5 
                       onClick={() => setCollapsedCategories(prev => ({...prev, [category.name]: !prev[category.name]}))} 
                       style={{ 
@@ -2704,11 +2397,11 @@ const FlowEditorContent = ({
                         backgroundColor: collapsedCategories[category.name] ? '#ffffff' : '#f8f8f8',
                         transition: 'background-color 0.2s'
                       }}
-                      onMouseOver={(e) => {
+                      onMouseOver={(e: React.MouseEvent<HTMLHeadingElement>) => { 
                         if (!collapsedCategories[category.name]) return;
                         e.currentTarget.style.backgroundColor = '#f5f5f5';
                       }}
-                      onMouseOut={(e) => {
+                      onMouseOut={(e: React.MouseEvent<HTMLHeadingElement>) => { 
                         if (!collapsedCategories[category.name]) return;
                         e.currentTarget.style.backgroundColor = '#ffffff';
                       }}
@@ -2731,7 +2424,7 @@ const FlowEditorContent = ({
                           <li
                             key={category.name + '-' + item.type + '-' + item.name}
                             draggable
-                            onDragStart={(e) => onDragStartSidebar(e, item)}
+                            onDragStart={(e: React.DragEvent<HTMLLIElement>) => onDragStartSidebar(e, item)} 
                             style={{ 
                               padding: '6px 16px',
                               margin: '0', 
@@ -2743,13 +2436,16 @@ const FlowEditorContent = ({
                               color: '#444',
                               transition: 'background-color 0.15s'
                             }}
-                            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
-                            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                            onMouseOver={(e: React.MouseEvent<HTMLLIElement>) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }} 
+                            onMouseOut={(e: React.MouseEvent<HTMLLIElement>) => { e.currentTarget.style.backgroundColor = 'transparent' }} 
                           >
-                            <div style={{ minWidth: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              {item.icon ? item.icon : <span style={{ fontSize: '18px', color: '#999' }}>•</span>}
+                            <div style={{ minWidth: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '8px' }}>
+                              {item.icon ? React.cloneElement(item.icon, { className: 'w-5 h-5 text-gray-500' }) : <ServerIcon className="w-5 h-5 text-gray-400" />}
                             </div>
-                            <span style={{ flex: 1 }}>{item.name}</span>
+                            <div style={{ flex: 1 }}>
+                              <span style={{ fontWeight: '500' }}>{item.name}</span>
+                              <p style={{ fontSize: '11px', color: '#777', margin: '2px 0 0 0', lineHeight: '1.3' }}>{item.description}</p>
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -2762,7 +2458,6 @@ const FlowEditorContent = ({
         </ReactFlow>
       </div>
       
-      {/* Run Modal */}
       {runModalVisible && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl">
@@ -2784,7 +2479,6 @@ const FlowEditorContent = ({
         </div>
       )}
 
-      {/* Preview Modal */}
       {previewModalVisible && previewData && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-8 relative animate-fade-in">
@@ -2820,7 +2514,6 @@ const FlowEditorContent = ({
                 <div className="text-sm text-red-700 mt-1">Recursos a Eliminar</div>
               </div>
             </div>
-            {/* Recursos a Crear */}
             {previewData.resourcesToCreate.length > 0 && (
               <details open className="mb-6">
                 <summary className="cursor-pointer text-green-700 font-semibold text-lg mb-2 flex items-center gap-2">
@@ -2851,7 +2544,6 @@ const FlowEditorContent = ({
                 </div>
               </details>
             )}
-            {/* Recursos a Actualizar */}
             {previewData.resourcesToUpdate.length > 0 && (
               <details open className="mb-6">
                 <summary className="cursor-pointer text-yellow-700 font-semibold text-lg mb-2 flex items-center gap-2">
@@ -2882,7 +2574,6 @@ const FlowEditorContent = ({
                 </div>
               </details>
             )}
-            {/* Recursos a Eliminar */}
             {previewData.resourcesToDelete.length > 0 && (
               <details open className="mb-6">
                 <summary className="cursor-pointer text-red-700 font-semibold text-lg mb-2 flex items-center gap-2">
@@ -2925,11 +2616,9 @@ const FlowEditorContent = ({
           </div>
         </div>
       )}
-      {/* Modal de preview de un solo nodo */}
       {showSingleNodePreview && singleNodePreview && (
         <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl overflow-hidden border border-gray-100" style={{ maxHeight: '80vh' }}>
-            {/* Header */}
             <div className="bg-white p-6 border-b border-gray-100">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-3">
@@ -2966,10 +2655,8 @@ const FlowEditorContent = ({
               </div>
             </div>
 
-            {/* Content */}
             <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 180px)' }}>
               <div className="space-y-6">
-                {/* Changes */}
                 <div>
                   <h3 className="font-medium text-gray-900 mb-3">Cambios:</h3>
                   <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
@@ -3013,7 +2700,6 @@ const FlowEditorContent = ({
                   </div>
                 </div>
 
-                {/* Dependencies */}
                 {singleNodePreview.dependencies && singleNodePreview.dependencies.length > 0 && (
                   <div>
                     <h3 className="font-medium text-gray-900 mb-3">Dependencias:</h3>
@@ -3085,7 +2771,6 @@ const FlowEditorContent = ({
                   </div>
                 )}
 
-                {/* Estimated Cost */}
                 {singleNodePreview.estimated_cost && (
                   <div>
                     <h3 className="font-medium text-gray-900 mb-3">Costo estimado:</h3>
@@ -3102,7 +2787,6 @@ const FlowEditorContent = ({
               </div>
             </div>
 
-            {/* Footer with action buttons */}
             <div className="p-6 border-t border-gray-100 bg-gray-50">
               <div className="flex justify-end gap-3">
                 <button
@@ -3124,7 +2808,6 @@ const FlowEditorContent = ({
         </div>
       )}
 
-      {/* Drawer de logs */}
       <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '480px' }}>
         <ExecutionLog
           isVisible={showLogs}
@@ -3138,8 +2821,6 @@ const FlowEditorContent = ({
 };
 
 const FlowEditor = (props: FlowEditorProps): JSX.Element => {
-  // Pass nodes and edges from props to FlowEditorContent
-  // onNodesChange and onEdgesChange should update these props in the parent component (e.g., DiagramPage)
   return (
     <ReactFlowProvider>
       <div className="relative w-full h-full">
