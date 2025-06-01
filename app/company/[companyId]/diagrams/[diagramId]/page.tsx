@@ -62,15 +62,15 @@ interface ResourceCategory {
 
 const resourceCategories: ResourceCategory[] = [
   {
-    name: 'AWS - Cómputo',
-    provider: 'aws',
+    name: 'Azure - Redes',
+    provider: 'azure',
     items: [
-      { type: 'aws_ec2_instance', name: 'EC2 Instance', description: 'Servidor virtual en la nube', provider: 'aws' },
-      { type: 'aws_elbv2_load_balancer', name: 'Application Load Balancer', description: 'Balanceador de carga de aplicación (L7)', provider: 'aws' },
-      { type: 'aws_autoscaling_group', name: 'Auto Scaling Group', description: 'Grupo de escalado automático de instancias', provider: 'aws' },
-      { type: 'aws_elasticbeanstalk_environment', name: 'Elastic Beanstalk Environment', description: 'Entorno de aplicación PaaS', provider: 'aws' },
-      { type: 'aws_ecs_service', name: 'ECS Service', description: 'Servicio de Contenedores ECS', provider: 'aws' },
-      { type: 'aws_eks_cluster', name: 'EKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'aws' },
+      { type: 'azurerm_virtual_network', name: 'Virtual Network', description: 'Red virtual privada', provider: 'azure' },
+      { type: 'azurerm_subnet', name: 'Subnet', description: 'Subred dentro de una VNet', provider: 'azure' },
+      { type: 'azurerm_network_security_group', name: 'Network Security Group', description: 'Reglas de seguridad de red', provider: 'azure' },
+      { type: 'azurerm_lb', name: 'Load Balancer', description: 'Balanceador de carga L4', provider: 'azure' },
+      { type: 'azurerm_application_gateway', name: 'Application Gateway', description: 'Balanceador de carga L7', provider: 'azure' },
+      { type: 'azurerm_firewall', name: 'Firewall', description: 'Firewall de red gestionado', provider: 'azure' },
     ]
   },
   {
@@ -153,31 +153,31 @@ const resourceCategories: ResourceCategory[] = [
       { type: 'azurerm_kubernetes_cluster', name: 'AKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'azure' },
       { type: 'azurerm_linux_web_app', name: 'App Service (Linux)', description: 'Aplicación web PaaS en Linux', provider: 'azure' },
       { type: 'azurerm_container_group', name: 'Container Instances', description: 'Grupo de Contenedores', provider: 'azure' },
-      { type: 'vm', name: 'Functions', description: 'Funciones serverless', provider: 'azure' },
+      { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless en Linux', provider: 'azure' },
     ]
   },
   {
     name: 'Azure - Almacenamiento',
     provider: 'azure',
     items: [
-      { type: 'blob', name: 'Blob Storage', description: 'Almacenamiento de objetos', provider: 'azure' },
-      { type: 'cosmos', name: 'Cosmos DB', description: 'Base de datos NoSQL', provider: 'azure' },
-      { type: 'cosmos', name: 'SQL Database', description: 'Base de datos relacional', provider: 'azure' },
-      { type: 'cosmos', name: 'Redis Cache', description: 'Caché en memoria', provider: 'azure' },
-      { type: 'cosmos', name: 'Synapse Analytics', description: 'Almacén de datos', provider: 'azure' },
-      { type: 'blob', name: 'File Storage', description: 'Sistema de archivos', provider: 'azure' },
+      { type: 'azurerm_storage_container', name: 'Storage Container (Blob)', description: 'Contenedor de Blob Storage', provider: 'azure' },
+      { type: 'azurerm_cosmosdb_account', name: 'Cosmos DB Account', description: 'Cuenta de Azure Cosmos DB (NoSQL)', provider: 'azure' },
+      { type: 'azurerm_mssql_database', name: 'SQL Database', description: 'Base de datos SQL de Azure', provider: 'azure' },
+      { type: 'azurerm_redis_cache', name: 'Cache for Redis', description: 'Caché en memoria Redis', provider: 'azure' },
+      { type: 'azurerm_synapse_workspace', name: 'Synapse Workspace', description: 'Espacio de trabajo de Azure Synapse Analytics', provider: 'azure' },
+      { type: 'azurerm_storage_share', name: 'File Share', description: 'Recurso compartido de Azure Files', provider: 'azure' },
     ]
   },
   {
     name: 'Azure - Aplicación',
     provider: 'azure',
     items: [
-      { type: 'function', name: 'Azure Functions', description: 'Función serverless', provider: 'azure' },
-      { type: 'function', name: 'API Management', description: 'API Gateway', provider: 'azure' },
-      { type: 'function', name: 'Service Bus', description: 'Mensajería', provider: 'azure' },
-      { type: 'function', name: 'Event Grid', description: 'Orquestación de eventos', provider: 'azure' },
-      { type: 'function', name: 'Logic Apps', description: 'Flujos de trabajo', provider: 'azure' },
-      { type: 'function', name: 'Event Hubs', description: 'Streaming de eventos', provider: 'azure' },
+      { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless en Linux', provider: 'azure' }, // Ya implementado, solo ajusto el type aquí para consistencia
+      { type: 'azurerm_api_management', name: 'API Management Service', description: 'Servicio de gestión de APIs', provider: 'azure' },
+      { type: 'azurerm_servicebus_namespace', name: 'Service Bus Namespace', description: 'Namespace para mensajería de Service Bus', provider: 'azure' },
+      { type: 'azurerm_eventgrid_topic', name: 'Event Grid Topic', description: 'Tema de Azure Event Grid', provider: 'azure' },
+      { type: 'azurerm_logic_app_workflow', name: 'Logic App Workflow', description: 'Flujo de trabajo de Logic Apps (Consumo)', provider: 'azure' },
+      { type: 'azurerm_eventhub_namespace', name: 'Event Hubs Namespace', description: 'Namespace para streaming de eventos', provider: 'azure' },
     ]
   },
   {

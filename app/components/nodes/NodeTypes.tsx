@@ -15,8 +15,8 @@ import {
   BoltIcon,
   FolderIcon as FilestoreIcon, // Usando FolderIcon para Filestore
   FolderIcon, // Importando FolderIcon directamente para EFS
-  ArrowsRightLeftIcon as LoadBalancerIcon, // Reutilizando para AWS ALB
-  GlobeAltIcon as ApiGatewayIcon, // Usando GlobeAltIcon para API Gateway
+  ArrowsRightLeftIcon as LoadBalancerIcon, // Reutilizando para AWS ALB y Azure LB
+  GlobeAltIcon as ApiGatewayIcon, // Usando GlobeAltIcon para API Gateway y Azure App Gateway
   RectangleStackIcon as SqsQueueIcon, // Usando RectangleStackIcon para SQS
   ChatBubbleOvalLeftEllipsisIcon as SnsTopicIcon, // Usando para SNS
   CalendarDaysIcon as EventBridgeRuleIcon, // Usando para EventBridge
@@ -28,7 +28,23 @@ import {
   ServerStackIcon as AzureLinuxVmssIcon, // Usando para Azure Linux VMSS
   CpuChipIcon as AzureAKSClusterIcon, // Usando para Azure AKS Cluster
   GlobeAltIcon as AzureLinuxWebAppIcon, // Usando para Azure App Service (Linux)
-  CubeIcon as AzureContainerGroupIcon // Usando para Azure Container Group
+  CubeIcon as AzureContainerGroupIcon, // Usando para Azure Container Group
+  BoltIcon as AzureLinuxFunctionAppIcon, // Usando para Azure Linux Function App
+  ArchiveBoxIcon as AzureStorageContainerIcon, // Usando para Azure Storage Container
+  CircleStackIcon as AzureCosmosDbAccountIcon, // Usando para Azure Cosmos DB Account
+  CircleStackIcon as AzureMsSqlDatabaseIcon, // Reutilizando para Azure SQL Database
+  BoltIcon as AzureRedisCacheIcon, // Reutilizando BoltIcon para Azure Cache for Redis
+  ChartBarIcon as AzureSynapseWorkspaceIcon, // Usando ChartBarIcon para Synapse
+  FolderIcon as AzureStorageShareIcon, // Reutilizando FolderIcon para Azure File Share
+  GlobeAltIcon as AzureApiManagementServiceIcon, // Reutilizando GlobeAltIcon para API Management
+  ChatBubbleOvalLeftEllipsisIcon as AzureServiceBusNamespaceIcon, // Reutilizando para Service Bus
+  RssIcon as AzureEventGridTopicIcon, // Reutilizando RssIcon para Event Grid Topic
+  RectangleGroupIcon as AzureLogicAppWorkflowIcon, // Reutilizando para Logic Apps
+  BoltIcon as AzureEventHubNamespaceIcon, // Reutilizando BoltIcon para Event Hubs
+  GlobeAltIcon as AzureVirtualNetworkIcon, // Reutilizando para VNet
+  ShieldCheckIcon as AzureNetworkSecurityGroupIcon, // Reutilizando para NSG
+  GlobeAltIcon as AzureApplicationGatewayIcon, // Reutilizando para App Gateway
+  ShieldCheckIcon as AzureFirewallIcon // Reutilizando para Firewall
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';
@@ -51,7 +67,7 @@ export function S3BucketNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CloudIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'S3 Bucket', resourceType: 'aws_s3_bucket' }} // Ajustar si se crea aws_s3_bucket
+      data={{ ...props.data, provider: 'aws', icon: <CloudIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'S3 Bucket', resourceType: 'aws_s3_bucket' }}
     />
   );
 }
@@ -61,7 +77,7 @@ export function LambdaFunctionNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CodeBracketIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'Lambda Function', resourceType: 'aws_lambda_function' }} // Ajustar si se crea aws_lambda_function
+      data={{ ...props.data, provider: 'aws', icon: <CodeBracketIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'Lambda Function', resourceType: 'aws_lambda_function' }}
     />
   );
 }
@@ -71,7 +87,7 @@ export function RDSInstanceNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CircleStackIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'RDS Instance', resourceType: 'aws_rds_instance' }} // Ajustar si se crea aws_rds_instance
+      data={{ ...props.data, provider: 'aws', icon: <CircleStackIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'RDS Instance', resourceType: 'aws_rds_instance' }}
     />
   );
 }
@@ -520,10 +536,180 @@ export function AzureContainerGroupNode(props: NodeProps) {
 }
 AzureContainerGroupNode.displayName = 'AzureContainerGroupNode';
 
+export function AzureLinuxFunctionAppNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureLinuxFunctionAppIcon className="w-6 h-6 text-yellow-500" />, label: props.data.label || 'Linux Function App', resourceType: 'azurerm_linux_function_app' }}
+    />
+  );
+}
+AzureLinuxFunctionAppNode.displayName = 'AzureLinuxFunctionAppNode';
+
+export function AzureStorageContainerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureStorageContainerIcon className="w-6 h-6 text-blue-500" />, label: props.data.label || 'Storage Container', resourceType: 'azurerm_storage_container' }}
+    />
+  );
+}
+AzureStorageContainerNode.displayName = 'AzureStorageContainerNode';
+
+export function AzureCosmosDbAccountNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureCosmosDbAccountIcon className="w-6 h-6 text-emerald-500" />, label: props.data.label || 'Cosmos DB Account', resourceType: 'azurerm_cosmosdb_account' }}
+    />
+  );
+}
+AzureCosmosDbAccountNode.displayName = 'AzureCosmosDbAccountNode';
+
+export function AzureMsSqlDatabaseNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureMsSqlDatabaseIcon className="w-6 h-6 text-sky-500" />, label: props.data.label || 'SQL Database', resourceType: 'azurerm_mssql_database' }}
+    />
+  );
+}
+AzureMsSqlDatabaseNode.displayName = 'AzureMsSqlDatabaseNode';
+
+export function AzureRedisCacheNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureRedisCacheIcon className="w-6 h-6 text-red-500" />, label: props.data.label || 'Redis Cache', resourceType: 'azurerm_redis_cache' }}
+    />
+  );
+}
+AzureRedisCacheNode.displayName = 'AzureRedisCacheNode';
+
+export function AzureSynapseWorkspaceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureSynapseWorkspaceIcon className="w-6 h-6 text-purple-600" />, label: props.data.label || 'Synapse Workspace', resourceType: 'azurerm_synapse_workspace' }}
+    />
+  );
+}
+AzureSynapseWorkspaceNode.displayName = 'AzureSynapseWorkspaceNode';
+
+export function AzureStorageShareNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureStorageShareIcon className="w-6 h-6 text-blue-500" />, label: props.data.label || 'File Share', resourceType: 'azurerm_storage_share' }}
+    />
+  );
+}
+AzureStorageShareNode.displayName = 'AzureStorageShareNode';
+
+export function AzureApiManagementServiceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureApiManagementServiceIcon className="w-6 h-6 text-teal-600" />, label: props.data.label || 'API Management', resourceType: 'azurerm_api_management' }}
+    />
+  );
+}
+AzureApiManagementServiceNode.displayName = 'AzureApiManagementServiceNode';
+
+export function AzureServiceBusNamespaceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureServiceBusNamespaceIcon className="w-6 h-6 text-purple-700" />, label: props.data.label || 'Service Bus Namespace', resourceType: 'azurerm_servicebus_namespace' }}
+    />
+  );
+}
+AzureServiceBusNamespaceNode.displayName = 'AzureServiceBusNamespaceNode';
+
+export function AzureEventGridTopicNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureEventGridTopicIcon className="w-6 h-6 text-orange-500" />, label: props.data.label || 'Event Grid Topic', resourceType: 'azurerm_eventgrid_topic' }}
+    />
+  );
+}
+AzureEventGridTopicNode.displayName = 'AzureEventGridTopicNode';
+
+export function AzureLogicAppWorkflowNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureLogicAppWorkflowIcon className="w-6 h-6 text-cyan-600" />, label: props.data.label || 'Logic App Workflow', resourceType: 'azurerm_logic_app_workflow' }}
+    />
+  );
+}
+AzureLogicAppWorkflowNode.displayName = 'AzureLogicAppWorkflowNode';
+
+export function AzureEventHubNamespaceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureEventHubNamespaceIcon className="w-6 h-6 text-emerald-600" />, label: props.data.label || 'Event Hubs Namespace', resourceType: 'azurerm_eventhub_namespace' }}
+    />
+  );
+}
+AzureEventHubNamespaceNode.displayName = 'AzureEventHubNamespaceNode';
+
+export function AzureVirtualNetworkNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureVirtualNetworkIcon className="w-6 h-6 text-indigo-600" />, label: props.data.label || 'Virtual Network', resourceType: 'azurerm_virtual_network' }}
+    />
+  );
+}
+AzureVirtualNetworkNode.displayName = 'AzureVirtualNetworkNode';
+
+export function AzureSubnetNode(props: NodeProps) { 
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <RectangleStackIcon className="w-6 h-6 text-sky-600" />, label: props.data.label || 'Subnet', resourceType: 'azurerm_subnet' }}
+    />
+  );
+}
+AzureSubnetNode.displayName = 'AzureSubnetNode';
+
+export function AzureNetworkSecurityGroupNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureNetworkSecurityGroupIcon className="w-6 h-6 text-teal-600" />, label: props.data.label || 'NSG', resourceType: 'azurerm_network_security_group' }}
+    />
+  );
+}
+AzureNetworkSecurityGroupNode.displayName = 'AzureNetworkSecurityGroupNode';
+
+export function AzureLoadBalancerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <LoadBalancerIcon className="w-6 h-6 text-orange-500" />, label: props.data.label || 'Load Balancer', resourceType: 'azurerm_lb' }}
+    />
+  );
+}
+AzureLoadBalancerNode.displayName = 'AzureLoadBalancerNode';
+
+export function AzureApplicationGatewayNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <ApiGatewayIcon className="w-6 h-6 text-emerald-500" />, label: props.data.label || 'App Gateway', resourceType: 'azurerm_application_gateway' }}
+    />
+  );
+}
+AzureApplicationGatewayNode.displayName = 'AzureApplicationGatewayNode';
+
 // --- Node Types Object ---
 const nodeTypes = {
   // AWS nodes
-  aws_ec2_instance: EC2Node,             // Corregido
+  aws_ec2_instance: EC2Node,
   aws_lambda_function: LambdaFunctionNode, 
   aws_s3_bucket: S3BucketNode,           
   aws_rds_instance: RDSInstanceNode,
@@ -540,13 +726,13 @@ const nodeTypes = {
   aws_sqs_queue: SqsQueueNode,
   aws_sns_topic: SnsTopicNode,
   aws_cloudwatch_event_rule: EventBridgeRuleNode,
-  aws_sfn_state_machine: SfnStateMachineNode, // Añadido Step Functions State Machine
+  aws_sfn_state_machine: SfnStateMachineNode,
   
   // GCP nodes
   gcp_compute_instance: ComputeEngineNode,
   gcp_cloud_tasks_queue: GcpCloudTasksQueueNode,
   gcp_workflows_workflow: GcpWorkflowsWorkflowNode,
-  gcp_eventarc_trigger: GcpEventarcTriggerNode, // Añadido GCP Eventarc Trigger
+  gcp_eventarc_trigger: GcpEventarcTriggerNode,
   gcp_compute_instance_group_manager: InstanceGroupManagerNode,
   gcp_appengine_app: AppEngineNode,
   gcp_gke_cluster: GKENode,
@@ -557,7 +743,7 @@ const nodeTypes = {
   gcp_bigquery_dataset: BigQueryDatasetNode,
   gcp_firestore_database: FirestoreDatabaseNode,
   gcp_memorystore_instance: MemorystoreInstanceNode,
-  gcp_filestore_instance: FilestoreInstanceNode, // Añadido Filestore Instance
+  gcp_filestore_instance: FilestoreInstanceNode,
   
   gcp_compute_disk: ComputeDiskNode,
   gcp_compute_network: ComputeNetworkNode,
@@ -568,7 +754,7 @@ const nodeTypes = {
   gcp_api_gateway: BaseResourceNode, 
   gcp_pubsub_topic: BaseResourceNode,
   
-  // Fallbacks genéricos (pueden eliminarse si todos los nodos usan tipos específicos)
+  // Fallbacks genéricos
   compute: ComputeEngineNode, 
   storage: CloudStorageNode,  
   sql: CloudSQLNode,          
@@ -582,10 +768,27 @@ const nodeTypes = {
   azurerm_linux_virtual_machine_scale_set: AzureLinuxVmssNode,
   azurerm_kubernetes_cluster: AzureAKSClusterNode,
   azurerm_linux_web_app: AzureLinuxWebAppNode,
-  azurerm_container_group: AzureContainerGroupNode, // Añadido Azure Container Group
-  vm: AzureVMNode, // Mantener por si otros nodos Azure usan 'vm' genéricamente por ahora
-  blob: AzureBlobNode,
-  cosmos: AzureCosmosNode,
+  azurerm_container_group: AzureContainerGroupNode,
+  azurerm_linux_function_app: AzureLinuxFunctionAppNode,
+  azurerm_storage_container: AzureStorageContainerNode,
+  azurerm_cosmosdb_account: AzureCosmosDbAccountNode,
+  azurerm_mssql_database: AzureMsSqlDatabaseNode,
+  azurerm_redis_cache: AzureRedisCacheNode,
+  azurerm_synapse_workspace: AzureSynapseWorkspaceNode,
+  azurerm_storage_share: AzureStorageShareNode,
+  azurerm_api_management: AzureApiManagementServiceNode,
+  azurerm_servicebus_namespace: AzureServiceBusNamespaceNode,
+  azurerm_eventgrid_topic: AzureEventGridTopicNode,
+  azurerm_logic_app_workflow: AzureLogicAppWorkflowNode,
+  azurerm_eventhub_namespace: AzureEventHubNamespaceNode,
+  azurerm_virtual_network: AzureVirtualNetworkNode,
+  azurerm_subnet: AzureSubnetNode,
+  azurerm_network_security_group: AzureNetworkSecurityGroupNode,
+  azurerm_lb: AzureLoadBalancerNode,
+  azurerm_application_gateway: AzureApplicationGatewayNode, // Añadido Azure App Gateway
+  vm: AzureVMNode,
+  blob: AzureBlobNode, 
+  cosmos: AzureCosmosNode, 
   function: AzureFunctionNode, 
   
   // Group node
@@ -600,3 +803,280 @@ const nodeTypes = {
 };
 
 export default nodeTypes;
+<environment_details>
+# VSCode Visible Files
+../../../../../request_b011b0d3-bbbb-4ca7-9b1f-57f5dda7ca72/0
+../../../../../request_b011b0d3-bbbb-4ca7-9b1f-57f5dda7ca72/0
+../../../../../response_70fdaeda-46b9-4955-8f94-87ff3ee35cb0/10
+../../../../../response_0c68ea48-2682-47d1-89c8-c6c5d94ed8b9/tools-13
+../../../../../response_e6341bf3-e3f2-4eb3-b247-d0b2ec8da17c/tools-3
+aether/app/components/ui/CredentialsPage.tsx
+aether/app/components/ui/CredentialsPage.tsx
+aether/app/api/auth/github/callback/route.ts
+aether/app/api/auth/github/callback/route.ts
+../../../../../response_72062af1-e2b8-49ff-a882-c150dbb868a6/tools-1
+../../../../../response_0c68ea48-2682-47d1-89c8-c6c5d94ed8b9/tools-13
+../../../../../response_e6341bf3-e3f2-4eb3-b247-d0b2ec8da17c/tools-2
+../../../../../response_72062af1-e2b8-49ff-a882-c150dbb868a6/tools-1
+../../../../../response_0c68ea48-2682-47d1-89c8-c6c5d94ed8b9/tools-14
+../../../../../response_e6341bf3-e3f2-4eb3-b247-d0b2ec8da17c/tools-2
+../../../../../response_e6341bf3-e3f2-4eb3-b247-d0b2ec8da17c/tools-3
+../../../../../response_e6341bf3-e3f2-4eb3-b247-d0b2ec8da17c/tools-4
+../../../../../response_0c68ea48-2682-47d1-89c8-c6c5d94ed8b9/tools-15
+../../../../../response_e6341bf3-e3f2-4eb3-b247-d0b2ec8da17c/tools-11
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-10
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-9
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-6
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-5
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-5
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-6
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-9
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-10
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-12
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-13
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-14
+../../../../../response_395817b7-be9c-4835-adc4-5d4e6c9eecae/tools-15
+../../../../../response_5e8ed63e-9005-4c41-9cb7-413e40dd5cff/tools-24
+../../../../../response_5e8ed63e-9005-4c41-9cb7-413e40dd5cff/tools-23
+../../../../../response_5e8ed63e-9005-4c41-9cb7-413e40dd5cff/tools-22
+../../../../../response_5e8ed63e-9005-4c41-9cb7-413e40dd5cff/tools-0
+../../../../../response_e6341bf3-e3f2-4eb3-b247-d0b2ec8da17c/tools-5
+../../../../../response_e6341bf3-e3f2-4eb3-b247-d0b2ec8da17c/tools-4
+infraux/app/components/nodes/NodeTypes.tsx
+
+# VSCode Open Tabs
+infraux/test_gcp_system.ts
+infraux/app/config/resourceSchemas.ts
+infraux/app/config/schemas/gcp/compute/instance/instance.ts
+infraux/app/config/schemas/gcp/compute/disk/diskTemplates.ts
+infraux/app/config/schemas/gcp/compute/disk/disk.ts
+infraux/app/config/schemas/gcp/compute/firewall/firewallTemplates.ts
+infraux/app/config/schemas/gcp/compute/firewall/firewall.ts
+infraux/app/config/schemas/gcp/compute/instance-template/instanceTemplateTemplates.ts
+infraux/app/config/schemas/gcp/compute/instance-template/instanceTemplate.ts
+infraux/app/config/schemas/gcp/compute/load-balancer/loadBalancerTemplates.ts
+infraux/app/config/schemas/gcp/compute/load-balancer/loadBalancer.ts
+infraux/app/config/schemas/gcp/compute/network/networkTemplates.ts
+infraux/app/config/schemas/gcp/compute/network/network.ts
+infraux/app/config/schemas/gcp/compute/instance-group/instanceGroupTemplates.ts
+infraux/app/config/schemas/gcp/compute/instance-group/instanceGroup.ts
+infraux/app/config/schemas/gcp/storage/bucketFields.ts
+infraux/app/config/schemas/gcp/storage/bucketTemplates.ts
+infraux/app/config/schemas/gcp/compute/index.ts
+infraux/app/components/ui/ResourceConfigForm.tsx
+infraux/app/config/schemas/gcp/cloudrun/serviceFields.ts
+infraux/app/config/schemas/gcp/cloudrun/serviceTemplates.ts
+infraux/app/config/schemas/gcp/cloudrun/service.ts
+infraux/app/config/schemas/gcp/cloudrun/index.ts
+infraux/app/config/schemas/gcp/functions/functionFields.ts
+infraux/app/config/schemas/gcp/functions/functionTemplates.ts
+infraux/app/config/schemas/gcp/functions/function.ts
+infraux/app/config/schemas/gcp/functions/index.ts
+infraux/app/config/schemas/gcp/storage/bucket.ts
+infraux/app/config/schemas/gcp/database/instanceFields.ts
+infraux/app/config/schemas/gcp/database/instanceTemplates.ts
+infraux/app/config/schemas/gcp/database/instance.ts
+infraux/app/config/schemas/gcp/database/datasetFields.ts
+infraux/app/config/schemas/gcp/database/datasetTemplates.ts
+infraux/app/config/schemas/gcp/database/dataset.ts
+infraux/app/config/schemas/gcp/database/firestoreDatabaseFields.ts
+infraux/app/config/schemas/gcp/database/firestoreDatabaseTemplates.ts
+infraux/app/config/schemas/gcp/database/firestoreDatabase.ts
+infraux/app/config/schemas/gcp/database/index.ts
+infraux/app/config/schemas/gcp/appengine/appFields.ts
+infraux/app/config/schemas/gcp/compute/instance/instanceTemplates.ts
+infraux/app/config/schemas/aws/elasticache/clusterFields.ts
+infraux/app/config/schemas/aws/elasticache/clusterTemplates.ts
+infraux/app/config/schemas/aws/elasticache/cluster.ts
+infraux/app/config/schemas/aws/elasticache/index.ts
+infraux/app/config/schemas/aws/redshift/clusterFields.ts
+infraux/app/config/schemas/aws/redshift/clusterTemplates.ts
+infraux/app/config/schemas/aws/redshift/cluster.ts
+infraux/app/config/schemas/aws/redshift/index.ts
+infraux/app/config/schemas/aws/efs/fileSystemFields.ts
+infraux/app/config/schemas/aws/efs/fileSystemTemplates.ts
+infraux/app/config/schemas/aws/efs/fileSystem.ts
+infraux/app/config/schemas/aws/efs/index.ts
+infraux/app/config/schemas/aws/apigateway/restApiFields.ts
+infraux/app/config/schemas/aws/apigateway/restApiTemplates.ts
+infraux/app/config/schemas/aws/apigateway/index.ts
+infraux/app/config/schemas/aws/sqs/queueFields.ts
+infraux/app/config/schemas/aws/sqs/queueTemplates.ts
+infraux/app/config/schemas/aws/sqs/index.ts
+infraux/app/config/schemas/aws/sns/topicFields.ts
+infraux/app/config/schemas/aws/sns/topicTemplates.ts
+infraux/app/config/schemas/aws/sns/index.ts
+infraux/app/config/schemas/gcp/cache/instanceTemplates.ts
+infraux/app/config/schemas/gcp/cache/index.ts
+infraux/app/config/schemas/gcp/cache/instanceFields.ts
+infraux/app/config/schemas/gcp/cache/instance.ts
+infraux/app/config/schemas/gcp/storage/filestoreInstanceFields.ts
+infraux/app/config/schemas/gcp/storage/filestoreInstanceTemplates.ts
+infraux/app/config/schemas/gcp/storage/filestoreInstance.ts
+infraux/app/config/schemas/gcp/storage/index.ts
+infraux/app/config/schemas/aws/ec2/instanceFields.ts
+infraux/app/config/schemas/aws/ec2/instance.ts
+infraux/app/config/schemas/aws/ec2/index.ts
+infraux/app/config/schemas/aws/s3/bucketFields.ts
+infraux/app/config/schemas/aws/s3/bucketTemplates.ts
+infraux/app/config/schemas/aws/s3/bucket.ts
+infraux/app/config/schemas/aws/s3/index.ts
+infraux/app/config/schemas/aws/ec2/instanceTemplates.ts
+infraux/app/config/schemas/aws/dynamodb/table.ts
+infraux/app/config/schemas/aws/lambda/functionFields.ts
+infraux/app/config/schemas/aws/lambda/functionTemplates.ts
+infraux/app/config/schemas/aws/lambda/function.ts
+infraux/app/config/schemas/aws/lambda/index.ts
+infraux/app/config/schemas/aws/rds/instanceFields.ts
+infraux/app/config/schemas/aws/rds/instanceTemplates.ts
+infraux/app/config/schemas/aws/rds/instance.ts
+infraux/app/config/schemas/aws/rds/index.ts
+infraux/app/config/schemas/aws/elbv2/loadBalancerFields.ts
+infraux/app/config/schemas/aws/elbv2/loadBalancer.ts
+infraux/app/config/schemas/aws/elbv2/index.ts
+infraux/app/config/schemas/aws/elbv2/loadBalancerTemplates.ts
+infraux/app/config/schemas/aws/autoscaling/groupFields.ts
+infraux/app/config/schemas/aws/autoscaling/group.ts
+infraux/app/config/schemas/aws/autoscaling/index.ts
+infraux/app/config/schemas/aws/dynamodb/index.ts
+infraux/app/config/schemas/aws/ecs/serviceTemplates.ts
+infraux/app/config/schemas/aws/ecs/service.ts
+infraux/app/config/schemas/aws/ecs/index.ts
+infraux/app/config/schemas/aws/eks/clusterFields.ts
+infraux/app/config/schemas/aws/eks/clusterTemplates.ts
+infraux/app/config/schemas/aws/dynamodb/tableTemplates.ts
+infraux/app/config/schemas/aws/eks/cluster.ts
+infraux/app/config/schemas/aws/eks/index.ts
+infraux/app/config/schemas/aws/dynamodb/tableFields.ts
+infraux/app/config/schemas/aws/elasticbeanstalk/environmentFields.ts
+infraux/app/config/schemas/aws/elasticbeanstalk/environmentTemplates.ts
+infraux/app/config/schemas/aws/elasticbeanstalk/environment.ts
+infraux/app/config/schemas/aws/elasticbeanstalk/index.ts
+infraux/app/config/schemas/gcp/appengine/app.ts
+infraux/app/config/schemas/gcp/appengine/appTemplates.ts
+infraux/app/config/schemas/gcp/appengine/index.ts
+infraux/app/config/schemas/gcp/gke/clusterFields.ts
+infraux/app/config/schemas/gcp/gke/clusterTemplates.ts
+infraux/app/config/schemas/gcp/gke/cluster.ts
+infraux/app/config/schemas/aws/eventbridge/ruleFields.ts
+infraux/app/config/schemas/aws/eventbridge/ruleTemplates.ts
+infraux/app/config/schemas/aws/eventbridge/index.ts
+infraux/app/config/schemas/aws/sfn/stateMachineFields.ts
+infraux/app/config/schemas/aws/sfn/stateMachineTemplates.ts
+infraux/app/config/schemas/aws/sfn/index.ts
+infraux/app/config/schemas/aws/index.ts
+infraux/app/config/schemas/gcp/cloudtasks/queueFields.ts
+infraux/app/config/schemas/gcp/cloudtasks/queueTemplates.ts
+infraux/app/config/schemas/gcp/cloudtasks/queue.ts
+infraux/app/config/schemas/gcp/cloudtasks/index.ts
+infraux/app/config/schemas/gcp/workflows/workflowFields.ts
+infraux/app/config/schemas/gcp/workflows/workflowTemplates.ts
+infraux/app/config/schemas/gcp/workflows/workflow.ts
+infraux/app/config/schemas/gcp/workflows/index.ts
+infraux/app/config/schemas/gcp/eventarc/triggerFields.ts
+infraux/app/config/schemas/gcp/eventarc/triggerTemplates.ts
+infraux/app/config/schemas/gcp/eventarc/trigger.ts
+infraux/app/config/schemas/gcp/eventarc/index.ts
+infraux/app/config/schemas/gcp/index.ts
+infraux/app/config/schemas/aws/sns/topic.ts
+infraux/app/config/schemas/aws/sqs/queue.ts
+infraux/app/config/schemas/aws/eventbridge/rule.ts
+infraux/app/config/schemas/aws/sfn/stateMachine.ts
+infraux/app/config/schemas/aws/apigateway/restApi.ts
+infraux/app/config/schemas/azure/compute/virtualmachine/virtualMachineFields.ts
+infraux/app/config/schemas/azure/compute/virtualmachine/virtualMachineTemplates.ts
+infraux/app/config/schemas/azure/compute/virtualmachine/virtualMachine.ts
+infraux/app/config/schemas/azure/compute/linuxvirtualmachinescaleset/linuxVirtualMachineScaleSetFields.ts
+infraux/app/config/schemas/azure/compute/linuxvirtualmachinescaleset/linuxVirtualMachineScaleSetTemplates.ts
+infraux/app/config/schemas/azure/compute/linuxvirtualmachinescaleset/linuxVirtualMachineScaleSet.ts
+infraux/app/config/schemas/index.ts
+infraux/app/config/schemas/azure/compute/kubernetescluster/kubernetesClusterFields.ts
+infraux/app/config/schemas/azure/compute/kubernetescluster/kubernetesClusterTemplates.ts
+infraux/app/config/schemas/azure/compute/kubernetescluster/kubernetesCluster.ts
+infraux/app/config/schemas/azure/compute/linuxwebapp/linuxWebAppFields.ts
+infraux/app/config/schemas/azure/compute/linuxwebapp/linuxWebAppTemplates.ts
+infraux/app/config/schemas/azure/database/cosmosdbaccount/cosmosDbAccountFields.ts
+infraux/app/config/schemas/azure/compute/linuxwebapp/linuxWebApp.ts
+infraux/app/config/schemas/azure/compute/containergroup/containerGroupFields.ts
+infraux/app/types/resourceConfig.ts
+infraux/app/config/schemas/azure/compute/containergroup/containerGroupTemplates.ts
+infraux/app/config/schemas/azure/database/cosmosdbaccount/cosmosDbAccountTemplates.ts
+infraux/app/config/schemas/azure/database/cosmosdbaccount/cosmosDbAccount.ts
+infraux/app/config/schemas/azure/database/mssqldatabase/mssqlDatabaseFields.ts
+infraux/app/config/schemas/azure/database/mssqldatabase/mssqlDatabaseTemplates.ts
+infraux/app/config/schemas/azure/database/mssqldatabase/mssqlDatabase.ts
+infraux/app/config/schemas/azure/database/index.ts
+infraux/app/config/schemas/azure/cache/rediscache/redisCacheFields.ts
+infraux/app/config/schemas/azure/cache/rediscache/redisCacheTemplates.ts
+infraux/app/config/schemas/azure/cache/rediscache/redisCache.ts
+infraux/app/config/schemas/azure/cache/index.ts
+infraux/app/config/schemas/azure/analytics/synapseworkspace/synapseWorkspaceFields.ts
+infraux/app/config/schemas/azure/analytics/synapseworkspace/synapseWorkspaceTemplates.ts
+infraux/app/config/schemas/azure/analytics/synapseworkspace/synapseWorkspace.ts
+infraux/app/config/schemas/azure/analytics/index.ts
+infraux/app/config/schemas/azure/storage/storageshare/storageShareFields.ts
+infraux/app/config/schemas/azure/storage/storageshare/storageShareTemplates.ts
+infraux/app/config/schemas/azure/storage/storageshare/storageShare.ts
+infraux/app/config/schemas/azure/storage/index.ts
+infraux/app/config/schemas/azure/apimanagement/service/apiManagementServiceFields.ts
+infraux/app/config/schemas/azure/apimanagement/service/apiManagementServiceTemplates.ts
+infraux/app/config/schemas/azure/networking/subnet/subnet.ts
+infraux/app/config/schemas/azure/networking/networksecuritygroup/networkSecurityGroupFields.ts
+infraux/app/config/schemas/azure/networking/networksecuritygroup/networkSecurityGroupTemplates.ts
+infraux/app/config/schemas/azure/networking/networksecuritygroup/networkSecurityGroup.ts
+infraux/app/config/schemas/azure/networking/loadbalancer/loadBalancerFields.ts
+infraux/app/config/schemas/azure/networking/loadbalancer/loadBalancerTemplates.ts
+infraux/app/config/schemas/azure/networking/loadbalancer/loadBalancer.ts
+infraux/app/config/schemas/azure/networking/applicationgateway/applicationGatewayFields.ts
+infraux/app/config/schemas/azure/networking/applicationgateway/applicationGatewayTemplates.ts
+infraux/app/config/schemas/azure/networking/applicationgateway/applicationGateway.ts
+infraux/app/config/schemas/azure/networking/firewall/firewall.ts
+infraux/app/config/schemas/azure/networking/index.ts
+infraux/app/components/ui/IaCTemplatePanel.tsx
+infraux/app/components/nodes/NodeTypes.tsx
+infraux/app/company/[companyId]/diagrams/[diagramId]/page.tsx
+infraux/app/config/schemas/azure/networking/firewall/firewallFields.ts
+infraux/app/config/schemas/azure/networking/firewall/firewallTemplates.ts
+infraux/app/config/schemas/azure/networking/subnet/subnetTemplates.ts
+infraux/app/config/schemas/azure/networking/subnet/subnetFields.ts
+infraux/app/config/schemas/azure/apimanagement/service/apiManagementService.ts
+infraux/app/config/schemas/azure/apimanagement/index.ts
+infraux/app/config/schemas/azure/servicebus/namespace/serviceBusNamespaceFields.ts
+infraux/app/config/schemas/azure/servicebus/namespace/serviceBusNamespaceTemplates.ts
+infraux/app/config/schemas/azure/servicebus/namespace/serviceBusNamespace.ts
+infraux/app/config/schemas/azure/servicebus/index.ts
+infraux/app/config/schemas/azure/eventgrid/topic/eventGridTopicFields.ts
+infraux/app/config/schemas/azure/eventgrid/topic/eventGridTopicTemplates.ts
+infraux/app/config/schemas/azure/eventgrid/topic/eventGridTopic.ts
+infraux/app/config/schemas/azure/eventgrid/index.ts
+infraux/app/config/schemas/azure/logicapp/workflow/logicAppWorkflowFields.ts
+infraux/app/config/schemas/azure/logicapp/workflow/logicAppWorkflowTemplates.ts
+infraux/app/config/schemas/azure/logicapp/workflow/logicAppWorkflow.ts
+infraux/app/config/schemas/azure/logicapp/index.ts
+infraux/app/config/schemas/azure/eventhub/namespace/eventHubNamespaceFields.ts
+infraux/app/config/schemas/azure/eventhub/namespace/eventHubNamespaceTemplates.ts
+infraux/app/config/schemas/azure/eventhub/namespace/eventHubNamespace.ts
+infraux/app/config/schemas/azure/eventhub/index.ts
+infraux/app/config/schemas/azure/index.ts
+infraux/app/config/schemas/azure/networking/virtualnetwork/virtualNetworkFields.ts
+infraux/app/config/schemas/azure/networking/virtualnetwork/virtualNetworkTemplates.ts
+infraux/app/config/schemas/azure/networking/virtualnetwork/virtualNetwork.ts
+infraux/app/config/schemas/azure/compute/containergroup/containerGroup.ts
+infraux/app/config/schemas/azure/compute/index.ts
+infraux/app/config/schemas/azure/functions/linuxfunctionapp/linuxFunctionAppFields.ts
+infraux/app/config/schemas/azure/functions/linuxfunctionapp/linuxFunctionAppTemplates.ts
+infraux/app/config/schemas/azure/functions/linuxfunctionapp/linuxFunctionApp.ts
+infraux/app/config/schemas/azure/functions/index.ts
+infraux/app/config/schemas/azure/storage/storagecontainer/storageContainerFields.ts
+infraux/app/config/schemas/azure/storage/storagecontainer/storageContainerTemplates.ts
+infraux/app/config/schemas/azure/storage/storagecontainer/storageContainer.ts
+
+# Current Time
+31/5/2025, 11:46:36 p.m. (America/Bogota, UTC-5:00)
+
+# Context Window Usage
+702,360 / 1,048.576K tokens used (67%)
+
+# Current Mode
+ACT MODE
+</environment_details>

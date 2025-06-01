@@ -277,6 +277,42 @@ const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
           return { category: 'compute', resourceType: 'linuxwebapp' }; 
         } else if (simplifiedResourceType === 'container_group') {
           return { category: 'compute', resourceType: 'containergroup' };
+        } else if (simplifiedResourceType === 'linux_function_app') {
+          return { category: 'functions', resourceType: 'linuxfunctionapp' };
+        } else if (simplifiedResourceType === 'storage_container') {
+          return { category: 'storage', resourceType: 'storagecontainer' };
+        } else if (simplifiedResourceType === 'cosmosdb_account') {
+          return { category: 'database', resourceType: 'cosmosdbaccount' };
+        } else if (simplifiedResourceType === 'mssql_database') {
+          return { category: 'database', resourceType: 'mssqldatabase' };
+        } else if (simplifiedResourceType === 'redis_cache') {
+          return { category: 'cache', resourceType: 'rediscache' };
+        } else if (simplifiedResourceType === 'synapse_workspace') {
+          return { category: 'analytics', resourceType: 'synapseworkspace' };
+        } else if (simplifiedResourceType === 'storage_share') {
+          return { category: 'storage', resourceType: 'storageshare' };
+        } else if (simplifiedResourceType === 'api_management') { // El tipo de nodo es azurerm_api_management
+          return { category: 'apimanagement', resourceType: 'service' }; // El recurso dentro de la categoría es 'service'
+        } else if (simplifiedResourceType === 'servicebus_namespace') {
+          return { category: 'servicebus', resourceType: 'namespace' };
+        } else if (simplifiedResourceType === 'eventgrid_topic') {
+          return { category: 'eventgrid', resourceType: 'topic' };
+        } else if (simplifiedResourceType === 'logic_app_workflow') {
+          return { category: 'logicapp', resourceType: 'workflow' };
+        } else if (simplifiedResourceType === 'eventhub_namespace') {
+          return { category: 'eventhub', resourceType: 'namespace' };
+        } else if (simplifiedResourceType === 'virtual_network') {
+          return { category: 'networking', resourceType: 'virtualnetwork' };
+        } else if (simplifiedResourceType === 'subnet') {
+          return { category: 'networking', resourceType: 'subnet' };
+        } else if (simplifiedResourceType === 'network_security_group') {
+          return { category: 'networking', resourceType: 'networksecuritygroup' };
+        } else if (simplifiedResourceType === 'lb') {
+          return { category: 'networking', resourceType: 'loadbalancer' };
+        } else if (simplifiedResourceType === 'application_gateway') {
+          return { category: 'networking', resourceType: 'applicationgateway' };
+        } else if (simplifiedResourceType === 'firewall') {
+          return { category: 'networking', resourceType: 'firewall' };
         }
         // Añadir más casos de Azure aquí
       }

@@ -1,13 +1,19 @@
-// Azure Networking Schemas
-// TODO: Define and export actual networking resource schemas
+import azureVirtualNetworkResource from './virtualnetwork/virtualNetwork';
+import azureSubnetResource from './subnet/subnet';
+import azureNetworkSecurityGroupResource from './networksecuritygroup/networkSecurityGroup';
+import azureLoadBalancerResource from './loadbalancer/loadBalancer';
+import azureApplicationGatewayResource from './applicationgateway/applicationGateway';
+import azureFirewallResource from './firewall/firewall';
+// Importar otros recursos de Networking aquí si se añaden en el futuro.
 
-export const azureNetworkingResources = {
-  // Ejemplo:
-  // virtualNetwork: {
-  //   schema: async () => (await import('./virtualnetwork/virtualNetworkSchema')).virtualNetworkSchema,
-  //   fields: async () => (await import('./virtualnetwork/virtualNetworkFields')).virtualNetworkFields,
-  //   defaults: async () => (await import('./virtualnetwork/virtualNetworkDefaults')).virtualNetworkDefaults,
-  //   templates: async () => (await import('./virtualnetwork/virtualNetworkTemplates')).virtualNetworkTemplates,
-  // },
-  // subnet: { ... },
-} as const;
+// Agrupa todos los recursos de Azure Networking en un solo objeto.
+const azureNetworkingResources = {
+  virtualnetwork: azureVirtualNetworkResource,
+  subnet: azureSubnetResource,
+  networksecuritygroup: azureNetworkSecurityGroupResource,
+  loadbalancer: azureLoadBalancerResource,
+  applicationgateway: azureApplicationGatewayResource,
+  firewall: azureFirewallResource,
+};
+
+export { azureNetworkingResources }; // Exportación nombrada

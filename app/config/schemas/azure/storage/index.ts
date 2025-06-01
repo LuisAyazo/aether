@@ -1,13 +1,12 @@
-// Azure Storage Schemas
-// TODO: Define and export actual storage resource schemas
+import azureStorageContainerResource from './storagecontainer/storageContainer';
+import azureStorageShareResource from './storageshare/storageShare';
 
-export const azureStorageResources = {
-  // Ejemplo:
-  // account: {
-  //   schema: async () => (await import('./account/accountSchema')).accountSchema,
-  //   fields: async () => (await import('./account/accountFields')).accountFields,
-  //   defaults: async () => (await import('./account/accountDefaults')).accountDefaults,
-  //   templates: async () => (await import('./account/accountTemplates')).accountTemplates,
-  // },
-  // blobContainer: { ... },
-} as const;
+// Agrupa todos los recursos de Azure Storage en un solo objeto.
+const azureStorageResources = {
+  storagecontainer: azureStorageContainerResource,
+  storageshare: azureStorageShareResource,
+  // Aquí se podrían añadir otros recursos de Azure Storage en el futuro,
+  // por ejemplo: storageaccount, queue, table, etc.
+};
+
+export { azureStorageResources }; // Exportación nombrada

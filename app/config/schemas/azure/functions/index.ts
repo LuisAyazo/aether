@@ -1,12 +1,9 @@
-// Azure Functions Schemas
-// TODO: Define and export actual functions resource schemas
+import azureLinuxFunctionAppResource from './linuxfunctionapp/linuxFunctionApp';
 
-export const azureFunctionsResources = {
-  // Ejemplo:
-  // functionApp: {
-  //   schema: async () => (await import('./functionapp/functionAppSchema')).functionAppSchema,
-  //   fields: async () => (await import('./functionapp/functionAppFields')).functionAppFields,
-  //   defaults: async () => (await import('./functionapp/functionAppDefaults')).functionAppDefaults,
-  //   templates: async () => (await import('./functionapp/functionAppTemplates')).functionAppTemplates,
-  // },
-} as const;
+// Agrupa todos los recursos de Azure Functions en un solo objeto.
+const azureFunctionsResources = {
+  linuxfunctionapp: azureLinuxFunctionAppResource,
+  // Aquí se podrían añadir otros tipos de Function Apps (ej. Windows) en el futuro.
+};
+
+export { azureFunctionsResources }; // Exportación nombrada
