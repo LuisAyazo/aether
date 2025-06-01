@@ -5,7 +5,7 @@ export type ResourceType = string; // Permitir cualquier string, el mapeo se enc
 export interface FieldConfig {
   key?: string; // Field identifier for array-based configurations
   label: string;
-  type: 'text' | 'select' | 'number' | 'boolean' | 'group' | 'textarea'; // Añadido 'textarea'
+  type: 'text' | 'select' | 'number' | 'boolean' | 'group' | 'textarea' | 'password' | 'hidden'; // Añadidos 'password' y 'hidden'
   placeholder?: string;
   help?: string;
   description?: string; // Alternative to help text
@@ -13,6 +13,7 @@ export interface FieldConfig {
   defaultValue?: any; // Alternative to default
   min?: number;
   max?: number;
+  step?: number; // Añadido para campos numéricos
   required?: boolean;
   options?: Array<{
     value: string;

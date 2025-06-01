@@ -148,11 +148,11 @@ const resourceCategories: ResourceCategory[] = [
     name: 'Azure - Cómputo',
     provider: 'azure',
     items: [
-      { type: 'vm', name: 'Virtual Machine', description: 'Máquina virtual', provider: 'azure' },
-      { type: 'vm', name: 'VM Scale Set', description: 'Conjunto de escalado', provider: 'azure' },
-      { type: 'vm', name: 'AKS Cluster', description: 'Cluster de Kubernetes', provider: 'azure' },
-      { type: 'vm', name: 'App Service', description: 'Plataforma como servicio', provider: 'azure' },
-      { type: 'vm', name: 'Container Instances', description: 'Contenedores', provider: 'azure' },
+      { type: 'azurerm_virtual_machine', name: 'Virtual Machine', description: 'Máquina virtual', provider: 'azure' },
+      { type: 'azurerm_linux_virtual_machine_scale_set', name: 'Linux VM Scale Set', description: 'Conjunto de escalado Linux', provider: 'azure' },
+      { type: 'azurerm_kubernetes_cluster', name: 'AKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'azure' },
+      { type: 'azurerm_linux_web_app', name: 'App Service (Linux)', description: 'Aplicación web PaaS en Linux', provider: 'azure' },
+      { type: 'azurerm_container_group', name: 'Container Instances', description: 'Grupo de Contenedores', provider: 'azure' },
       { type: 'vm', name: 'Functions', description: 'Funciones serverless', provider: 'azure' },
     ]
   },

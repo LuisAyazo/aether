@@ -23,7 +23,12 @@ import {
   AdjustmentsHorizontalIcon as SfnStateMachineIcon, // Usando para Step Functions
   ListBulletIcon as GcpCloudTasksQueueIcon, // Usando para GCP Cloud Tasks
   RectangleGroupIcon as GcpWorkflowsWorkflowIcon, // Usando para GCP Workflows
-  RssIcon as GcpEventarcTriggerIcon // Usando para GCP Eventarc
+  RssIcon as GcpEventarcTriggerIcon, // Usando para GCP Eventarc
+  ComputerDesktopIcon as AzureVirtualMachineIcon, // Usando para Azure VM
+  ServerStackIcon as AzureLinuxVmssIcon, // Usando para Azure Linux VMSS
+  CpuChipIcon as AzureAKSClusterIcon, // Usando para Azure AKS Cluster
+  GlobeAltIcon as AzureLinuxWebAppIcon, // Usando para Azure App Service (Linux)
+  CubeIcon as AzureContainerGroupIcon // Usando para Azure Container Group
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';
@@ -465,6 +470,56 @@ export function AzureFunctionNode(props: NodeProps) {
 }
 AzureFunctionNode.displayName = 'AzureFunctionNode';
 
+export function AzureVirtualMachineNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureVirtualMachineIcon className="w-6 h-6 text-blue-500" />, label: props.data.label || 'Azure VM', resourceType: 'azurerm_virtual_machine' }}
+    />
+  );
+}
+AzureVirtualMachineNode.displayName = 'AzureVirtualMachineNode';
+
+export function AzureLinuxVmssNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureLinuxVmssIcon className="w-6 h-6 text-blue-600" />, label: props.data.label || 'Linux VMSS', resourceType: 'azurerm_linux_virtual_machine_scale_set' }}
+    />
+  );
+}
+AzureLinuxVmssNode.displayName = 'AzureLinuxVmssNode';
+
+export function AzureAKSClusterNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureAKSClusterIcon className="w-6 h-6 text-blue-700" />, label: props.data.label || 'AKS Cluster', resourceType: 'azurerm_kubernetes_cluster' }}
+    />
+  );
+}
+AzureAKSClusterNode.displayName = 'AzureAKSClusterNode';
+
+export function AzureLinuxWebAppNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureLinuxWebAppIcon className="w-6 h-6 text-sky-600" />, label: props.data.label || 'Linux Web App', resourceType: 'azurerm_linux_web_app' }}
+    />
+  );
+}
+AzureLinuxWebAppNode.displayName = 'AzureLinuxWebAppNode';
+
+export function AzureContainerGroupNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureContainerGroupIcon className="w-6 h-6 text-teal-500" />, label: props.data.label || 'Container Group', resourceType: 'azurerm_container_group' }}
+    />
+  );
+}
+AzureContainerGroupNode.displayName = 'AzureContainerGroupNode';
+
 // --- Node Types Object ---
 const nodeTypes = {
   // AWS nodes
@@ -523,7 +578,12 @@ const nodeTypes = {
   generic: GenericNode,
   
   // Azure nodes
-  vm: AzureVMNode,
+  azurerm_virtual_machine: AzureVirtualMachineNode,
+  azurerm_linux_virtual_machine_scale_set: AzureLinuxVmssNode,
+  azurerm_kubernetes_cluster: AzureAKSClusterNode,
+  azurerm_linux_web_app: AzureLinuxWebAppNode,
+  azurerm_container_group: AzureContainerGroupNode, // Añadido Azure Container Group
+  vm: AzureVMNode, // Mantener por si otros nodos Azure usan 'vm' genéricamente por ahora
   blob: AzureBlobNode,
   cosmos: AzureCosmosNode,
   function: AzureFunctionNode, 

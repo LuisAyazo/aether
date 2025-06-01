@@ -1,16 +1,17 @@
 // Main resource schemas registry
 export * from './gcp';
 export * from './aws';     // Para futuro
-// export * from './azure';   // Para futuro
+export * from './azure';   // Para futuro
 
 import { GCP_RESOURCE_REGISTRY } from './gcp';
 import { AWS_RESOURCE_REGISTRY } from './aws'; // Importar AWS
+import { AZURE_RESOURCE_REGISTRY } from './azure'; // Importar AZURE
 
 // Global resource registry
 export const RESOURCE_REGISTRY = {
   gcp: GCP_RESOURCE_REGISTRY,
   aws: AWS_RESOURCE_REGISTRY,     // Para futuro
-  // azure: AZURE_RESOURCE_REGISTRY, // Para futuro
+  azure: AZURE_RESOURCE_REGISTRY, // Para futuro
 } as const;
 
 export type SupportedProvider = keyof typeof RESOURCE_REGISTRY;

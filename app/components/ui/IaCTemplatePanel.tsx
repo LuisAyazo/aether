@@ -256,6 +256,30 @@ const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
         simplifiedResourceType = parts[1].toLowerCase();
         category = parts[1].toLowerCase();
       }
+    } else if (providerPrefix === 'azurerm') {
+      // Manejo para Azure
+      const serviceCategory = parts[1].toLowerCase(); // ej: "virtualmachine" (si el tipo es azurerm_virtual_machine)
+      const typeParts = parts.slice(2); // No siempre habrá más partes para Azure
+
+      if (parts.length >= 2) { // ej: azurerm_virtual_machine
+        simplifiedResourceType = parts.slice(1).join('_').toLowerCase(); // ej: "virtual_machine"
+        // Para Azure, la categoría podría ser el segundo elemento o necesitar un mapeo más específico.
+        // Por ahora, intentaremos un mapeo directo o usaremos el segundo elemento como categoría.
+        category = serviceCategory; // ej: "virtualmachine"
+        
+        if (simplifiedResourceType === 'virtual_machine') {
+          return { category: 'compute', resourceType: 'virtualmachine' };
+        } else if (simplifiedResourceType === 'linux_virtual_machine_scale_set') {
+          return { category: 'compute', resourceType: 'linuxvirtualmachinescaleset' };
+        } else if (simplifiedResourceType === 'kubernetes_cluster') {
+          return { category: 'compute', resourceType: 'kubernetescluster' };
+        } else if (simplifiedResourceType === 'linux_web_app') {
+          return { category: 'compute', resourceType: 'linuxwebapp' }; 
+        } else if (simplifiedResourceType === 'container_group') {
+          return { category: 'compute', resourceType: 'containergroup' };
+        }
+        // Añadir más casos de Azure aquí
+      }
     }
     // Aquí category y simplifiedResourceType están establecidos para GCP o AWS (o 'unknown')
   } else {
