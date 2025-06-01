@@ -11,6 +11,7 @@ import { awsAutoscalingResources } from './autoscaling'; // Importar el registro
 import { awsElasticbeanstalkResources } from './elasticbeanstalk'; // Importar el registro de Elastic Beanstalk
 import { awsEcsResources } from './ecs'; // Importar el registro de ECS
 import { awsEksResources } from './eks'; // Importar el registro de EKS
+import { awsDynamodbResources } from './dynamodb'; // Importar el registro de DynamoDB
 
 // Registry of all AWS resource categories and their types
 export const AWS_RESOURCE_REGISTRY = {
@@ -23,6 +24,7 @@ export const AWS_RESOURCE_REGISTRY = {
   elasticbeanstalk: awsElasticbeanstalkResources,
   ecs: awsEcsResources,
   eks: awsEksResources,
+  dynamodb: awsDynamodbResources,
   // ... otras categorías de AWS
 } as const;
 

@@ -113,6 +113,16 @@ export function EKSClusterNode(props: NodeProps) {
 }
 EKSClusterNode.displayName = 'EKSClusterNode';
 
+export function DynamoDBTableNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <TableCellsIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'DynamoDB Table', resourceType: 'aws_dynamodb_table' }}
+    />
+  );
+}
+DynamoDBTableNode.displayName = 'DynamoDBTableNode';
+
 // --- GCP Node Implementations ---
 export function ComputeEngineNode(props: NodeProps) {
   return (
@@ -347,7 +357,8 @@ const nodeTypes = {
   aws_autoscaling_group: AutoScalingGroupNode,
   aws_elasticbeanstalk_environment: ElasticBeanstalkEnvironmentNode,
   aws_ecs_service: ECSServiceNode,
-  aws_eks_cluster: EKSClusterNode, // Añadido EKS Cluster
+  aws_eks_cluster: EKSClusterNode,
+  aws_dynamodb_table: DynamoDBTableNode, // Añadido DynamoDB Table
   
   // GCP nodes
   gcp_compute_instance: ComputeEngineNode,

@@ -224,6 +224,8 @@ const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
           return { category: 'ecs', resourceType: 'service' };
         } else if (serviceCategory === 'eks' && simplifiedResourceType === 'cluster') {
           return { category: 'eks', resourceType: 'cluster' };
+        } else if (serviceCategory === 'dynamodb' && simplifiedResourceType === 'table') {
+          return { category: 'dynamodb', resourceType: 'table' };
         }
         // Añadir más casos de AWS aquí
       } else if (parts.length === 2) { // ej: aws_ec2
