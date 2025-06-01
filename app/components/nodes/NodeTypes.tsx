@@ -123,6 +123,26 @@ export function DynamoDBTableNode(props: NodeProps) {
 }
 DynamoDBTableNode.displayName = 'DynamoDBTableNode';
 
+export function ElastiCacheClusterNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <BoltIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'ElastiCache Cluster', resourceType: 'aws_elasticache_cluster' }}
+    />
+  );
+}
+ElastiCacheClusterNode.displayName = 'ElastiCacheClusterNode';
+
+export function RedshiftClusterNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <CircleStackIcon className="w-6 h-6 text-red-600" />, label: props.data.label || 'Redshift Cluster', resourceType: 'aws_redshift_cluster' }}
+    />
+  );
+}
+RedshiftClusterNode.displayName = 'RedshiftClusterNode';
+
 // --- GCP Node Implementations ---
 export function ComputeEngineNode(props: NodeProps) {
   return (
@@ -358,7 +378,9 @@ const nodeTypes = {
   aws_elasticbeanstalk_environment: ElasticBeanstalkEnvironmentNode,
   aws_ecs_service: ECSServiceNode,
   aws_eks_cluster: EKSClusterNode,
-  aws_dynamodb_table: DynamoDBTableNode, // Añadido DynamoDB Table
+  aws_dynamodb_table: DynamoDBTableNode,
+  aws_elasticache_cluster: ElastiCacheClusterNode,
+  aws_redshift_cluster: RedshiftClusterNode, // Añadido Redshift Cluster
   
   // GCP nodes
   gcp_compute_instance: ComputeEngineNode,

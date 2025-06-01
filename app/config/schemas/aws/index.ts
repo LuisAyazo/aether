@@ -12,6 +12,8 @@ import { awsElasticbeanstalkResources } from './elasticbeanstalk'; // Importar e
 import { awsEcsResources } from './ecs'; // Importar el registro de ECS
 import { awsEksResources } from './eks'; // Importar el registro de EKS
 import { awsDynamodbResources } from './dynamodb'; // Importar el registro de DynamoDB
+import { awsElasticacheResources } from './elasticache'; // Importar el registro de ElastiCache
+import { awsRedshiftResources } from './redshift'; // Importar el registro de Redshift
 
 // Registry of all AWS resource categories and their types
 export const AWS_RESOURCE_REGISTRY = {
@@ -25,6 +27,8 @@ export const AWS_RESOURCE_REGISTRY = {
   ecs: awsEcsResources,
   eks: awsEksResources,
   dynamodb: awsDynamodbResources,
+  elasticache: awsElasticacheResources,
+  redshift: awsRedshiftResources,
   // ... otras categorías de AWS
 } as const;
 
