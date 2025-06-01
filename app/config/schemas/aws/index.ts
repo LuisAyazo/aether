@@ -14,6 +14,12 @@ import { awsEksResources } from './eks'; // Importar el registro de EKS
 import { awsDynamodbResources } from './dynamodb'; // Importar el registro de DynamoDB
 import { awsElasticacheResources } from './elasticache'; // Importar el registro de ElastiCache
 import { awsRedshiftResources } from './redshift'; // Importar el registro de Redshift
+import awsEfsResources from './efs'; // Importar el registro de EFS
+import awsApiGatewayResources from './apigateway'; // Importar el registro de API Gateway
+import awsSqsResources from './sqs'; // Importar el registro de SQS
+import awsSnsResources from './sns'; // Importar el registro de SNS
+import awsEventBridgeResources from './eventbridge'; // Importar el registro de EventBridge
+import awsSfnResources from './sfn'; // Importar el registro de SFN
 
 // Registry of all AWS resource categories and their types
 export const AWS_RESOURCE_REGISTRY = {
@@ -29,6 +35,12 @@ export const AWS_RESOURCE_REGISTRY = {
   dynamodb: awsDynamodbResources,
   elasticache: awsElasticacheResources,
   redshift: awsRedshiftResources,
+  efs: awsEfsResources,
+  apigateway: awsApiGatewayResources,
+  sqs: awsSqsResources,
+  sns: awsSnsResources,
+  eventbridge: awsEventBridgeResources,
+  sfn: awsSfnResources, // Añadir SFN (Step Functions) al registro
   // ... otras categorías de AWS
 } as const;
 

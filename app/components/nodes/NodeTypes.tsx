@@ -14,7 +14,16 @@ import {
   DocumentTextIcon as FirestoreIcon,
   BoltIcon,
   FolderIcon as FilestoreIcon, // Usando FolderIcon para Filestore
-  ArrowsRightLeftIcon as LoadBalancerIcon // Reutilizando para AWS ALB
+  FolderIcon, // Importando FolderIcon directamente para EFS
+  ArrowsRightLeftIcon as LoadBalancerIcon, // Reutilizando para AWS ALB
+  GlobeAltIcon as ApiGatewayIcon, // Usando GlobeAltIcon para API Gateway
+  RectangleStackIcon as SqsQueueIcon, // Usando RectangleStackIcon para SQS
+  ChatBubbleOvalLeftEllipsisIcon as SnsTopicIcon, // Usando para SNS
+  CalendarDaysIcon as EventBridgeRuleIcon, // Usando para EventBridge
+  AdjustmentsHorizontalIcon as SfnStateMachineIcon, // Usando para Step Functions
+  ListBulletIcon as GcpCloudTasksQueueIcon, // Usando para GCP Cloud Tasks
+  RectangleGroupIcon as GcpWorkflowsWorkflowIcon, // Usando para GCP Workflows
+  RssIcon as GcpEventarcTriggerIcon // Usando para GCP Eventarc
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';
@@ -143,7 +152,97 @@ export function RedshiftClusterNode(props: NodeProps) {
 }
 RedshiftClusterNode.displayName = 'RedshiftClusterNode';
 
+export function EFSFileSystemNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <FolderIcon className="w-6 h-6 text-green-600" />, label: props.data.label || 'EFS File System', resourceType: 'aws_efs_file_system' }}
+    />
+  );
+}
+EFSFileSystemNode.displayName = 'EFSFileSystemNode';
+
+export function ApiGatewayRestApiNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <ApiGatewayIcon className="w-6 h-6 text-yellow-500" />, label: props.data.label || 'API Gateway REST', resourceType: 'aws_api_gateway_rest_api' }}
+    />
+  );
+}
+ApiGatewayRestApiNode.displayName = 'ApiGatewayRestApiNode';
+
+export function SqsQueueNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <SqsQueueIcon className="w-6 h-6 text-purple-500" />, label: props.data.label || 'SQS Queue', resourceType: 'aws_sqs_queue' }}
+    />
+  );
+}
+SqsQueueNode.displayName = 'SqsQueueNode';
+
+export function SnsTopicNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <SnsTopicIcon className="w-6 h-6 text-cyan-500" />, label: props.data.label || 'SNS Topic', resourceType: 'aws_sns_topic' }}
+    />
+  );
+}
+SnsTopicNode.displayName = 'SnsTopicNode';
+
+export function EventBridgeRuleNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <EventBridgeRuleIcon className="w-6 h-6 text-orange-700" />, label: props.data.label || 'EventBridge Rule', resourceType: 'aws_cloudwatch_event_rule' }}
+    />
+  );
+}
+EventBridgeRuleNode.displayName = 'EventBridgeRuleNode';
+
+export function SfnStateMachineNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <SfnStateMachineIcon className="w-6 h-6 text-teal-600" />, label: props.data.label || 'State Machine', resourceType: 'aws_sfn_state_machine' }}
+    />
+  );
+}
+SfnStateMachineNode.displayName = 'SfnStateMachineNode';
+
 // --- GCP Node Implementations ---
+export function GcpCloudTasksQueueNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <GcpCloudTasksQueueIcon className="w-6 h-6 text-green-600" />, label: props.data.label || 'Cloud Tasks Queue', resourceType: 'gcp_cloud_tasks_queue' }}
+    />
+  );
+}
+GcpCloudTasksQueueNode.displayName = 'GcpCloudTasksQueueNode';
+
+export function GcpWorkflowsWorkflowNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <GcpWorkflowsWorkflowIcon className="w-6 h-6 text-orange-500" />, label: props.data.label || 'Workflow', resourceType: 'gcp_workflows_workflow' }}
+    />
+  );
+}
+GcpWorkflowsWorkflowNode.displayName = 'GcpWorkflowsWorkflowNode';
+
+export function GcpEventarcTriggerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <GcpEventarcTriggerIcon className="w-6 h-6 text-red-500" />, label: props.data.label || 'Eventarc Trigger', resourceType: 'gcp_eventarc_trigger' }}
+    />
+  );
+}
+GcpEventarcTriggerNode.displayName = 'GcpEventarcTriggerNode';
+
 export function ComputeEngineNode(props: NodeProps) {
   return (
     <BaseResourceNode
@@ -380,10 +479,19 @@ const nodeTypes = {
   aws_eks_cluster: EKSClusterNode,
   aws_dynamodb_table: DynamoDBTableNode,
   aws_elasticache_cluster: ElastiCacheClusterNode,
-  aws_redshift_cluster: RedshiftClusterNode, // Añadido Redshift Cluster
+  aws_redshift_cluster: RedshiftClusterNode,
+  aws_efs_file_system: EFSFileSystemNode,
+  aws_api_gateway_rest_api: ApiGatewayRestApiNode,
+  aws_sqs_queue: SqsQueueNode,
+  aws_sns_topic: SnsTopicNode,
+  aws_cloudwatch_event_rule: EventBridgeRuleNode,
+  aws_sfn_state_machine: SfnStateMachineNode, // Añadido Step Functions State Machine
   
   // GCP nodes
   gcp_compute_instance: ComputeEngineNode,
+  gcp_cloud_tasks_queue: GcpCloudTasksQueueNode,
+  gcp_workflows_workflow: GcpWorkflowsWorkflowNode,
+  gcp_eventarc_trigger: GcpEventarcTriggerNode, // Añadido GCP Eventarc Trigger
   gcp_compute_instance_group_manager: InstanceGroupManagerNode,
   gcp_appengine_app: AppEngineNode,
   gcp_gke_cluster: GKENode,

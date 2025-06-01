@@ -82,7 +82,7 @@ const resourceCategories: ResourceCategory[] = [
       { type: 'aws_dynamodb_table', name: 'DynamoDB Table', description: 'Base de datos NoSQL Key-Value y Documento', provider: 'aws' },
       { type: 'aws_elasticache_cluster', name: 'ElastiCache Cluster', description: 'Caché en memoria (Redis/Memcached)', provider: 'aws' },
       { type: 'aws_redshift_cluster', name: 'Redshift Cluster', description: 'Almacén de datos (Data Warehouse)', provider: 'aws' },
-      { type: 's3', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws' },
+      { type: 'aws_efs_file_system', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws' },
     ]
   },
   {
@@ -90,11 +90,11 @@ const resourceCategories: ResourceCategory[] = [
     provider: 'aws',
     items: [
       { type: 'aws_lambda_function', name: 'Lambda Function', description: 'Ejecuta código sin aprovisionar servidores', provider: 'aws' },
-      { type: 'lambda', name: 'API Gateway', description: 'API REST/WebSocket', provider: 'aws' },
-      { type: 'lambda', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws' },
-      { type: 'lambda', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws' },
-      { type: 'lambda', name: 'EventBridge Rule', description: 'Orquestación de eventos', provider: 'aws' },
-      { type: 'lambda', name: 'Step Functions State Machine', description: 'Flujos de trabajo serverless', provider: 'aws' },
+      { type: 'aws_api_gateway_rest_api', name: 'API Gateway (REST)', description: 'API REST/WebSocket', provider: 'aws' },
+      { type: 'aws_sqs_queue', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws' },
+      { type: 'aws_sns_topic', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws' },
+      { type: 'aws_cloudwatch_event_rule', name: 'EventBridge Rule', description: 'Orquestación de eventos', provider: 'aws' },
+      { type: 'aws_sfn_state_machine', name: 'Step Functions State Machine', description: 'Flujos de trabajo serverless', provider: 'aws' },
     ]
   },
   {
@@ -139,9 +139,9 @@ const resourceCategories: ResourceCategory[] = [
       { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Función serverless (Aplicación)', provider: 'gcp' },
       { type: 'gcp_api_gateway', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp' }, 
       { type: 'gcp_pubsub_topic', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp' }, 
-      { type: 'function', name: 'Cloud Tasks', description: 'Colas de tareas', provider: 'gcp' },
-      { type: 'function', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp' },
-      { type: 'function', name: 'Eventarc', description: 'Orquestación de eventos', provider: 'gcp' },
+      { type: 'gcp_cloud_tasks_queue', name: 'Cloud Tasks Queue', description: 'Colas de tareas', provider: 'gcp' },
+      { type: 'gcp_workflows_workflow', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp' },
+      { type: 'gcp_eventarc_trigger', name: 'Eventarc Trigger', description: 'Orquestación de eventos', provider: 'gcp' },
     ]
   },
   {

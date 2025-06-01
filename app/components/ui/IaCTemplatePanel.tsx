@@ -191,6 +191,12 @@ const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
           return { category: 'cache', resourceType: 'instance' };
         } else if (serviceCategory === 'filestore' && simplifiedResourceType === 'instance') {
           return { category: 'storage', resourceType: 'filestoreInstance' };
+        } else if (serviceCategory === 'cloudtasks' && simplifiedResourceType === 'queue') {
+          return { category: 'cloudtasks', resourceType: 'queue' };
+        } else if (serviceCategory === 'workflows' && simplifiedResourceType === 'workflow') {
+          return { category: 'workflows', resourceType: 'workflow' };
+        } else if (serviceCategory === 'eventarc' && simplifiedResourceType === 'trigger') {
+          return { category: 'eventarc', resourceType: 'trigger' };
         }
         // ... (otros casos de GCP)
       } else if (parts.length === 2) { 
@@ -230,6 +236,20 @@ const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
           return { category: 'elasticache', resourceType: 'cluster' };
         } else if (serviceCategory === 'redshift' && simplifiedResourceType === 'cluster') {
           return { category: 'redshift', resourceType: 'cluster' };
+        } else if (serviceCategory === 'efs' && simplifiedResourceType === 'file_system') {
+          return { category: 'efs', resourceType: 'fileSystem' };
+        } else if (serviceCategory === 'api' && simplifiedResourceType === 'gateway_rest_api') { // Corregido para aws_api_gateway_rest_api
+          return { category: 'apigateway', resourceType: 'restApi' };
+        } else if (serviceCategory === 'apigateway' && simplifiedResourceType === 'rest_api') { // Mantener por si acaso, pero el anterior debería cubrirlo
+          return { category: 'apigateway', resourceType: 'restApi' };
+        } else if (serviceCategory === 'sqs' && simplifiedResourceType === 'queue') {
+          return { category: 'sqs', resourceType: 'queue' };
+        } else if (serviceCategory === 'sns' && simplifiedResourceType === 'topic') {
+          return { category: 'sns', resourceType: 'topic' };
+        } else if (serviceCategory === 'cloudwatch' && simplifiedResourceType === 'event_rule') { // Terraform usa cloudwatch_event_rule
+          return { category: 'eventbridge', resourceType: 'rule' }; // Mapeamos a nuestra categoría eventbridge
+        } else if (serviceCategory === 'sfn' && simplifiedResourceType === 'state_machine') {
+          return { category: 'sfn', resourceType: 'stateMachine' };
         }
         // Añadir más casos de AWS aquí
       } else if (parts.length === 2) { // ej: aws_ec2
