@@ -13,7 +13,8 @@ import {
   TableCellsIcon,
   DocumentTextIcon as FirestoreIcon,
   BoltIcon,
-  FolderIcon as FilestoreIcon // Usando FolderIcon para Filestore
+  FolderIcon as FilestoreIcon, // Usando FolderIcon para Filestore
+  ArrowsRightLeftIcon as LoadBalancerIcon // Reutilizando para AWS ALB
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';
@@ -26,7 +27,7 @@ export function EC2Node(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <ServerIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'EC2 Instance', resourceType: 'ec2' }}
+      data={{ ...props.data, provider: 'aws', icon: <ServerIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'EC2 Instance', resourceType: 'aws_ec2_instance' }}
     />
   );
 }
@@ -36,7 +37,7 @@ export function S3BucketNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CloudIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'S3 Bucket', resourceType: 's3' }}
+      data={{ ...props.data, provider: 'aws', icon: <CloudIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'S3 Bucket', resourceType: 'aws_s3_bucket' }} // Ajustar si se crea aws_s3_bucket
     />
   );
 }
@@ -46,7 +47,7 @@ export function LambdaFunctionNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CodeBracketIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'Lambda Function', resourceType: 'lambda' }}
+      data={{ ...props.data, provider: 'aws', icon: <CodeBracketIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'Lambda Function', resourceType: 'aws_lambda_function' }} // Ajustar si se crea aws_lambda_function
     />
   );
 }
@@ -56,11 +57,61 @@ export function RDSInstanceNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CircleStackIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'RDS Instance', resourceType: 'rds' }}
+      data={{ ...props.data, provider: 'aws', icon: <CircleStackIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'RDS Instance', resourceType: 'aws_rds_instance' }} // Ajustar si se crea aws_rds_instance
     />
   );
 }
 RDSInstanceNode.displayName = 'RDSInstanceNode';
+
+export function ApplicationLoadBalancerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <LoadBalancerIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'ALB', resourceType: 'aws_elbv2_load_balancer' }}
+    />
+  );
+}
+ApplicationLoadBalancerNode.displayName = 'ApplicationLoadBalancerNode';
+
+export function AutoScalingGroupNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <RectangleStackIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'ASG', resourceType: 'aws_autoscaling_group' }}
+    />
+  );
+}
+AutoScalingGroupNode.displayName = 'AutoScalingGroupNode';
+
+export function ElasticBeanstalkEnvironmentNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <CloudIcon className="w-6 h-6 text-green-600" />, label: props.data.label || 'EB Env', resourceType: 'aws_elasticbeanstalk_environment' }}
+    />
+  );
+}
+ElasticBeanstalkEnvironmentNode.displayName = 'ElasticBeanstalkEnvironmentNode';
+
+export function ECSServiceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <CpuChipIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'ECS Service', resourceType: 'aws_ecs_service' }}
+    />
+  );
+}
+ECSServiceNode.displayName = 'ECSServiceNode';
+
+export function EKSClusterNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <CpuChipIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'EKS Cluster', resourceType: 'aws_eks_cluster' }}
+    />
+  );
+}
+EKSClusterNode.displayName = 'EKSClusterNode';
 
 // --- GCP Node Implementations ---
 export function ComputeEngineNode(props: NodeProps) {
@@ -288,10 +339,15 @@ AzureFunctionNode.displayName = 'AzureFunctionNode';
 // --- Node Types Object ---
 const nodeTypes = {
   // AWS nodes
-  ec2: EC2Node,
-  lambda: LambdaFunctionNode,
-  s3: S3BucketNode,
-  rds: RDSInstanceNode,
+  aws_ec2_instance: EC2Node,             // Corregido
+  aws_lambda_function: LambdaFunctionNode, 
+  aws_s3_bucket: S3BucketNode,           
+  aws_rds_instance: RDSInstanceNode,
+  aws_elbv2_load_balancer: ApplicationLoadBalancerNode,
+  aws_autoscaling_group: AutoScalingGroupNode,
+  aws_elasticbeanstalk_environment: ElasticBeanstalkEnvironmentNode,
+  aws_ecs_service: ECSServiceNode,
+  aws_eks_cluster: EKSClusterNode, // Añadido EKS Cluster
   
   // GCP nodes
   gcp_compute_instance: ComputeEngineNode,

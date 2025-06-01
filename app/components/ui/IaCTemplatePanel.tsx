@@ -134,11 +134,6 @@ const CODE_TABS = [
 const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
   const inputType: string = typeof typeFromNode === 'string' ? typeFromNode : String(typeFromNode);
   
-  // Manejo explícito para el tipo genérico 'compute'
-  if (inputType === 'compute') {
-    return { category: 'compute', resourceType: 'instance' };
-  }
-
   let simplifiedResourceType: string = inputType;
   let category = 'unknown';
 
@@ -159,12 +154,15 @@ const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
     return directMatchKeys[inputType];
   }
 
-  // Si no hay coincidencia directa, procesar para gcp_...
+  // Si no hay coincidencia directa, procesar para gcp_... o aws_...
   if (inputType.includes('_')) {
-    const parts = inputType.split('_'); // Corregido: usar inputType y eliminar declaración duplicada
-    if (parts[0].toLowerCase() === 'gcp') {
-      const serviceCategory = parts[1].toLowerCase(); // ej: "compute", "appengine", "gke"
-      const typeParts = parts.slice(2); // ej: ["instance"], ["app"]
+    const parts = inputType.split('_');
+    const providerPrefix = parts[0].toLowerCase();
+
+    if (providerPrefix === 'gcp') {
+      // Manejo existente para GCP
+      const serviceCategory = parts[1].toLowerCase(); 
+      const typeParts = parts.slice(2); 
 
       if (typeParts.length > 0) {
         simplifiedResourceType = typeParts.join('_').toLowerCase(); // ej: "instance", "app"
@@ -194,23 +192,59 @@ const mapResourceTypeToRegistry = (typeFromNode: ResourceType | string) => {
         } else if (serviceCategory === 'filestore' && simplifiedResourceType === 'instance') {
           return { category: 'storage', resourceType: 'filestoreInstance' };
         }
-        // Si no es un caso especial que retorna, la categoría y el tipo simplificado ya están establecidos.
-        // Ahora se intentará con directMatchKeys y finalMappingKeys.
-      } else if (parts.length === 2) { // Fallback para gcp_type como gcp_appengine (si no hay más partes)
+        // ... (otros casos de GCP)
+      } else if (parts.length === 2) { 
         simplifiedResourceType = parts[1].toLowerCase();
-        category = parts[1].toLowerCase(); // Asumir que el tipo es la categoría
+        category = parts[1].toLowerCase(); 
+      }
+    } else if (providerPrefix === 'aws') {
+      // Nuevo manejo para AWS
+      if (parts.length > 2) {
+        const serviceCategory = parts[1].toLowerCase(); // ej: "ec2", "s3"
+        const typeParts = parts.slice(2); // ej: ["instance"], ["bucket"]
+        simplifiedResourceType = typeParts.join('_').toLowerCase();
+        category = serviceCategory;
+
+        // Casos especiales para AWS (si los nombres de categoría/recurso difieren)
+        if (serviceCategory === 'ec2' && simplifiedResourceType === 'instance') {
+          return { category: 'ec2', resourceType: 'instance' };
+        } else if (serviceCategory === 's3' && simplifiedResourceType === 'bucket') {
+          return { category: 's3', resourceType: 'bucket' };
+        } else if (serviceCategory === 'lambda' && simplifiedResourceType === 'function') {
+          return { category: 'lambda', resourceType: 'function' };
+        } else if (serviceCategory === 'rds' && simplifiedResourceType === 'instance') {
+          return { category: 'rds', resourceType: 'instance' };
+        } else if (serviceCategory === 'elbv2' && simplifiedResourceType === 'load_balancer') {
+          return { category: 'elbv2', resourceType: 'loadBalancer' };
+        } else if (serviceCategory === 'autoscaling' && simplifiedResourceType === 'group') {
+          return { category: 'autoscaling', resourceType: 'group' };
+        } else if (serviceCategory === 'elasticbeanstalk' && simplifiedResourceType === 'environment') {
+          return { category: 'elasticbeanstalk', resourceType: 'environment' };
+        } else if (serviceCategory === 'ecs' && simplifiedResourceType === 'service') {
+          return { category: 'ecs', resourceType: 'service' };
+        } else if (serviceCategory === 'eks' && simplifiedResourceType === 'cluster') {
+          return { category: 'eks', resourceType: 'cluster' };
+        }
+        // Añadir más casos de AWS aquí
+      } else if (parts.length === 2) { // ej: aws_ec2
+        simplifiedResourceType = parts[1].toLowerCase();
+        category = parts[1].toLowerCase();
       }
     }
+    // Aquí category y simplifiedResourceType están establecidos para GCP o AWS (o 'unknown')
   } else {
-    // Si no hay guiones bajos, usar el inputType tal cual (convertido a minúsculas para el mapeo)
+    // Si no hay guiones bajos (ej. 'ec2', 's3' pasados directamente desde NodeTypes para AWS)
+    // Esto es un fallback y podría necesitar ser más robusto o depender del provider.
+    // Por ahora, asumimos que estos tipos simples son categorías y tipos de recursos.
     simplifiedResourceType = inputType.toLowerCase();
-    // Intentar adivinar la categoría si es un tipo simple conocido
-    if (directMatchKeys[simplifiedResourceType]) {
-        category = directMatchKeys[simplifiedResourceType].category;
-    }
+    category = inputType.toLowerCase(); 
+    // Si el provider es AWS y el tipo es 'ec2', mapear a ec2/instance
+    // Esta lógica se vuelve compleja aquí. Es mejor que los nodos pasen tipos completos como 'aws_ec2_instance'.
+    // O que la lógica de mapeo para tipos simples dependa del provider actual.
   }
   
   // Mapeos específicos para claves que podrían no ser idénticas después de la simplificación
+  // (Esta sección podría necesitar ajustes si los tipos de AWS también usan estos mapeos)
   // (e.g., instance_template -> instanceTemplate)
   // Las claves aquí deben estar en minúsculas y ser el 'resourceType' final esperado en el registro
   const finalMappingKeys: Record<string, { category: string; resourceType: string }> = {

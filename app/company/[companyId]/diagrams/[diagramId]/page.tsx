@@ -70,36 +70,36 @@ const resourceCategories: ResourceCategory[] = [
     name: 'AWS - Cómputo',
     provider: 'aws',
     items: [
-      { type: 'ec2', name: 'EC2 Instance', description: 'Servidor virtual en la nube', provider: 'aws' },
-      { type: 'ec2', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'aws' },
-      { type: 'group', name: 'Auto Scaling Group', description: 'Grupo de escalado automático', provider: 'aws' },
-      { type: 'ec2', name: 'Elastic Beanstalk', description: 'Plataforma como servicio', provider: 'aws' },
-      { type: 'ec2', name: 'ECS Container', description: 'Contenedor en ECS', provider: 'aws' },
-      { type: 'ec2', name: 'EKS Cluster', description: 'Cluster de Kubernetes', provider: 'aws' },
+      { type: 'aws_ec2_instance', name: 'EC2 Instance', description: 'Servidor virtual en la nube', provider: 'aws' },
+      { type: 'aws_elbv2_load_balancer', name: 'Application Load Balancer', description: 'Balanceador de carga de aplicación (L7)', provider: 'aws' },
+      { type: 'aws_autoscaling_group', name: 'Auto Scaling Group', description: 'Grupo de escalado automático de instancias', provider: 'aws' },
+      { type: 'aws_elasticbeanstalk_environment', name: 'Elastic Beanstalk Environment', description: 'Entorno de aplicación PaaS', provider: 'aws' },
+      { type: 'aws_ecs_service', name: 'ECS Service', description: 'Servicio de Contenedores ECS', provider: 'aws' },
+      { type: 'aws_eks_cluster', name: 'EKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'aws' },
     ]
   },
   {
     name: 'AWS - Almacenamiento',
     provider: 'aws',
     items: [
-      { type: 's3', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws' },
-      { type: 'rds', name: 'RDS Instance', description: 'Base de datos relacional', provider: 'aws' },
-      { type: 'rds', name: 'DynamoDB', description: 'Base de datos NoSQL', provider: 'aws' },
-      { type: 'rds', name: 'ElastiCache', description: 'Caché en memoria', provider: 'aws' },
-      { type: 'rds', name: 'Redshift', description: 'Almacén de datos', provider: 'aws' },
-      { type: 's3', name: 'EFS', description: 'Sistema de archivos elástico', provider: 'aws' },
+      { type: 'aws_s3_bucket', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws' },
+      { type: 'aws_rds_instance', name: 'RDS Instance', description: 'Base de datos relacional gestionada', provider: 'aws' },
+      { type: 'aws_dynamodb_table', name: 'DynamoDB Table', description: 'Base de datos NoSQL Key-Value y Documento', provider: 'aws' },
+      { type: 'rds', name: 'ElastiCache Cluster', description: 'Caché en memoria', provider: 'aws' }, // Pendiente: aws_elasticache_cluster
+      { type: 'rds', name: 'Redshift Cluster', description: 'Almacén de datos', provider: 'aws' }, // Pendiente: aws_redshift_cluster
+      { type: 's3', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws' }, // Pendiente: aws_efs_file_system
     ]
   },
   {
     name: 'AWS - Aplicación',
     provider: 'aws',
     items: [
-      { type: 'lambda', name: 'Lambda Function', description: 'Función serverless', provider: 'aws' },
-      { type: 'lambda', name: 'API Gateway', description: 'API REST/WebSocket', provider: 'aws' },
-      { type: 'lambda', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws' },
-      { type: 'lambda', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws' },
-      { type: 'lambda', name: 'EventBridge', description: 'Orquestación de eventos', provider: 'aws' },
-      { type: 'lambda', name: 'Step Functions', description: 'Flujos de trabajo', provider: 'aws' },
+      { type: 'aws_lambda_function', name: 'Lambda Function', description: 'Ejecuta código sin aprovisionar servidores', provider: 'aws' },
+      { type: 'lambda', name: 'API Gateway', description: 'API REST/WebSocket', provider: 'aws' }, // Pendiente: aws_api_gateway_rest_api o similar
+      { type: 'lambda', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws' }, // Pendiente: aws_sqs_queue
+      { type: 'lambda', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws' }, // Pendiente: aws_sns_topic
+      { type: 'lambda', name: 'EventBridge Rule', description: 'Orquestación de eventos', provider: 'aws' }, // Pendiente: aws_cloudwatch_event_rule
+      { type: 'lambda', name: 'Step Functions State Machine', description: 'Flujos de trabajo serverless', provider: 'aws' }, // Pendiente: aws_sfn_state_machine
     ]
   },
   {
