@@ -12,7 +12,7 @@ import {
   XMarkIcon,
   ServerIcon,
   SquaresPlusIcon, // Asegurar que SquaresPlusIcon esté importado
-  CurrencyDollarIcon // Mantener CurrencyDollarIcon si se usa en otro lado
+  
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
@@ -394,8 +394,9 @@ const FlowEditorContent = ({
   const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const onEdgeClick = useCallback((event: ReactMouseEvent, edge: Edge) => {
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
     console.log('Edge clicked:', edge);
     setSelectedEdge(edge);
@@ -407,7 +408,7 @@ const FlowEditorContent = ({
     setSelectedEdge(null);
   }, [onEdgesChange]);
 
-  const handlePaneClick = useCallback((event: ReactMouseEvent) => {
+  const handlePaneClick = useCallback((event: React.MouseEvent) => {
     setSelectedEdge(null);
     setContextMenu(prev => ({...prev, visible: false}));
     
@@ -515,7 +516,7 @@ const FlowEditorContent = ({
     };
   }, []);
 
-  const handleNodeContextMenu = useCallback((event: ReactMouseEvent, node: Node) => {
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
     event.stopPropagation();
     if (!node.selected) {
@@ -532,7 +533,7 @@ const FlowEditorContent = ({
     });
   }, []);
 
-  const handlePaneContextMenu = useCallback((event: ReactMouseEvent) => {
+  const handlePaneContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     setContextMenu(prev => ({...prev, visible: false}));
   }, []);
@@ -556,7 +557,7 @@ const FlowEditorContent = ({
     const currentNodesJSON = JSON.stringify(currentNodes);
     const currentEdgesJSON = JSON.stringify(currentEdges);
     
-    if (onSave && reactFlowInstance && 
+    if (onSave && reactFlowInstance && !isDragging &&
         (currentNodesJSON !== previousNodesRef.current || 
          currentEdgesJSON !== previousEdgesRef.current)) {
       previousNodesRef.current = currentNodesJSON;
@@ -574,7 +575,7 @@ const FlowEditorContent = ({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [onSave, reactFlowInstance, propNodes, propEdges]);
+  }, [onSave, reactFlowInstance, propNodes, propEdges, isDragging]);
 
   const [editingGroup, setEditingGroup] = useState<{
     id: string;
@@ -1462,7 +1463,25 @@ const FlowEditorContent = ({
           onPaneClick={handlePaneClick}
           onEdgeClick={onEdgeClick}
           onNodeContextMenu={handleNodeContextMenu}
-          onPaneContextMenu={handlePaneContextMenu}          
+          onPaneContextMenu={handlePaneContextMenu}
+          onNodeDragStart={(_event, _node) => setIsDragging(true)}
+          onNodeDragStop={(_event, _node) => {
+            setIsDragging(false);
+            // Forzar un guardado al finalizar el arrastre si es necesario,
+            // ya que el useEffect de onSave ahora está condicionado por isDragging.
+            // Esto asegura que la posición final se guarde.
+            if (onSave && reactFlowInstance) {
+              if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+              }
+              saveTimeoutRef.current = setTimeout(() => {
+                const flow = reactFlowInstance.toObject();
+                 onSave?.(flow);
+                 previousNodesRef.current = JSON.stringify(reactFlowInstance.getNodes());
+                 previousEdgesRef.current = JSON.stringify(reactFlowInstance.getEdges());
+              }, 100); // Un pequeño delay para asegurar que todo se actualizó
+            }
+          }}
           onMouseDown={(event: React.MouseEvent) => { 
             if (activeTool === 'area' && reactFlowInstance) {
               const target = event.target as HTMLElement;
@@ -1555,6 +1574,10 @@ const FlowEditorContent = ({
           selectionOnDrag={activeTool === 'lasso'}
           selectionMode={SelectionMode.Partial}
           multiSelectionKeyCode={['Shift']}
+          // dragBuffer={1} // Comentado temporalmente
+          // elevateNodesOnSelect={false} // Comentado temporalmente
+          snapToGrid={false}
+          nodeDragThreshold={5}
         >
           <Background 
             id="1"
