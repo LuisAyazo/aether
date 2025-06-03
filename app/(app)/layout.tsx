@@ -125,7 +125,7 @@ export default function AppLayout({
   return (
     <>
       <Navigation />
-      <main className="pt-16"> {/* Ajustar pt si la altura del Nav cambia */}
+      <main className="pt-14"> {/* Ajustado pt-16 a pt-14 para coincidir con h-14 del Nav */}
         {children}
       </main>
     </>

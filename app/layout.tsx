@@ -24,11 +24,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
-  return (<html lang="es" className={`${inter.variable} ${geistMono.variable} scroll-smooth`}>
-      <body className={`${inter.className} antialiased bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-50`}> {/* Añadido fondo y color de texto base */}
+}) {
+  return <html lang="es" className={`${inter.variable} ${geistMono.variable} scroll-smooth h-full bg-slate-50 dark:bg-slate-900`}>
+      <body className={`${inter.className} antialiased text-slate-900 dark:text-slate-50 h-full`}>
         <AntdReact19Patch />
         {/* <Navigation />  Se elimina de aquí */}
         <GlobalIaCTemplatePanelWrapper /> {/* Asumiendo que estos son globales o se manejan contextualmente */}
@@ -37,5 +37,5 @@ export default function RootLayout({
         {/* El div con className="content" podría no ser necesario aquí si cada layout de grupo maneja su propia estructura */}
         {children} 
       </body>
-    </html>);
+    </html>;
 }

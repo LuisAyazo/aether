@@ -63,6 +63,7 @@ export interface Diagram {
   viewport?: Viewport;
   created_at: string;
   updated_at: string;
+  isFolder?: boolean; // Añadido para distinguir diagramas de directorios
   // Nuevos campos para manejar relaciones y metadatos
   nodeGroups?: Record<string, {
     nodeIds: string[];

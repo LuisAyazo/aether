@@ -375,7 +375,7 @@ export default function SettingsPage({ companyId }: SettingsPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 p-6">
+    <div className="bg-slate-100 dark:bg-slate-900 p-6 h-full"> {/* Cambiado min-h-screen a h-full y ajustado padding si es necesario */}
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <Title level={2} style={{ color: 'inherit' }} className="flex items-center gap-3 !text-3xl !font-bold !text-gray-900 !dark:text-slate-100">
