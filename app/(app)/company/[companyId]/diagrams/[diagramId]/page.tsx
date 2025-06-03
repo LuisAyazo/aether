@@ -60,7 +60,7 @@ import CredentialsPage from '../../../../../components/ui/CredentialsPage';
 import DeploymentsPage from '../../../../../components/ui/DeploymentsPage'; 
 import SettingsPage from '../../../../../components/ui/SettingsPage'; 
 import TeamPage from '../../../../../components/ui/TeamPage'; 
-import EdgeTypeToolbox from '../../../../../components/ui/EdgeTypeToolbox'; // Importar la Toolbox
+// EdgeTypeToolbox no se importa aquí
 
 // Servicios
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, deleteDiagram, deleteEnvironment } from '../../../../../services/diagramService';
@@ -852,8 +852,7 @@ export default function DiagramPage() {
   const renderDiagramEditor = () => {
     if (currentDiagram && selectedEnvironment && selectedDiagram) {
       return (
-        <> {/* Usar Fragment para permitir múltiples elementos hermanos */}
-          <EdgeTypeToolbox /> {/* Añadir la Toolbox aquí */}
+        // EdgeTypeToolbox ya no se renderiza aquí directamente
           <div className="h-full w-full" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
             <FlowEditor 
               key={`current-diagram-${currentDiagram.id}-${selectedEnvironment}-${selectedDiagram}`}
@@ -869,7 +868,6 @@ export default function DiagramPage() {
               onSave={onSaveDiagramCallback} 
             />
           </div>
-        </>
       );
     }
     if (!loading) {
@@ -1023,4 +1021,3 @@ export default function DiagramPage() {
     </SelectedEdgeTypeProvider>
   );
 }
-

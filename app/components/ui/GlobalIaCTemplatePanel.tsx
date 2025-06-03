@@ -1,7 +1,8 @@
 // Global IaC Template Panel Singleton for better rendering
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+const { useState, useEffect } = React; // Acceder a useState y useEffect desde el objeto React
 import { createPortal } from 'react-dom';
 import IaCTemplatePanel from './IaCTemplatePanel';
 import { ResourceType } from '@/app/types/resourceConfig';
