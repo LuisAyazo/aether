@@ -12,6 +12,8 @@ import {
   XMarkIcon,
   ServerIcon,
   SquaresPlusIcon, // Asegurar que SquaresPlusIcon esté importado
+  ArrowsUpDownIcon, // Icono para cambiar layout del toolbar
+  ArrowsPointingOutIcon, // Icono para el handle de arrastre
   
 } from '@heroicons/react/24/outline';
 import React from 'react';
@@ -349,7 +351,7 @@ const FlowEditorContent = ({
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodesHook] = useNodesState((propNodes || initialNodes) as Node[]); // Cast to Node[]
   const [edges, setEdgesHook] = useEdgesState((propEdges || initialEdges) as Edge[]); // Cast to Edge[]
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Inicializar a false
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState<string>(''); 
   const [activeDrag, setActiveDrag] = useState<{ 
@@ -394,7 +396,87 @@ const FlowEditorContent = ({
   const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isDragging, setIsDragging] = useState(false); // Para nodos
+  const [isToolbarDragging, setIsToolbarDragging] = useState(false);
+  // Estado para la posición del toolbar, inicializado desde localStorage o por defecto
+  const [toolbarPosition, setToolbarPosition] = useState(() => {
+    if (typeof window === 'undefined') return { x: 400, y: 20 }; // Default para SSR
+    const savedPosition = localStorage.getItem('toolbarPosition');
+    if (savedPosition) {
+      try {
+        const parsedPosition = JSON.parse(savedPosition);
+        // Asegurarse de que los valores sean números válidos
+        if (typeof parsedPosition.x === 'number' && typeof parsedPosition.y === 'number') {
+          return parsedPosition;
+        }
+      } catch (e) {
+        console.error("Error parsing toolbarPosition from localStorage", e);
+      }
+    }
+    return { x: window.innerWidth / 2 - 200, y: 20 };
+  });
+  const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 });
+  // Estado para el layout del toolbar, inicializado desde localStorage o por defecto
+  const [toolbarLayout, setToolbarLayout] = useState<'horizontal' | 'vertical'>(() => {
+    if (typeof window === 'undefined') return 'horizontal'; // Default para SSR
+    const savedLayout = localStorage.getItem('toolbarLayout') as 'horizontal' | 'vertical';
+    return savedLayout || 'horizontal';
+  });
+
+  // Guardar posición del toolbar en localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('toolbarPosition', JSON.stringify(toolbarPosition));
+    }
+  }, [toolbarPosition]);
+
+  // Guardar layout del toolbar en localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('toolbarLayout', toolbarLayout);
+    }
+  }, [toolbarLayout]);
+
+  // Guardar estado de sidebarOpen en localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
+    }
+  }, [sidebarOpen]);
+
+  // Cargar estado de sidebarOpen desde localStorage al montar
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedState = localStorage.getItem('sidebarOpen');
+      if (savedState === 'true' || savedState === 'false') {
+        setSidebarOpen(JSON.parse(savedState));
+      }
+    }
+  }, []); // El array vacío asegura que esto solo se ejecute al montar y desmontar
+  
+  useEffect(() => {
+    const handleToolbarMouseMove = (event: MouseEvent) => {
+      if (!isToolbarDragging) return;
+      setToolbarPosition({
+        x: event.clientX - dragStartOffset.x,
+        y: event.clientY - dragStartOffset.y,
+      });
+    };
+
+    const handleToolbarMouseUp = () => {
+      setIsToolbarDragging(false);
+    };
+
+    if (isToolbarDragging) {
+      window.addEventListener('mousemove', handleToolbarMouseMove);
+      window.addEventListener('mouseup', handleToolbarMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleToolbarMouseMove);
+      window.removeEventListener('mouseup', handleToolbarMouseUp);
+    };
+  }, [isToolbarDragging, dragStartOffset]);
 
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
@@ -2130,11 +2212,88 @@ const FlowEditorContent = ({
           )}
           {selectedEdge && <EdgeDeleteButton edge={selectedEdge} onEdgeDelete={onEdgeDelete} />}
           
-          <Panel position="top-center">
-            <div style={{ display: 'flex', gap: '8px', padding: '10px', background: 'rgba(255,255,255,0.9)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-              <button 
-                onClick={saveCurrentDiagramState} 
-                title="Guardar estado actual (zoom y posición)" 
+          {/* Panel de Herramientas Modificado */}
+          <div
+            style={{
+              position: 'absolute',
+              top: `${toolbarPosition.y}px`,
+              left: `${toolbarPosition.x}px`,
+              zIndex: 10,
+              // El cursor de agarre se moverá al handle
+              // cursor: isToolbarDragging ? 'grabbing' : 'grab', 
+              background: 'rgba(255,255,255,0.9)',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              // No se necesita padding aquí si el handle está dentro del contenido
+            }}
+            // onMouseDown ya no es necesario aquí, se moverá al handle
+          >
+            <Panel position="top-left" style={{ all: 'unset', display: 'flex' }}> 
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  flexDirection: toolbarLayout === 'horizontal' ? 'row' : 'column',
+                  alignItems: 'center', // Centrar items para el handle
+                  gap: '8px', 
+                  padding: '5px', // Padding para el contenido interno
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <button // Handle de arrastre
+                  onMouseDown={(e) => {
+                    e.stopPropagation(); // Evitar que el panel de React Flow lo capture si estuviera activo
+                    setIsToolbarDragging(true);
+                    setDragStartOffset({
+                      x: e.clientX - toolbarPosition.x,
+                      y: e.clientY - toolbarPosition.y,
+                    });
+                  }}
+                  title="Drag Toolbar"
+                  style={{
+                    cursor: isToolbarDragging ? 'grabbing' : 'grab',
+                    padding: '4px', // Pequeño padding para el icono
+                    background: 'transparent',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    // Order para que esté al principio o final según layout
+                    order: toolbarLayout === 'horizontal' ? -2 : 0, 
+                  }}
+                >
+                  <ArrowsPointingOutIcon className="h-5 w-5 text-gray-500" />
+                </button>
+                <button
+                  onClick={() => {
+                    const newLayout = toolbarLayout === 'horizontal' ? 'vertical' : 'horizontal';
+                    setToolbarLayout(newLayout);
+                    if (newLayout === 'vertical') {
+                      setToolbarPosition({ x: 20, y: 70 });
+                    } else {
+                      setToolbarPosition({ x: (typeof window !== 'undefined' ? window.innerWidth / 2 - 200 : 400), y: 20 });
+                    }
+                  }}
+                  title={toolbarLayout === 'horizontal' ? "Switch to Vertical Toolbar" : "Switch to Horizontal Toolbar"}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    padding: '0',
+                    transition: 'background 0.2s',
+                    order: toolbarLayout === 'horizontal' ? -1 : 0, // Poner al inicio si es horizontal
+                  }}
+                >
+                  <ArrowsUpDownIcon className="h-5 w-5" />
+                </button>
+                <button 
+                  onClick={saveCurrentDiagramState} 
+                  title="Guardar estado actual (zoom y posición)" 
                 style={{
                   background: '#4CAF50',
                   border: 'none',
@@ -2278,6 +2437,7 @@ const FlowEditorContent = ({
               </button>
             </div>
           </Panel>
+        </div> {/* Cierre del div wrapper del toolbar */}
 
           {!sidebarOpen && (
             <Panel position="top-right">

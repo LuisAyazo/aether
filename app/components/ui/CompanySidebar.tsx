@@ -28,12 +28,52 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   activeSection: propActiveSection,
   onSectionChange,
   companyName = 'Company',
-  isCollapsed = false,
+  isCollapsed: propIsCollapsed = false, // Renombrar prop para evitar conflicto con estado interno
   onToggleCollapse
 }) => {
   const params = useParams();
   const router = useRouter();
   const companyId = params.companyId as string;
+
+  // 1. Inicializar con propIsCollapsed. 
+  //    El useEffect subsiguiente cargará desde localStorage si existe un valor.
+  const [internalIsCollapsed, setInternalIsCollapsed] = useState(propIsCollapsed);
+
+  // 2. Cargar desde localStorage cuando companyId esté disponible.
+  //    Este efecto se ejecuta si companyId cambia.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && companyId) { // Solo operar si hay un companyId válido
+      const savedState = localStorage.getItem(`companySidebarCollapsed_${companyId}`);
+      if (savedState !== null) {
+        try {
+          setInternalIsCollapsed(JSON.parse(savedState));
+        } catch (e) {
+          console.error("Error parsing companySidebarCollapsed from localStorage", e);
+          // Si hay error al parsear, el estado se mantiene como fue inicializado por useState (propIsCollapsed).
+        }
+      }
+      // Si no hay savedState para este companyId, internalIsCollapsed mantiene el valor 
+      // con el que fue inicializado por useState (propIsCollapsed), lo cual es correcto.
+    }
+    // Si no hay companyId, no se intenta leer de localStorage, y el estado se mantiene
+    // como fue inicializado por useState (propIsCollapsed).
+  }, [companyId]); // Depender solo de companyId.
+
+  // 3. Guardar en localStorage cuando internalIsCollapsed o companyId cambien.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && companyId) {
+      localStorage.setItem(`companySidebarCollapsed_${companyId}`, JSON.stringify(internalIsCollapsed));
+    }
+  }, [internalIsCollapsed, companyId]);
+
+  const handleToggleCollapse = () => {
+    const newState = !internalIsCollapsed;
+    setInternalIsCollapsed(newState); // Actualiza el estado interno
+    // El useEffect anterior se encargará de guardar en localStorage.
+    if (onToggleCollapse) {
+      onToggleCollapse(); // Notificar al padre. El padre puede actualizar su propIsCollapsed.
+    }
+  };
 
   // Get current section from sessionStorage or default to diagrams
   const getCurrentSection = (): 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team' => {
@@ -126,25 +166,24 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   };
 
   return (
-    <div className={`bg-white flex flex-col h-full transition-all duration-300 ${isCollapsed ? 'w-16' : 'w-72'}`}>
+    <div className={`bg-white flex flex-col h-full transition-all duration-300 ${internalIsCollapsed ? 'w-16' : 'w-72'}`}>
       {/* Company Header with Toggle */}
-      <div className={`border-b border-gray-200 ${isCollapsed ? 'p-2' : 'p-4'}`}>
-        <div className={`flex items-center ${isCollapsed ? 'flex-col space-y-2' : 'justify-between'}`}>
-          {isCollapsed ? (
+      <div className={`border-b border-gray-200 ${internalIsCollapsed ? 'p-2' : 'p-4'}`}>
+        <div className={`flex items-center ${internalIsCollapsed ? 'flex-col space-y-2' : 'justify-between'}`}>
+          {internalIsCollapsed ? (
             <>
               {/* Collapsed Layout - Vertical Stack */}
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                 <BuildingOfficeIcon className="w-6 h-6 text-white" />
               </div>
-              {onToggleCollapse && (
-                <button
-                  onClick={onToggleCollapse}
-                  className="p-2 rounded-md hover:bg-gray-100 transition-colors w-full flex justify-center"
-                  title="Expandir sidebar"
+              {/* Usar handleToggleCollapse para el botón interno */}
+              <button
+                onClick={handleToggleCollapse}
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors w-full flex justify-center"
+                title="Expandir sidebar"
                 >
                   <ChevronRightIcon className="w-5 h-5 text-gray-500" />
                 </button>
-              )}
             </>
           ) : (
             <>
@@ -158,22 +197,21 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
                   <p className="text-sm text-gray-500">Empresa</p>
                 </div>
               </div>
-              {onToggleCollapse && (
-                <button
-                  onClick={onToggleCollapse}
-                  className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-                  title="Contraer sidebar"
+              {/* Usar handleToggleCollapse para el botón interno */}
+              <button
+                onClick={handleToggleCollapse}
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
+                title="Contraer sidebar"
                 >
                   <ChevronLeftIcon className="w-5 h-5 text-gray-500" />
                 </button>
-              )}
             </>
           )}
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className={`flex-1 space-y-1 ${isCollapsed ? 'p-1' : 'p-2'}`}>
+      <nav className={`flex-1 space-y-1 ${internalIsCollapsed ? 'p-1' : 'p-2'}`}>
         {navigation.map((item) => {
           const isActive = currentActiveSection === item.id;
           const Icon = isActive ? item.iconSolid : item.icon;
@@ -185,13 +223,13 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
               className={`
                 w-full flex items-center rounded-lg transition-all duration-200
                 group hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                ${isCollapsed ? 'px-2 py-3 justify-center' : 'px-4 py-3 space-x-3'}
+                ${internalIsCollapsed ? 'px-2 py-3 justify-center' : 'px-4 py-3 space-x-3'}
                 ${isActive 
                   ? `bg-${item.color}-50 border border-${item.color}-200 shadow-sm` 
                   : 'hover:bg-gray-50'
                 }
               `}
-              title={isCollapsed ? item.name : undefined}
+              title={internalIsCollapsed ? item.name : undefined}
             >
               <Icon 
                 className={`
@@ -202,7 +240,7 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
                   }
                 `} 
               />
-              {!isCollapsed && (
+              {!internalIsCollapsed && (
                 <div className="flex-1 min-w-0 text-left">
                   <p className={`
                     text-sm font-medium transition-colors
@@ -224,7 +262,7 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
                   </p>
                 </div>
               )}
-              {isActive && !isCollapsed && (
+              {isActive && !internalIsCollapsed && (
                 <div className={`w-2 h-2 rounded-full bg-${item.color}-600 animate-pulse`} />
               )}
             </button>
@@ -233,7 +271,7 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
       </nav>
 
       {/* Footer */}
-      {!isCollapsed && (
+      {!internalIsCollapsed && (
         <div className="p-4 border-t border-gray-200">
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
             <h3 className="text-sm font-medium text-gray-900 mb-1">

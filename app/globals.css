@@ -1,19 +1,6 @@
-@import "tailwindcss";
-
-:root {
-  --background: transparent;
-  --foreground: #171717;
-  --primary: #3b82f6;
-  --primary-dark: #2563eb;
-  --secondary: #10b981;
-  --accent: #d2b48c;
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, sans-serif;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Animations */
 @keyframes fadeIn {
