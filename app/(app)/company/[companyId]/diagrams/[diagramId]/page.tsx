@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useTransition, JSX } from 'react'; // Añadido JSX
+import React, { useState, useEffect, useCallback, useRef, useTransition, JSX } from 'react'; 
 import ReactDOM from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import './page.css';
@@ -9,10 +9,10 @@ import { PlusOutlined, EyeOutlined, PlayCircleOutlined, ArrowUpOutlined, DeleteO
 import { 
   ExclamationTriangleIcon, 
   KeyIcon,
-  GlobeAltIcon, // Para VNet, App Gateway
-  RectangleStackIcon, // Para Subnet
-  ShieldCheckIcon, // Para NSG, Firewall
-  ArrowsRightLeftIcon, // Para Load Balancer
+  GlobeAltIcon, 
+  RectangleStackIcon, 
+  ShieldCheckIcon, 
+  ArrowsRightLeftIcon, 
   ServerIcon, 
   CloudIcon,
   CircleStackIcon,
@@ -30,8 +30,8 @@ import {
   ComputerDesktopIcon,
   ServerStackIcon,
   CubeIcon,
-  ChartBarIcon as SolidChartBarIcon, 
-  FolderIcon, 
+  ChartBarIcon as SolidChartBarIconHero, 
+  FolderIcon as FolderIconOutline, 
   DocumentTextIcon 
 } from '@heroicons/react/24/outline';
 import ChartBarIcon from '@heroicons/react/24/solid/ChartBarIcon'; 
@@ -47,27 +47,27 @@ import {
   type NodeChange,
   type EdgeChange,
   type Connection,
-  type Viewport as ReactFlowViewport // Importar Viewport de reactflow
+  type Viewport as ReactFlowViewport
 } from 'reactflow';
 
 // Componentes
-import FlowEditor from '../../../../../components/flow/FlowEditor'; // Corregida ruta
-import EnvironmentTreeSelect from '../../../../../components/ui/EnvironmentTreeSelect'; // Corregida ruta
-import EnvironmentCategorySelect from '../../../../../components/ui/EnvironmentCategorySelect'; // Corregida ruta
-import DiagramTreeSelect from '../../../../../components/ui/DiagramTreeSelect'; // Corregida ruta
-import CompanySidebar from '../../../../../components/ui/CompanySidebar'; // Corregida ruta
-import CredentialsPage from '../../../../../components/ui/CredentialsPage'; // Corregida ruta
-import DeploymentsPage from '../../../../../components/ui/DeploymentsPage'; // Corregida ruta
-import SettingsPage from '../../../../../components/ui/SettingsPage'; // Corregida ruta
-import TeamPage from '../../../../../components/ui/TeamPage'; // Corregida ruta
+import FlowEditor from '../../../../../components/flow/FlowEditor'; 
+import EnvironmentTreeSelect from '../../../../../components/ui/EnvironmentTreeSelect'; 
+import EnvironmentCategorySelect from '../../../../../components/ui/EnvironmentCategorySelect'; 
+import DiagramTreeSelect from '../../../../../components/ui/DiagramTreeSelect'; 
+import CompanySidebar from '../../../../../components/ui/CompanySidebar'; 
+import CredentialsPage from '../../../../../components/ui/CredentialsPage'; 
+import DeploymentsPage from '../../../../../components/ui/DeploymentsPage'; 
+import SettingsPage from '../../../../../components/ui/SettingsPage'; 
+import TeamPage from '../../../../../components/ui/TeamPage'; 
 
 // Servicios
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, deleteDiagram, deleteEnvironment } from '../../../../../services/diagramService';
 import { isAuthenticated } from '../../../../../services/authService';
 
 // Tipos y utilidades
-import nodeTypes from '../../../../../components/nodes/NodeTypes'; // Corregida ruta
-import { Node, Edge } from '../../../../../services/diagramService'; // Corregida ruta
+import nodeTypes from '../../../../../components/nodes/NodeTypes'; 
+import { Node, Edge } from '../../../../../services/diagramService'; 
 
 const { TextArea } = Input;
 
@@ -99,7 +99,7 @@ const resourceCategories: ResourceCategory[] = [
       { type: 'aws_dynamodb_table', name: 'DynamoDB Table', description: 'Base de datos NoSQL Key-Value y Documento', provider: 'aws', icon: <TableCellsIcon /> },
       { type: 'aws_elasticache_cluster', name: 'ElastiCache Cluster', description: 'Caché en memoria (Redis/Memcached)', provider: 'aws', icon: <BoltIcon /> },
       { type: 'aws_redshift_cluster', name: 'Redshift Cluster', description: 'Almacén de datos (Data Warehouse)', provider: 'aws', icon: <CircleStackIcon /> },
-      { type: 'aws_efs_file_system', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws', icon: <FolderIcon /> },
+      { type: 'aws_efs_file_system', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws', icon: <FolderIconOutline /> },
     ]
   },
   {
@@ -151,14 +151,14 @@ const resourceCategories: ResourceCategory[] = [
       { type: 'azurerm_storage_container', name: 'Storage Container (Blob)', description: 'Contenedor de Blob Storage', provider: 'azure', icon: <ArchiveBoxIcon /> },
       { type: 'azurerm_cosmosdb_account', name: 'Cosmos DB Account', description: 'Cuenta de Azure Cosmos DB (NoSQL)', provider: 'azure', icon: <CircleStackIcon /> },
       { type: 'azurerm_mssql_database', name: 'SQL Database', description: 'Base de datos SQL de Azure', provider: 'azure', icon: <CircleStackIcon /> },
-      { type: 'azurerm_storage_share', name: 'File Share', description: 'Recurso compartido de Azure Files', provider: 'azure', icon: <FolderIcon /> },
+      { type: 'azurerm_storage_share', name: 'File Share', description: 'Recurso compartido de Azure Files', provider: 'azure', icon: <FolderIconOutline /> },
     ]
   },
   {
     name: 'Azure - Analytics',
     provider: 'azure',
     items: [
-      { type: 'azurerm_synapse_workspace', name: 'Synapse Workspace', description: 'Espacio de trabajo de Azure Synapse Analytics', provider: 'azure', icon: <SolidChartBarIcon /> },
+      { type: 'azurerm_synapse_workspace', name: 'Synapse Workspace', description: 'Espacio de trabajo de Azure Synapse Analytics', provider: 'azure', icon: <SolidChartBarIconHero /> },
     ]
   },
   {
@@ -224,7 +224,7 @@ const resourceCategories: ResourceCategory[] = [
       { type: 'gcp_bigquery_dataset', name: 'BigQuery Dataset', description: 'Conjunto de datos de BigQuery', provider: 'gcp', icon: <TableCellsIcon /> },
       { type: 'gcp_firestore_database', name: 'Firestore Database', description: 'Base de datos NoSQL en modo Nativo o Datastore', provider: 'gcp', icon: <DocumentTextIcon /> }, 
       { type: 'gcp_memorystore_instance', name: 'Memorystore Instance', description: 'Servicio de caché Redis o Memcached', provider: 'gcp', icon: <BoltIcon /> },
-      { type: 'gcp_filestore_instance', name: 'Filestore Instance', description: 'Almacenamiento de archivos NFS gestionado', provider: 'gcp', icon: <FolderIcon /> },
+      { type: 'gcp_filestore_instance', name: 'Filestore Instance', description: 'Almacenamiento de archivos NFS gestionado', provider: 'gcp', icon: <FolderIconOutline /> },
     ]
   },
   {
@@ -275,7 +275,8 @@ export default function DiagramPage() {
   
   const [previousDiagram, setPreviousDiagram] = useState<Diagram | null>(null);
   
-  const [activeSection, setActiveSection] = useState<'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team'>('diagrams');
+  type SectionKeys = 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team';
+  const [activeSection, setActiveSection] = useState<SectionKeys>('diagrams');
   const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   
@@ -564,10 +565,15 @@ export default function DiagramPage() {
               setSelectedEnvironment(environmentsData[0].id);
               const diagramsData = await getDiagramsByEnvironment(companyId as string, environmentsData[0].id);
               setDiagrams(diagramsData);
-              if (diagramsData.length > 0) { setSelectedDiagram(diagramsData[0].id); setCurrentDiagram(diagramsData[0]); }
-              else { setSelectedDiagram(null); setCurrentDiagram(null); }
+              if (diagramsData.length > 0) { 
+                setSelectedDiagram(diagramsData[0].id); 
+                setCurrentDiagram(diagramsData[0] as Diagram); // Coerción para satisfacer al linter
+              } else { 
+                setSelectedDiagram(null); 
+                setCurrentDiagram(null); 
+              }
             } else {
-              setSelectedEnvironment(null); setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null);
+              setSelectedEnvironment(null); setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null); // Correcto: null
             }
           }
         } catch (error) { message.error(error instanceof Error ? error.message : "No se pudo eliminar el ambiente."); }
@@ -583,7 +589,7 @@ export default function DiagramPage() {
     try {
       const newDiagram = await createDiagram(companyId as string, selectedEnvironment, { name: newDiagramName, description: newDiagramDescription, path: newDiagramPath.trim() || undefined, nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } });
       const diagramsData = await getDiagramsByEnvironment(companyId as string, selectedEnvironment);
-      setDiagrams(diagramsData); setSelectedDiagram(newDiagram.id); setCurrentDiagram(newDiagram);
+      setDiagrams(diagramsData); setSelectedDiagram(newDiagram.id); setCurrentDiagram(newDiagram); // Correcto: newDiagram es Diagram
       const selectedEnv = environments.find(env => env.id === selectedEnvironment);
       if (!selectedEnv) throw new Error('Ambiente no encontrado');
       updateUrlWithNames(selectedEnvironment, newDiagram.id, selectedEnv.name, newDiagram.name);
@@ -624,11 +630,15 @@ export default function DiagramPage() {
       if (selectedDiagram === diagramToDelete.id) {
         if (diagramsData.length > 0) {
           const firstDiagram = diagramsData[0];
-          setSelectedDiagram(firstDiagram.id); setCurrentDiagram(firstDiagram);
+          setSelectedDiagram(firstDiagram.id); 
+          setCurrentDiagram(firstDiagram); // Correcto: firstDiagram es Diagram
           const selectedEnv = environments.find(env => env.id === selectedEnvironment);
           if (selectedEnv) updateUrlWithNames(selectedEnvironment, firstDiagram.id, selectedEnv.name, firstDiagram.name);
         } else {
-          setSelectedDiagram(null); setCurrentDiagram(null); setNodes([]); setEdges([]); router.push(`/company/${companyId}/diagrams`);
+          setSelectedDiagram(null); 
+          setCurrentDiagram(null); // Correcto: null
+          setNodes([]); setEdges([]); 
+          router.push(`/company/${companyId}/diagrams`);
         }
       }
       setDeleteConfirmVisible(false); setDiagramToDelete(null);
@@ -929,17 +939,16 @@ export default function DiagramPage() {
   };
 
   const renderDiagramEditor = () => {
-    // Si hay diagrama seleccionado y no estamos en loading general, lo mostramos
     if (currentDiagram && selectedEnvironment && selectedDiagram) {
       return (
         <div className="h-full w-full" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
           <FlowEditor 
             key={`current-diagram-${currentDiagram.id}-${selectedEnvironment}-${selectedDiagram}`}
             companyId={companyId as string} 
-            environmentId={selectedEnvironment} // Ya no es null aquí
-            diagramId={selectedDiagram} // Ya no es null aquí
-            initialDiagram={currentDiagram!} // Aserción de no nulidad, ya que está dentro del if
-            initialViewport={currentDiagram!.viewport}
+            environmentId={selectedEnvironment} 
+            diagramId={selectedDiagram} 
+            initialDiagram={currentDiagram} 
+            initialViewport={currentDiagram.viewport}
             nodeTypes={nodeTypes} 
             resourceCategories={resourceCategories}
             nodes={nodes}
@@ -947,23 +956,17 @@ export default function DiagramPage() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onSave={(diagramData: { nodes: ReactFlowNode[]; edges: ReactFlowEdge[]; viewport?: ReactFlowViewport }) => { // Usar tipos de ReactFlow aquí
+            onSave={(diagramData: { nodes: ReactFlowNode[]; edges: ReactFlowEdge[]; viewport?: ReactFlowViewport }) => { 
               if (isUpdatingRef.current) return;
-              // Convertir a tipos personalizados ANTES de llamar a updateDiagram
               const customNodes = convertToCustomNodes(diagramData.nodes);
               const customEdges = convertToCustomEdges(diagramData.edges);
               const flowData = { nodes: customNodes, edges: customEdges, viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 } };
               
-              // La lógica de nodeGroups y nodePositions ya usa ReactFlowNode, lo cual está bien si se recalcula aquí
-              // o si se pasa diagramData.nodes (ReactFlowNode[]) a esa lógica.
-              // Por ahora, asumimos que la lógica interna de onSave se adapta o ya usa los tipos correctos.
-              // La clave es que updateDiagram espera los tipos personalizados.
-              const groupNodes = diagramData.nodes.filter((node: ReactFlowNode) => node.type === 'group'); // Usa diagramData.nodes (ReactFlowNode[])
+              const groupNodes = diagramData.nodes.filter((node: ReactFlowNode) => node.type === 'group'); 
               const nodeGroups: Record<string, any> = {}; 
               const nodePositions: Record<string, any> = {};
               
               groupNodes.forEach((groupNode: ReactFlowNode) => {
-                // Al filtrar flowData.nodes (que son CustomNode[]), la comparación de parentNode (string) con groupNode.id (string) es correcta.
                 const childNodes = flowData.nodes.filter(node => node.parentNode === groupNode.id); 
                 nodeGroups[groupNode.id] = { 
                   nodeIds: childNodes.map(node => node.id), 
@@ -975,7 +978,7 @@ export default function DiagramPage() {
                   label: groupNode.data?.label || 'Group' 
                 };
                 nodePositions[groupNode.id] = {};
-                childNodes.forEach(childNode => { // childNode es CustomNode aquí
+                childNodes.forEach(childNode => { 
                   nodePositions[groupNode.id][childNode.id] = { 
                     relativePosition: { ...childNode.position }, 
                     dimensions: { 
@@ -985,8 +988,7 @@ export default function DiagramPage() {
                   };
                 });
               });
-              // customNodes y customEdges ya están definidos arriba y son del tipo correcto para updateDiagram
-              updateDiagram(companyId as string, selectedEnvironment as string, selectedDiagram as string, { name: currentDiagram!.name, description: currentDiagram!.description, nodes: customNodes, edges: customEdges, viewport: flowData.viewport, nodeGroups, nodePositions })
+              updateDiagram(companyId as string, selectedEnvironment as string, selectedDiagram as string, { name: currentDiagram.name, description: currentDiagram.description, nodes: customNodes, edges: customEdges, viewport: flowData.viewport, nodeGroups, nodePositions })
                 .then(() => message.success("Diagrama actualizado exitosamente."))
                 .catch(() => message.error("No se pudo guardar el diagrama."));
             }}
@@ -1051,7 +1053,7 @@ export default function DiagramPage() {
               {selectedEnvironment && (
                 <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
                   <span className="text-gray-700 font-medium mr-2">Diagrama:</span>
-                  <DiagramTreeSelect key={`diagram-selector-${diagrams.length}-${selectedDiagram}`} diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} companyId={companyId as string} environmentId={selectedEnvironment as string} className="min-w-[320px]" showDeleteButton={true} onDeleteDiagram={(id: string) => { const diagram = diagrams.find(d => d.id === id); if (diagram) confirmDeleteDiagram(diagram); }} /> {/* Tipo añadido */}
+                  <DiagramTreeSelect key={`diagram-selector-${diagrams.length}-${selectedDiagram}`} diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} companyId={companyId as string} environmentId={selectedEnvironment as string} className="min-w-[320px]" showDeleteButton={true} onDeleteDiagram={(id: string) => { const diagram = diagrams.find(d => d.id === id); if (diagram) confirmDeleteDiagram(diagram); }} />
                   <Button type="primary" icon={<PlusOutlined />} className="ml-2 bg-green-600 hover:bg-green-700 border-green-600" onClick={() => setNewDiagramModalVisible(true)} title="Crear nuevo diagrama" />
                 </div>
               )}
@@ -1125,7 +1127,13 @@ export default function DiagramPage() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <CompanySidebar companyName={company?.name || 'Cargando...'} activeSection={activeSection} onSectionChange={(section: 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team') => setActiveSection(section)} isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} /> {/* Tipo añadido */}
+      <CompanySidebar 
+        companyName={company?.name || 'Cargando...'} 
+        activeSection={activeSection} 
+        onSectionChange={(section: string) => setActiveSection(section as SectionKeys)} 
+        isCollapsed={sidebarCollapsed} 
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
+      />
       <div className="flex-1 overflow-auto">{renderActiveSection()}</div>
       <div className="fixed bottom-0 left-0 right-0 bg-red-100 text-xs p-1 text-red-900 z-50">Debug: {companyId as string} | Env: {selectedEnvironment || 'none'} | Diagram: {selectedDiagram || 'none'} | Nodes: {nodes.length} | Edges: {edges.length} | Loading: {loading ? 'true' : 'false'} | DiagramExists: {currentDiagram ? 'true' : 'false'}</div>
     </div>

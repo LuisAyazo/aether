@@ -7,6 +7,7 @@ export interface User { // Exportar la interfaz
   name: string;
   auth_provider?: 'email' | 'google' | 'github'; // Añadido
   usage_type?: 'personal' | 'company' | null; // Añadido
+  avatar_url?: string; // Añadido para el avatar del usuario
 }
 
 export interface AuthResponse { // Exportar también si se usa externamente

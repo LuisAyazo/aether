@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createCompany } from '../../services/companyService';
-import { isAuthenticated } from '../../services/authService';
+import { createCompany } from '../../../services/companyService'; // Corregida ruta
+import { isAuthenticated } from '../../../services/authService'; // Corregida ruta
 
 export default function CreateCompany() {
   const [name, setName] = useState('');
@@ -36,7 +36,9 @@ export default function CreateCompany() {
     setError('');
     
     try {
-      const company = await createCompany(name, slug);
+      // El backend espera un objeto con name, description (opcional), logo_url (opcional)
+      // El slug no se envía al backend para la creación de la compañía.
+      const company = await createCompany({ name: name }); 
       
       // Verificar que tengamos un ID válido antes de navegar
       if (company && company._id) {

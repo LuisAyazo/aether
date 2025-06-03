@@ -23,28 +23,62 @@ export interface Company {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-export async function createCompany(name: string, slug: string): Promise<Company> {
+interface CompanyCreationData {
+  name: string;
+  description?: string;
+  logo_url?: string;
+}
+
+export async function createCompany(companyData: CompanyCreationData): Promise<Company> {
   const token = getAuthToken();
   
   if (!token) {
     throw new Error('No estás autenticado');
   }
 
+  // Asegurarse de que solo se envían los campos definidos en CompanyCreate
+  const payload: CompanyCreationData = {
+    name: companyData.name,
+  };
+  if (companyData.description !== undefined) {
+    payload.description = companyData.description;
+  }
+  if (companyData.logo_url !== undefined) {
+    payload.logo_url = companyData.logo_url;
+  }
+
   try {
-    console.log(`Creando compañía: ${name}, slug: ${slug}`);
-    const response = await fetch(`${API_URL}/api/v1/companies`, { // Añadido v1
+    console.log(`Creando compañía con payload: ${JSON.stringify(payload)}`);
+    const response = await fetch(`${API_URL}/api/v1/companies`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ name, slug })
+      body: JSON.stringify(payload)
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Error al crear la compañía');
+      let errorDetail = 'Error al crear la compañía';
+      try {
+        const errorData = await response.json();
+        console.error("Error data from backend (createCompany):", errorData);
+        if (errorData && errorData.detail) {
+          if (Array.isArray(errorData.detail) && errorData.detail.length > 0) {
+            errorDetail = errorData.detail.map((d: any) => `${d.loc ? d.loc.join('.') : 'detail'}: ${d.msg}`).join('; ');
+          } else if (typeof errorData.detail === 'string') {
+            errorDetail = errorData.detail;
+          } else {
+            errorDetail = JSON.stringify(errorData.detail);
+          }
+        } else if (response.statusText) {
+          errorDetail = response.statusText;
+        }
+      } catch (e) {
+        errorDetail = response.statusText || 'Error al parsear respuesta de error.';
+      }
+      throw new Error(errorDetail);
     }
 
     // Guardar la compañía en localStorage como fallback

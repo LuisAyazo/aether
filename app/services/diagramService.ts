@@ -102,9 +102,12 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
   }
 
   const token = localStorage.getItem('token');
+  // API_BASE_URL es http://localhost:8000/api
+  // El backend espera /api/v1/companies/...
+  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments`;
   
   try {
-    const response = await fetch(`${API_BASE_URL}/companies/${companyId}/environments`, {
+    const response = await fetch(correctApiUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -144,7 +147,11 @@ export const createEnvironment = async (companyId: string, environmentData: { na
     console.log(`Intentando crear ambiente para compañía ${companyId}:`, environmentData);
     
     // Crear el ambiente usando el endpoint del backend
-    const response = await fetch(`${API_BASE_URL}/companies/${companyId}/environments`, {
+    // API_BASE_URL es http://localhost:8000/api
+    // El backend espera /api/v1/companies/...
+    const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments`;
+    console.log('URL para crear ambiente:', correctApiUrl); // Log para depurar URL
+    const response = await fetch(correctApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -183,7 +190,10 @@ export const updateEnvironment = async (companyId: string, environmentId: string
   }
 
   const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/environments/${environmentId}`, {
+  // API_BASE_URL es http://localhost:8000/api
+  // El backend espera /api/v1/companies/...
+  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
+  const response = await fetch(correctApiUrl, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -206,7 +216,10 @@ export const deleteEnvironment = async (companyId: string, environmentId: string
   }
 
   const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/environments/${environmentId}`, {
+  // API_BASE_URL es http://localhost:8000/api
+  // El backend espera /api/v1/companies/...
+  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
+  const response = await fetch(correctApiUrl, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',

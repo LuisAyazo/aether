@@ -7,7 +7,7 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000
 export const API_BASE_URL = `${API_URL}/api`;
 
 // Otras configuraciones globales
-export const APP_NAME = 'Aether';
+export const APP_NAME = 'InfraUX';
 export const APP_VERSION = '1.0.0';
 
 // Configuración de entornos

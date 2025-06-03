@@ -24,7 +24,8 @@ interface Deployment {
   id: string;
   name: string;
   environment: 'production' | 'staging' | 'development';
-  provider: 'aws' | 'gcp' | 'azure';
+  provider: 'aws' | 'gcp' | 'azure' | 'kubernetes' | 'docker'; // Añadir 'kubernetes', 'docker'
+  platform: 'ecs' | 'cloud-run' | 'fargate' | 'cloud-function' | 'kubernetes' | 'docker-instance' | 'unknown'; // Nueva propiedad
   status: 'running' | 'stopped' | 'deploying' | 'failed' | 'pending';
   region: string;
   lastDeployed: string;
@@ -58,6 +59,7 @@ const mockDeployments: Deployment[] = [
     name: 'Web App Frontend',
     environment: 'production',
     provider: 'aws',
+    platform: 'ecs',
     status: 'running',
     region: 'us-east-1',
     lastDeployed: '2024-01-15T10:30:00Z',
@@ -71,6 +73,7 @@ const mockDeployments: Deployment[] = [
     name: 'API Backend',
     environment: 'production',
     provider: 'gcp',
+    platform: 'cloud-run',
     status: 'running',
     region: 'us-central1',
     lastDeployed: '2024-01-14T15:45:00Z',
@@ -84,6 +87,7 @@ const mockDeployments: Deployment[] = [
     name: 'Analytics Pipeline',
     environment: 'staging',
     provider: 'azure',
+    platform: 'cloud-function',
     status: 'deploying',
     region: 'eastus',
     lastDeployed: '2024-01-15T14:20:00Z',
@@ -97,6 +101,7 @@ const mockDeployments: Deployment[] = [
     name: 'ML Model Service',
     environment: 'development',
     provider: 'aws',
+    platform: 'fargate',
     status: 'stopped',
     region: 'us-west-2',
     lastDeployed: '2024-01-12T09:15:00Z',
@@ -124,7 +129,19 @@ const environmentConfig = {
 const providerConfig = {
   aws: { name: 'AWS', icon: '🟧', color: 'text-orange-600' },
   gcp: { name: 'GCP', icon: '🟦', color: 'text-blue-600' },
-  azure: { name: 'Azure', icon: '🟨', color: 'text-sky-600' }
+  azure: { name: 'Azure', icon: '🟨', color: 'text-sky-600' },
+  kubernetes: { name: 'Kubernetes', icon: '☸️', color: 'text-indigo-600' },
+  docker: { name: 'Docker', icon: '🐳', color: 'text-cyan-600' }
+};
+
+const platformConfig: Record<Deployment['platform'], { name: string; icon: string; color: string }> = {
+  'ecs': { name: 'AWS ECS', icon: '📦', color: 'text-orange-500' },
+  'cloud-run': { name: 'Google Cloud Run', icon: '🏃', color: 'text-blue-500' },
+  'fargate': { name: 'AWS Fargate', icon: '💨', color: 'text-teal-500' },
+  'cloud-function': { name: 'Google Cloud Function', icon: '⚡', color: 'text-yellow-500' },
+  'kubernetes': { name: 'Kubernetes Cluster', icon: '☸️', color: 'text-indigo-500' },
+  'docker-instance': { name: 'Docker Instance', icon: '🐳', color: 'text-cyan-500' },
+  'unknown': { name: 'Desconocido', icon: '❓', color: 'text-gray-500' }
 };
 
 interface DeploymentsPageProps {
@@ -144,6 +161,8 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('all');
   const [selectedProvider, setSelectedProvider] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newDeploymentName, setNewDeploymentName] = useState('');
+  const [newDeploymentPlatform, setNewDeploymentPlatform] = useState<Deployment['platform'] | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [repositories, setRepositories] = useState<GitHubRepo[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
@@ -350,10 +369,10 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                 <RocketLaunchIcon className="h-8 w-8 text-blue-600" />
-                Despliegues
+                Despliegues Universales
               </h1>
               <p className="text-gray-600 mt-2">
-                Gestiona y monitorea todos tus despliegues en la nube
+                Gestiona, monitorea y lanza tus aplicaciones a múltiples plataformas cloud y on-premise.
               </p>
             </div>
             <button
@@ -365,6 +384,31 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
             </button>
           </div>
         </div>
+
+        {/* Info sobre Despliegue Universal */}
+        <Alert
+          message="Potencia de Despliegue Universal a tu Alcance"
+          description={
+            <div>
+              <Text>
+                InfraUX te permite desplegar tus aplicaciones y servicios a una amplia gama de plataformas, incluyendo:
+              </Text>
+              <ul className="list-disc list-inside mt-2 pl-4">
+                <li>AWS ECS & Fargate</li>
+                <li>Google Cloud Run & Cloud Functions</li>
+                <li>Kubernetes (cualquier clúster)</li>
+                <li>Instancias Docker Genéricas</li>
+                <li>¡Y más próximamente!</li>
+              </ul>
+              <Text className="mt-2 block">
+                Configura un nuevo despliegue y selecciona tu plataforma de destino para empezar.
+              </Text>
+            </div>
+          }
+          type="info"
+          showIcon
+          className="mb-8"
+        />
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -495,6 +539,12 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
                       <div className={`flex items-center gap-2 ${providerConfig[deployment.provider].color}`}>
                         <span className="text-lg">{providerConfig[deployment.provider].icon}</span>
                         <span className="text-sm font-medium">{providerConfig[deployment.provider].name}</span>
+                      </div>
+
+                      {/* Platform Badge */}
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${platformConfig[deployment.platform]?.color || platformConfig.unknown.color}`}>
+                        <span className="text-xs">{platformConfig[deployment.platform]?.icon || platformConfig.unknown.icon}</span>
+                        {platformConfig[deployment.platform]?.name || platformConfig.unknown.name}
                       </div>
                       
                       {/* Action Buttons */}
@@ -760,6 +810,68 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
             onChange={(e) => setGithubToken(e.target.value)}
           />
         </div>
+      </Modal>
+
+      {/* Modal para Crear Nuevo Despliegue */}
+      <Modal
+        title="Crear Nuevo Despliegue"
+        open={isCreateModalOpen}
+        onCancel={() => setIsCreateModalOpen(false)}
+        onOk={() => {
+          // Lógica para crear el despliegue
+          if (newDeploymentName && newDeploymentPlatform) {
+            const newDeployment: Deployment = {
+              id: String(deployments.length + 1),
+              name: newDeploymentName,
+              platform: newDeploymentPlatform,
+              environment: 'development', // Default o permitir seleccionar
+              provider: 'aws', // Default o derivar de plataforma/permitir seleccionar
+              status: 'pending',
+              region: 'us-east-1', // Default
+              lastDeployed: new Date().toISOString(),
+              resources: 0,
+              cost: 0,
+              version: 'v0.1.0',
+              description: `Nuevo despliegue para ${newDeploymentPlatform}`,
+            };
+            setDeployments(prev => [newDeployment, ...prev]);
+            message.success(`Despliegue "${newDeploymentName}" iniciado (simulado).`);
+            setIsCreateModalOpen(false);
+            setNewDeploymentName('');
+            setNewDeploymentPlatform(undefined);
+          } else {
+            message.error('Por favor, completa el nombre y la plataforma.');
+          }
+        }}
+        okText="Crear Despliegue"
+        confirmLoading={loading}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Input
+            placeholder="Nombre del Despliegue"
+            value={newDeploymentName}
+            onChange={(e) => setNewDeploymentName(e.target.value)}
+          />
+          <Select
+            placeholder="Seleccionar Plataforma de Destino"
+            style={{ width: '100%' }}
+            value={newDeploymentPlatform}
+            onChange={(value) => setNewDeploymentPlatform(value as Deployment['platform'])}
+          >
+            {Object.keys(platformConfig).filter(p => p !== 'unknown').map((platformKey) => (
+              <Option key={platformKey} value={platformKey}>
+                <Space>
+                  <span>{platformConfig[platformKey as Deployment['platform']].icon}</span>
+                  {platformConfig[platformKey as Deployment['platform']].name}
+                </Space>
+              </Option>
+            ))}
+          </Select>
+          {/* Aquí se podrían añadir más campos: entorno, proveedor, región, fuente, etc. */}
+          <Text type="secondary">
+            Más opciones de configuración (entorno, proveedor, etc.) estarán disponibles al editar el despliegue.
+          </Text>
+        </Space>
       </Modal>
     </div>
   );
