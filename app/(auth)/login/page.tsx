@@ -50,11 +50,20 @@ export default function LoginPage() {
   }
 
   const handleGoogleLogin = () => {
-    setError('Inicio de sesión con Google aún no implementado.');
+    // Redirigir al endpoint del backend que iniciará el flujo OAuth de Google
+    // Asegúrate de que la URL base del backend sea la correcta (ej. http://localhost:8000)
+    // Esta URL puede necesitar ser configurable o provenir de una variable de entorno.
+    // Corregido: Se añadió /v1 a la ruta para que coincida con el prefijo del backend
+    const backendGoogleLoginUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/v1/auth/google/login`;
+    window.location.href = backendGoogleLoginUrl;
   };
 
   const handleGitHubLogin = () => {
-    router.push('/api/auth/github'); 
+    // Similar para GitHub, si se implementa
+    // Corregido: Se añadió /v1 a la ruta
+    const backendGitHubLoginUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/v1/auth/github/login`;
+    // router.push('/api/auth/github'); // Esto era para un route handler de Next.js, ajustar si es necesario
+    window.location.href = backendGitHubLoginUrl; // Asumiendo que el backend maneja el inicio
   };
 
   return (

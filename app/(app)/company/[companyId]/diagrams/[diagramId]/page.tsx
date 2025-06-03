@@ -46,27 +46,28 @@ import {
   type OnConnect,
   type NodeChange,
   type EdgeChange,
-  type Connection
+  type Connection,
+  type Viewport as ReactFlowViewport // Importar Viewport de reactflow
 } from 'reactflow';
 
 // Componentes
-import FlowEditor from '../../../../components/flow/FlowEditor';
-import EnvironmentTreeSelect from '../../../../components/ui/EnvironmentTreeSelect';
-import EnvironmentCategorySelect from '../../../../components/ui/EnvironmentCategorySelect';
-import DiagramTreeSelect from '../../../../components/ui/DiagramTreeSelect';
-import CompanySidebar from '../../../../components/ui/CompanySidebar';
-import CredentialsPage from '../../../../components/ui/CredentialsPage';
-import DeploymentsPage from '../../../../components/ui/DeploymentsPage';
-import SettingsPage from '../../../../components/ui/SettingsPage';
-import TeamPage from '../../../../components/ui/TeamPage';
+import FlowEditor from '../../../../../components/flow/FlowEditor'; // Corregida ruta
+import EnvironmentTreeSelect from '../../../../../components/ui/EnvironmentTreeSelect'; // Corregida ruta
+import EnvironmentCategorySelect from '../../../../../components/ui/EnvironmentCategorySelect'; // Corregida ruta
+import DiagramTreeSelect from '../../../../../components/ui/DiagramTreeSelect'; // Corregida ruta
+import CompanySidebar from '../../../../../components/ui/CompanySidebar'; // Corregida ruta
+import CredentialsPage from '../../../../../components/ui/CredentialsPage'; // Corregida ruta
+import DeploymentsPage from '../../../../../components/ui/DeploymentsPage'; // Corregida ruta
+import SettingsPage from '../../../../../components/ui/SettingsPage'; // Corregida ruta
+import TeamPage from '../../../../../components/ui/TeamPage'; // Corregida ruta
 
 // Servicios
-import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, deleteDiagram, deleteEnvironment } from '../../../../services/diagramService';
-import { isAuthenticated } from '../../../../services/authService';
+import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, deleteDiagram, deleteEnvironment } from '../../../../../services/diagramService';
+import { isAuthenticated } from '../../../../../services/authService';
 
 // Tipos y utilidades
-import nodeTypes from '../../../../components/nodes/NodeTypes';
-import { Node, Edge } from '../../../../services/diagramService';
+import nodeTypes from '../../../../../components/nodes/NodeTypes'; // Corregida ruta
+import { Node, Edge } from '../../../../../services/diagramService'; // Corregida ruta
 
 const { TextArea } = Input;
 
@@ -937,8 +938,8 @@ export default function DiagramPage() {
             companyId={companyId as string} 
             environmentId={selectedEnvironment} // Ya no es null aquí
             diagramId={selectedDiagram} // Ya no es null aquí
-            initialDiagram={currentDiagram} // currentDiagram es Diagram aquí, no Diagram | null
-            initialViewport={currentDiagram.viewport}
+            initialDiagram={currentDiagram!} // Aserción de no nulidad, ya que está dentro del if
+            initialViewport={currentDiagram!.viewport}
             nodeTypes={nodeTypes} 
             resourceCategories={resourceCategories}
             nodes={nodes}
@@ -946,22 +947,46 @@ export default function DiagramPage() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onSave={(diagramData) => {
+            onSave={(diagramData: { nodes: ReactFlowNode[]; edges: ReactFlowEdge[]; viewport?: ReactFlowViewport }) => { // Usar tipos de ReactFlow aquí
               if (isUpdatingRef.current) return;
-              const flowData = { nodes: diagramData.nodes, edges: diagramData.edges, viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 } };
-              const groupNodes = flowData.nodes.filter((node: ReactFlowNode) => node.type === 'group');
-              const nodeGroups: Record<string, any> = {}; const nodePositions: Record<string, any> = {};
-              groupNodes.forEach((groupNode: ReactFlowNode) => {
-                const childNodes = flowData.nodes.filter((node: ReactFlowNode) => node.parentNode === groupNode.id);
-                nodeGroups[groupNode.id] = { nodeIds: childNodes.map((node: ReactFlowNode) => node.id), dimensions: { width: typeof groupNode.style?.width === 'number' ? groupNode.style.width : 300, height: typeof groupNode.style?.height === 'number' ? groupNode.style.height : 200 }, provider: groupNode.data?.provider || 'generic', label: groupNode.data?.label || 'Group' };
-                nodePositions[groupNode.id] = {};
-                childNodes.forEach((childNode: ReactFlowNode) => {
-                  nodePositions[groupNode.id][childNode.id] = { relativePosition: { ...childNode.position }, dimensions: { width: typeof childNode.style?.width === 'number' ? childNode.style.width : (typeof childNode.width === 'number' ? childNode.width : 100), height: typeof childNode.style?.height === 'number' ? childNode.style.height : (typeof childNode.height === 'number' ? childNode.height : 50) } };
-                });
-              });
+              // Convertir a tipos personalizados ANTES de llamar a updateDiagram
               const customNodes = convertToCustomNodes(diagramData.nodes);
               const customEdges = convertToCustomEdges(diagramData.edges);
-              updateDiagram(companyId as string, selectedEnvironment as string, selectedDiagram as string, { name: currentDiagram.name, description: currentDiagram.description, nodes: customNodes, edges: customEdges, viewport: flowData.viewport, nodeGroups, nodePositions })
+              const flowData = { nodes: customNodes, edges: customEdges, viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 } };
+              
+              // La lógica de nodeGroups y nodePositions ya usa ReactFlowNode, lo cual está bien si se recalcula aquí
+              // o si se pasa diagramData.nodes (ReactFlowNode[]) a esa lógica.
+              // Por ahora, asumimos que la lógica interna de onSave se adapta o ya usa los tipos correctos.
+              // La clave es que updateDiagram espera los tipos personalizados.
+              const groupNodes = diagramData.nodes.filter((node: ReactFlowNode) => node.type === 'group'); // Usa diagramData.nodes (ReactFlowNode[])
+              const nodeGroups: Record<string, any> = {}; 
+              const nodePositions: Record<string, any> = {};
+              
+              groupNodes.forEach((groupNode: ReactFlowNode) => {
+                // Al filtrar flowData.nodes (que son CustomNode[]), la comparación de parentNode (string) con groupNode.id (string) es correcta.
+                const childNodes = flowData.nodes.filter(node => node.parentNode === groupNode.id); 
+                nodeGroups[groupNode.id] = { 
+                  nodeIds: childNodes.map(node => node.id), 
+                  dimensions: { 
+                    width: typeof groupNode.style?.width === 'number' ? groupNode.style.width : 300, 
+                    height: typeof groupNode.style?.height === 'number' ? groupNode.style.height : 200 
+                  }, 
+                  provider: groupNode.data?.provider || 'generic', 
+                  label: groupNode.data?.label || 'Group' 
+                };
+                nodePositions[groupNode.id] = {};
+                childNodes.forEach(childNode => { // childNode es CustomNode aquí
+                  nodePositions[groupNode.id][childNode.id] = { 
+                    relativePosition: { ...childNode.position }, 
+                    dimensions: { 
+                      width: childNode.width || 100, 
+                      height: childNode.height || 50 
+                    } 
+                  };
+                });
+              });
+              // customNodes y customEdges ya están definidos arriba y son del tipo correcto para updateDiagram
+              updateDiagram(companyId as string, selectedEnvironment as string, selectedDiagram as string, { name: currentDiagram!.name, description: currentDiagram!.description, nodes: customNodes, edges: customEdges, viewport: flowData.viewport, nodeGroups, nodePositions })
                 .then(() => message.success("Diagrama actualizado exitosamente."))
                 .catch(() => message.error("No se pudo guardar el diagrama."));
             }}
@@ -1026,7 +1051,7 @@ export default function DiagramPage() {
               {selectedEnvironment && (
                 <div className="flex items-center bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
                   <span className="text-gray-700 font-medium mr-2">Diagrama:</span>
-                  <DiagramTreeSelect key={`diagram-selector-${diagrams.length}-${selectedDiagram}`} diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} companyId={companyId as string} environmentId={selectedEnvironment as string} className="min-w-[320px]" showDeleteButton={true} onDeleteDiagram={(diagramId) => { const diagram = diagrams.find(d => d.id === diagramId); if (diagram) confirmDeleteDiagram(diagram); }} />
+                  <DiagramTreeSelect key={`diagram-selector-${diagrams.length}-${selectedDiagram}`} diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} companyId={companyId as string} environmentId={selectedEnvironment as string} className="min-w-[320px]" showDeleteButton={true} onDeleteDiagram={(id: string) => { const diagram = diagrams.find(d => d.id === id); if (diagram) confirmDeleteDiagram(diagram); }} /> {/* Tipo añadido */}
                   <Button type="primary" icon={<PlusOutlined />} className="ml-2 bg-green-600 hover:bg-green-700 border-green-600" onClick={() => setNewDiagramModalVisible(true)} title="Crear nuevo diagrama" />
                 </div>
               )}
@@ -1100,7 +1125,7 @@ export default function DiagramPage() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <CompanySidebar companyName={company?.name || 'Cargando...'} activeSection={activeSection} onSectionChange={(section) => setActiveSection(section)} isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />
+      <CompanySidebar companyName={company?.name || 'Cargando...'} activeSection={activeSection} onSectionChange={(section: 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team') => setActiveSection(section)} isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} /> {/* Tipo añadido */}
       <div className="flex-1 overflow-auto">{renderActiveSection()}</div>
       <div className="fixed bottom-0 left-0 right-0 bg-red-100 text-xs p-1 text-red-900 z-50">Debug: {companyId as string} | Env: {selectedEnvironment || 'none'} | Diagram: {selectedDiagram || 'none'} | Nodes: {nodes.length} | Edges: {edges.length} | Loading: {loading ? 'true' : 'false'} | DiagramExists: {currentDiagram ? 'true' : 'false'}</div>
     </div>

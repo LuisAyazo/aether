@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Geist_Mono } from "next/font/google";
-import Navigation from "./components/Navigation";
+// import Navigation from "./components/Navigation"; // Navigation se moverá a (app)/layout.tsx
 import "./globals.css";
 import AntdReact19Patch from "./components/AntdReact19Patch";
 import GlobalIaCTemplatePanelWrapper from "./components/ui/GlobalIaCTemplatePanelWrapper";
@@ -28,15 +28,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (<html lang="es" className={`${inter.variable} ${geistMono.variable} scroll-smooth`}>
-      <body className={`${inter.className} antialiased`}>
+      <body className={`${inter.className} antialiased bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-50`}> {/* Añadido fondo y color de texto base */}
         <AntdReact19Patch />
-        <Navigation />
-        <GlobalIaCTemplatePanelWrapper />
+        {/* <Navigation />  Se elimina de aquí */}
+        <GlobalIaCTemplatePanelWrapper /> {/* Asumiendo que estos son globales o se manejan contextualmente */}
         <IaCPanelDebugger />
           
-        <div className="content">
-          {children}
-        </div>
+        {/* El div con className="content" podría no ser necesario aquí si cada layout de grupo maneja su propia estructura */}
+        {children} 
       </body>
     </html>);
 }

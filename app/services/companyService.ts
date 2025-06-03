@@ -32,7 +32,7 @@ export async function createCompany(name: string, slug: string): Promise<Company
 
   try {
     console.log(`Creando compañía: ${name}, slug: ${slug}`);
-    const response = await fetch(`${API_URL}/api/companies`, {
+    const response = await fetch(`${API_URL}/api/v1/companies`, { // Añadido v1
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -80,7 +80,7 @@ export async function getCompanies(): Promise<Company[]> {
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/companies`, {
+  const response = await fetch(`${API_URL}/api/v1/companies`, { // Añadido v1
     headers: {
       'Authorization': `Bearer ${token}`
     }
@@ -101,7 +101,7 @@ export const getCompany = async (companyId: string): Promise<Company> => {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/companies/${companyId}`, {
+    const response = await fetch(`${API_URL}/api/v1/companies/${companyId}`, { // Añadido v1
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
@@ -127,7 +127,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/companies/${companyId}`, {
+  const response = await fetch(`${API_URL}/api/v1/companies/${companyId}`, { // Añadido v1
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -151,7 +151,7 @@ export async function addMember(companyId: string, userEmail: string): Promise<{
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/companies/${companyId}/members/${userEmail}`, {
+  const response = await fetch(`${API_URL}/api/v1/companies/${companyId}/members/${userEmail}`, { // Añadido v1
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`

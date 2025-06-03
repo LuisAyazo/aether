@@ -1,12 +1,15 @@
 // Servicio para manejar la autenticación de usuarios
 
-interface User {
+export interface User { // Exportar la interfaz
   _id: string;
+  id?: string; // Para compatibilidad, ya que a veces se usa id
   email: string;
   name: string;
+  auth_provider?: 'email' | 'google' | 'github'; // Añadido
+  usage_type?: 'personal' | 'company' | null; // Añadido
 }
 
-interface AuthResponse {
+export interface AuthResponse { // Exportar también si se usa externamente
   access_token: string;
   token_type: string;
   user: User;
@@ -18,7 +21,7 @@ console.log('API URL:', API_URL); // Para debugging
 
 export async function registerUser(name: string, email: string, password: string) {
   try {
-    const response = await fetch(`${API_URL}/api/auth/register`, {
+    const response = await fetch(`${API_URL}/api/v1/auth/register`, { // Añadido v1
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -50,7 +53,7 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
     formData.append('username', email); // FastAPI OAuth2 espera 'username', aunque sea un email
     formData.append('password', password);
 
-    const response = await fetch(`${API_URL}/api/auth/login`, {
+    const response = await fetch(`${API_URL}/api/v1/auth/login`, { // Añadido v1
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
