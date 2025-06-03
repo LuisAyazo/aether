@@ -11,18 +11,17 @@ import {
   RectangleGroupIcon,
   XMarkIcon,
   ServerIcon,
-  SquaresPlusIcon, // Asegurar que SquaresPlusIcon esté importado
-  ArrowsUpDownIcon, // Icono para cambiar layout del toolbar
-  ArrowsPointingOutIcon, // Icono para el handle de arrastre
+  SquaresPlusIcon, 
+  ArrowsUpDownIcon, 
+  ArrowsPointingOutIcon, 
   
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { Diagram } from '@/app/services/diagramService';
-import nodeTypesFromFile from '../nodes/NodeTypes'; // Renamed to avoid conflict
+import nodeTypesFromFile from '../nodes/NodeTypes'; 
 import { NodeExecutionState, NodeWithExecutionStatus } from '../../utils/customTypes';
 import ExecutionLog from './ExecutionLog';
 
-// Destructurar los tipos y componentes necesarios desde ReactFlowLibrary
 const { 
   Background, 
   Controls, 
@@ -38,7 +37,6 @@ const {
   SelectionMode
 } = ReactFlowLibrary;
 
-// Tipos que se usarán directamente
 type Edge = ReactFlowLibrary.Edge;
 type EdgeTypes = ReactFlowLibrary.EdgeTypes;
 type Node = ReactFlowLibrary.Node;
@@ -49,7 +47,6 @@ type OnNodesChange = ReactFlowLibrary.OnNodesChange;
 type Viewport = ReactFlowLibrary.Viewport;
 
 
-// Add this interface at the top of the file with other interfaces
 interface SingleNodePreview {
   action: 'create' | 'update' | 'delete';
   resource: {
@@ -96,8 +93,8 @@ interface ResourceItem {
   type: string;
   name: string;
   description: string;
-  icon?: JSX.Element; // Cambiado a JSX.Element para mayor especificidad
-  provider: 'aws' | 'gcp' | 'azure' | 'generic' // Added provider
+  icon?: JSX.Element; 
+  provider: 'aws' | 'gcp' | 'azure' | 'generic' 
 }
 
 interface ContextMenu {
@@ -177,7 +174,6 @@ interface PreviewData {
   }>;
 }
 
-// Define throttle function outside or import if it's a general utility
 function throttle<T extends (...args: unknown[]) => void>(func: T, limit: number): (...args: Parameters<T>) => void {
   let inThrottle: boolean;
   let lastArgs: Parameters<T> | null = null;
@@ -196,7 +192,6 @@ function throttle<T extends (...args: unknown[]) => void>(func: T, limit: number
   return throttled;
 }
 
-// 🔒 Critical component below – do not edit or delete
 const EdgeDeleteButton = ({ edge, onEdgeDelete }: { edge: Edge; onEdgeDelete: (edge: Edge) => void }) => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const positionRef = useRef({ x: 0, y: 0 });
@@ -338,10 +333,10 @@ const FlowEditorContent = ({
   
   const memoizedNodeTypes: ReactFlowNodeTypes = useMemo(() => { 
     const combinedNodeTypes = {
-      ...nodeTypesFromFile, // Use renamed import         
+      ...nodeTypesFromFile,       
       ...externalNodeTypes,  
-      note: nodeTypesFromFile.noteNode, // Use renamed import
-      text: nodeTypesFromFile.textNode // Use renamed import
+      note: nodeTypesFromFile.noteNode, 
+      text: nodeTypesFromFile.textNode 
     };
     
     console.log('Available node types:', Object.keys(combinedNodeTypes));
@@ -349,9 +344,9 @@ const FlowEditorContent = ({
   }, [externalNodeTypes]);
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodesHook] = useNodesState((propNodes || initialNodes) as Node[]); // Cast to Node[]
-  const [edges, setEdgesHook] = useEdgesState((propEdges || initialEdges) as Edge[]); // Cast to Edge[]
-  const [sidebarOpen, setSidebarOpen] = useState(false); // Inicializar a false
+  const [nodes, setNodesHook] = useNodesState((propNodes || initialNodes) as Node[]); 
+  const [edges, setEdgesHook] = useEdgesState((propEdges || initialEdges) as Edge[]); 
+  const [sidebarOpen, setSidebarOpen] = useState(false); 
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState<string>(''); 
   const [activeDrag, setActiveDrag] = useState<{ 
@@ -396,16 +391,14 @@ const FlowEditorContent = ({
   const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
-  const [isDragging, setIsDragging] = useState(false); // Para nodos
+  const [isDragging, setIsDragging] = useState(false); 
   const [isToolbarDragging, setIsToolbarDragging] = useState(false);
-  // Estado para la posición del toolbar, inicializado desde localStorage o por defecto
   const [toolbarPosition, setToolbarPosition] = useState(() => {
-    if (typeof window === 'undefined') return { x: 400, y: 20 }; // Default para SSR
+    if (typeof window === 'undefined') return { x: 400, y: 20 }; 
     const savedPosition = localStorage.getItem('toolbarPosition');
     if (savedPosition) {
       try {
         const parsedPosition = JSON.parse(savedPosition);
-        // Asegurarse de que los valores sean números válidos
         if (typeof parsedPosition.x === 'number' && typeof parsedPosition.y === 'number') {
           return parsedPosition;
         }
@@ -416,35 +409,30 @@ const FlowEditorContent = ({
     return { x: window.innerWidth / 2 - 200, y: 20 };
   });
   const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 });
-  // Estado para el layout del toolbar, inicializado desde localStorage o por defecto
   const [toolbarLayout, setToolbarLayout] = useState<'horizontal' | 'vertical'>(() => {
-    if (typeof window === 'undefined') return 'horizontal'; // Default para SSR
+    if (typeof window === 'undefined') return 'horizontal'; 
     const savedLayout = localStorage.getItem('toolbarLayout') as 'horizontal' | 'vertical';
     return savedLayout || 'horizontal';
   });
 
-  // Guardar posición del toolbar en localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('toolbarPosition', JSON.stringify(toolbarPosition));
     }
   }, [toolbarPosition]);
 
-  // Guardar layout del toolbar en localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('toolbarLayout', toolbarLayout);
     }
   }, [toolbarLayout]);
 
-  // Guardar estado de sidebarOpen en localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen));
     }
   }, [sidebarOpen]);
 
-  // Cargar estado de sidebarOpen desde localStorage al montar
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedState = localStorage.getItem('sidebarOpen');
@@ -452,7 +440,7 @@ const FlowEditorContent = ({
         setSidebarOpen(JSON.parse(savedState));
       }
     }
-  }, []); // El array vacío asegura que esto solo se ejecute al montar y desmontar
+  }, []); 
   
   useEffect(() => {
     const handleToolbarMouseMove = (event: MouseEvent) => {
@@ -571,9 +559,9 @@ const FlowEditorContent = ({
         )
       );
     };
-    window.addEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener); // Cast to EventListener
+    window.addEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener); 
     return () => {
-      window.removeEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener); // Cast to EventListener
+      window.removeEventListener('updateAreaNode', handleAreaNodeUpdate as EventListener); 
     };
   }, [reactFlowInstance]);
 
@@ -592,9 +580,9 @@ const FlowEditorContent = ({
         customItems: items 
       });
     };
-    document.addEventListener('showContextMenu', handleShowContextMenu as EventListener); // Cast to EventListener
+    document.addEventListener('showContextMenu', handleShowContextMenu as EventListener); 
     return () => {
-      document.removeEventListener('showContextMenu', handleShowContextMenu as EventListener); // Cast to EventListener
+      document.removeEventListener('showContextMenu', handleShowContextMenu as EventListener); 
     };
   }, []);
 
@@ -696,7 +684,7 @@ const FlowEditorContent = ({
       const { nodeId, isFocused } = customEvent.detail;
       setFocusedNodeId(isFocused ? nodeId : null);
     };
-    window.addEventListener('nodeGroupFocus', handleNodeFocus as EventListener); // Cast to EventListener
+    window.addEventListener('nodeGroupFocus', handleNodeFocus as EventListener); 
     return () => {
     };
   }, []);
@@ -979,7 +967,7 @@ const FlowEditorContent = ({
         setNodesHook(updatedNodes as Node[]); 
       }
     }
-  }, [propNodes, setNodesHook, diagramId, reactFlowInstance]); // Changed setNodes to setNodesHook
+  }, [propNodes, setNodesHook, diagramId, reactFlowInstance]); 
 
   useEffect(() => {
     if (propEdges) {
@@ -989,7 +977,7 @@ const FlowEditorContent = ({
         setEdgesHook(propEdges as Edge[]); 
       }
     }
-  }, [propEdges, setEdgesHook, diagramId, reactFlowInstance]); // Changed setEdges to setEdgesHook
+  }, [propEdges, setEdgesHook, diagramId, reactFlowInstance]); 
 
   const findGroupAtPosition = useCallback((position: { x: number; y: number }) => {
     const currentNodes = reactFlowInstance.getNodes();
@@ -1130,7 +1118,7 @@ const FlowEditorContent = ({
     } catch (error) {
       console.error("Error handling node drop:", error);
     }
-  }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodesHook, diagramId, onSave, activeDrag, activeTool]); // Changed setNodes to setNodesHook
+  }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodesHook, diagramId, onSave, activeDrag, activeTool]); 
 
   const saveCurrentDiagramState = useCallback(() => {
     if (!reactFlowInstance || !onSave) return;
@@ -1549,9 +1537,6 @@ const FlowEditorContent = ({
           onNodeDragStart={(_event, _node) => setIsDragging(true)}
           onNodeDragStop={(_event, _node) => {
             setIsDragging(false);
-            // Forzar un guardado al finalizar el arrastre si es necesario,
-            // ya que el useEffect de onSave ahora está condicionado por isDragging.
-            // Esto asegura que la posición final se guarde.
             if (onSave && reactFlowInstance) {
               if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
@@ -1561,7 +1546,7 @@ const FlowEditorContent = ({
                  onSave?.(flow);
                  previousNodesRef.current = JSON.stringify(reactFlowInstance.getNodes());
                  previousEdgesRef.current = JSON.stringify(reactFlowInstance.getEdges());
-              }, 100); // Un pequeño delay para asegurar que todo se actualizó
+              }, 100); 
             }
           }}
           onMouseDown={(event: React.MouseEvent) => { 
@@ -1656,8 +1641,6 @@ const FlowEditorContent = ({
           selectionOnDrag={activeTool === 'lasso'}
           selectionMode={SelectionMode.Partial}
           multiSelectionKeyCode={['Shift']}
-          // dragBuffer={1} // Comentado temporalmente
-          // elevateNodesOnSelect={false} // Comentado temporalmente
           snapToGrid={false}
           nodeDragThreshold={5}
         >
@@ -2212,36 +2195,31 @@ const FlowEditorContent = ({
           )}
           {selectedEdge && <EdgeDeleteButton edge={selectedEdge} onEdgeDelete={onEdgeDelete} />}
           
-          {/* Panel de Herramientas Modificado */}
           <div
             style={{
               position: 'absolute',
               top: `${toolbarPosition.y}px`,
               left: `${toolbarPosition.x}px`,
               zIndex: 10,
-              // El cursor de agarre se moverá al handle
-              // cursor: isToolbarDragging ? 'grabbing' : 'grab', 
               background: 'rgba(255,255,255,0.9)',
               borderRadius: '8px',
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              // No se necesita padding aquí si el handle está dentro del contenido
             }}
-            // onMouseDown ya no es necesario aquí, se moverá al handle
           >
             <Panel position="top-left" style={{ all: 'unset', display: 'flex' }}> 
               <div 
                 style={{ 
                   display: 'flex', 
                   flexDirection: toolbarLayout === 'horizontal' ? 'row' : 'column',
-                  alignItems: 'center', // Centrar items para el handle
+                  alignItems: 'center', 
                   gap: '8px', 
-                  padding: '5px', // Padding para el contenido interno
+                  padding: '5px', 
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <button // Handle de arrastre
+                <button 
                   onMouseDown={(e) => {
-                    e.stopPropagation(); // Evitar que el panel de React Flow lo capture si estuviera activo
+                    e.stopPropagation(); 
                     setIsToolbarDragging(true);
                     setDragStartOffset({
                       x: e.clientX - toolbarPosition.x,
@@ -2251,13 +2229,12 @@ const FlowEditorContent = ({
                   title="Drag Toolbar"
                   style={{
                     cursor: isToolbarDragging ? 'grabbing' : 'grab',
-                    padding: '4px', // Pequeño padding para el icono
+                    padding: '4px', 
                     background: 'transparent',
                     border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    // Order para que esté al principio o final según layout
                     order: toolbarLayout === 'horizontal' ? -2 : 0, 
                   }}
                 >
@@ -2286,7 +2263,7 @@ const FlowEditorContent = ({
                     cursor: 'pointer',
                     padding: '0',
                     transition: 'background 0.2s',
-                    order: toolbarLayout === 'horizontal' ? -1 : 0, // Poner al inicio si es horizontal
+                    order: toolbarLayout === 'horizontal' ? -1 : 0, 
                   }}
                 >
                   <ArrowsUpDownIcon className="h-5 w-5" />
@@ -2437,22 +2414,22 @@ const FlowEditorContent = ({
               </button>
             </div>
           </Panel>
-        </div> {/* Cierre del div wrapper del toolbar */}
+        </div> 
 
           {!sidebarOpen && (
             <Panel position="top-right">
-              <button // Changed div to button for better semantics and accessibility
+              <button 
                 style={{ 
-                  padding: '10px 14px', // Increased padding
-                  background: 'rgba(255,255,255,0.95)', // Slightly more opaque
+                  padding: '10px 14px', 
+                  background: 'rgba(255,255,255,0.95)', 
                   borderRadius: '8px',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px', // Increased gap
-                  border: '1px solid rgba(0,0,0,0.05)', // Subtle border
-                  transition: 'background-color 0.2s, box-shadow 0.2s', // Added transition
+                  gap: '8px', 
+                  border: '1px solid rgba(0,0,0,0.05)', 
+                  transition: 'background-color 0.2s, box-shadow 0.2s', 
                 }}
                 onClick={() => setSidebarOpen(true)}
                 onMouseOver={(e) => {
@@ -2465,8 +2442,8 @@ const FlowEditorContent = ({
                 }}
                 title="Show Resources Panel"
               >
-                <SquaresPlusIcon className="h-5 w-5 text-gray-700" /> {/* Changed icon */}
-                <span style={{fontSize: '14px', fontWeight: 500, color: '#333'}}>Resources</span> {/* Adjusted font weight and color */}
+                <SquaresPlusIcon className="h-5 w-5 text-gray-700" /> 
+                <span style={{fontSize: '14px', fontWeight: 500, color: '#333'}}>Resources</span> 
               </button>
             </Panel>
           )}
@@ -2477,16 +2454,16 @@ const FlowEditorContent = ({
               background: 'rgba(255,255,255,0.9)', 
               padding: '0', 
               borderRadius: '12px 0 0 12px', 
-              height: '100%', 
+              height: 'calc(100vh - 7.5rem)', // Ajustado para header de layout (3.5rem) + header de dashboard (4rem)
               overflow: 'hidden', 
               boxShadow: '0 4px 20px rgba(0,0,0,0.15)', 
               display: 'flex', 
               flexDirection: 'column',
               position: 'fixed',
-              top: '0px', 
+              top: '7.5rem', // Ajustado para header de layout (3.5rem) + header de dashboard (4rem)
               right: '0px', 
-              bottom: '0px', 
-              zIndex: 9999,
+              // bottom: '0px', // Eliminado para que height tenga efecto
+              zIndex: 9999, // Asegurar que esté sobre otros elementos fijos si los hubiera
               transform: 'none', 
               transition: 'transform 0.3s ease-out, opacity 0.3s ease-out, width 0.3s ease-out',
               backdropFilter: 'blur(10px)'
@@ -2551,7 +2528,7 @@ const FlowEditorContent = ({
                 flexDirection: 'column',
                 backgroundColor: 'rgba(255, 255, 255, 0.9)',
                 paddingBottom: '16px',
-                height: 'calc(100% - 56px - 57px)', 
+                // height ya no es necesario aquí, flexGrow se encargará
                 scrollbarWidth: 'thin',
                 scrollbarColor: '#ccc #f1f1f1',
               }}>
