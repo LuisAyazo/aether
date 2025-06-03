@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, JSX } from 'react'; // Added JSX
+import React, { useState, useEffect, useCallback, useRef, JSX, useMemo } from 'react'; // Added useMemo, JSX
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Select, Modal, Input, Spin, message, Typography } from 'antd';
@@ -277,8 +277,22 @@ export default function DashboardPage() {
   const [selectedDiagram, setSelectedDiagram] = useState<string | null>(null);
   const [currentDiagram, setCurrentDiagram] = useState<Diagram | null>(null);
   
-  const [nodes, setNodes] = useState<ReactFlowNode[]>([]);
-  const [edges, setEdges] = useState<ReactFlowEdge[]>([]);
+  // El estado local de nodes/edges en DashboardPage ya no es necesario si FlowEditor maneja su propio estado
+  // y solo lo actualizamos a través de initialNodes/initialEdges cuando currentDiagram cambia.
+  // const [nodes, setNodes] = useState<ReactFlowNode[]>([]); 
+  // const [edges, setEdges] = useState<ReactFlowEdge[]>([]);
+
+  // Definiciones de convertToReactFlowNodes y convertToReactFlowEdges movidas aquí arriba
+  const convertToReactFlowNodes = (customNodes: CustomNode[]): ReactFlowNode[] => customNodes.map(n => ({...n, data: {...n.data}} as ReactFlowNode));
+  const convertToReactFlowEdges = (customEdges: CustomEdge[]): ReactFlowEdge[] => customEdges.map(e => ({...e} as ReactFlowEdge));
+
+  const initialNodesForFlow = useMemo(() => {
+    return currentDiagram?.nodes ? convertToReactFlowNodes(currentDiagram.nodes) : [];
+  }, [currentDiagram?.nodes]);
+
+  const initialEdgesForFlow = useMemo(() => {
+    return currentDiagram?.edges ? convertToReactFlowEdges(currentDiagram.edges) : [];
+  }, [currentDiagram?.edges]);
 
   const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState<boolean>(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState<string>('');
@@ -339,7 +353,9 @@ export default function DashboardPage() {
           setActiveCompany(firstCompany); setIsPersonalSpace(false);
           await loadCompanyOrPersonalSpaceData(firstCompany);
         } else {
-          setActiveCompany(null); setEnvironments([]); setDiagrams([]); setSelectedEnvironment(null); setSelectedDiagram(null); setCurrentDiagram(null); setNodes([]); setEdges([]);
+          setActiveCompany(null); setEnvironments([]); setDiagrams([]); setSelectedEnvironment(null); setSelectedDiagram(null); setCurrentDiagram(null); 
+          // setNodes([]); // Eliminado
+          // setEdges([]); // Eliminado
         }
       } catch (e: any) {
         setError(e.message || 'Error al cargar datos de compañía.');
@@ -391,22 +407,28 @@ export default function DashboardPage() {
         setSelectedDiagram(diags[0].id);
         const diagramData = await getDiagram(companyId, defaultEnvId, diags[0].id);
         setCurrentDiagram(diagramData);
-        setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []);
-        setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []);
+        // setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []); // Ya no se usa el estado local nodes
+        // setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []); // Ya no se usa el estado local edges
       } else {
-        setCurrentDiagram(null); setNodes([]); setEdges([]); setSelectedDiagram(null);
+        setCurrentDiagram(null); 
+        // setNodes([]); // Ya no se usa el estado local nodes
+        // setEdges([]); // Ya no se usa el estado local edges
+        setSelectedDiagram(null);
       }
     } else {
-      setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null); setNodes([]); setEdges([]); setSelectedEnvironment(null);
+      setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null); 
+      // setNodes([]); // Ya no se usa el estado local nodes
+      // setEdges([]); // Ya no se usa el estado local edges
+      setSelectedEnvironment(null);
     }
   }
 
-  const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
-  const onEdgesChange: OnEdgesChange = useCallback((changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
-  const onConnect: OnConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)), []);
+  // onNodesChange, onEdgesChange, onConnect ya no son necesarios aquí ya que FlowEditor los maneja internamente
+  // const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
+  // const onEdgesChange: OnEdgesChange = useCallback((changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
+  // const onConnect: OnConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)), []);
 
-  const convertToReactFlowNodes = (customNodes: CustomNode[]): ReactFlowNode[] => customNodes.map(n => ({...n, data: {...n.data}} as ReactFlowNode));
-  const convertToReactFlowEdges = (customEdges: CustomEdge[]): ReactFlowEdge[] => customEdges.map(e => ({...e} as ReactFlowEdge));
+  // Las definiciones de convertToReactFlowNodes y convertToReactFlowEdges se movieron arriba.
   
   const handleEnvironmentChange = async (environmentId: string) => {
     if (!activeCompany) return;
@@ -418,10 +440,12 @@ export default function DashboardPage() {
         setSelectedDiagram(diags[0].id);
         const diagramData = await getDiagram(activeCompany._id || activeCompany.id!, environmentId, diags[0].id);
         setCurrentDiagram(diagramData);
-        setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []);
-        setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []);
+        // setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []); // Ya no se usa
+        // setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []); // Ya no se usa
       } else {
-        setSelectedDiagram(null); setCurrentDiagram(null); setNodes([]); setEdges([]);
+        setSelectedDiagram(null); setCurrentDiagram(null); 
+        // setNodes([]); // Ya no se usa
+        // setEdges([]); // Ya no se usa
       }
     } catch (e:any) { message.error("Error al cambiar de ambiente: " + e.message); }
     finally { setLoading(false); }
@@ -433,13 +457,13 @@ export default function DashboardPage() {
     try {
       const diagramData = await getDiagram(activeCompany._id || activeCompany.id!, selectedEnvironment, diagramId);
       setCurrentDiagram(diagramData);
-      setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []);
-      setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []);
+      // setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []); // Ya no se usa
+      // setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []); // Ya no se usa
     } catch (e:any) { message.error("Error al cambiar de diagrama: " + e.message); }
     finally { setLoading(false); }
   };
   
-  const handleSaveDiagram = async (data: { nodes: ReactFlowNode[], edges: ReactFlowEdge[], viewport?: ReactFlowViewport }) => {
+  const handleSaveDiagram = useCallback(async (data: { nodes: ReactFlowNode[], edges: ReactFlowEdge[], viewport?: ReactFlowViewport }) => {
     if (!activeCompany || !selectedEnvironment || !selectedDiagram || !currentDiagram) return;
     const customNodes = data.nodes.map(n => ({ id: n.id, type: n.type!, position: n.position, data: n.data, width: n.width, height: n.height, parentNode: n.parentNode, style: n.style } as CustomNode));
     const customEdges = data.edges.map(e => ({ id: e.id, source: e.source, target: e.target, type: e.type, animated: e.animated, label: e.label as string, data: e.data, style: e.style } as CustomEdge));
@@ -449,7 +473,7 @@ export default function DashboardPage() {
       });
       message.success("Diagrama guardado.");
     } catch (e:any) { message.error("Error al guardar el diagrama: " + e.message); }
-  };
+  }, [activeCompany, selectedEnvironment, selectedDiagram, currentDiagram]);
 
   const handleCreateNewEnvironment = async () => {
     if (!activeCompany || !newEnvironmentName.trim()) {
@@ -529,8 +553,8 @@ export default function DashboardPage() {
         } else {
           setSelectedDiagram(null);
           setCurrentDiagram(null);
-          setNodes([]);
-          setEdges([]);
+          // setNodes([]); // Ya no se usa
+          // setEdges([]); // Ya no se usa
         }
       }
       setDiagramToDeleteId(null);
@@ -618,11 +642,8 @@ export default function DashboardPage() {
                 environmentId={selectedEnvironment!} 
                 diagramId={selectedDiagram!} 
                 initialDiagram={currentDiagram} 
-                initialNodes={nodes} 
-                initialEdges={edges} 
-                onNodesChange={onNodesChange} 
-                onEdgesChange={onEdgesChange} 
-                onConnect={onConnect} 
+                initialNodes={initialNodesForFlow} 
+                initialEdges={initialEdgesForFlow} 
                 onSave={handleSaveDiagram} 
                 nodeTypes={nodeTypes}
                 resourceCategories={resourceCategories} // Pasar resourceCategories aquí

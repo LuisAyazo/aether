@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useTransition, JSX } from 'react'; 
+import React, { useState, useEffect, useCallback, useRef, useTransition, JSX, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import './page.css';
@@ -60,6 +60,7 @@ import CredentialsPage from '../../../../../components/ui/CredentialsPage';
 import DeploymentsPage from '../../../../../components/ui/DeploymentsPage'; 
 import SettingsPage from '../../../../../components/ui/SettingsPage'; 
 import TeamPage from '../../../../../components/ui/TeamPage'; 
+import EdgeTypeToolbox from '../../../../../components/ui/EdgeTypeToolbox'; // Importar la Toolbox
 
 // Servicios
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram, createEnvironment, updateDiagram, deleteDiagram, deleteEnvironment } from '../../../../../services/diagramService';
@@ -68,6 +69,7 @@ import { isAuthenticated } from '../../../../../services/authService';
 // Tipos y utilidades
 import nodeTypes from '../../../../../components/nodes/NodeTypes'; 
 import { Node, Edge } from '../../../../../services/diagramService'; 
+import { SelectedEdgeTypeProvider } from '../../../../../contexts/SelectedEdgeTypeContext'; // Importar el Provider
 
 const { TextArea } = Input;
 
@@ -270,36 +272,12 @@ export default function DiagramPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [, startTransition] = useTransition();
   
-  const [nodes, setNodes] = useState<ReactFlowNode[]>([]);
-  const [edges, setEdges] = useState<ReactFlowEdge[]>([]);
-  
   const [previousDiagram, setPreviousDiagram] = useState<Diagram | null>(null);
   
   type SectionKeys = 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team';
   const [activeSection, setActiveSection] = useState<SectionKeys>('diagrams');
   const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  
-  const onNodesChange: OnNodesChange = useCallback(
-    (changes: NodeChange[]) => {
-      setNodes((nds) => applyNodeChanges(changes, nds));
-    },
-    []
-  );
-  
-  const onEdgesChange: OnEdgesChange = useCallback(
-    (changes: EdgeChange[]) => {
-      setEdges((eds) => applyEdgeChanges(changes, eds));
-    },
-    []
-  );
-  
-  const onConnect: OnConnect = useCallback(
-    (params: Connection) => {
-      setEdges((eds) => addEdge({ ...params, animated: true }, eds));
-    },
-    []
-  );
   
   const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState<boolean>(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState<string>('');
@@ -336,91 +314,83 @@ export default function DiagramPage() {
       id: node.id,
       type: node.type,
       position: node.position,
-      data: {
-        ...node.data,
-        provider: node.data?.provider || 'generic'
-      },
+      data: { ...node.data, provider: node.data?.provider || 'generic' },
       width: node.width || null,
       height: node.height || null,
       selected: node.selected || false,
       positionAbsolute: node.positionAbsolute,
       dragging: node.dragging || false,
       parentNode: node.parentNode,
-      style: {
-        ...node.style,
-        border: '2px solid transparent',
-        borderRadius: '4px'
-      },
-      className: undefined,
-      sourcePosition: undefined,
-      targetPosition: undefined,
-      hidden: false,
-      draggable: true,
-      selectable: true,
-      connectable: true,
-      deletable: true,
-      zIndex: 0,
-      extent: undefined,
-      expandParent: false,
-      ariaLabel: undefined,
-      focusable: true,
-      resizing: false
+      style: { ...node.style, border: '2px solid transparent', borderRadius: '4px' },
+      className: undefined, sourcePosition: undefined, targetPosition: undefined,
+      hidden: false, draggable: true, selectable: true, connectable: true, deletable: true,
+      zIndex: 0, extent: undefined, expandParent: false, ariaLabel: undefined, focusable: true, resizing: false
     }));
   };
 
   const convertToReactFlowEdges = (customEdges: Edge[]): ReactFlowEdge[] => {
     return customEdges.map(edge => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      type: edge.type,
-      animated: edge.animated || false,
-      label: edge.label,
-      data: edge.data,
-      style: edge.style,
-      selected: edge.selected || false,
-      sourceHandle: edge.sourceHandle,
-      targetHandle: edge.targetHandle,
-      className: undefined,
-      hidden: false,
-      deletable: true,
-      focusable: true,
-      updatable: true,
-      zIndex: 0
+      id: edge.id, source: edge.source, target: edge.target, type: edge.type,
+      animated: edge.animated || false, label: edge.label, data: edge.data, style: edge.style,
+      selected: edge.selected || false, sourceHandle: edge.sourceHandle, targetHandle: edge.targetHandle,
+      className: undefined, hidden: false, deletable: true, focusable: true, updatable: true, zIndex: 0
     }));
   };
 
   const convertToCustomNodes = (reactFlowNodes: ReactFlowNode[]): Node[] => {
     return reactFlowNodes.map(node => ({
-      id: node.id,
-      type: node.type || 'default',
-      position: node.position,
-      data: node.data,
-      width: node.width || undefined,
-      height: node.height || undefined,
-      selected: node.selected || false,
-      positionAbsolute: node.positionAbsolute,
-      dragging: node.dragging || false,
-      parentNode: node.parentNode,
-      style: node.style
+      id: node.id, type: node.type || 'default', position: node.position, data: node.data,
+      width: node.width || undefined, height: node.height || undefined, selected: node.selected || false,
+      positionAbsolute: node.positionAbsolute, dragging: node.dragging || false,
+      parentNode: node.parentNode, style: node.style
     }));
   };
 
   const convertToCustomEdges = (reactFlowEdges: ReactFlowEdge[]): Edge[] => {
     return reactFlowEdges.map(edge => ({
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      type: edge.type,
-      animated: edge.animated || false,
-      label: typeof edge.label === 'string' ? edge.label : undefined,
-      data: edge.data,
-      style: edge.style,
-      selected: edge.selected || false,
-      sourceHandle: edge.sourceHandle || undefined,
-      targetHandle: edge.targetHandle || undefined
+      id: edge.id, source: edge.source, target: edge.target, type: edge.type,
+      animated: edge.animated || false, label: typeof edge.label === 'string' ? edge.label : undefined,
+      data: edge.data, style: edge.style, selected: edge.selected || false,
+      sourceHandle: edge.sourceHandle || undefined, targetHandle: edge.targetHandle || undefined
     }));
   };
+
+  const initialNodesForFlowEditor = useMemo(() => {
+    return currentDiagram?.nodes ? convertToReactFlowNodes(currentDiagram.nodes) : [];
+  }, [currentDiagram?.nodes]);
+
+  const initialEdgesForFlowEditor = useMemo(() => {
+    return currentDiagram?.edges ? convertToReactFlowEdges(currentDiagram.edges) : [];
+  }, [currentDiagram?.edges]);
+
+  const onSaveDiagramCallback = useCallback((diagramData: { nodes: ReactFlowNode[]; edges: ReactFlowEdge[]; viewport?: ReactFlowViewport }) => { 
+    if (isUpdatingRef.current) return;
+    if (!companyId || !selectedEnvironment || !selectedDiagram || !currentDiagram) return;
+    const customNodes = convertToCustomNodes(diagramData.nodes);
+    const customEdges = convertToCustomEdges(diagramData.edges);
+    const flowData = { nodes: customNodes, edges: customEdges, viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 } };
+    const groupNodes = diagramData.nodes.filter((node: ReactFlowNode) => node.type === 'group'); 
+    const nodeGroups: Record<string, any> = {}; 
+    const nodePositions: Record<string, any> = {};
+    groupNodes.forEach((groupNode: ReactFlowNode) => {
+      const childNodes = flowData.nodes.filter(node => node.parentNode === groupNode.id); 
+      nodeGroups[groupNode.id] = { 
+        nodeIds: childNodes.map(node => node.id), 
+        dimensions: { width: typeof groupNode.style?.width === 'number' ? groupNode.style.width : 300, height: typeof groupNode.style?.height === 'number' ? groupNode.style.height : 200 }, 
+        provider: groupNode.data?.provider || 'generic', label: groupNode.data?.label || 'Group' 
+      };
+      nodePositions[groupNode.id] = {};
+      childNodes.forEach(childNode => { 
+        nodePositions[groupNode.id][childNode.id] = { 
+          relativePosition: { ...childNode.position }, 
+          dimensions: { width: childNode.width || 100, height: childNode.height || 50 } 
+        };
+      });
+    });
+    updateDiagram(companyId as string, selectedEnvironment as string, selectedDiagram as string, { name: currentDiagram.name, description: currentDiagram.description, nodes: customNodes, edges: customEdges, viewport: flowData.viewport, nodeGroups, nodePositions })
+      .then(() => message.success("Diagrama actualizado exitosamente."))
+      .catch(() => message.error("No se pudo guardar el diagrama."));
+  }, [companyId, selectedEnvironment, selectedDiagram, currentDiagram]);
 
   const prevUrlRef = useRef({ envId: '', diagramId: '' });
   const isUpdatingRef = useRef(false);
@@ -431,46 +401,28 @@ export default function DiagramPage() {
     const urlParams = new URLSearchParams(window.location.search);
     const currentEnvId = urlParams.get('environmentId');
     const currentDiagramId = params.diagramId as string;
-    
-    if ((currentEnvId !== environmentId || currentDiagramId !== diagramId) && 
-        (prevUrlRef.current.envId !== environmentId || prevUrlRef.current.diagramId !== diagramId)) {
+    if ((currentEnvId !== environmentId || currentDiagramId !== diagramId) && (prevUrlRef.current.envId !== environmentId || prevUrlRef.current.diagramId !== diagramId)) {
       prevUrlRef.current = { envId: environmentId, diagramId };
-      router.replace(
-        `/company/${companyId}/diagrams/${diagramId}?environmentId=${environmentId}&env=${sanitizedEnvName}&diagram=${sanitizedDiagramName}`, 
-        { scroll: false }
-      );
+      router.replace(`/company/${companyId}/diagrams/${diagramId}?environmentId=${environmentId}&env=${sanitizedEnvName}&diagram=${sanitizedDiagramName}`, { scroll: false });
     }
   };
 
-  const batchStateUpdates = useCallback((updates: {
-    diagram?: Diagram | null;
-    nodes?: Node[];
-    edges?: Edge[];
-  }) => {
+  const batchStateUpdates = useCallback((newDiagramToSet: Diagram | null) => {
     if (!isMounted.current || isUpdatingRef.current) return;
     isUpdatingRef.current = true;
     try {
-      if (updates.diagram !== undefined) stableDataRef.current.diagram = updates.diagram;
-      if (updates.nodes) {
-        stableDataRef.current.nodes = updates.nodes;
-        setNodes(convertToReactFlowNodes(updates.nodes));
-      }
-      if (updates.edges) {
-        stableDataRef.current.edges = updates.edges;
-        setEdges(convertToReactFlowEdges(updates.edges));
-      }
-      if (updates.diagram !== undefined && currentDiagram) setPreviousDiagram(currentDiagram);
-      startTransition(() => {
-        if (updates.nodes) setNodes(convertToReactFlowNodes(updates.nodes));
-        if (updates.edges) setEdges(convertToReactFlowEdges(updates.edges));
-      });
-      ReactDOM.flushSync(() => {
-        if (updates.diagram !== undefined) setCurrentDiagram(updates.diagram);
+      stableDataRef.current.diagram = newDiagramToSet;
+      setCurrentDiagram(prevCurrentDiagram => {
+        if (newDiagramToSet !== undefined) { 
+          setPreviousDiagram(prevCurrentDiagram);
+          return newDiagramToSet;
+        }
+        return prevCurrentDiagram; 
       });
     } finally {
       isUpdatingRef.current = false;
     }
-  }, [currentDiagram]);
+  }, []);
 
   const MIN_LOADING_DURATION = 300;
   
@@ -490,19 +442,14 @@ export default function DiagramPage() {
         const firstDiagram = diagramsData[0];
         setSelectedDiagram(firstDiagram.id);
         updateUrlWithNames(environmentId, firstDiagram.id, selectedEnv.name, firstDiagram.name);
-        batchStateUpdates({ diagram: firstDiagram, nodes: firstDiagram.nodes || [], edges: firstDiagram.edges || [] });
+        batchStateUpdates(firstDiagram); 
         const elapsedTime = Date.now() - startTime;
         setTimeout(() => { if (isMounted.current) setLoading(false); }, Math.max(0, MIN_LOADING_DURATION - elapsedTime));
       } else {
         const elapsedTime = Date.now() - startTime;
-        setTimeout(() => {
-          if (!isMounted.current) return;
-          setSelectedDiagram(null); setCurrentDiagram(null); setNodes([]); setEdges([]); setLoading(false);
-        }, Math.max(0, MIN_LOADING_DURATION - elapsedTime));
+        setTimeout(() => { if (!isMounted.current) return; setSelectedDiagram(null); setCurrentDiagram(null); setLoading(false); }, Math.max(0, MIN_LOADING_DURATION - elapsedTime));
       }
-    } catch {
-      message.error("No se pudieron cargar los diagramas."); setLoading(false);
-    }
+    } catch { message.error("No se pudieron cargar los diagramas."); setLoading(false); }
   };
 
   const handleDiagramChange = async (diagramId: string) => {
@@ -516,18 +463,15 @@ export default function DiagramPage() {
         if (!selectedEnv) throw new Error('Ambiente no encontrado');
         const singleDiagramCacheKey = `diagram-${companyId}-${selectedEnvironment}-${diagramId}`;
         let diagramData: Diagram | null = singleDiagramCache.has(singleDiagramCacheKey) ? (singleDiagramCache.get(singleDiagramCacheKey) || null) : await getDiagram(companyId as string, selectedEnvironment, diagramId);
-        if (!singleDiagramCache.has(singleDiagramCacheKey)) singleDiagramCache.set(singleDiagramCacheKey, diagramData);
+        if (!singleDiagramCache.has(singleDiagramCacheKey) && diagramData !== null) singleDiagramCache.set(singleDiagramCacheKey, diagramData);
+        console.log("[DiagramPage] handleDiagramChange - Datos del diagrama recuperados:", JSON.stringify(diagramData, null, 2));
         if (!diagramData || !isMounted.current) { setLoading(false); return; }
         updateUrlWithNames(selectedEnvironment, diagramId, selectedEnv.name, diagramData.name);
-        batchStateUpdates({ diagram: diagramData, nodes: diagramData.nodes || [], edges: diagramData.edges || [] });
+        batchStateUpdates(diagramData); 
         const elapsedTime = Date.now() - startTime;
         setTimeout(() => { if (isMounted.current) setLoading(false); }, Math.max(0, MIN_LOADING_DURATION - elapsedTime));
-      } else {
-        setLoading(false);
-      }
-    } catch (error) {
-      message.error("No se pudo cargar el diagrama."); setLoading(false);
-    }
+      } else { setLoading(false); }
+    } catch (error) { message.error("No se pudo cargar el diagrama."); setLoading(false); }
   };
 
   const handleCreateEnvironment = async () => {
@@ -541,9 +485,7 @@ export default function DiagramPage() {
       const newEnv = environmentsData.find(env => env.name === newEnvironmentName);
       if (newEnv) { setSelectedEnvironment(newEnv.id); setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null); }
       setNewEnvironmentModalVisible(false); setNewEnvironmentName(''); setNewEnvironmentDescription(''); setNewEnvironmentCategory('desarrollo');
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : "No se pudo crear el ambiente.");
-    }
+    } catch (error) { message.error(error instanceof Error ? error.message : "No se pudo crear el ambiente."); }
     setLoading(false);
   };
 
@@ -565,16 +507,9 @@ export default function DiagramPage() {
               setSelectedEnvironment(environmentsData[0].id);
               const diagramsData = await getDiagramsByEnvironment(companyId as string, environmentsData[0].id);
               setDiagrams(diagramsData);
-              if (diagramsData.length > 0) { 
-                setSelectedDiagram(diagramsData[0].id); 
-                setCurrentDiagram(diagramsData[0] as Diagram); // Coerción para satisfacer al linter
-              } else { 
-                setSelectedDiagram(null); 
-                setCurrentDiagram(null); 
-              }
-            } else {
-              setSelectedEnvironment(null); setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null); // Correcto: null
-            }
+              if (diagramsData.length > 0) { setSelectedDiagram(diagramsData[0].id); setCurrentDiagram(diagramsData[0] || null); }
+              else { setSelectedDiagram(null); setCurrentDiagram(null); }
+            } else { setSelectedEnvironment(null); setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null); }
           }
         } catch (error) { message.error(error instanceof Error ? error.message : "No se pudo eliminar el ambiente."); }
         setLoading(false);
@@ -589,7 +524,7 @@ export default function DiagramPage() {
     try {
       const newDiagram = await createDiagram(companyId as string, selectedEnvironment, { name: newDiagramName, description: newDiagramDescription, path: newDiagramPath.trim() || undefined, nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } });
       const diagramsData = await getDiagramsByEnvironment(companyId as string, selectedEnvironment);
-      setDiagrams(diagramsData); setSelectedDiagram(newDiagram.id); setCurrentDiagram(newDiagram); // Correcto: newDiagram es Diagram
+      setDiagrams(diagramsData); setSelectedDiagram(newDiagram.id); setCurrentDiagram(newDiagram);
       const selectedEnv = environments.find(env => env.id === selectedEnvironment);
       if (!selectedEnv) throw new Error('Ambiente no encontrado');
       updateUrlWithNames(selectedEnvironment, newDiagram.id, selectedEnv.name, newDiagram.name);
@@ -630,16 +565,10 @@ export default function DiagramPage() {
       if (selectedDiagram === diagramToDelete.id) {
         if (diagramsData.length > 0) {
           const firstDiagram = diagramsData[0];
-          setSelectedDiagram(firstDiagram.id); 
-          setCurrentDiagram(firstDiagram); // Correcto: firstDiagram es Diagram
+          setSelectedDiagram(firstDiagram.id); setCurrentDiagram(firstDiagram || null); 
           const selectedEnv = environments.find(env => env.id === selectedEnvironment);
           if (selectedEnv) updateUrlWithNames(selectedEnvironment, firstDiagram.id, selectedEnv.name, firstDiagram.name);
-        } else {
-          setSelectedDiagram(null); 
-          setCurrentDiagram(null); // Correcto: null
-          setNodes([]); setEdges([]); 
-          router.push(`/company/${companyId}/diagrams`);
-        }
+        } else { setSelectedDiagram(null); setCurrentDiagram(null); router.push(`/company/${companyId}/diagrams`); }
       }
       setDeleteConfirmVisible(false); setDiagramToDelete(null);
       startTransition(() => setDiagrams([...diagramsData]));
@@ -691,48 +620,31 @@ export default function DiagramPage() {
                 return singleDiagramCache.has(singleDiagramCacheKey) ? (singleDiagramCache.get(singleDiagramCacheKey) || null) : (data => { singleDiagramCache.set(singleDiagramCacheKey, data); return data; })(await getDiagram(companyId as string, targetEnvironment.id, targetDiagramId));
               })();
               const diagramData = await fetchDiagramPromise;
+              console.log("[DiagramPage] loadEnvironments (initial load) - Datos del diagrama recuperados:", JSON.stringify(diagramData, null, 2));
               if (!isMounted.current || !diagramData) { setLoading(false); return; }
               updateUrlWithNames(targetEnvironment.id, targetDiagramId, targetEnvironment.name, diagramData.name);
-              batchStateUpdates({ diagram: diagramData, nodes: diagramData.nodes || [], edges: diagramData.edges || [] });
+              batchStateUpdates(diagramData); 
               initialLoadCompleteRef.current = true;
               setTimeout(() => { if (isMounted.current) setLoading(false); }, 300);
             } else {
-              setSelectedDiagram(null); setCurrentDiagram(null); setNodes([]); setEdges([]); initialLoadCompleteRef.current = true; setLoading(false);
+              setSelectedDiagram(null); setCurrentDiagram(null); 
+              console.log("[DiagramPage] loadEnvironments (initial load) - No target diagram ID, or diagram not found.");
+              initialLoadCompleteRef.current = true; setLoading(false);
             }
-          } else {
-            initialLoadCompleteRef.current = true; setLoading(false);
-          }
-        } else {
-          initialLoadCompleteRef.current = true; setLoading(false);
-        }
-      } catch (error) {
-        message.error("No se pudieron cargar los datos."); initialLoadCompleteRef.current = true; setLoading(false);
-      }
+          } else { initialLoadCompleteRef.current = true; setLoading(false); }
+        } else { initialLoadCompleteRef.current = true; setLoading(false); }
+      } catch (error) { message.error("No se pudieron cargar los datos."); initialLoadCompleteRef.current = true; setLoading(false); }
     };
     loadEnvironments();
-  }, [companyId, diagramId, batchStateUpdates]); 
+  }, [companyId, diagramId, batchStateUpdates]);
 
   useEffect(() => {
-    const debounceTimeMs = 1000;
-    const updateTimeRef = { current: 0 };
+    const debounceTimeMs = 1000; const updateTimeRef = { current: 0 };
     const handleGroupUpdate = (event: CustomEvent) => {
       const { groupId, nodes: updatedNodes, edges: updatedEdges } = event.detail;
-      const currentTime = Date.now();
-      if (currentTime - updateTimeRef.current < debounceTimeMs) return;
+      const currentTime = Date.now(); if (currentTime - updateTimeRef.current < debounceTimeMs) return;
       updateTimeRef.current = currentTime;
-      if (groupId && updatedNodes) {
-        const safeUpdatedNodes = updatedNodes.map((n: ReactFlowNode) => ({...n}));
-        setNodes(currentNodes => {
-          const nodesWithoutGroup = currentNodes.filter(n => n.id !== groupId);
-          return [...nodesWithoutGroup, ...safeUpdatedNodes];
-        });
-        if (updatedEdges && updatedEdges.length > 0) {
-          setEdges(currentEdges => {
-            const edgesToKeep = currentEdges.filter(edge => !updatedNodes.some((n: ReactFlowNode) => n.id === edge.source || n.id === edge.target));
-            return [...edgesToKeep, ...updatedEdges];
-          });
-        }
-      }
+      if (groupId && updatedNodes) { console.warn('handleGroupUpdate necesita ser refactorizado ya que setNodes/setEdges locales fueron eliminados.'); }
     };
     document.addEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
     return () => document.removeEventListener('updateGroupNodes', handleGroupUpdate as EventListener);
@@ -792,9 +704,8 @@ export default function DiagramPage() {
 
   const handlePromoteConfirm = async () => {
     if (!selectedTargetEnvironment || !currentDiagram) return;
-    try {
-      setLoading(true); message.success('Diagrama promovido exitosamente'); setPromoteModalVisible(false);
-    } catch { message.error('Error al promover el diagrama'); }
+    try { setLoading(true); message.success('Diagrama promovido exitosamente'); setPromoteModalVisible(false); }
+    catch { message.error('Error al promover el diagrama'); }
     finally { setLoading(false); }
   };
 
@@ -812,14 +723,12 @@ export default function DiagramPage() {
   const handleDestroy = () => { setDestroyConfirmationText(''); setDestroyModalVisible(true); };
 
   const handleDestroyConfirm = async () => {
-    if (!currentDiagram || destroyConfirmationText.trim() !== currentDiagram.name) {
-      message.error(currentDiagram ? `Debe escribir exactamente "${currentDiagram.name}" para confirmar` : "No hay diagrama seleccionado."); return;
-    }
+    if (!currentDiagram || destroyConfirmationText.trim() !== currentDiagram.name) { message.error(currentDiagram ? `Debe escribir exactamente "${currentDiagram.name}" para confirmar` : "No hay diagrama seleccionado."); return; }
     try {
       setLoading(true);
       const updatedDiagram: Diagram = { ...currentDiagram, nodes: [], edges: [], updated_at: new Date().toISOString() };
       if (selectedEnvironment) await updateDiagram(companyId as string, selectedEnvironment, currentDiagram.id, { name: updatedDiagram.name, description: updatedDiagram.description, nodes: [], edges: [], viewport: updatedDiagram.viewport });
-      setCurrentDiagram(updatedDiagram); setNodes([]); setEdges([]);
+      setCurrentDiagram(updatedDiagram); 
       const singleDiagramCacheKey = `diagram-${companyId}-${selectedEnvironment}-${currentDiagram.id}`;
       singleDiagramCache.set(singleDiagramCacheKey, updatedDiagram);
       message.success(`Todos los recursos del diagrama "${currentDiagram.name}" han sido eliminados`);
@@ -837,9 +746,11 @@ export default function DiagramPage() {
   useEffect(() => {
     const fetchCompanyInfo = async () => {
       try {
-        const response = await fetch(`/api/companies/${companyId}`);
-        const data = await response.json(); setCompany(data);
-      } catch (error) { message.error('No se pudo cargar la información de la compañía'); }
+        const response = await fetch(`/api/v1/companies/${companyId}`);
+        const data = await response.json(); 
+        if (!response.ok) { throw new Error(data.error || `Error ${response.status} al cargar la compañía`); }
+        setCompany(data);
+      } catch (error) { console.error('Error en fetchCompanyInfo:', error); message.error('No se pudo cargar la información de la compañía'); setCompany(null); }
     };
     if (companyId) fetchCompanyInfo();
   }, [companyId]);
@@ -941,62 +852,26 @@ export default function DiagramPage() {
   const renderDiagramEditor = () => {
     if (currentDiagram && selectedEnvironment && selectedDiagram) {
       return (
-        <div className="h-full w-full" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <FlowEditor 
-            key={`current-diagram-${currentDiagram.id}-${selectedEnvironment}-${selectedDiagram}`}
-            companyId={companyId as string} 
-            environmentId={selectedEnvironment} 
-            diagramId={selectedDiagram} 
-            initialDiagram={currentDiagram} 
-            initialViewport={currentDiagram.viewport}
-            nodeTypes={nodeTypes} 
-            resourceCategories={resourceCategories}
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onSave={(diagramData: { nodes: ReactFlowNode[]; edges: ReactFlowEdge[]; viewport?: ReactFlowViewport }) => { 
-              if (isUpdatingRef.current) return;
-              const customNodes = convertToCustomNodes(diagramData.nodes);
-              const customEdges = convertToCustomEdges(diagramData.edges);
-              const flowData = { nodes: customNodes, edges: customEdges, viewport: diagramData.viewport || { x: 0, y: 0, zoom: 1 } };
-              
-              const groupNodes = diagramData.nodes.filter((node: ReactFlowNode) => node.type === 'group'); 
-              const nodeGroups: Record<string, any> = {}; 
-              const nodePositions: Record<string, any> = {};
-              
-              groupNodes.forEach((groupNode: ReactFlowNode) => {
-                const childNodes = flowData.nodes.filter(node => node.parentNode === groupNode.id); 
-                nodeGroups[groupNode.id] = { 
-                  nodeIds: childNodes.map(node => node.id), 
-                  dimensions: { 
-                    width: typeof groupNode.style?.width === 'number' ? groupNode.style.width : 300, 
-                    height: typeof groupNode.style?.height === 'number' ? groupNode.style.height : 200 
-                  }, 
-                  provider: groupNode.data?.provider || 'generic', 
-                  label: groupNode.data?.label || 'Group' 
-                };
-                nodePositions[groupNode.id] = {};
-                childNodes.forEach(childNode => { 
-                  nodePositions[groupNode.id][childNode.id] = { 
-                    relativePosition: { ...childNode.position }, 
-                    dimensions: { 
-                      width: childNode.width || 100, 
-                      height: childNode.height || 50 
-                    } 
-                  };
-                });
-              });
-              updateDiagram(companyId as string, selectedEnvironment as string, selectedDiagram as string, { name: currentDiagram.name, description: currentDiagram.description, nodes: customNodes, edges: customEdges, viewport: flowData.viewport, nodeGroups, nodePositions })
-                .then(() => message.success("Diagrama actualizado exitosamente."))
-                .catch(() => message.error("No se pudo guardar el diagrama."));
-            }}
-          />
-        </div>
+        <> {/* Usar Fragment para permitir múltiples elementos hermanos */}
+          <EdgeTypeToolbox /> {/* Añadir la Toolbox aquí */}
+          <div className="h-full w-full" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+            <FlowEditor 
+              key={`current-diagram-${currentDiagram.id}-${selectedEnvironment}-${selectedDiagram}`}
+              companyId={companyId as string} 
+              environmentId={selectedEnvironment} 
+              diagramId={selectedDiagram} 
+              initialDiagram={currentDiagram} 
+              initialViewport={currentDiagram.viewport}
+              nodeTypes={nodeTypes} 
+              resourceCategories={resourceCategories}
+              initialNodes={initialNodesForFlowEditor} 
+              initialEdges={initialEdgesForFlowEditor} 
+              onSave={onSaveDiagramCallback} 
+            />
+          </div>
+        </>
       );
     }
-    
     if (!loading) {
       return (
         <div className="flex items-center justify-center h-full">
@@ -1009,7 +884,6 @@ export default function DiagramPage() {
         </div>
       );
     }
-    
     return <div className="flex items-center justify-center h-full"><Spin size="large" tip="Cargando diagrama..."><div className="p-12"></div></Spin></div>;
   };
 
@@ -1074,12 +948,12 @@ export default function DiagramPage() {
           </div>
         </div>
       </div>
-      {currentDiagram && nodes.length > 0 && (
+      {currentDiagram && initialNodesForFlowEditor.length > 0 && (
         <div className="px-2 py-1 bg-white border-t border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-1"><div className="w-2 h-2 rounded-full bg-blue-500" /><span className="text-sm text-gray-700">Nodos:</span><span className="text-sm font-semibold text-gray-900">{nodes.length}</span></div>
-              <div className="flex items-center space-x-1"><div className="w-2 h-2 rounded-full bg-purple-500" /><span className="text-sm text-gray-700">Conexiones:</span><span className="text-sm font-semibold text-gray-900">{edges.length}</span></div>
+              <div className="flex items-center space-x-1"><div className="w-2 h-2 rounded-full bg-blue-500" /><span className="text-sm text-gray-700">Nodos:</span><span className="text-sm font-semibold text-gray-900">{initialNodesForFlowEditor.length}</span></div>
+              <div className="flex items-center space-x-1"><div className="w-2 h-2 rounded-full bg-purple-500" /><span className="text-sm text-gray-700">Conexiones:</span><span className="text-sm font-semibold text-gray-900">{initialEdgesForFlowEditor.length}</span></div>
             </div>
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-1"><div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" /><span className="text-xs text-gray-600">{currentEnvironmentName} • Sincronizado</span></div>
@@ -1125,17 +999,28 @@ export default function DiagramPage() {
     return <div className="flex justify-center items-center h-screen"><Spin size="large"><div className="p-5">Cargando...</div></Spin></div>;
   }
 
+  // Loguear las props que se pasan a FlowEditor
+  if (activeSection === 'diagrams' && currentDiagram) {
+    console.log("[DiagramPage] Rendering FlowEditor with initialNodes:", JSON.stringify(initialNodesForFlowEditor, null, 2));
+    console.log("[DiagramPage] Rendering FlowEditor with initialEdges:", JSON.stringify(initialEdgesForFlowEditor, null, 2));
+    console.log("[DiagramPage] currentDiagram object being used for FlowEditor:", JSON.stringify(currentDiagram, null, 2));
+  }
+
+
   return (
-    <div className="flex h-screen bg-gray-50">
-      <CompanySidebar 
-        companyName={company?.name || 'Cargando...'} 
-        activeSection={activeSection} 
-        onSectionChange={(section: string) => setActiveSection(section as SectionKeys)} 
-        isCollapsed={sidebarCollapsed} 
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
-      />
-      <div className="flex-1 overflow-auto">{renderActiveSection()}</div>
-      <div className="fixed bottom-0 left-0 right-0 bg-red-100 text-xs p-1 text-red-900 z-50">Debug: {companyId as string} | Env: {selectedEnvironment || 'none'} | Diagram: {selectedDiagram || 'none'} | Nodes: {nodes.length} | Edges: {edges.length} | Loading: {loading ? 'true' : 'false'} | DiagramExists: {currentDiagram ? 'true' : 'false'}</div>
-    </div>
+    <SelectedEdgeTypeProvider> {/* Envolver con el Provider */}
+      <div className="flex h-screen bg-gray-50">
+        <CompanySidebar 
+          companyName={company?.name || 'Cargando...'} 
+          activeSection={activeSection} 
+          onSectionChange={(section: string) => setActiveSection(section as SectionKeys)} 
+          isCollapsed={sidebarCollapsed} 
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
+        />
+        <div className="flex-1 overflow-auto">{renderActiveSection()}</div>
+        <div className="fixed bottom-0 left-0 right-0 bg-red-100 text-xs p-1 text-red-900 z-50">Debug: {companyId as string} | Env: {selectedEnvironment || 'none'} | Diagram: {selectedDiagram || 'none'} | Nodes: {initialNodesForFlowEditor.length} | Edges: {initialEdgesForFlowEditor.length} | Loading: {loading ? 'true' : 'false'} | DiagramExists: {currentDiagram ? 'true' : 'false'}</div>
+      </div>
+    </SelectedEdgeTypeProvider>
   );
 }
+

@@ -34,7 +34,9 @@ const {
   useEdgesState,
   useNodesState,
   BackgroundVariant,
-  SelectionMode
+  SelectionMode,
+  applyNodeChanges, 
+  applyEdgeChanges, 
 } = ReactFlowLibrary;
 
 type Edge = ReactFlowLibrary.Edge;
@@ -119,10 +121,6 @@ interface ContextMenu {
 type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea' | 'note' | 'text' | 'area';
 
 interface FlowEditorProps {
-  nodes?: Node[];
-  edges?: Edge[];
-  onNodesChange?: OnNodesChange;
-  onEdgesChange?: OnEdgesChange;
   onConnect?: OnConnect;
   nodeTypes?: ReactFlowNodeTypes; 
   edgeTypes?: EdgeTypes;
@@ -313,13 +311,9 @@ const EdgeDeleteButton = ({ edge, onEdgeDelete }: { edge: Edge; onEdgeDelete: (e
 
 
 const FlowEditorContent = ({ 
-  nodes: propNodes, 
-  edges: propEdges, 
   initialNodes = [], 
   initialEdges = [],
   initialViewport,
-  onNodesChange, 
-  onEdgesChange, 
   onConnect,
   onSave,
   nodeTypes: externalNodeTypes = {}, 
@@ -327,8 +321,6 @@ const FlowEditorContent = ({
   resourceCategories = [],
   diagramId,
   initialDiagram,
-  companyId,
-  environmentId
 }: FlowEditorProps): JSX.Element => {
   
   const memoizedNodeTypes: ReactFlowNodeTypes = useMemo(() => { 
@@ -344,8 +336,10 @@ const FlowEditorContent = ({
   }, [externalNodeTypes]);
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const [nodes, setNodesHook] = useNodesState((propNodes || initialNodes) as Node[]); 
-  const [edges, setEdgesHook] = useEdgesState((propEdges || initialEdges) as Edge[]); 
+  
+  const [nodes, setNodes, onNodesChangeInternal] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChangeInternal] = useEdgesState(initialEdges);
+  
   const [sidebarOpen, setSidebarOpen] = useState(false); 
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState<string>(''); 
@@ -393,6 +387,8 @@ const FlowEditorContent = ({
   const [showLogs, setShowLogs] = useState(false);
   const [isDragging, setIsDragging] = useState(false); 
   const [isToolbarDragging, setIsToolbarDragging] = useState(false);
+  const previousNodesRef = useRef<string | null>(null);
+  const previousEdgesRef = useRef<string | null>(null);
   const [toolbarPosition, setToolbarPosition] = useState(() => {
     if (typeof window === 'undefined') return { x: 400, y: 20 }; 
     const savedPosition = localStorage.getItem('toolbarPosition');
@@ -410,7 +406,7 @@ const FlowEditorContent = ({
   });
   const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 });
   const [toolbarLayout, setToolbarLayout] = useState<'horizontal' | 'vertical'>(() => {
-    if (typeof window === 'undefined') return 'horizontal'; 
+    if (typeof window === 'undefined') return 'horizontal';
     const savedLayout = localStorage.getItem('toolbarLayout') as 'horizontal' | 'vertical';
     return savedLayout || 'horizontal';
   });
@@ -440,7 +436,12 @@ const FlowEditorContent = ({
         setSidebarOpen(JSON.parse(savedState));
       }
     }
-  }, []); 
+  }, []);
+
+  const onSaveRef = useRef(onSave);
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
   
   useEffect(() => {
     const handleToolbarMouseMove = (event: MouseEvent) => {
@@ -466,6 +467,37 @@ const FlowEditorContent = ({
     };
   }, [isToolbarDragging, dragStartOffset]);
 
+  // useEffect para initialViewport - se moverá y refinará
+  // useEffect(() => {
+  //   if (initialViewport && reactFlowInstance) {
+  //     lastViewportRef.current = initialViewport;
+  //     setTimeout(() => {
+  //       reactFlowInstance.setViewport(initialViewport);
+  //     }, 100);
+  //   }
+  // }, [initialViewport, reactFlowInstance]);
+
+  // Nuevo useEffect para initialViewport con setTimeout
+  useEffect(() => {
+    if (initialViewport && reactFlowInstance) {
+      const currentRfViewport = reactFlowInstance.getViewport();
+      if (
+        currentRfViewport.x !== initialViewport.x ||
+        currentRfViewport.y !== initialViewport.y ||
+        currentRfViewport.zoom !== initialViewport.zoom
+      ) {
+        const timeoutId = setTimeout(() => {
+          // Comprobar si reactFlowInstance y getViewport aún son válidos, y si el zoom no es 0 (indicando que RF podría no estar completamente listo)
+          if (reactFlowInstance && typeof reactFlowInstance.getViewport === 'function' && reactFlowInstance.getViewport().zoom !== 0) {
+               reactFlowInstance.setViewport(initialViewport);
+               lastViewportRef.current = initialViewport;
+          }
+        }, 50); // Un timeout corto para desacoplar
+        return () => clearTimeout(timeoutId);
+      }
+    }
+  }, [initialViewport, reactFlowInstance]); // Dependencias simplificadas
+
   const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
     event.stopPropagation();
     console.log('Edge clicked:', edge);
@@ -474,19 +506,21 @@ const FlowEditorContent = ({
 
   const onEdgeDelete = useCallback((edgeToDelete: Edge) => {
     console.log('Deleting edge:', edgeToDelete);
-    onEdgesChange?.([{ id: edgeToDelete.id, type: 'remove' }]);
+    onEdgesChangeInternal([{ id: edgeToDelete.id, type: 'remove' }]); 
     setSelectedEdge(null);
-  }, [onEdgesChange]);
+  }, [onEdgesChangeInternal]);
 
   const handlePaneClick = useCallback((event: React.MouseEvent) => {
     setSelectedEdge(null);
     setContextMenu(prev => ({...prev, visible: false}));
+    console.log('Pane clicked, activeTool:', activeTool);
     
     if (activeTool === 'lasso') {
       return;
     }
 
     if (activeTool === 'note' && reactFlowInstance) {
+      console.log('Creating note...');
       event.preventDefault();
       event.stopPropagation();
       document.body.style.cursor = 'crosshair';
@@ -508,13 +542,12 @@ const FlowEditorContent = ({
         draggable: true,
         selectable: true
       };
-      if (onNodesChange) {
-        onNodesChange([{ type: 'add', item: newNode }]);
-      }
+      setNodes((nds) => applyNodeChanges([{ type: 'add', item: newNode }], nds));
       return;
     }
 
     if (activeTool === 'text' && reactFlowInstance) {
+      console.log('Creating text...');
       event.preventDefault();
       event.stopPropagation();
       document.body.style.cursor = 'crosshair';
@@ -539,13 +572,11 @@ const FlowEditorContent = ({
         draggable: true,
         selectable: true
       };
-      if (onNodesChange) {
-        onNodesChange([{ type: 'add', item: newNode }]);
-      }
+      setNodes((nds) => applyNodeChanges([{ type: 'add', item: newNode }], nds));
       return;
     }
     document.body.style.cursor = 'default';
-  }, [activeTool, reactFlowInstance, onNodesChange]);
+  }, [activeTool, reactFlowInstance, setNodes]);
 
   useEffect(() => {
     const handleAreaNodeUpdate = (event: Event): void => { 
@@ -586,6 +617,28 @@ const FlowEditorContent = ({
     };
   }, []);
 
+  // useEffect para initialNodes/Edges - Eliminado porque useNodesState/useEdgesState deberían manejarlo.
+  // useEffect(() => {
+  //   console.log('useEffect for initialNodes/Edges triggered. DiagramId:', diagramId);
+  //   if (reactFlowInstance) {
+  //     const currentNodes = initialNodes.map(node => ({
+  //       ...node,
+  //       draggable: true,
+  //       selectable: true,
+  //       connectable: true,
+  //       style: {
+  //         ...node.style,
+  //         width: node.width || node.style?.width || 200,
+  //         height: node.height || node.style?.height || 100,
+  //       }
+  //     }));
+  //     setNodes(currentNodes as Node[]);
+  //     setEdges(initialEdges as Edge[]);
+  //     // initialViewport handling is now in its own useEffect
+  //   }
+  // }, [diagramId, initialNodes, initialEdges, /* initialViewport, */ reactFlowInstance]);
+
+
   const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
     event.preventDefault();
     event.stopPropagation();
@@ -608,36 +661,20 @@ const FlowEditorContent = ({
     setContextMenu(prev => ({...prev, visible: false}));
   }, []);
 
-  useEffect(() => {
-    if (initialViewport && reactFlowInstance) {
-      lastViewportRef.current = initialViewport;
-      setTimeout(() => {
-        reactFlowInstance.setViewport(initialViewport);
-      }, 100);
-    }
-  }, [initialViewport, reactFlowInstance]);
-
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const previousNodesRef = useRef<string>(JSON.stringify(propNodes || initialNodes)); 
-  const previousEdgesRef = useRef<string>(JSON.stringify(propEdges || initialEdges)); 
   
+  // Este useEffect fue eliminado o su lógica de initialNodes/Edges fue eliminada.
+  // El manejo de initialViewport se hace en el nuevo useEffect dedicado.
+
   useEffect(() => {
-    const currentNodes = reactFlowInstance.getNodes();
-    const currentEdges = reactFlowInstance.getEdges();
-    const currentNodesJSON = JSON.stringify(currentNodes);
-    const currentEdgesJSON = JSON.stringify(currentEdges);
-    
-    if (onSave && reactFlowInstance && !isDragging &&
-        (currentNodesJSON !== previousNodesRef.current || 
-         currentEdgesJSON !== previousEdgesRef.current)) {
-      previousNodesRef.current = currentNodesJSON;
-      previousEdgesRef.current = currentEdgesJSON;
+    if (onSaveRef.current && reactFlowInstance && !isDragging) { // Use onSaveRef
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
       saveTimeoutRef.current = setTimeout(() => {
         const flow = reactFlowInstance.toObject();
-        onSave?.(flow); 
+        console.log("Saving diagram from internal state change", flow.nodes.length, "nodes");
+        onSaveRef.current?.(flow); // Use onSaveRef
       }, 1000);
     }
     return () => {
@@ -645,7 +682,8 @@ const FlowEditorContent = ({
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [onSave, reactFlowInstance, propNodes, propEdges, isDragging]);
+  }, [nodes, edges, reactFlowInstance, isDragging]); // Removed onSave from dependencies
+
 
   const [editingGroup, setEditingGroup] = useState<{
     id: string;
@@ -661,8 +699,8 @@ const FlowEditorContent = ({
 
   const saveGroupName = useCallback((newName: string) => {
     if (!editingGroup) return;
-    reactFlowInstance.setNodes((nodes: Node[]) => 
-      nodes.map((node: Node) => 
+    setNodes((nds) => 
+      nds.map((node) => 
         node.id === editingGroup.id 
           ? { ...node, data: { ...node.data, label: newName } } 
           : node
@@ -670,7 +708,7 @@ const FlowEditorContent = ({
     );
     setContextMenu(prev => ({...prev, visible: false})); 
     setEditingGroup(null);
-  }, [editingGroup, reactFlowInstance]);
+  }, [editingGroup, setNodes]);
 
   useOnSelectionChange({
     onChange: ({ nodes: selectedNodesFromCallback }: { nodes: Node[] }) => { 
@@ -689,6 +727,18 @@ const FlowEditorContent = ({
     };
   }, []);
 
+  const findGroupAtPosition = useCallback((position: { x: number; y: number }) => {
+    const currentNodes = reactFlowInstance.getNodes();
+    return currentNodes.find((node: Node) => 
+      node.type === 'group' && 
+      !node.data?.isMinimized &&
+      position.x >= node.position.x &&
+      position.x <= node.position.x + (node.width || 300) &&
+      position.y >= node.position.y &&
+      position.y <= node.position.y + (node.height || 200)
+    );
+  }, [reactFlowInstance]);
+
   const createEmptyGroup = useCallback((provider: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic') => {
     const { width, height } = reactFlowWrapper.current?.getBoundingClientRect() || { width: 1000, height: 800 };
     const position = reactFlowInstance.screenToFlowPosition({ x: width / 2, y: height / 2 });
@@ -699,13 +749,13 @@ const FlowEditorContent = ({
       data: { label: 'New Group', provider, isCollapsed: false, isMinimized: false },
       style: { width: 300, height: 200 }
     };
-    onNodesChange?.([{ type: 'add', item: newGroup }]);
+    setNodes((nds) => applyNodeChanges([{ type: 'add', item: newGroup }], nds));
     setTimeout(() => {
       const event = new CustomEvent('nodesChanged', { detail: { action: 'nodeAdded', nodeIds: [newGroupId] } });
       document.dispatchEvent(event);
     }, 100);
     return newGroupId;
-  }, [reactFlowInstance, onNodesChange, reactFlowWrapper]);
+  }, [reactFlowInstance, setNodes, reactFlowWrapper]);
 
   const optimizeNodesInGroup = useCallback((groupId: string) => {
     const group = reactFlowInstance.getNode(groupId);
@@ -720,7 +770,8 @@ const FlowEditorContent = ({
     const nodeSpacing = 8;
     const availableWidth = groupWidth - 2 * horizontalMargin;
     const sortedChildNodes = [...childNodes].sort((a, b) => a.id.localeCompare(b.id));      
-    const updatedNodes = reactFlowInstance.getNodes().map((node: Node) => {
+    
+    setNodes((nds) => nds.map((node: Node) => {
       if (node.parentId !== groupId) return node;
       const idx = sortedChildNodes.findIndex((n: Node) => n.id === node.id);
       const y = headerHeight + verticalMargin + idx * (40 + nodeSpacing);
@@ -737,10 +788,9 @@ const FlowEditorContent = ({
         draggable: true, 
         selectable: true  
       };
-    });
+    }));
     console.log(`Optimizando ${childNodes.length} nodos en el grupo ${groupId}`);
-    reactFlowInstance.setNodes(updatedNodes as Node[]); 
-  }, [reactFlowInstance]);
+  }, [reactFlowInstance, setNodes]);
 
   const groupSelectedNodes = useCallback(() => {
     console.log("Agrupando nodos seleccionados:", selectedNodes.length);
@@ -780,24 +830,30 @@ const FlowEditorContent = ({
       data: { label: 'Grupo', provider: mostCommonProvider, isCollapsed: false, isMinimized: false },
       style: { width, height }
     };
-    const updatedNodes = reactFlowInstance.getNodes().map((node: Node) => { 
-      if (selectedNodes.some(selectedNode => selectedNode.id === node.id)) {
-        return {
-          ...node, parentId: newGroupId, extent: 'parent' as const,
-          position: { x: node.position.x - minX, y: node.position.y - minY },
-          selected: false
-        };
-      }
-      return node;
+    
+    setNodes((nds) => {
+      const updatedNds = nds.map((n) => {
+        if (selectedNodes.some(sn => sn.id === n.id)) {
+          return {
+            ...n,
+            parentId: newGroupId,
+            extent: 'parent' as const,
+            position: { x: n.position.x - minX, y: n.position.y - minY },
+            selected: false,
+          };
+        }
+        return n;
+      });
+      return [...updatedNds, newGroup];
     });
-    reactFlowInstance.setNodes([...updatedNodes, newGroup] as Node[]); 
+
     setTimeout(() => optimizeNodesInGroup(newGroupId), 50);
     return newGroupId;
-  }, [selectedNodes, reactFlowInstance, optimizeNodesInGroup]);
+  }, [selectedNodes, reactFlowInstance, optimizeNodesInGroup, setNodes]);
 
   const ungroupNodes = useCallback(() => {
     const selectedGroupNodes = selectedNodes.filter((node: Node) => node.type === 'group'); 
-    const allNodes = reactFlowInstance.getNodes(); 
+    const allCurrentNodes = reactFlowInstance.getNodes(); 
     let groupsToProcess: string[] = [];
     if (selectedGroupNodes.length > 0) {
       groupsToProcess = selectedGroupNodes.map((group: Node) => group.id); 
@@ -815,28 +871,38 @@ const FlowEditorContent = ({
         return;
     }
     console.log("Grupos a desagrupar/procesar:", groupsToProcess);
-    const finalNodes = allNodes.map((node: Node) => { 
-      if (node.parentId && groupsToProcess.includes(node.parentId)) {
-        const parentGroup = allNodes.find((n: Node) => n.id === node.parentId); 
-        if (parentGroup) {
-          return {
-            ...node, parentId: undefined, extent: undefined,
-            position: { x: parentGroup.position.x + node.position.x, y: parentGroup.position.y + node.position.y }
-          };
+    
+    setNodes((nds) =>
+      nds.map((n) => {
+        if (n.parentId && groupsToProcess.includes(n.parentId)) {
+          const parentGroup = allCurrentNodes.find(pg => pg.id === n.parentId);
+          if (parentGroup) {
+            return {
+              ...n,
+              parentId: undefined,
+              extent: undefined,
+              position: { x: parentGroup.position.x + n.position.x, y: parentGroup.position.y + n.position.y },
+            };
+          }
         }
-      }
-      if (groupsToProcess.includes(node.id)) return null; 
-      return node;
-    }).filter(Boolean) as Node[];
-    reactFlowInstance.setNodes(finalNodes);
-  }, [selectedNodes, reactFlowInstance]);
+        return n;
+      }).filter(n => !groupsToProcess.includes(n.id)) 
+    );
+
+  }, [selectedNodes, reactFlowInstance, setNodes]);
 
   const handleToolClick = useCallback((tool: ToolType) => {
-    if (tool === activeTool && tool !== 'lasso' && tool !== 'area') return;
-    document.body.classList.remove('lasso-selection-mode');
-    document.body.classList.remove('area-drawing-mode');
+    console.log("Tool clicked:", tool, "Current activeTool:", activeTool);
+    if (tool === activeTool && tool !== 'lasso' && tool !== 'area') {
+      return; 
+    }
+  
+    document.body.classList.remove('lasso-selection-mode', 'area-drawing-mode');
+    document.body.style.cursor = 'default'; 
+  
     if (tool === 'lasso') {
       document.body.classList.add('lasso-selection-mode');
+      document.body.style.cursor = 'crosshair';
       reactFlowInstance.setNodes((nodes: Node[]) => nodes.map((node: Node) => ({ 
         ...node, 
         selected: false, 
@@ -844,48 +910,38 @@ const FlowEditorContent = ({
       })));
     } else if (tool === 'area') {
       document.body.classList.add('area-drawing-mode');
+      document.body.style.cursor = 'crosshair'; 
       reactFlowInstance.setNodes((nodes: Node[]) => nodes.map((node: Node) => ({ 
         ...node, 
         selected: false 
       })));
+    } else if (tool === 'note' || tool === 'text') {
+      document.body.style.cursor = 'crosshair'; 
     }
+  
     setActiveTool(tool);
-    const lassoSelectStyle = document.createElement('style');
-    lassoSelectStyle.id = 'lasso-select-compatibility';
-    lassoSelectStyle.innerHTML = `
-      .react-flow__node {
-        pointer-events: all !important;
-      }
-      .lasso-selection-mode .react-flow__pane {
-        cursor: crosshair !important;
-      }
-    `;
-    const existingStyle = document.getElementById('lasso-select-compatibility');
-    if (existingStyle) {
-      existingStyle.remove();
-    }
+    console.log("New activeTool:", tool);
+  
+    const lassoSelectStyle = document.getElementById('lasso-select-compatibility');
     if (tool === 'lasso') {
-      document.head.appendChild(lassoSelectStyle);
+      if (!lassoSelectStyle) {
+        const styleElement = document.createElement('style');
+        styleElement.id = 'lasso-select-compatibility';
+        styleElement.innerHTML = `
+          .react-flow__node { pointer-events: all !important; }
+          .lasso-selection-mode .react-flow__pane { cursor: crosshair !important; }
+        `;
+        document.head.appendChild(styleElement);
+      }
+    } else {
+      if (lassoSelectStyle) {
+        lassoSelectStyle.remove();
+      }
     }
-  }, [activeTool, reactFlowInstance]);
+  }, [activeTool, reactFlowInstance, setActiveTool]);
 
   useEffect(() => {
   }, []);
-
-  const isInsideGroup = (position: { x: number, y: number }, group: Node) => {
-    if (group.data?.isMinimized) return false; 
-    const groupX = group.position.x;
-    const groupY = group.position.y;
-    const groupWidth = (group.style?.width as number) || 200;
-    const groupHeight = (group.style?.height as number) || 150;
-    const margin = 5;
-    const isInside = (
-      position.x >= groupX - margin && position.x <= groupX + groupWidth + margin &&
-      position.y >= groupY - margin && position.y <= groupY + groupHeight + margin
-    );
-    console.log(`Drop position check: (${position.x}, ${position.y}) inside group at (${groupX}, ${groupY}) with size ${groupWidth}x${groupHeight}: ${isInside}`);
-    return isInside;
-  };
 
   const onDragStartSidebar = (event: React.DragEvent, itemData: ResourceItem) => {
     if (activeTool === 'area' || activeTool === 'text') {
@@ -908,6 +964,20 @@ const FlowEditorContent = ({
 
   const [highlightedGroupId, setHighlightedGroupId] = useState<string | null>(null);
 
+  const isInsideGroup = useCallback((position: { x: number; y: number }, group: Node): boolean => {
+    const groupX = group.position.x;
+    const groupY = group.position.y;
+    const groupWidth = group.style?.width as number || 300;
+    const groupHeight = group.style?.height as number || 200;
+    
+    return (
+      position.x >= groupX &&
+      position.x <= groupX + groupWidth &&
+      position.y >= groupY &&
+      position.y <= groupY + groupHeight
+    );
+  }, []);
+  
   const onDragOver = useCallback((event: React.DragEvent) => {
     if (activeTool === 'area' || activeTool === 'text') {
       event.preventDefault();
@@ -948,52 +1018,11 @@ const FlowEditorContent = ({
     document.body.style.cursor = 'default';
   }, [setActiveDrag]);
 
-  useEffect(() => {
-    if (propNodes) {
-      const currentNodesJSON = JSON.stringify(reactFlowInstance.getNodes());
-      const propNodesJSON = JSON.stringify(propNodes);
-      if (currentNodesJSON !== propNodesJSON) {
-        const updatedNodes = propNodes.map((node: Node) => ({ 
-          ...node,
-          draggable: true,
-          selectable: true,
-          connectable: true,
-          style: {
-            ...node.style,
-            width: node.width || 200,
-            height: node.height || 100
-          }
-        }));
-        setNodesHook(updatedNodes as Node[]); 
-      }
-    }
-  }, [propNodes, setNodesHook, diagramId, reactFlowInstance]); 
-
-  useEffect(() => {
-    if (propEdges) {
-      const currentEdgesJSON = JSON.stringify(reactFlowInstance.getEdges());
-      const propEdgesJSON = JSON.stringify(propEdges);
-      if (currentEdgesJSON !== propEdgesJSON) {
-        setEdgesHook(propEdges as Edge[]); 
-      }
-    }
-  }, [propEdges, setEdgesHook, diagramId, reactFlowInstance]); 
-
-  const findGroupAtPosition = useCallback((position: { x: number; y: number }) => {
-    const currentNodes = reactFlowInstance.getNodes();
-    return currentNodes.find((node: Node) => 
-      node.type === 'group' && 
-      !node.data?.isMinimized &&
-      position.x >= node.position.x &&
-      position.x <= node.position.x + (node.width || 300) &&
-      position.y >= node.position.y &&
-      position.y <= node.position.y + (node.height || 200)
-    );
-  }, [reactFlowInstance]);
-
   const onDrop = useCallback((event: React.DragEvent) => {
     event.preventDefault();
+    document.body.style.cursor = 'default'; 
     if (activeTool === 'area') {
+      setActiveTool('select'); 
       return;
     }
     const reactFlowBounds = reactFlowWrapper.current?.getBoundingClientRect();
@@ -1097,52 +1126,45 @@ const FlowEditorContent = ({
           newNode.extent = 'parent' as const;
         }
       }
-      const updatedNodes = [...reactFlowInstance.getNodes(), newNode];
-      setNodesHook(updatedNodes as Node[]); 
-      if (onNodesChange) {
-        onNodesChange([{ type: 'add', item: newNode }]);
-      }
+      
+      setNodes((nds) => applyNodeChanges([{ type: 'add', item: newNode }], nds));
+
       if (newNode.parentId) {
         setTimeout(() => {
           optimizeNodesInGroup(newNode.parentId!);
         }, 0);
       }
-      if (diagramId && onSave) {
-        const currentViewport = reactFlowInstance.getViewport();
-        onSave({
-          nodes: updatedNodes,
-          edges: reactFlowInstance.getEdges(),
-          viewport: currentViewport
-        });
-      }
+      
+      setActiveTool('select'); 
+      console.log('Tool reset to select, nodes should be draggable.'); 
+      document.body.style.cursor = 'default'; 
     } catch (error) {
       console.error("Error handling node drop:", error);
     }
-  }, [reactFlowInstance, findGroupAtPosition, onNodesChange, optimizeNodesInGroup, setNodesHook, diagramId, onSave, activeDrag, activeTool]); 
+  }, [reactFlowInstance, findGroupAtPosition, optimizeNodesInGroup, setNodes, activeDrag, activeTool, setActiveTool]); 
 
   const saveCurrentDiagramState = useCallback(() => {
-    if (!reactFlowInstance || !onSave) return;
+    if (!reactFlowInstance || !onSaveRef.current) return; // Use onSaveRef
     const currentNodes = reactFlowInstance.getNodes();
     const currentEdges = reactFlowInstance.getEdges();
     const currentViewport = reactFlowInstance.getViewport();
     console.log('Guardando viewport explícitamente:', currentViewport);
     lastViewportRef.current = currentViewport;
     const flow = reactFlowInstance.toObject();
-    onSave({
+    onSaveRef.current({ // Use onSaveRef
       ...flow,
       viewport: currentViewport
     });
     previousNodesRef.current = JSON.stringify(currentNodes);
     previousEdgesRef.current = JSON.stringify(currentEdges);
     console.log('Diagrama guardado con viewport:', currentViewport);
-  }, [reactFlowInstance, onSave]);
+  }, [reactFlowInstance]); // Removed onSave from dependencies
   
   useEffect(() => {
-    if (!reactFlowInstance || !onSave) return;
-    const currentNodes = reactFlowInstance.getNodes();
-    const currentEdges = reactFlowInstance.getEdges();
-    const currentNodesJSON = JSON.stringify(currentNodes);
-    const currentEdgesJSON = JSON.stringify(currentEdges);
+    if (!reactFlowInstance || !onSaveRef.current) return; // Use onSaveRef and check its existence
+    const currentNodesJSON = JSON.stringify(nodes);
+    const currentEdgesJSON = JSON.stringify(edges);
+
     if (currentNodesJSON !== previousNodesRef.current || 
         currentEdgesJSON !== previousEdgesRef.current) {
       if (saveTimeoutRef.current) {
@@ -1152,12 +1174,7 @@ const FlowEditorContent = ({
         saveCurrentDiagramState();
       }, 1000);
     }
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-    };
-  }, [onSave, reactFlowInstance, propNodes, propEdges, saveCurrentDiagramState]);
+  }, [nodes, edges, reactFlowInstance, isDragging, saveCurrentDiagramState]); // Removed onSave from dependencies
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1459,9 +1476,11 @@ const FlowEditorContent = ({
         <style>
           {`
             .react-flow__pane {
-              cursor: ${activeTool === 'note' ? 'move' : 
-                       activeTool === 'text' ? 'move' :
-                       activeTool === 'area' ? 'move' : 'default'};
+              cursor: ${
+                activeTool === 'note' || activeTool === 'text' || activeTool === 'area' || activeTool === 'lasso' 
+                ? 'crosshair' 
+                : 'default'
+              };
             }
             .react-flow__node {
               cursor: move !important;
@@ -1527,8 +1546,8 @@ const FlowEditorContent = ({
           edges={edges}
           nodeTypes={memoizedNodeTypes}
           edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          onNodesChange={onNodesChangeInternal}
+          onEdgesChange={onEdgesChangeInternal}
           onConnect={onConnect}
           onPaneClick={handlePaneClick}
           onEdgeClick={onEdgeClick}
@@ -1537,15 +1556,13 @@ const FlowEditorContent = ({
           onNodeDragStart={(_event, _node) => setIsDragging(true)}
           onNodeDragStop={(_event, _node) => {
             setIsDragging(false);
-            if (onSave && reactFlowInstance) {
+            if (onSaveRef.current && reactFlowInstance) { // Usar onSaveRef.current
               if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
               }
               saveTimeoutRef.current = setTimeout(() => {
                 const flow = reactFlowInstance.toObject();
-                 onSave?.(flow);
-                 previousNodesRef.current = JSON.stringify(reactFlowInstance.getNodes());
-                 previousEdgesRef.current = JSON.stringify(reactFlowInstance.getEdges());
+                 onSaveRef.current?.(flow); // Usar onSaveRef.current
               }, 100); 
             }
           }}
@@ -1617,9 +1634,7 @@ const FlowEditorContent = ({
                   draggable: true,
                   selectable: true
                 };
-                if (onNodesChange) {
-                  onNodesChange([{ type: 'add', item: newAreaNode }]);
-                }
+                setNodes((nds) => applyNodeChanges([{ type: 'add', item: newAreaNode }], nds));
               }
               setIsDrawingArea(false);
               setAreaStartPos(null);
@@ -1633,7 +1648,7 @@ const FlowEditorContent = ({
           elementsSelectable={true}
           nodesDraggable={activeTool !== 'area'}
           nodesConnectable={true}
-          panOnDrag={activeTool !== 'lasso' && activeTool !== 'area'}
+          panOnDrag={activeTool !== 'lasso' && activeTool !== 'area'} 
           panOnScroll={true}
           zoomOnScroll={true}
           zoomOnPinch={true}
@@ -1768,7 +1783,7 @@ const FlowEditorContent = ({
                             console.log("Eliminando nodos seleccionados:", currentSelectedNodes.length, currentSelectedNodes.map((n: Node) => n.id)); 
                             if (currentSelectedNodes.length > 0) {
                               const nodeIds = currentSelectedNodes.map((node: Node) => node.id); 
-                              onNodesChange?.(nodeIds.map((id: string) => ({ type: 'remove', id }))); 
+                              setNodes(nds => applyNodeChanges(nodeIds.map(id => ({type: 'remove', id})), nds));
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -1791,15 +1806,7 @@ const FlowEditorContent = ({
                           onClick={() => {
                             const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             if (currentSelectedNodes.length > 0) {
-                              const allNodes = reactFlowInstance.getNodes(); 
-                              const selectedIds = new Set(currentSelectedNodes.map((node: Node) => node.id)); 
-                              const updatedNodes = allNodes.map((node: Node) => { 
-                                if (selectedIds.has(node.id)) {
-                                  return { ...node, zIndex: (node.zIndex || 0) - 1 };
-                                }
-                                return node;
-                              });
-                              reactFlowInstance.setNodes(updatedNodes as Node[]); 
+                              moveNodesToBack(currentSelectedNodes.map((node: Node) => node.id)); 
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2014,7 +2021,7 @@ const FlowEditorContent = ({
                       <button 
                         onClick={() => {
                           if (contextMenu.nodeId) {
-                            onNodesChange?.([{ type: 'remove', id: contextMenu.nodeId }]);
+                            setNodes(nds => applyNodeChanges([{ type: 'remove', id: contextMenu.nodeId! }], nds));
                           }
                           setContextMenu(prev => ({...prev, visible: false}));
                         }}
@@ -2068,7 +2075,7 @@ const FlowEditorContent = ({
                             const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             if (currentSelectedNodes.length > 0) {
                               const nodeIds = currentSelectedNodes.map((node: Node) => node.id); 
-                              onNodesChange?.(nodeIds.map((id: string) => ({ type: 'remove', id }))); 
+                              setNodes(nds => applyNodeChanges(nodeIds.map(id => ({type: 'remove', id})), nds));
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2091,15 +2098,7 @@ const FlowEditorContent = ({
                           onClick={() => {
                             const currentSelectedNodes = reactFlowInstance.getNodes().filter((node: Node) => node.selected); 
                             if (currentSelectedNodes.length > 0) {
-                              const allNodes = reactFlowInstance.getNodes(); 
-                              const selectedIds = new Set(currentSelectedNodes.map((node: Node) => node.id)); 
-                              const updatedNodes = allNodes.map((node: Node) => { 
-                                if (selectedIds.has(node.id)) {
-                                  return { ...node, zIndex: (node.zIndex || 0) - 1 };
-                                }
-                                return node;
-                              });
-                              reactFlowInstance.setNodes(updatedNodes as Node[]); 
+                              moveNodesToBack(currentSelectedNodes.map((node: Node) => node.id)); 
                             }
                             setContextMenu(prev => ({...prev, visible: false}));
                           }}
@@ -2454,16 +2453,15 @@ const FlowEditorContent = ({
               background: 'rgba(255,255,255,0.9)', 
               padding: '0', 
               borderRadius: '12px 0 0 12px', 
-              height: 'calc(100vh - 7.5rem)', // Ajustado para header de layout (3.5rem) + header de dashboard (4rem)
+              height: 'calc(100vh - 7.5rem)', 
               overflow: 'hidden', 
               boxShadow: '0 4px 20px rgba(0,0,0,0.15)', 
               display: 'flex', 
               flexDirection: 'column',
               position: 'fixed',
-              top: '7.5rem', // Ajustado para header de layout (3.5rem) + header de dashboard (4rem)
+              top: '7.5rem', 
               right: '0px', 
-              // bottom: '0px', // Eliminado para que height tenga efecto
-              zIndex: 9999, // Asegurar que esté sobre otros elementos fijos si los hubiera
+              zIndex: 9999, 
               transform: 'none', 
               transition: 'transform 0.3s ease-out, opacity 0.3s ease-out, width 0.3s ease-out',
               backdropFilter: 'blur(10px)'
@@ -2528,7 +2526,6 @@ const FlowEditorContent = ({
                 flexDirection: 'column',
                 backgroundColor: 'rgba(255, 255, 255, 0.9)',
                 paddingBottom: '16px',
-                // height ya no es necesario aquí, flexGrow se encargará
                 scrollbarWidth: 'thin',
                 scrollbarColor: '#ccc #f1f1f1',
               }}>
