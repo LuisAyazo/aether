@@ -30,7 +30,7 @@ import { Diagram } from '@/app/services/diagramService';
 import nodeTypesFromFile from '../nodes/NodeTypes'; 
 import { NodeExecutionState, NodeWithExecutionStatus } from '../../utils/customTypes';
 import ExecutionLog from './ExecutionLog';
-import GroupFocusView from './GroupFocusView'; // Importar el nuevo componente
+import GroupFocusView from './GroupFocusView'; 
 
 const { 
   Background, 
@@ -103,7 +103,7 @@ interface ResourceCategory {
   provider: 'aws' | 'gcp' | 'azure' | 'generic';
 }
 
-export interface ResourceItem { // Exportar interfaz
+export interface ResourceItem { 
   type: string;
   name: string;
   description: string;
@@ -130,8 +130,7 @@ interface ContextMenu {
   }>;
 }
 
-// Exportar ResourceCategory también si GroupFocusView la necesita directamente para su prop
-export type { ResourceCategory }; // Re-exportar el tipo si ya está definido arriba o definir y exportar
+export type { ResourceCategory }; 
 
 type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea' | 'note' | 'text' | 'area';
 
@@ -308,12 +307,11 @@ const FlowEditorContent = ({
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [isDragging, setIsDragging] = useState(false); 
-  const [isToolbarDragging, setIsToolbarDragging] = useState(false); // Se mantendrá por ahora, aunque la barra sea fija, para el botón de orientación
+  const [isToolbarDragging, setIsToolbarDragging] = useState(false); 
   const previousNodesRef = useRef<string | null>(null);
   const previousEdgesRef = useRef<string | null>(null);
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null); // Nuevo estado para la vista de grupo expandida
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null); 
 
-  // Constantes para el layout de la vista expandida del grupo
   const GROUP_HEADER_HEIGHT = 40; 
   const CHILD_NODE_PADDING_X = 20;
   const CHILD_NODE_PADDING_Y = 15;
@@ -330,16 +328,14 @@ const FlowEditorContent = ({
         ...un,
         parentId: expandedGroupId!,
         extent: 'parent' as const,
-        // hidden: true, // Dejar que handleCollapseGroupView maneje el estado 'hidden' final
       }));
 
-      // Asegurar que el groupNode principal también se actualice para no estar en isExpandedView
       const updatedGroupNode = groupNodeFromState ? {
         ...groupNodeFromState,
         data: {
           ...groupNodeFromState.data,
-          isExpandedView: false, // El grupo ya no está en "vista detallada"
-          isMinimized: groupNodeFromState.data.isMinimized, // Mantener estado de minimizado
+          isExpandedView: false, 
+          isMinimized: groupNodeFromState.data.isMinimized, 
         },
       } : undefined;
 
@@ -347,12 +343,10 @@ const FlowEditorContent = ({
     });
 
     setEdges(currentEdges => {
-      // Eliminar aristas antiguas que estaban solo entre los nodos del grupo
       const childNodeIdsInGroup = new Set(updatedNodesInGroup.map(n => n.id));
       const edgesOutsideGroupOrNotRelated = currentEdges.filter(edge => 
         !childNodeIdsInGroup.has(edge.source) || !childNodeIdsInGroup.has(edge.target)
       );
-      // Añadir las nuevas/actualizadas aristas del grupo
       return [...edgesOutsideGroupOrNotRelated, ...newEdgesInGroup];
     });
 
@@ -393,32 +387,34 @@ const FlowEditorContent = ({
   }, [selectedLogicalType, setEdges, onConnectProp]);
 
   useEffect(() => {
-    // Ya no se necesita la lógica de arrastre para la posición de la barra de herramientas si es fija.
-    // const move = (e: MouseEvent) => { if(isToolbarDragging) setToolbarPosition({ x: e.clientX - dragStartOffset.x, y: e.clientY - dragStartOffset.y }); };
-    // const up = () => setIsToolbarDragging(false);
-    // if (isToolbarDragging) { window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); }
-    // return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-  }, [isToolbarDragging, dragStartOffset]);
+    // Lógica de arrastre de la barra de herramientas eliminada ya que ahora es fija.
+  }, []);
 
   useEffect(() => {
     if (initialViewport && reactFlowInstance) {
-      const rfVp = reactFlowInstance.getViewport();
-      // Solo aplicar initialViewport si es significativamente diferente o si el zoom actual es 0 (no inicializado)
-      if (rfVp.zoom === 0 || initialViewport.zoom === 0 || // Evitar aplicar si alguno es inválido o no inicializado
-          rfVp.x !== initialViewport.x || 
-          rfVp.y !== initialViewport.y || 
-          rfVp.zoom !== initialViewport.zoom) {
-        const tId = setTimeout(() => { 
-          if (reactFlowInstance?.getViewport?.().zoom !== 0 || initialViewport.zoom !== 0) { 
-            reactFlowInstance.setViewport(initialViewport); 
-            lastViewportRef.current = initialViewport; // Sincronizar lastViewportRef con el initialViewport aplicado
+      // Siempre intentar aplicar el initialViewport si está definido
+      // y es diferente del viewport actual o si lastViewportRef no coincide.
+      const currentViewport = reactFlowInstance.getViewport();
+      const viewportChangedSignificantly = 
+        Math.abs(currentViewport.x - initialViewport.x) > 0.001 ||
+        Math.abs(currentViewport.y - initialViewport.y) > 0.001 ||
+        Math.abs(currentViewport.zoom - initialViewport.zoom) > 0.0001;
+
+      // Si el initialViewport es diferente del viewport actual, o si es la primera carga con un viewport válido
+      if (initialViewport.zoom !== 0 && (viewportChangedSignificantly || !lastViewportRef.current)) {
+        const timeoutId = setTimeout(() => {
+          if (reactFlowInstance) { // Re-check reactFlowInstance
+            reactFlowInstance.setViewport(initialViewport);
+            lastViewportRef.current = initialViewport; // Sincronizar siempre
+            console.log('Applied initialViewport:', initialViewport);
           }
-        }, 50);
-        return () => clearTimeout(tId);
+        }, 50); // Delay para permitir que RF procese otros cambios
+        return () => clearTimeout(timeoutId);
       } else if (!lastViewportRef.current && initialViewport.zoom !== 0) {
-        // Si lastViewportRef no está seteado y el initialViewport es válido, setearlo.
-        // Esto es importante para que al abrir un grupo por primera vez, se guarde el viewport correcto.
+        // Caso borde: si el viewport actual ya coincide con initialViewport en la primera carga,
+        // aún así, inicializar lastViewportRef.
         lastViewportRef.current = initialViewport;
+        console.log('Initialized lastViewportRef with initialViewport:', initialViewport);
       }
     }
   }, [initialViewport, reactFlowInstance]);
@@ -450,7 +446,7 @@ const FlowEditorContent = ({
 
   const handleNodeContextMenu = useCallback((evt: React.MouseEvent, node: Node) => { evt.preventDefault(); evt.stopPropagation(); if(!node.selected) return; setContextMenu({visible:true,x:evt.clientX,y:evt.clientY,nodeId:node.id,nodeType:node.type||null,isPane:false,parentInfo:null}); }, []);
   const handlePaneContextMenu = useCallback((evt: React.MouseEvent) => { evt.preventDefault(); setContextMenu(p => ({...p, visible:false})); }, []);
-
+  
   const [editingGroup, setEditingGroup] = useState<{id:string,label:string}|null>(null);
   const startEditingGroupName = useCallback((id:string,lbl:string)=>setEditingGroup({id,label:lbl}),[]);
   const saveGroupName = useCallback((name:string)=>{ if(!editingGroup)return; setNodes(ns=>ns.map(n=>n.id===editingGroup.id?{...n,data:{...n.data,label:name}}:n)); setContextMenu(p=>({...p,visible:false})); setEditingGroup(null); },[editingGroup,setNodes]);
@@ -564,70 +560,55 @@ const FlowEditorContent = ({
     if (!reactFlowInstance || !onSaveRef.current) return;
     const flow = reactFlowInstance.toObject();
     console.log('Saving viewport:', flow.viewport);
-    lastViewportRef.current = flow.viewport;
+    lastViewportRef.current = flow.viewport; // Guardar el viewport actual
     onSaveRef.current(flow);
     previousNodesRef.current = JSON.stringify(flow.nodes);
     previousEdgesRef.current = JSON.stringify(flow.edges);
-  }, [reactFlowInstance, onSaveRef]); // Agregado onSaveRef a las dependencias
+  }, [reactFlowInstance, onSaveRef]); 
 
   useEffect(() => {
-    // Este useEffect maneja el guardado automático basado en cambios en nodes, edges, etc.
-    // Asegúrate de que onSaveRef.current y reactFlowInstance existan.
     if (onSaveRef.current && reactFlowInstance && !isDragging) {
-      // Compara el estado actual con el guardado previamente para evitar guardados innecesarios.
       const currentNodesJSON = JSON.stringify(nodes);
       const currentEdgesJSON = JSON.stringify(edges);
       if (currentNodesJSON !== previousNodesRef.current || currentEdgesJSON !== previousEdgesRef.current) {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
-          // Llama a saveCurrentDiagramState que ahora tiene sus propias dependencias correctas.
           saveCurrentDiagramState(); 
-        }, 1000); // Delay para el guardado
+        }, 1000); 
       }
     }
-    // Limpieza del timeout si el componente se desmonta o las dependencias cambian.
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [nodes, edges, reactFlowInstance, isDragging, saveCurrentDiagramState]); // saveCurrentDiagramState es una dependencia
+  }, [nodes, edges, reactFlowInstance, isDragging, saveCurrentDiagramState, onSaveRef]);
 
   const handleExpandGroupView = useCallback((groupId: string) => {
     if (reactFlowInstance) {
-      lastViewportRef.current = reactFlowInstance.getViewport(); // Guardar viewport actual
+      lastViewportRef.current = reactFlowInstance.getViewport(); 
     }
     setExpandedGroupId(groupId);
     setNodes(nds => nds.map(n => n.id === groupId ? { ...n, data: { ...n.data, isExpandedView: true, isMinimized: false } } : n));
   }, [reactFlowInstance, setNodes, setExpandedGroupId]);
 
   useEffect(() => {
-    // Efecto para restaurar el viewport cuando se cierra la vista de grupo
     if (!expandedGroupId && lastViewportRef.current && reactFlowInstance) {
       const currentViewport = reactFlowInstance.getViewport();
-      // Solo restaurar si el viewport guardado es válido (zoom no es 0) y es diferente al actual.
       if (lastViewportRef.current.zoom !== 0 && 
           (Math.abs(currentViewport.x - lastViewportRef.current.x) > 0.01 ||
            Math.abs(currentViewport.y - lastViewportRef.current.y) > 0.01 ||
            Math.abs(currentViewport.zoom - lastViewportRef.current.zoom) > 0.001)
       ) {
-        // Usar setTimeout para asegurar que React Flow haya procesado cambios de nodos
         setTimeout(() => {
-          if (reactFlowInstance && lastViewportRef.current) { // Re-verificar instancias
+          if (reactFlowInstance && lastViewportRef.current) { 
             reactFlowInstance.setViewport(lastViewportRef.current);
-            // Opcional: limpiar la referencia después de usarla para evitar restauraciones no deseadas
-            // lastViewportRef.current = null; 
           }
-        }, 50); // Pequeño delay
+        }, 50); 
       }
     }
   }, [expandedGroupId, reactFlowInstance]);
 
   const handleCollapseGroupView = useCallback((groupIdToCollapse: string) => {
-    // Si se está colapsando un grupo que no es el actualmente expandido en GroupFocusView,
-    // simplemente se actualiza su estado en el canvas principal (lógica original).
-    // Si es el mismo, se cierra GroupFocusView.
     if (expandedGroupId && expandedGroupId !== groupIdToCollapse) {
-        // Lógica para colapsar un grupo en el canvas principal que no está en GroupFocusView
-        // (Esta es la lógica que tenías antes para el colapso in-canvas)
         const { getNode, setNodes: rfSetNodes } = reactFlowInstance;
         const groupNode = getNode(groupIdToCollapse);
         if (!groupNode || !groupNode.data.isExpandedView) {
@@ -651,29 +632,25 @@ const FlowEditorContent = ({
             return n;
           })
         );
-        return; // Salir para no afectar expandedGroupId
+        return; 
     }
     
-    // Si estamos cerrando la vista de GroupFocusView (expandedGroupId === groupIdToCollapse)
     setExpandedGroupId(null);
 
-    // Restaurar el estado del nodo de grupo en el canvas principal y ocultar sus hijos
     setNodes(nds =>
       nds.map(n => {
         if (n.id === groupIdToCollapse) {
           return {
             ...n,
-            data: { ...n.data, isExpandedView: false }, // Asegurar que isExpandedView sea false
+            data: { ...n.data, isExpandedView: false }, 
           };
         }
         if (n.parentId === groupIdToCollapse) {
-          return { ...n, hidden: true }; // Ocultar siempre los hijos al colapsar/cerrar GroupFocusView
+          return { ...n, hidden: true }; 
         }
         return n;
       })
     );
-    // Forzar un guardado del estado actual del diagrama después de colapsar/cerrar la vista de grupo
-    // para asegurar que los cambios en parentId y hidden se persistan antes de otras interacciones.
     saveCurrentDiagramState(); 
   }, [reactFlowInstance, setNodes, expandedGroupId, setExpandedGroupId, saveCurrentDiagramState]);
 
@@ -755,7 +732,6 @@ const FlowEditorContent = ({
           newNodeToAdd.parentId=targetGroupNode.id;
           if(!parentNode.data.isExpandedView){
             newNodeToAdd.hidden=true; 
-            // No position/extent needed if hidden and listed by GroupNode
           }else{
             const relativePos={x:dropPosition.x-(parentNode.positionAbsolute?.x ?? parentNode.position.x),y:dropPosition.y-(parentNode.positionAbsolute?.y ?? parentNode.position.y)};
             const groupWidth=parentNode.width||300;
@@ -772,7 +748,6 @@ const FlowEditorContent = ({
       if(newNodeToAdd.parentId){
         const parentNodeDetails=reactFlowInstance.getNode(newNodeToAdd.parentId);
         if(parentNodeDetails?.data.isExpandedView){
-  // Function already defined above
         }
       }
       setActiveTool('select');
@@ -782,7 +757,6 @@ const FlowEditorContent = ({
     }
   },[reactFlowInstance,findGroupAtPosition,setNodes,activeDrag,activeTool,setActiveTool, handleExpandGroupView]);
 
-  // useEffect duplicado eliminado. El correcto está ahora más arriba con saveCurrentDiagramState.
   useEffect(()=>{const kd=(e:KeyboardEvent)=>{if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;switch(e.key.toLowerCase()){case'v':handleToolClick('select');break;case'n':handleToolClick('note');break;case't':handleToolClick('text');break;case'a':if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey)handleToolClick('area');break;case'g':if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey)createEmptyGroup();break;case's':if(e.shiftKey)handleToolClick('lasso');break;}};document.addEventListener('keydown',kd);return()=>document.removeEventListener('keydown',kd);},[handleToolClick,createEmptyGroup]);
   const renderEditGroupModal=()=>{if(!editingGroup)return null;return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,backgroundColor:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}}onClick={()=>setEditingGroup(null)}><div style={{backgroundColor:'white',padding:'20px',borderRadius:'8px',width:'300px',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}onClick={e=>e.stopPropagation()}><h3 style={{marginTop:0,marginBottom:'16px',fontSize:'16px'}}>Edit Group Name</h3><input type="text"defaultValue={editingGroup.label}style={{width:'100%',padding:'8px 12px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'14px',marginBottom:'16px'}}autoFocus onKeyDown={e=>{if(e.key==='Enter')saveGroupName((e.target as HTMLInputElement).value);if(e.key==='Escape')setEditingGroup(null);}}/><div style={{display:'flex',justifyContent:'flex-end',gap:'8px'}}><button onClick={()=>setEditingGroup(null)}style={{padding:'6px 12px',border:'1px solid #ddd',borderRadius:'4px',backgroundColor:'#f5f5f5',cursor:'pointer',fontSize:'14px'}}>Cancel</button><button onClick={e=>saveGroupName((e.currentTarget.parentElement?.querySelector('input')as HTMLInputElement).value)}style={{padding:'6px 12px',border:'none',borderRadius:'4px',backgroundColor:'#0088ff',color:'white',cursor:'pointer',fontSize:'14px'}}>Save</button></div></div></div>);};
   const moveNodesToBack=useCallback((ids:string[])=>{const cN=reactFlowInstance.getNodes();const sIds=new Set(ids);const mZ=Math.min(...cN.map(n=>n.zIndex||0));reactFlowInstance.setNodes(cN.map(n=>sIds.has(n.id)?{...n,zIndex:mZ-1}:n)as Node[]);},[reactFlowInstance]);
@@ -801,20 +775,16 @@ const FlowEditorContent = ({
         allNodes={nodes}
         allEdges={edges}
         onClose={() => {
-          // La lógica de 'handleCollapseGroupView' se encarga de limpiar expandedGroupId
-          // y actualizar el nodo grupo principal.
-          if (expandedGroupId) { // Verificar por si acaso
+          if (expandedGroupId) { 
              handleCollapseGroupView(expandedGroupId);
           }
         }}
         onSaveChanges={handleSaveChangesInGroup}
         mainNodeTypes={memoizedNodeTypes}
         mainEdgeTypes={edgeTypes}
-        // Props para la barra de herramientas interna de GroupFocusView
-        edgeTypeConfigs={edgeTypeConfigs} // Pasar la configuración de tipos de arista
-        edgeToolbarIcons={edgeToolbarIcons} // Pasar los iconos de la barra de herramientas de aristas
-        resourceCategories={resourceCategories} // Pasar las categorías de recursos para el sidebar
-        // initialViewport={ { x:0, y:0, zoom:1 }} // Opcional: definir un viewport inicial para la vista de grupo
+        edgeTypeConfigs={edgeTypeConfigs} 
+        edgeToolbarIcons={edgeToolbarIcons} 
+        resourceCategories={resourceCategories} 
       />
     );
   }
@@ -858,7 +828,7 @@ const FlowEditorContent = ({
               let nodesToUpdate = currentNodesOnDragStop.map(n => {
                 if (n.id === draggedNode.id) {
                   const isTargetGroupExpanded = targetGroup.data.isExpandedView;
-                  let newPosition = n.position; // Por defecto, mantener la posición si no se expande
+                  let newPosition = n.position; 
                   let newExtent = undefined;
                   let newHidden = !isTargetGroupExpanded;
 
@@ -952,11 +922,11 @@ const FlowEditorContent = ({
           {isDrawingArea&&currentArea&&reactFlowInstance&&(<div className="area-drawing-overlay"style={{position:'absolute',pointerEvents:'none',zIndex:1000,left:`${(currentArea.x*reactFlowInstance.getViewport().zoom)+reactFlowInstance.getViewport().x}px`,top:`${(currentArea.y*reactFlowInstance.getViewport().zoom)+reactFlowInstance.getViewport().y}px`,width:`${currentArea.width*reactFlowInstance.getViewport().zoom}px`,height:`${currentArea.height*reactFlowInstance.getViewport().zoom}px`,border:'2px dashed rgba(59,130,246,1)',backgroundColor:'rgba(59,130,246,0.1)',borderRadius:'4px',boxShadow:'0 0 10px rgba(59,130,246,0.3)',transition:'none'}}/>)}
           {contextMenu.visible&&(<div style={{position:'fixed',left:contextMenu.x,top:contextMenu.y,background:'white',border:'1px solid #ddd',zIndex:1000,padding:'0px',borderRadius:'8px',boxShadow:'0 4px 10px rgba(0,0,0,0.2)',display:'flex',flexDirection:'column',gap:'0px',minWidth:'180px',overflow:'hidden',transform:'translate(8px, 8px)'}}onClick={e=>e.stopPropagation()}onContextMenu={e=>e.preventDefault()}><div style={{padding:'8px 12px',backgroundColor:'#f7f7f7',borderBottom:'1px solid #eee'}}>{!contextMenu.isPane&&contextMenu.nodeId&&(<><p style={{margin:'0 0 2px 0',fontSize:'13px',fontWeight:'bold'}}>{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.label||'Node'}</p><p style={{margin:0,fontSize:'11px',color:'#777'}}>ID: {contextMenu.nodeId}</p><p style={{margin:0,fontSize:'11px',color:'#777'}}>Type: {contextMenu.nodeType} {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider&&(<span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-xs">{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider.toUpperCase()}</span>)}</p></>)}{contextMenu.isPane&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>0?(<p style={{margin:0,fontSize:'13px',fontWeight:'bold'}}>{selN.length} nodos seleccionados</p>):(<p style={{margin:0,fontSize:'13px',fontWeight:'bold'}}>Canvas Options</p>);})()}</>)}</div><div>{!contextMenu.isPane&&contextMenu.nodeId&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>1&&selN.some(n=>n.id===contextMenu.nodeId);})()?(<><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)groupSelectedNodes();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{`📦 Group Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{deleteSelectedElements(); setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>{`Delete Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)moveNodesToBack(selN.map(n=>n.id));setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⬇️ Move Selected to Back</button></>):reactFlowInstance.getNode(contextMenu.nodeId!)?.type==='group'?(<><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n)startEditingGroupName(n.id,n.data?.label||'Group');setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>✏️ Edit Group Name</button><button onClick={()=>{if(contextMenu.nodeId)ungroupNodes(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup</button><button onClick={()=>{if(contextMenu.nodeId)handleDeleteNodeFromContextMenu(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Group</button></>):(<><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){setLoadingState(true);setIsExecutionLogVisible(true);simulateNodeExecution(n as NodeWithExecutionStatus,'creating').then(()=>simulateNodeExecution(n as NodeWithExecutionStatus,'success')).finally(()=>setLoadingState(false));}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>▶️ Run Node</button><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const np:SingleNodePreview={action:'create',resource:{name:n.data?.label||'Unnamed',type:n.type||'unknown',provider:n.data?.provider||'generic',changes:{properties:{label:{after:n.data?.label||'Unnamed',action:'create'},description:{after:n.data?.description||'',action:'create'},provider:{after:n.data?.provider||'generic',action:'create'},status:{after:n.data?.status||'success',action:'create'},lastUpdated:{after:n.data?.lastUpdated||new Date().toISOString(),action:'create'},version:{after:n.data?.version||1,action:'create'}}}},dependencies:n.data?.dependencies?.map((d:Dependency)=>({name:d.name,type:d.type,action:'create',properties:{...Object.entries(d).reduce((acc:Record<string,any>,[k,v])=>{if(k!=='name'&&k!=='type')acc[k]={after:v,action:'create'};return acc;},{})}}))||[],estimated_cost:n.data?.estimated_cost};setSingleNodePreview(np);setShowSingleNodePreview(true);}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>👁️ Preview</button><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const ev=new CustomEvent('openIaCPanel',{detail:{nodeId:n.id,resourceData:{label:n.data.label,provider:n.data.provider,resourceType:n.data.resourceType}}});window.dispatchEvent(ev);document.dispatchEvent(ev);}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⚙️ Configuración</button></>)}{!(selectedNodes.length>1&&selectedNodes.some(n=>n.id===contextMenu.nodeId))&&(<button onClick={()=>{if(contextMenu.nodeId)handleDeleteNodeFromContextMenu(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Node</button>)}</>)}{contextMenu.isPane&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>0;})()?(<><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)groupSelectedNodes();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{`📦 Group Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{ungroupNodes(); setContextMenu(p=>({...p,visible:false}));}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup Selected Nodes</button><button onClick={()=>{deleteSelectedElements(); setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>{`Delete Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)moveNodesToBack(selN.map(n=>n.id));setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⬇️ Move Selected to Back</button></>):(<><button onClick={()=>{createEmptyGroup();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>📦 Create Empty Group</button><button onClick={()=>{setSidebarOpen(true);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>📚 Show Resources Panel</button></>)}</>)}{contextMenu.customItems&&(<>{contextMenu.customItems.map((item,idx)=>(<button key={idx}onClick={()=>{item.onClick();setContextMenu(p=>({...p,visible:false}));}}style={{display:'flex',alignItems:'center',gap:'8px',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:idx<(contextMenu.customItems?.length||0)-1?'1px solid #eee':'none',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{item.icon}{item.label}</button>))}</>)}</div></div>)}
           {selectedEdge&&<EdgeDeleteButton edge={selectedEdge}onEdgeDelete={onEdgeDelete}/>}
-          {/* Barra de herramientas principal - Ahora fija y con estilo similar a GroupFocusView */}
+          {/* Barra de herramientas principal - Fija y con estilo similar a GroupFocusView */}
           <div 
-            className="absolute top-2 left-2 z-10 bg-white p-1 rounded shadow flex items-center gap-1"
+            className="absolute top-4 left-4 z-10 bg-white p-1 rounded-md shadow-lg flex items-center gap-1 border border-gray-200" // Estilos base
             style={{ flexDirection: toolbarLayout === 'horizontal' ? 'row' : 'column' }}
-            onMouseDown={e => e.stopPropagation()} // Evitar que el click en la barra interactúe con el pane
+            onMouseDown={e => e.stopPropagation()} 
           >
             {/* Botón para cambiar orientación */}
             <button 
@@ -977,19 +947,22 @@ const FlowEditorContent = ({
               title="Guardar estado actual (zoom y posición)"
               className="p-1.5 bg-green-500 text-white hover:bg-green-600 rounded flex items-center justify-center"
             >
-              💾 {/* Icono simple de guardar, puedes usar un HeroIcon si prefieres */}
+              {/* Usar un ícono SVG o un HeroIcon si está disponible, por ahora texto */}
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
             </button>
 
             {/* Herramientas principales */}
-            <button onClick={()=>handleToolClick('select')} title="Select (V)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='select'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><CursorArrowRaysIcon className="h-5 w-5"/></button>
-            <button onClick={()=>handleToolClick('lasso')} title="Lasso Select (Shift+S)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='lasso'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><SwatchIcon className="h-5 w-5"/></button>
-            <button onClick={()=>handleToolClick('note')} onMouseDown={e=>e.preventDefault()} draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'note',name:'New Note',description:'Add a note',provider:'generic'});}} title="Add Note (N)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='note'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><DocumentTextIcon className="h-5 w-5"/></button>
-            <button onClick={()=>handleToolClick('text')} onMouseDown={e=>e.preventDefault()} draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'text',name:'New Text',description:'Add text',provider:'generic'});}} title="Add Text (T)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='text'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><PencilIcon className="h-5 w-5"/></button>
-            <button onClick={()=>handleToolClick('area')} title="Draw Area (A)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='area'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><RectangleGroupIcon className="h-5 w-5"/></button>
-            <button onClick={()=>createEmptyGroup()} title="Create Group (G)" className="p-1.5 hover:bg-gray-100 rounded text-gray-700"><Square3Stack3DIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('select')} title="Select (V)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='select'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><CursorArrowRaysIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('lasso')} title="Lasso Select (Shift+S)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='lasso'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><SwatchIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('note')} onMouseDown={e=>e.preventDefault()} draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'note',name:'New Note',description:'Add a note',provider:'generic'});}} title="Add Note (N)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='note'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><DocumentTextIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('text')} onMouseDown={e=>e.preventDefault()} draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'text',name:'New Text',description:'Add text',provider:'generic'});}} title="Add Text (T)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='text'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><PencilIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('area')} title="Draw Area (A)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='area'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><RectangleGroupIcon className="h-5 w-5"/></button>
+            <button onClick={()=>createEmptyGroup()} title="Create Group (G)" className="p-1.5 hover:bg-gray-200 rounded text-gray-600"><Square3Stack3DIcon className="h-5 w-5"/></button>
             
             {/* Separador */}
-            <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-5 mx-1' : 'h-px w-full my-1'}`}></div>
+            <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-6 mx-1' : 'h-px w-full my-1'}`}></div>
 
             {/* Botones de tipo de arista */}
             {Object.values(edgeTypeConfigs).map(cfg => {

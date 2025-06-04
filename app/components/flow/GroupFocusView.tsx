@@ -31,7 +31,7 @@ import {
   ServerIcon as HeroServerIcon,
   DocumentTextIcon, // Icono para Nota
   PencilIcon,       // Icono para Texto
-  // RectangleGroupIcon // Icono para Area (para después)
+  RectangleGroupIcon // Icono para Area
 } from '@heroicons/react/24/outline'; 
 
 
@@ -70,7 +70,10 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
   const [groupSearchTerm, setGroupSearchTerm] = React.useState('');
   const [groupCollapsedCategories, setGroupCollapsedCategories] = React.useState<Record<string, boolean>>({});
-  const [activeToolInGroup, setActiveToolInGroup] = React.useState<'select' | 'note' | 'text'>('select');
+  const [activeToolInGroup, setActiveToolInGroup] = React.useState<'select' | 'note' | 'text' | 'area'>('select');
+  const [isDrawingAreaInGroup, setIsDrawingAreaInGroup] = React.useState(false);
+  const [areaStartPosInGroup, setAreaStartPosInGroup] = React.useState<{ x: number; y: number } | null>(null);
+  const [currentAreaInGroup, setCurrentAreaInGroup] = React.useState<{ x: number; y: number; width: number; height: number; } | null>(null);
   
   const groupFlowInstance = useReactFlow(); 
   const groupFlowWrapper = React.useRef<HTMLDivElement>(null);
@@ -100,19 +103,30 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   // Los callbacks deben ir después de la inicialización de los estados que utilizan
   // onDropInGroup está definido más adelante
 
-  const handleToolClickInGroup = (tool: 'select' | 'note' | 'text') => {
-    setActiveToolInGroup(prevTool => prevTool === tool ? 'select' : tool);
-    // Cambiar cursor si es necesario
+  const handleToolClickInGroup = (tool: 'select' | 'note' | 'text' | 'area') => {
+    setActiveToolInGroup(prevTool => {
+      if (prevTool === tool && tool !== 'area') return 'select'; // Deseleccionar si se hace clic de nuevo, excepto para 'area'
+      return tool;
+    });
     if (groupFlowWrapper.current) {
-      if (tool === 'note' || tool === 'text') {
+      if (tool === 'note' || tool === 'text' || tool === 'area') {
         groupFlowWrapper.current.style.cursor = 'crosshair';
       } else {
         groupFlowWrapper.current.style.cursor = 'default';
       }
     }
+     // Limpiar estados de dibujo de área si se selecciona otra herramienta
+    if (tool !== 'area') {
+      setIsDrawingAreaInGroup(false);
+      setAreaStartPosInGroup(null);
+      setCurrentAreaInGroup(null);
+    }
   };
   
   const onPaneClickInGroup = useCallback((event: React.MouseEvent) => {
+    if (activeToolInGroup === 'area') { // No hacer nada en pane click si estamos en modo área
+      return;
+    }
     if ((activeToolInGroup === 'note' || activeToolInGroup === 'text') && groupFlowInstance) {
       event.preventDefault();
       event.stopPropagation();
@@ -304,6 +318,13 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
           >
             <PencilIcon className="w-5 h-5" />
           </button>
+          <button
+            onClick={() => handleToolClickInGroup('area')}
+            title="Dibujar Área"
+            className={`p-1.5 hover:bg-gray-100 rounded ${activeToolInGroup === 'area' ? 'bg-blue-100 text-blue-600' : 'text-gray-700'}`}
+          >
+            <RectangleGroupIcon className="w-5 h-5" />
+          </button>
           {/* Separador */}
           <div className="h-5 w-px bg-gray-300 mx-1"></div>
           {/* Botones de tipo de arista */}
@@ -324,16 +345,66 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
           })}
         </div>
         <ReactFlowProvider> {/* Necesario si usamos hooks de React Flow dentro */}
-          <div ref={groupFlowWrapper} className="w-full h-full"> {/* Añadir ref y asegurar tamaño */}
+          <div ref={groupFlowWrapper} className="w-full h-full" style={{ cursor: activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default' }}>
+           <style>{`.react-flow__pane { cursor: ${activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default'} !important; }`}</style>
             <ReactFlow
               nodes={nodes}
               edges={edges}
               onDrop={onDropInGroup} 
               onDragOver={(event) => event.preventDefault()} 
-              onPaneClick={onPaneClickInGroup} // Añadir onPaneClick
-            onNodesChange={onNodesChangeInternal}
-            onEdgesChange={onEdgesChangeInternal}
-            onConnect={onConnect}
+              onPaneClick={onPaneClickInGroup}
+              onNodesChange={onNodesChangeInternal}
+              onEdgesChange={onEdgesChangeInternal}
+              onConnect={onConnect}
+              onMouseDown={(e) => {
+                if (activeToolInGroup === 'area' && groupFlowInstance) {
+                  const target = e.target as HTMLElement;
+                  if (!target.closest('.react-flow__node') && !target.closest('.react-flow__edge') && !target.closest('.react-flow__handle') && target.closest('.react-flow__pane')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const position = groupFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+                    setIsDrawingAreaInGroup(true);
+                    setAreaStartPosInGroup(position);
+                    setCurrentAreaInGroup({ x: position.x, y: position.y, width: 0, height: 0 });
+                  }
+                }
+              }}
+              onMouseMove={(e) => {
+                if (isDrawingAreaInGroup && areaStartPosInGroup && groupFlowInstance) {
+                  const currentPosition = groupFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+                  setCurrentAreaInGroup({
+                    x: Math.min(areaStartPosInGroup.x, currentPosition.x),
+                    y: Math.min(areaStartPosInGroup.y, currentPosition.y),
+                    width: Math.abs(currentPosition.x - areaStartPosInGroup.x),
+                    height: Math.abs(currentPosition.y - areaStartPosInGroup.y),
+                  });
+                }
+              }}
+              onMouseUp={() => {
+                if (isDrawingAreaInGroup && currentAreaInGroup && groupFlowInstance) {
+                  if (currentAreaInGroup.width > 20 && currentAreaInGroup.height > 20) {
+                    const newAreaNode: Node = {
+                      id: `area-group-${Date.now()}`,
+                      type: 'areaNode', // Asegúrate que 'areaNode' esté en mainNodeTypes
+                      position: { x: currentAreaInGroup.x, y: currentAreaInGroup.y },
+                      data: { backgroundColor:'rgba(59,130,246,0.5)',borderColor:'rgba(59,130,246,1)',borderWidth:2,shape:'rectangle',label:'Area in Group' },
+                      style: { width: currentAreaInGroup.width, height: currentAreaInGroup.height },
+                      width: currentAreaInGroup.width,
+                      height: currentAreaInGroup.height,
+                      selectable: true,
+                      draggable: true,
+                    };
+                    setNodes((nds) => applyNodeChangesRf([{ type: 'add', item: newAreaNode }], nds));
+                  }
+                  setIsDrawingAreaInGroup(false);
+                  setAreaStartPosInGroup(null);
+                  setCurrentAreaInGroup(null);
+                  setActiveToolInGroup('select'); // Volver a select
+                   if (groupFlowWrapper.current) {
+                    groupFlowWrapper.current.style.cursor = 'default';
+                  }
+                }
+              }}
             nodeTypes={mainNodeTypes} // Usar los mismos tipos de nodo que el editor principal
             edgeTypes={mainEdgeTypes}
             // fitView // Quitar fitView para tener más control sobre el zoom inicial
@@ -343,6 +414,25 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
             <Background />
             <Controls />
             <MiniMap />
+            {isDrawingAreaInGroup && currentAreaInGroup && groupFlowInstance && (
+              <div
+                className="area-drawing-overlay"
+                style={{
+                  position: 'absolute',
+                  pointerEvents: 'none',
+                  zIndex: 1000,
+                  left: `${(currentAreaInGroup.x * groupFlowInstance.getViewport().zoom) + groupFlowInstance.getViewport().x}px`,
+                  top: `${(currentAreaInGroup.y * groupFlowInstance.getViewport().zoom) + groupFlowInstance.getViewport().y}px`,
+                  width: `${currentAreaInGroup.width * groupFlowInstance.getViewport().zoom}px`,
+                  height: `${currentAreaInGroup.height * groupFlowInstance.getViewport().zoom}px`,
+                  border: '2px dashed rgba(59,130,246,1)',
+                  backgroundColor: 'rgba(59,130,246,0.1)',
+                  borderRadius: '4px',
+                  boxShadow: '0 0 10px rgba(59,130,246,0.3)',
+                  transition: 'none',
+                }}
+              />
+            )}
             {!isGroupSidebarOpen && (
               <Panel position="top-right">
                 <button

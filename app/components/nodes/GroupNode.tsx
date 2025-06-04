@@ -59,6 +59,13 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
   const allNodes = useNodes();
 
   const [isMinimized, setIsMinimized] = useState(data.isMinimized || false);
+  const [currentWidthState, setCurrentWidthState] = useState(width || DEFAULT_WIDTH);
+  useEffect(() => {
+    if (width && !isMinimized) { // Solo actualizar si no está minimizado y width es válido
+      setCurrentWidthState(width);
+    }
+  }, [width, isMinimized]);
+
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editedLabel, setEditedLabel] = useState(data.label || 'Group');
   const labelInputRef = useRef<HTMLInputElement>(null);
@@ -148,26 +155,27 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     setNodes(nds => 
       nds.map(n => {
         if (n.id === id) {
+          const preservedWidth = n.width ?? (typeof n.style?.width === 'number' ? n.style.width : currentWidthState);
+          const currentHeight = n.height ?? (typeof n.style?.height === 'number' ? n.style.height : DEFAULT_HEIGHT);
+          
+          if (newMinimizedState) {
+            setCurrentWidthState(preservedWidth); // Guardar el ancho actual antes de minimizar
+          }
+
           return {
             ...n,
             data: { ...n.data, isMinimized: newMinimizedState },
             style: { 
               ...n.style, 
-              // Mantener el ancho actual al minimizar, solo cambiar el alto
-              width: (width || DEFAULT_WIDTH), 
-              height: newMinimizedState ? MINIMIZED_HEIGHT : (height || DEFAULT_HEIGHT)
+              width: preservedWidth, // Mantener el ancho preservado
+              height: newMinimizedState ? MINIMIZED_HEIGHT : currentHeight
             },
-            // El dragging se resetea por React Flow al cambiar nodos, no debería ser problema aquí.
           };
         }
-        // Ocultar/mostrar nodos hijos reales (si se decide hacerlo)
-        // if (n.parentId === id) {
-        //    return { ...n, hidden: newMinimizedState /* || !data.isExpandedView */ };
-        // }
         return n;
       })
     );
-  }, [id, isMinimized, setNodes, width, height]);
+  }, [id, isMinimized, setNodes, currentWidthState]); // Quitar width, height de props, usar currentWidthState
 
   const handleExpandViewClick = useCallback(() => {
     console.log(`Solicitando expandir vista para el grupo ${id}`);
@@ -203,7 +211,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
       <div
         className={`relative px-2 py-1 border rounded-lg bg-white shadow-sm ${getProviderColor()} flex items-center justify-between`}
         style={{ 
-          width: `${width || DEFAULT_WIDTH}px`, // Usar el ancho actual del nodo
+          width: `${currentWidthState}px`, // Usar el ancho guardado en el estado local
           height: `${MINIMIZED_HEIGHT}px`,
         }}
       >
