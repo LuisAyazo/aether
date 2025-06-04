@@ -275,7 +275,23 @@ const FlowEditorContent = ({
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   
-  const [nodes, setNodes, onNodesChangeInternal] = useNodesState(initialNodes);
+  // Inicializar los nodos con la lógica correcta para grupos
+  const processedInitialNodes = useMemo(() => {
+    return initialNodes.map(node => {
+      if (node.parentId) {
+        const parentNode = initialNodes.find(n => n.id === node.parentId);
+        const isHidden = !parentNode?.data?.isExpandedView;
+        return {
+          ...node,
+          hidden: isHidden,
+          extent: 'parent' as const
+        };
+      }
+      return node;
+    });
+  }, [initialNodes]);
+
+  const [nodes, setNodes, onNodesChangeInternal] = useNodesState(processedInitialNodes);
   const [edges, setEdges, onEdgesChangeInternal] = useEdgesState(initialEdges as ReactFlowLibrary.Edge[]);
 
   const onSaveRef = useRef(onSave);
@@ -627,51 +643,51 @@ const FlowEditorContent = ({
     }
   }, [expandedGroupId, reactFlowInstance]);
 
+  // Modificar el efecto que maneja el colapso de grupos
   const handleCollapseGroupView = useCallback((groupIdToCollapse: string) => {
     if (expandedGroupId && expandedGroupId !== groupIdToCollapse) {
-        const { getNode, setNodes: rfSetNodes } = reactFlowInstance;
-        const groupNode = getNode(groupIdToCollapse);
-        if (!groupNode || !groupNode.data.isExpandedView) {
-          return;
-        }
-        const defaultWidth = 300; 
-        const defaultHeight = 200; 
+      const { getNode, setNodes: rfSetNodes } = reactFlowInstance;
+      const groupNode = getNode(groupIdToCollapse);
+      if (!groupNode || !groupNode.data.isExpandedView) {
+        return;
+      }
+      const defaultWidth = 300;
+      const defaultHeight = 200;
 
-        rfSetNodes((currentNodesMap) =>
-          currentNodesMap.map((n) => {
-            if (n.id === groupIdToCollapse) {
-              return {
-                ...n,
-                data: { ...n.data, isExpandedView: false },
-                style: { ...n.style, width: defaultWidth, height: defaultHeight }, 
-              };
-            }
-            if (n.parentId === groupIdToCollapse) {
-               return { ...n, hidden: true }; 
-            }
-            return n;
-          })
-        );
-        return; 
+      rfSetNodes((currentNodesMap) =>
+        currentNodesMap.map((n) => {
+          if (n.id === groupIdToCollapse) {
+            return {
+              ...n,
+              data: { ...n.data, isExpandedView: false },
+              style: { ...n.style, width: defaultWidth, height: defaultHeight }
+            };
+          }
+          if (n.parentId === groupIdToCollapse) {
+            return { ...n, hidden: true };
+          }
+          return n;
+        })
+      );
+      return;
     }
     
     setExpandedGroupId(null);
-
     setNodes(nds =>
       nds.map(n => {
         if (n.id === groupIdToCollapse) {
           return {
             ...n,
-            data: { ...n.data, isExpandedView: false }, 
+            data: { ...n.data, isExpandedView: false }
           };
         }
         if (n.parentId === groupIdToCollapse) {
-          return { ...n, hidden: true }; 
+          return { ...n, hidden: true };
         }
         return n;
       })
     );
-    saveCurrentDiagramState(); 
+    saveCurrentDiagramState();
   }, [reactFlowInstance, setNodes, expandedGroupId, setExpandedGroupId, saveCurrentDiagramState]);
 
 
