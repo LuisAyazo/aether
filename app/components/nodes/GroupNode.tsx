@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
-import { Handle, Position, NodeProps, useReactFlow, useNodes, Node } from 'reactflow';
+import { Handle, Position, NodeProps, useReactFlow, useNodes } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
 import { 
@@ -16,8 +16,8 @@ const MINIMIZED_WIDTH = 150; // Ancho cuando está minimizado
 const MINIMIZED_HEIGHT = HEADER_HEIGHT; // Alto cuando está minimizado (solo header)
 const DEFAULT_WIDTH = 300;
 const DEFAULT_HEIGHT = 200;
-const CHILD_ITEM_HEIGHT = 28; // Altura de cada item en la lista visual
-const CHILD_ITEM_SPACING = 4;
+// const CHILD_ITEM_HEIGHT = 28; // Altura de cada item en la lista visual
+// const CHILD_ITEM_SPACING = 4;
 // Constantes que daban error, movidas dentro del componente
 // const CONTENT_PADDING_TOP = 8;
 // const CONTENT_PADDING_BOTTOM = 8;

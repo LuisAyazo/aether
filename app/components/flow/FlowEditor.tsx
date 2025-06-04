@@ -148,43 +148,43 @@ interface FlowEditorProps {
   companyId?: string;
   environmentId?: string;
   diagramId?: string;
-  initialDiagram?: Diagram;
+  initialDiagram?: Diagram; // Prop for initial diagram data
 }
 
 interface ResourceProperties {
   [key: string]: string | number | boolean | null;
 }
 
-interface PreviewData {
-  resourcesToCreate: Array<{
-    id: string;
-    type: string | undefined;
-    name: string;
-    provider: string;
-    changes: {
-      create: boolean;
-      update: boolean;
-      properties: ResourceProperties;
-    };
-  }>;
-  resourcesToUpdate: Array<{
-    id: string;
-    type: string | undefined;
-    name: string;
-    provider: string;
-    changes: {
-      create: boolean;
-      update: boolean;
-      properties: ResourceProperties;
-    };
-  }>;
-  resourcesToDelete: Array<{
-    id: string;
-    type: string | undefined;
-    name: string;
-    provider: string;
-  }>;
-}
+// interface PreviewData { // Commented out as it seems unused
+//   resourcesToCreate: Array<{
+//     id: string;
+//     type: string | undefined;
+//     name: string;
+//     provider: string;
+//     changes: {
+//       create: boolean;
+//       update: boolean;
+//       properties: ResourceProperties;
+//     };
+//   }>;
+//   resourcesToUpdate: Array<{
+//     id: string;
+//     type: string | undefined;
+//     name: string;
+//     provider: string;
+//     changes: {
+//       create: boolean;
+//       update: boolean;
+//       properties: ResourceProperties;
+//     };
+//   }>;
+//   resourcesToDelete: Array<{
+//     id: string;
+//     type: string | undefined;
+//     name: string;
+//     provider: string;
+//   }>;
+// }
 
 function throttle<T extends (...args: unknown[]) => void>(func: T, limit: number): (...args: Parameters<T>) => void {
   let inThrottle: boolean;
@@ -267,20 +267,17 @@ const FlowEditorContent = ({
   nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
   resourceCategories = [],
-  initialDiagram,
+  // initialDiagram, // Prop seems unused
 }: FlowEditorProps): JSX.Element => {
   
   const memoizedNodeTypes: ReactFlowNodeTypes = useMemo(() => ({ ...nodeTypesFromFile, ...externalNodeTypes, note: nodeTypesFromFile.noteNode, text: nodeTypesFromFile.textNode }), [externalNodeTypes]);
   const reactFlowInstance = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   
-  // Inicializar los nodos con la lógica correcta para grupos
   const processedInitialNodes = useMemo(() => {
     return initialNodes.map(node => {
       if (node.parentId) {
         const parentNode = initialNodes.find(n => n.id === node.parentId);
-        // Children of group nodes should be hidden in the main flow,
-        // as the GroupNode component is responsible for rendering them.
         const isHidden = parentNode?.type === 'group';
         return {
           ...node,
@@ -288,14 +285,12 @@ const FlowEditorContent = ({
           extent: 'parent' as const
         };
       }
-      // Ensure group nodes have isExpandedView set, defaulting to false
       if (node.type === 'group') {
         return {
           ...node,
           data: {
             ...node.data,
             isExpandedView: node.data?.isExpandedView || false,
-            // viewport: node.data.viewport // Viewport for group focus view, handle with care
           }
         };
       }
@@ -324,25 +319,15 @@ const FlowEditorContent = ({
   const lastViewportRef = useRef<Viewport | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu>({ visible: false, x: 0, y: 0, nodeId: null, nodeType: null, isPane: false, parentInfo: null, customItems: undefined });
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
-  // const [isExecutionLogVisible, setIsExecutionLogVisible] = useState(false); 
-  // const [loadingState, setLoadingState] = useState(false); 
   // const currentDiagram = initialDiagram; // Unused
-  // const [, setPreviewData] = useState<PreviewData | null>(null); 
+  // const [, setPreviewData] = useState<PreviewData | null>(null); // Unused
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
-  // const [runModalVisible, setRunModalVisible] = useState(false); 
-  // const [, setRunModalVisible] = useState(false); 
-  // const [previewModalVisible, setPreviewModalVisible] = useState(false); 
-  // const [, setPreviewModalVisible] = useState(false); 
   // const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null); // Unused
   const [, setShowSingleNodePreview] = useState(false); 
   const [showLogs, setShowLogs] = useState(false);
   const [isDragging, setIsDragging] = useState(false); 
-  // const [isToolbarDragging, setIsToolbarDragging] = useState(false); 
-  // const [, setIsToolbarDragging] = useState(false); 
   const previousNodesRef = useRef<string | null>(null);
   const previousEdgesRef = useRef<string | null>(null);
-  // const previousInitialNodesJSONRef = useRef<string | null>(null); 
-  // const previousInitialEdgesJSONRef = useRef<string | null>(null); 
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const GROUP_HEADER_HEIGHT = 40; 
@@ -360,7 +345,7 @@ const FlowEditorContent = ({
       const groupNodeData = groupNodeFromState?.data ? { ...groupNodeFromState.data } : {};
       
       groupNodeData.isExpandedView = false; 
-      groupNodeData.isMinimized = groupNodeFromState?.data?.isMinimized || false; // Preserve minimized state
+      groupNodeData.isMinimized = groupNodeFromState?.data?.isMinimized || false; 
       
       if (groupViewport) {
         groupNodeData.viewport = groupViewport;
@@ -377,7 +362,8 @@ const FlowEditorContent = ({
       const finalUpdatedNodesFromGroupView = updatedNodesInGroup.map(un => ({
         ...un,
         hidden: true, 
-        // parentId and extent are already set by GroupFocusView's handleSaveChanges
+        parentId: expandedGroupId, // Use expandedGroupId from the outer scope
+        extent: 'parent' as const, 
       }));
       
       const updatedNodesMap = new Map(finalUpdatedNodesFromGroupView.map(n => [n.id, n]));
@@ -414,15 +400,6 @@ const FlowEditorContent = ({
     setExpandedGroupId(null); 
   };
 
-
-  // const [toolbarPosition, setToolbarPosition] = useState(() => { 
-  //   if (typeof window === 'undefined') return { x: 400, y: 20 }; 
-  //   const saved = localStorage.getItem('toolbarPosition');
-  //   try { if (saved) { const p = JSON.parse(saved); if (typeof p.x === 'number' && typeof p.y === 'number') return p; }
-  //   } catch (e) { console.error("Error parsing toolbarPosition", e); }
-  //   return { x: (typeof window !== 'undefined' ? window.innerWidth / 2 - 200 : 400), y: 20 };
-  // });
-  // const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 }); 
   const [toolbarLayout, setToolbarLayout] = useState<'horizontal' | 'vertical'>(() => (typeof window !== 'undefined' ? (localStorage.getItem('toolbarLayout') as 'horizontal' | 'vertical' || 'horizontal') : 'horizontal'));
 
   const { selectedLogicalType, setSelectedLogicalType } = useSelectedEdgeType();
@@ -465,13 +442,13 @@ const FlowEditorContent = ({
           if (reactFlowInstance) { 
             reactFlowInstance.setViewport(initialViewport);
             lastViewportRef.current = initialViewport; 
-            console.log('Applied initialViewport:', initialViewport);
+            // console.log('Applied initialViewport:', initialViewport);
           }
         }, 50); 
         return () => clearTimeout(timeoutId);
       } else if (!lastViewportRef.current && initialViewport.zoom !== 0) {
         lastViewportRef.current = initialViewport;
-        console.log('Initialized lastViewportRef with initialViewport:', initialViewport);
+        // console.log('Initialized lastViewportRef with initialViewport:', initialViewport);
       }
     }
   }, [initialViewport, reactFlowInstance]);
@@ -615,77 +592,58 @@ const FlowEditorContent = ({
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveCurrentDiagramState = useCallback(() => {
     if (reactFlowInstance && onSaveRef.current) {
-      const flow = reactFlowInstance.toObject();
-      const viewport = reactFlowInstance.getViewport();
-      onSaveRef.current({
-        nodes: flow.nodes,
-        edges: flow.edges,
-        viewport: viewport
-      });
-    }
-  }, [reactFlowInstance]);
-
-  // Añadir efecto para guardar el viewport cuando cambia
-  useEffect(() => {
-    if (reactFlowInstance && onSaveRef.current) {
-      const handleViewportChange = () => {
-        const viewport = reactFlowInstance.getViewport();
-        if (viewport.zoom !== 0) {
-          saveCurrentDiagramState();
-        }
+      const viewport = reactFlowInstance.getViewport(); // Get viewport from instance
+      // Use the 'nodes' and 'edges' from useState as the source of truth
+      const diagramDataToSave = {
+        nodes: nodes, 
+        edges: edges, 
+        viewport: viewport 
       };
-
-      // Usar un debounce para evitar demasiadas llamadas
-      const debouncedHandleViewportChange = debounce(handleViewportChange, 500);
-
-      // Suscribirse a los eventos de cambio de viewport
-      document.addEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
-      
-      return () => {
-        document.removeEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
-      };
+      onSaveRef.current(diagramDataToSave);
+      console.log('[FlowEditor] Saving diagram. Nodes count:', nodes.length, 'Edges count:', edges.length);
+      console.log('[FlowEditor] Sample nodes being saved:', JSON.stringify(nodes.slice(0, 5).map(n => ({ id: n.id, type: n.type, parentId: n.parentId, hidden: n.hidden, dataLabel: n.data?.label }))));
     }
-  }, [reactFlowInstance, saveCurrentDiagramState]);
+  }, [reactFlowInstance, nodes, edges, onSaveRef]); // Include nodes and edges from state
 
-  // Modificar el efecto que maneja el guardado del estado para incluir el viewport de los grupos
+  // useEffect for debounced saving
   useEffect(() => {
     if (onSaveRef.current && reactFlowInstance && !isDragging) {
       const currentNodesJSON = JSON.stringify(nodes);
       const currentEdgesJSON = JSON.stringify(edges);
+      
       if (currentNodesJSON !== previousNodesRef.current || currentEdgesJSON !== previousEdgesRef.current) {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        
         saveTimeoutRef.current = setTimeout(() => {
-          if (reactFlowInstance && onSaveRef.current) {
-            const flow = reactFlowInstance.toObject();
-            const viewport = reactFlowInstance.getViewport();
-            
-            // Actualizar el viewport de los grupos expandidos
-            const updatedNodes = flow.nodes.map(node => {
-              if (node.type === 'group' && node.data?.isExpandedView) {
-                return {
-                  ...node,
-                  data: {
-                    ...node.data,
-                    viewport: viewport
-                  }
-                };
-              }
-              return node;
-            });
-
-            onSaveRef.current({
-              nodes: updatedNodes,
-              edges: flow.edges,
-              viewport: viewport
-            });
-          }
+          saveCurrentDiagramState(); // Call the centralized save function
         }, 1000);
+        
+        previousNodesRef.current = currentNodesJSON;
+        previousEdgesRef.current = currentEdgesJSON;
       }
     }
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [nodes, edges, reactFlowInstance, isDragging, onSaveRef]);
+  }, [nodes, edges, reactFlowInstance, isDragging, saveCurrentDiagramState]); // saveCurrentDiagramState is now a dependency
+
+  // useEffect for saving viewport changes
+  useEffect(() => {
+    if (reactFlowInstance && onSaveRef.current) {
+      const handleViewportChange = () => {
+        // Only call saveCurrentDiagramState if it's not part of an expanded group view transition
+        if (!expandedGroupId) { 
+          saveCurrentDiagramState();
+        }
+      };
+      const debouncedHandleViewportChange = debounce(handleViewportChange, 500);
+      document.addEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
+      return () => {
+        document.removeEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
+      };
+    }
+  }, [reactFlowInstance, saveCurrentDiagramState, expandedGroupId]);
+
 
   // Efecto para restaurar el viewport cuando se colapsa un grupo
   useEffect(() => {
@@ -710,29 +668,23 @@ const FlowEditorContent = ({
 
   const handleExpandGroupView = useCallback((groupId: string) => {
     if (reactFlowInstance) {
-      lastViewportRef.current = reactFlowInstance.getViewport(); // Save current main viewport
+      lastViewportRef.current = reactFlowInstance.getViewport(); 
     }
     setNodes(nds => nds.map(n => {
       if (n.id === groupId) {
         const groupData = { ...n.data, isExpandedView: true, isMinimized: false };
-        // Ensure viewport for focus view is initialized if not present
         if (!groupData.viewport && reactFlowInstance) {
-          groupData.viewport = reactFlowInstance.getViewport(); // Store current main viewport as initial for focus
+          groupData.viewport = reactFlowInstance.getViewport(); 
         }
-        // These are internal to GroupFocusView, not needed in FlowEditor's group node data
         delete groupData.nodes; 
         delete groupData.edges;
-        // Do NOT delete groupData.viewport here if we want to preserve it for GroupFocusView's initialViewport
         return { ...n, data: groupData };
       }
-      // Children's 'hidden' status in FlowEditor is managed by processedInitialNodes, onNodeDragStop, and handleCollapseGroupView.
-      // No need to change child visibility here when just setting up for GroupFocusView.
       return n;
     }));
-    setExpandedGroupId(groupId); // Set this after updating node data, to ensure GroupFocusView gets updated node data
+    setExpandedGroupId(groupId); 
   }, [reactFlowInstance, setNodes]);
 
-  // Modificar el efecto que maneja el colapso de grupos
   const handleCollapseGroupView = useCallback((groupIdToCollapse: string) => {
     if (expandedGroupId && expandedGroupId !== groupIdToCollapse) {
       const { getNode, setNodes: rfSetNodes } = reactFlowInstance;
@@ -888,17 +840,20 @@ const FlowEditorContent = ({
         const parentNode=reactFlowInstance.getNode(targetGroupNode.id);
         if(parentNode){
           newNodeToAdd.parentId=targetGroupNode.id;
-          if(!parentNode.data.isExpandedView){
-            newNodeToAdd.hidden=true; 
-          }else{
+          newNodeToAdd.extent='parent'as const;
+          newNodeToAdd.hidden=true; // Children of groups are always hidden in the main list
+          
+          // Calculate relative position if parent is expanded (for initial placement inside GroupNode)
+          if(parentNode.data.isExpandedView){
             const relativePos={x:dropPosition.x-(parentNode.positionAbsolute?.x ?? parentNode.position.x),y:dropPosition.y-(parentNode.positionAbsolute?.y ?? parentNode.position.y)};
             const groupWidth=parentNode.width||300;
             const groupHeight=parentNode.height||200;
             const marginX=CHILD_NODE_PADDING_X;
             const marginY=GROUP_HEADER_HEIGHT+CHILD_NODE_PADDING_Y;
             newNodeToAdd.position={x:Math.max(marginX,Math.min(groupWidth-nodeW-marginX,relativePos.x)),y:Math.max(marginY,Math.min(groupHeight-nodeH-CHILD_NODE_PADDING_Y,relativePos.y))};
-            newNodeToAdd.extent='parent'as const;
-            newNodeToAdd.hidden=false;
+          } else {
+            // Default position if parent is not expanded (GroupNode will handle layout)
+            newNodeToAdd.position = { x: CHILD_NODE_PADDING_X, y: GROUP_HEADER_HEIGHT + CHILD_NODE_PADDING_Y };
           }
         }
       }
@@ -926,22 +881,21 @@ const FlowEditorContent = ({
     // setLoadingState(false); 
   };
   const getExecutionMessage=(node:NodeWithExecutionStatus,state:NodeExecutionState):string=>{const n=node as Node;const name=n.data?.label||'Unnamed';const dets=[];if(n.data?.provider)dets.push(`Provider: ${n.data.provider}`);if(n.data?.resourceType)dets.push(`Type: ${n.data.resourceType}`);const detStr=dets.length>0?` (${dets.join(', ')})`:'';switch(state){case'creating':return`Iniciando creación de ${name}${detStr}...`;case'updating':return`Iniciando actualización de ${name}${detStr}...`;case'deleting':return`Iniciando eliminación de ${name}${detStr}...`;case'success':return`${name} procesado exitosamente`;case'error':return`Error al procesar ${name}`;default:return`Procesando ${name}...`;}};
-  // const handlePreview=useCallback(()=>{if(!currentDiagram)return;try{setIsExecutionLogVisible(true);setExecutionLogs([]);const exN=currentDiagram.nodes.filter(n=>n.type!=='group');(async()=>{for(const n of exN){let s:NodeExecutionState='creating';const d=(n as Node).data;if(d?.status==='creating'||d?.status==='new'||(!d?.status&&d?.isNew))s='creating';else if(d?.status==='updating'||d?.status==='modified'||d?.hasChanges)s='updating';else if(d?.status==='deleting'||d?.status==='toDelete'||d?.markedForDeletion)s='deleting';const name=d?.label||'Unnamed';setExecutionLogs(p=>[...p,`Procesando ${s} para ${name}...`]);await new Promise(r=>setTimeout(r,1000));setExecutionLogs(p=>[...p,`${s} completado para ${name}`,`Costo estimado para ${name}: $${d?.estimated_cost?.monthly||0} USD/mes`]);}})();}catch(err){console.error('Preview Error:',err);message.error('Error en Preview');}},[currentDiagram]); // ESLint: 'handlePreview' is assigned a value but never used.
-  // const handleRun=useCallback(()=>{if(!currentDiagram)return;try{setIsExecutionLogVisible(true);setExecutionLogs([]);const exN=currentDiagram.nodes.filter(n=>n.type!=='group');(async()=>{for(const n of exN){let s:NodeExecutionState='creating';const d=(n as Node).data;if(d?.status==='creating'||d?.status==='new'||(!d?.status&&d?.isNew))s='creating';else if(d?.status==='updating'||d?.status==='modified'||d?.hasChanges)s='updating';else if(d?.status==='deleting'||d?.status==='toDelete'||d?.markedForDeletion)s='deleting';const name=d?.label||'Unnamed';setExecutionLogs(p=>[...p,`Procesando ${s} para ${name}...`]);await new Promise(r=>setTimeout(r,1000));setExecutionLogs(p=>[...p,`${s} completado para ${name}`,`Costo estimado para ${name}: $${d?.estimated_cost?.monthly||0} USD/mes`]);}})();}catch(err){console.error('Run Error:',err);message.error('Error en Run');}},[currentDiagram]); // ESLint: 'handleRun' is assigned a value but never used.
+  // const handlePreview=useCallback(()=>{if(!currentDiagram)return;try{setIsExecutionLogVisible(true);setExecutionLogs([]);const exN=currentDiagram.nodes.filter(n=>n.type!=='group');(async()=>{for(const n of exN){let s:NodeExecutionState='creating';const d=(n as Node).data;if(d?.status==='creating'||d?.status==='new'||(!d?.status&&d?.isNew))s='creating';else if(d?.status==='updating'||d?.status==='modified'||d?.hasChanges)s='updating';else if(d?.status==='deleting'||d?.status==='toDelete'||d?.markedForDeletion)s='deleting';const name=d?.label||'Unnamed';setExecutionLogs(p=>[...p,`Procesando ${s} para ${name}...`]);await new Promise(r=>setTimeout(r,1000));setExecutionLogs(p=>[...p,`${s} completado para ${name}`,`Costo estimado para ${name}: $${d?.estimated_cost?.monthly||0} USD/mes`]);}})();}catch(err){console.error('Preview Error:',err);/*message.error('Error en Preview');*/}},[currentDiagram]);
+  // const handleRun=useCallback(()=>{if(!currentDiagram)return;try{setIsExecutionLogVisible(true);setExecutionLogs([]);const exN=currentDiagram.nodes.filter(n=>n.type!=='group');(async()=>{for(const n of exN){let s:NodeExecutionState='creating';const d=(n as Node).data;if(d?.status==='creating'||d?.status==='new'||(!d?.status&&d?.isNew))s='creating';else if(d?.status==='updating'||d?.status==='modified'||d?.hasChanges)s='updating';else if(d?.status==='deleting'||d?.status==='toDelete'||d?.markedForDeletion)s='deleting';const name=d?.label||'Unnamed';setExecutionLogs(p=>[...p,`Procesando ${s} para ${name}...`]);await new Promise(r=>setTimeout(r,1000));setExecutionLogs(p=>[...p,`${s} completado para ${name}`,`Costo estimado para ${name}: $${d?.estimated_cost?.monthly||0} USD/mes`]);}})();}catch(err){console.error('Run Error:',err);/*message.error('Error en Run');*/}},[currentDiagram]);
   useEffect(()=>{const h=(e:Event)=>{
-    // setSingleNodePreview((e as CustomEvent<SingleNodePreview>).detail); // singleNodePreview state is commented
-    // setShowSingleNodePreview(true); // showSingleNodePreview state is commented
-  };window.addEventListener('showSingleNodePreview',h);return()=>window.removeEventListener('showSingleNodePreview',h);},[/*setShowSingleNodePreview*/]); // dependency also commented
-  // const handleApplyChanges=async()=>{if(!singleNodePreview)return;try{setLoadingState(true);setShowLogs(true);setExecutionLogs([]);setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.action} del recurso ${singleNodePreview.resource.name}`]);await new Promise(r=>setTimeout(r,1500));setExecutionLogs(p=>[...p,`Recurso ${singleNodePreview.resource.name} ${singleNodePreview.action==='create'?'creado':singleNodePreview.action==='update'?'actualizado':'eliminado'} exitosamente`]);if(singleNodePreview.estimated_cost)setExecutionLogs(p=>[...p,`Costo estimado: ${singleNodePreview.estimated_cost?.currency} ${singleNodePreview.estimated_cost?.monthly?.toFixed(2)}`]);if(singleNodePreview.dependencies?.length>0){setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.dependencies.length} dependencias...`]);for(const d of singleNodePreview.dependencies){setExecutionLogs(p=>[...p,`Procesando dependencia: ${d.name} (${d.type}) - ${d.action==='create'?'Creando':d.action==='update'?'Actualizando':'Eliminando'}`]);await new Promise(r=>setTimeout(r,500));setExecutionLogs(p=>[...p,`Dependencia ${d.name} procesada exitosamente`]);}}}catch(err){console.error('ApplyChanges Error:',err);setExecutionLogs(p=>[...p,`Error: ${err instanceof Error?err.message:'Unknown'}`]);message.error('Error ApplyChanges');}finally{setLoadingState(false);setShowSingleNodePreview(false);setSingleNodePreview(null);}}; // ESLint: 'handleApplyChanges' is assigned a value but never used.
+    // setSingleNodePreview((e as CustomEvent<SingleNodePreview>).detail); 
+    // setShowSingleNodePreview(true); 
+  };window.addEventListener('showSingleNodePreview',h);return()=>window.removeEventListener('showSingleNodePreview',h);},[/*setShowSingleNodePreview*/]); 
+  // const handleApplyChanges=async()=>{if(!singleNodePreview)return;try{setLoadingState(true);setShowLogs(true);setExecutionLogs([]);setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.action} del recurso ${singleNodePreview.resource.name}`]);await new Promise(r=>setTimeout(r,1500));setExecutionLogs(p=>[...p,`Recurso ${singleNodePreview.resource.name} ${singleNodePreview.action==='create'?'creado':singleNodePreview.action==='update'?'actualizado':'eliminado'} exitosamente`]);if(singleNodePreview.estimated_cost)setExecutionLogs(p=>[...p,`Costo estimado: ${singleNodePreview.estimated_cost?.currency} ${singleNodePreview.estimated_cost?.monthly?.toFixed(2)}`]);if(singleNodePreview.dependencies?.length>0){setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.dependencies.length} dependencias...`]);for(const d of singleNodePreview.dependencies){setExecutionLogs(p=>[...p,`Procesando dependencia: ${d.name} (${d.type}) - ${d.action==='create'?'Creando':d.action==='update'?'Actualizando':'Eliminando'}`]);await new Promise(r=>setTimeout(r,500));setExecutionLogs(p=>[...p,`Dependencia ${d.name} procesada exitosamente`]);}}}catch(err){console.error('ApplyChanges Error:',err);setExecutionLogs(p=>[...p,`Error: ${err instanceof Error?err.message:'Unknown'}`]);/*message.error('Error ApplyChanges');*/}finally{setLoadingState(false);setShowSingleNodePreview(false);setSingleNodePreview(null);}};
 
-  // const handleGroupClick = (nodeId: string) => { // ESLint: 'handleGroupClick' is assigned a value but never used.
+  // const handleGroupClick = (nodeId: string) => { 
   //   const groupNode = nodes.find((n) => n.id === nodeId);
   //   if (groupNode) {
   //     setExpandedGroupId(nodeId);
   //   }
   // };
 
-  // Si expandedGroupId tiene un valor, renderizamos la vista de enfoque del grupo
   if (expandedGroupId) {
     return (
       <GroupFocusView
@@ -956,6 +910,7 @@ const FlowEditorContent = ({
         onSaveChanges={handleGroupSave}
         mainNodeTypes={memoizedNodeTypes}
         mainEdgeTypes={edgeTypes}
+        initialViewport={nodes.find(n => n.id === expandedGroupId)?.data?.viewport}
         edgeTypeConfigs={edgeTypeConfigs} 
         edgeToolbarIcons={edgeToolbarIcons} 
         resourceCategories={resourceCategories} 
@@ -963,7 +918,6 @@ const FlowEditorContent = ({
     );
   }
 
-  // Renderizado normal del FlowEditor
   return (
     <div className="relative w-full h-full">
       {renderEditGroupModal()}
@@ -1051,29 +1005,21 @@ const FlowEditorContent = ({
             if (targetGroup && targetGroup.id) {
               let nodesToUpdate = currentNodesOnDragStop.map(n => {
                 if (n.id === draggedNode.id) {
-                  // Calculate new relative position
-                  const newPosition = { // This needs to be 'let' if potentially modified by the if block below
+                  const newPosition = { 
                     x: (draggedNode.positionAbsolute?.x ?? 0) - (targetGroup.positionAbsolute?.x ?? 0),
                     y: (draggedNode.positionAbsolute?.y ?? 0) - (targetGroup.positionAbsolute?.y ?? 0),
                   };
 
-                  // If the target group is visually expanded in the FlowEditor (not focus view),
-                  // adjust position to be within bounds.
-                  // Note: 'isExpandedView' is a bit of a misnomer here if it's also used for internal group expansion state.
-                  // Assuming targetGroup.data.isExpandedView means its content is visible in FlowEditor.
                   if (targetGroup.data.isExpandedView) {
                      newPosition.x = Math.max(CHILD_NODE_PADDING_X, Math.min(newPosition.x, (targetGroup.width ?? MIN_EXPANDED_GROUP_WIDTH) - (draggedNode.width ?? 150) - CHILD_NODE_PADDING_X));
                      newPosition.y = Math.max(GROUP_HEADER_HEIGHT + CHILD_NODE_PADDING_Y, Math.min(newPosition.y, (targetGroup.height ?? MIN_EXPANDED_GROUP_HEIGHT) - (draggedNode.height ?? 50) - CHILD_NODE_PADDING_Y));
                   }
-                  // If group is not 'expanded' (i.e., it's collapsed/minimized), position might not need such strict clamping
-                  // or could be a default small offset. For now, use the calculated relative position.
-
                   return {
                     ...n,
                     parentId: targetGroup.id,
-                    extent: 'parent' as const, // Child nodes of a group should always have extent: 'parent'
+                    extent: 'parent' as const, 
                     position: newPosition,
-                    hidden: true, // Children of groups are always hidden in the main list; GroupNode renders them.
+                    hidden: true, 
                     style: { ...n.style, width: n.width || undefined, height: n.height || undefined },
                   };
                 }
@@ -1156,51 +1102,40 @@ const FlowEditorContent = ({
           <MiniMap />
           <Controls position="bottom-left" style={{bottom:20,left:20}}/>
           {isDrawingArea&&currentArea&&reactFlowInstance&&(<div className="area-drawing-overlay"style={{position:'absolute',pointerEvents:'none',zIndex:1000,left:`${(currentArea.x*reactFlowInstance.getViewport().zoom)+reactFlowInstance.getViewport().x}px`,top:`${(currentArea.y*reactFlowInstance.getViewport().zoom)+reactFlowInstance.getViewport().y}px`,width:`${currentArea.width*reactFlowInstance.getViewport().zoom}px`,height:`${currentArea.height*reactFlowInstance.getViewport().zoom}px`,border:'2px dashed rgba(59,130,246,1)',backgroundColor:'rgba(59,130,246,0.1)',borderRadius:'4px',boxShadow:'0 0 10px rgba(59,130,246,0.3)',transition:'none'}}/>)}
-          {contextMenu.visible&&(<div style={{position:'fixed',left:contextMenu.x,top:contextMenu.y,background:'white',border:'1px solid #ddd',zIndex:1000,padding:'0px',borderRadius:'8px',boxShadow:'0 4px 10px rgba(0,0,0,0.2)',display:'flex',flexDirection:'column',gap:'0px',minWidth:'180px',overflow:'hidden',transform:'translate(8px, 8px)'}}onClick={e=>e.stopPropagation()}onContextMenu={e=>e.preventDefault()}><div style={{padding:'8px 12px',backgroundColor:'#f7f7f7',borderBottom:'1px solid #eee'}}>{!contextMenu.isPane&&contextMenu.nodeId&&(<><p style={{margin:'0 0 2px 0',fontSize:'13px',fontWeight:'bold'}}>{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.label||'Node'}</p><p style={{margin:0,fontSize:'11px',color:'#777'}}>ID: {contextMenu.nodeId}</p><p style={{margin:0,fontSize:'11px',color:'#777'}}>Type: {contextMenu.nodeType} {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider&&(<span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-xs">{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider.toUpperCase()}</span>)}</p></>)}{contextMenu.isPane&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>0?(<p style={{margin:0,fontSize:'13px',fontWeight:'bold'}}>{selN.length} nodos seleccionados</p>):(<p style={{margin:0,fontSize:'13px',fontWeight:'bold'}}>Canvas Options</p>);})()}</>)}</div><div>{!contextMenu.isPane&&contextMenu.nodeId&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>1&&selN.some(n=>n.id===contextMenu.nodeId);})()?(<><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)groupSelectedNodes();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{`📦 Group Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{deleteSelectedElements(); setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>{`Delete Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)moveNodesToBack(selN.map(n=>n.id));setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⬇️ Move Selected to Back</button></>):reactFlowInstance.getNode(contextMenu.nodeId!)?.type==='group'?(<><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n)startEditingGroupName(n.id,n.data?.label||'Group');setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>✏️ Edit Group Name</button><button onClick={()=>{if(contextMenu.nodeId)ungroupNodes(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup</button><button onClick={()=>{if(contextMenu.nodeId)handleDeleteNodeFromContextMenu(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Group</button></>):(<><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){setLoadingState(true);setIsExecutionLogVisible(true);simulateNodeExecution(n as NodeWithExecutionStatus,'creating').then(()=>simulateNodeExecution(n as NodeWithExecutionStatus,'success')).finally(()=>setLoadingState(false));}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>▶️ Run Node</button><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const np:SingleNodePreview={action:'create',resource:{name:n.data?.label||'Unnamed',type:n.type||'unknown',provider:n.data?.provider||'generic',changes:{properties:{label:{after:n.data?.label||'Unnamed',action:'create'},description:{after:n.data?.description||'',action:'create'},provider:{after:n.data?.provider||'generic',action:'create'},status:{after:n.data?.status||'success',action:'create'},lastUpdated:{after:n.data?.lastUpdated||new Date().toISOString(),action:'create'},version:{after:n.data?.version||1,action:'create'}}}},dependencies:n.data?.dependencies?.map((d:Dependency)=>({name:d.name,type:d.type,action:'create',properties:{...Object.entries(d).reduce((acc:Record<string,any>,[k,v])=>{if(k!=='name'&&k!=='type')acc[k]={after:v,action:'create'};return acc;},{})}}))||[],estimated_cost:n.data?.estimated_cost};setSingleNodePreview(np);setShowSingleNodePreview(true);}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>👁️ Preview</button><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const ev=new CustomEvent('openIaCPanel',{detail:{nodeId:n.id,resourceData:{label:n.data.label,provider:n.data.provider,resourceType:n.data.resourceType}}});window.dispatchEvent(ev);document.dispatchEvent(ev);}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⚙️ Configuración</button></>)}{!(selectedNodes.length>1&&selectedNodes.some(n=>n.id===contextMenu.nodeId))&&(<button onClick={()=>{if(contextMenu.nodeId)handleDeleteNodeFromContextMenu(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Node</button>)}</>)}{contextMenu.isPane&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>0;})()?(<><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)groupSelectedNodes();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{`📦 Group Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{ungroupNodes(); setContextMenu(p=>({...p,visible:false}));}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup Selected Nodes</button><button onClick={()=>{deleteSelectedElements(); setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>{`Delete Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)moveNodesToBack(selN.map(n=>n.id));setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⬇️ Move Selected to Back</button></>):(<><button onClick={()=>{createEmptyGroup();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>📦 Create Empty Group</button><button onClick={()=>{setSidebarOpen(true);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>📚 Show Resources Panel</button></>)}</>)}{contextMenu.customItems&&(<>{contextMenu.customItems.map((item,idx)=>(<button key={idx}onClick={()=>{item.onClick();setContextMenu(p=>({...p,visible:false}));}}style={{display:'flex',alignItems:'center',gap:'8px',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:idx<(contextMenu.customItems?.length||0)-1?'1px solid #eee':'none',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{item.icon}{item.label}</button>))}</>)}</div></div>)}
+          {contextMenu.visible&&(<div style={{position:'fixed',left:contextMenu.x,top:contextMenu.y,background:'white',border:'1px solid #ddd',zIndex:1000,padding:'0px',borderRadius:'8px',boxShadow:'0 4px 10px rgba(0,0,0,0.2)',display:'flex',flexDirection:'column',gap:'0px',minWidth:'180px',overflow:'hidden',transform:'translate(8px, 8px)'}}onClick={e=>e.stopPropagation()}onContextMenu={e=>e.preventDefault()}><div style={{padding:'8px 12px',backgroundColor:'#f7f7f7',borderBottom:'1px solid #eee'}}>{!contextMenu.isPane&&contextMenu.nodeId&&(<><p style={{margin:'0 0 2px 0',fontSize:'13px',fontWeight:'bold'}}>{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.label||'Node'}</p><p style={{margin:0,fontSize:'11px',color:'#777'}}>ID: {contextMenu.nodeId}</p><p style={{margin:0,fontSize:'11px',color:'#777'}}>Type: {contextMenu.nodeType} {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider&&(<span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-xs">{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider.toUpperCase()}</span>)}</p></>)}{contextMenu.isPane&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>0?(<p style={{margin:0,fontSize:'13px',fontWeight:'bold'}}>{selN.length} nodos seleccionados</p>):(<p style={{margin:0,fontSize:'13px',fontWeight:'bold'}}>Canvas Options</p>);})()}</>)}</div><div>{!contextMenu.isPane&&contextMenu.nodeId&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>1&&selN.some(n=>n.id===contextMenu.nodeId);})()?(<><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)groupSelectedNodes();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{`📦 Group Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{deleteSelectedElements(); setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>{`Delete Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)moveNodesToBack(selN.map(n=>n.id));setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⬇️ Move Selected to Back</button></>):reactFlowInstance.getNode(contextMenu.nodeId!)?.type==='group'?(<><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n)startEditingGroupName(n.id,n.data?.label||'Group');setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>✏️ Edit Group Name</button><button onClick={()=>{if(contextMenu.nodeId)ungroupNodes(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup</button><button onClick={()=>{if(contextMenu.nodeId)handleDeleteNodeFromContextMenu(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Group</button></>):(<><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){/*setLoadingState(true);setIsExecutionLogVisible(true);*/simulateNodeExecution(n as NodeWithExecutionStatus,'creating').then(()=>simulateNodeExecution(n as NodeWithExecutionStatus,'success'))/*.finally(()=>setLoadingState(false))*/;}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>▶️ Run Node</button><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const np:SingleNodePreview={action:'create',resource:{name:n.data?.label||'Unnamed',type:n.type||'unknown',provider:n.data?.provider||'generic',changes:{properties:{label:{after:n.data?.label||'Unnamed',action:'create'},description:{after:n.data?.description||'',action:'create'},provider:{after:n.data?.provider||'generic',action:'create'},status:{after:n.data?.status||'success',action:'create'},lastUpdated:{after:n.data?.lastUpdated||new Date().toISOString(),action:'create'},version:{after:n.data?.version||1,action:'create'}}}},dependencies:n.data?.dependencies?.map((d:Dependency)=>({name:d.name,type:d.type,action:'create',properties:{...Object.entries(d).reduce((acc:Record<string,any>,[k,v])=>{if(k!=='name'&&k!=='type')acc[k]={after:v,action:'create'};return acc;},{})}}))||[],estimated_cost:n.data?.estimated_cost};/*setSingleNodePreview(np);setShowSingleNodePreview(true);*/}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>👁️ Preview</button><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const ev=new CustomEvent('openIaCPanel',{detail:{nodeId:n.id,resourceData:{label:n.data.label,provider:n.data.provider,resourceType:n.data.resourceType}}});window.dispatchEvent(ev);document.dispatchEvent(ev);}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⚙️ Configuración</button></>)}{!(selectedNodes.length>1&&selectedNodes.some(n=>n.id===contextMenu.nodeId))&&(<button onClick={()=>{if(contextMenu.nodeId)handleDeleteNodeFromContextMenu(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Node</button>)}</>)}{contextMenu.isPane&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>0;})()?(<><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)groupSelectedNodes();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{`📦 Group Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{ungroupNodes(); setContextMenu(p=>({...p,visible:false}));}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup Selected Nodes</button><button onClick={()=>{deleteSelectedElements(); setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>{`Delete Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)moveNodesToBack(selN.map(n=>n.id));setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⬇️ Move Selected to Back</button></>):(<><button onClick={()=>{createEmptyGroup();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>📦 Create Empty Group</button><button onClick={()=>{setSidebarOpen(true);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>📚 Show Resources Panel</button></>)}</>)}{contextMenu.customItems&&(<>{contextMenu.customItems.map((item,idx)=>(<button key={idx}onClick={()=>{item.onClick();setContextMenu(p=>({...p,visible:false}));}}style={{display:'flex',alignItems:'center',gap:'8px',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:idx<(contextMenu.customItems?.length||0)-1?'1px solid #eee':'none',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{item.icon}{item.label}</button>))}</>)}</div></div>)}
           {selectedEdge&&<EdgeDeleteButton edge={selectedEdge}onEdgeDelete={onEdgeDelete}/>}
-          {/* Barra de herramientas principal - Fija y con estilo similar a GroupFocusView */}
           <div 
-            className="absolute top-4 left-4 z-10 bg-white p-1 rounded-md shadow-lg flex items-center gap-1 border border-gray-200" // Estilos base
+            className="absolute top-4 left-4 z-10 bg-white p-1 rounded-md shadow-lg flex items-center gap-1 border border-gray-200" 
             style={{ flexDirection: toolbarLayout === 'horizontal' ? 'row' : 'column' }}
             onMouseDown={e => e.stopPropagation()} 
           >
-            {/* Botón para cambiar orientación */}
             <button 
               onClick={() => {
                 const newLayout = toolbarLayout === 'horizontal' ? 'vertical' : 'horizontal';
                 setToolbarLayout(newLayout);
-                localStorage.setItem('toolbarLayout', newLayout); // Guardar preferencia
+                localStorage.setItem('toolbarLayout', newLayout); 
               }}
               title={toolbarLayout === 'horizontal' ? "Cambiar a barra vertical" : "Cambiar a barra horizontal"}
               className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
             >
               <ArrowsUpDownIcon className="h-5 w-5" />
             </button>
-
-            {/* Botón de Guardar (opcional, si se quiere mantener visible) */}
             <button 
               onClick={saveCurrentDiagramState} 
               title="Guardar estado actual (zoom y posición)"
               className="p-1.5 bg-green-500 text-white hover:bg-green-600 rounded flex items-center justify-center"
             >
-              {/* Usar un ícono SVG o un HeroIcon si está disponible, por ahora texto */}
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
             </button>
-
-            {/* Herramientas principales */}
             <button onClick={()=>handleToolClick('select')} title="Select (V)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='select'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><CursorArrowRaysIcon className="h-5 w-5"/></button>
             <button onClick={()=>handleToolClick('lasso')} title="Lasso Select (Shift+S)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='lasso'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><SwatchIcon className="h-5 w-5"/></button>
             <button onClick={()=>handleToolClick('note')} onMouseDown={e=>e.preventDefault()} draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'note',name:'New Note',description:'Add a note',provider:'generic'});}} title="Add Note (N)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='note'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><DocumentTextIcon className="h-5 w-5"/></button>
             <button onClick={()=>handleToolClick('text')} onMouseDown={e=>e.preventDefault()} draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'text',name:'New Text',description:'Add text',provider:'generic'});}} title="Add Text (T)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='text'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><PencilIcon className="h-5 w-5"/></button>
             <button onClick={()=>handleToolClick('area')} title="Draw Area (A)" className={`p-1.5 hover:bg-gray-200 rounded ${activeTool==='area'?'bg-blue-100 text-blue-700 ring-1 ring-blue-500':'text-gray-600'}`}><RectangleGroupIcon className="h-5 w-5"/></button>
             <button onClick={()=>createEmptyGroup()} title="Create Group (G)" className="p-1.5 hover:bg-gray-200 rounded text-gray-600"><Square3Stack3DIcon className="h-5 w-5"/></button>
-            
-            {/* Separador */}
             <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-6 mx-1' : 'h-px w-full my-1'}`}></div>
-
-            {/* Botones de tipo de arista */}
             {Object.values(edgeTypeConfigs).map(cfg => {
               const IconComponent = edgeToolbarIcons[cfg.logicalType];
               const isSelected = selectedLogicalType === cfg.logicalType;
