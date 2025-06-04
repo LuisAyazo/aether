@@ -283,7 +283,13 @@ export default function DashboardPage() {
   // const [edges, setEdges] = useState<ReactFlowEdge[]>([]);
 
   // Definiciones de convertToReactFlowNodes y convertToReactFlowEdges movidas aquí arriba
-  const convertToReactFlowNodes = (customNodes: CustomNode[]): ReactFlowNode[] => customNodes.map(n => ({...n, data: {...n.data}} as ReactFlowNode));
+  const convertToReactFlowNodes = (customNodes: CustomNode[]): ReactFlowNode[] => {
+    return customNodes.map(node => ({
+      ...node,
+      parentId: node.parentNode, // Mapear parentNode de la BD a parentId para ReactFlow
+      data: { ...node.data }
+    } as ReactFlowNode));
+  };
   const convertToReactFlowEdges = (customEdges: CustomEdge[]): ReactFlowEdge[] => customEdges.map(e => ({...e} as ReactFlowEdge));
 
   const initialNodesForFlow = useMemo(() => {
@@ -465,7 +471,16 @@ export default function DashboardPage() {
   
   const handleSaveDiagram = useCallback(async (data: { nodes: ReactFlowNode[], edges: ReactFlowEdge[], viewport?: ReactFlowViewport }) => {
     if (!activeCompany || !selectedEnvironment || !selectedDiagram || !currentDiagram) return;
-    const customNodes = data.nodes.map(n => ({ id: n.id, type: n.type!, position: n.position, data: n.data, width: n.width, height: n.height, parentNode: n.parentNode, style: n.style } as CustomNode));
+    const customNodes = data.nodes.map(n => ({ 
+      id: n.id, 
+      type: n.type!, 
+      position: n.position, 
+      data: n.data, 
+      width: n.width, 
+      height: n.height, 
+      parentNode: n.parentId, // Mapear parentId de ReactFlow a parentNode para la BD
+      style: n.style 
+    } as CustomNode));
     const customEdges = data.edges.map(e => ({ id: e.id, source: e.source, target: e.target, type: e.type, animated: e.animated, label: e.label as string, data: e.data, style: e.style } as CustomEdge));
     try {
       await updateDiagram(activeCompany._id || activeCompany.id!, selectedEnvironment, selectedDiagram, {

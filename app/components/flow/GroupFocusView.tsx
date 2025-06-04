@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -20,6 +20,7 @@ import ReactFlow, {
   useReactFlow, // Importar useReactFlow
   Panel, // Importar Panel si se va a usar para el sidebar
   applyNodeChanges as applyNodeChangesRf, // Renombrar para evitar conflicto si se usa localmente
+  ReactFlowInstance,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import nodeTypesFromFile from '../nodes/NodeTypes'; // Asumiendo que los tipos de nodo son los mismos
@@ -33,6 +34,7 @@ import {
   PencilIcon,       // Icono para Texto
   RectangleGroupIcon // Icono para Area
 } from '@heroicons/react/24/outline'; 
+import { debounce } from 'lodash';
 
 
 interface GroupFocusViewProps {
@@ -40,7 +42,7 @@ interface GroupFocusViewProps {
   allNodes: Node[];
   allEdges: Edge[];
   onClose: () => void;
-  onSaveChanges: (updatedNodesInGroup: Node[], newEdgesInGroup: Edge[]) => void;
+  onSaveChanges: (updatedNodesInGroup: Node[], newEdgesInGroup: Edge[], viewport?: Viewport) => void;
   mainNodeTypes: NodeTypes;
   mainEdgeTypes?: EdgeTypes;
   initialViewport?: Viewport;
@@ -77,18 +79,37 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   
   const groupFlowInstance = useReactFlow(); 
   const groupFlowWrapper = React.useRef<HTMLDivElement>(null);
+  const onSaveRef = useRef(onSaveChanges);
 
   // Declaraciones de useMemo para initialGroupNodes e initialGroupEdges PRIMERO
   const initialGroupNodes = useMemo(() => {
     if (!parentNode) return [];
-    return allNodes
+    const childrenOfFocusedGroup = allNodes
       .filter(n => n.parentId === focusedGroupId)
-      .map(n => ({
-        ...n,
-        parentId: undefined, 
-        extent: undefined, 
-        hidden: false, 
-      }));
+      .map(n => {
+        // Crear un objeto nodo nuevo y limpio para la vista de enfoque
+        const focusedViewNode: Node = {
+          id: n.id,
+          type: n.type,
+          position: n.position, // Esta posición es relativa al padre si extent:'parent' fue usado.
+                                // En GroupFocusView, se tratará como absoluta dentro de su propio canvas.
+          data: n.data ? { ...n.data } : {}, // Copia de data
+          width: n.width,
+          height: n.height,
+          selected: n.selected || false, // Propagar el estado de selección
+          style: n.style ? { ...n.style } : undefined, // Copia de style
+          draggable: typeof n.draggable === 'boolean' ? n.draggable : true,
+          selectable: typeof n.selectable === 'boolean' ? n.selectable : true,
+          connectable: typeof n.connectable === 'boolean' ? n.connectable : true,
+          // Propiedades como parentId, extent, positionAbsolute, hidden son omitidas
+          // ya que no aplican o se manejan de forma diferente en esta vista aislada.
+        };
+        return focusedViewNode;
+      });
+    console.log('[GroupFocusView] focusedGroupId:', focusedGroupId);
+    console.log('[GroupFocusView] parentNode (the group itself):', JSON.stringify(parentNode ? {id: parentNode.id, data: parentNode.data, type: parentNode.type} : null));
+    console.log('[GroupFocusView] Children found for group:', JSON.stringify(childrenOfFocusedGroup.map(n => ({id: n.id, type: n.type, data: n.data, parentId: n.parentId}))));
+    return childrenOfFocusedGroup;
   }, [allNodes, focusedGroupId, parentNode]);
 
   const initialGroupEdges = useMemo(() => {
@@ -244,7 +265,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
       // Por ahora, asumimos que la posición es correcta como está.
       extent: 'parent' as const, // Restablecer extent
     }));
-    onSaveChanges(nodesToSave, edges);
+    onSaveRef.current?.(nodesToSave, edges, groupFlowInstance.getViewport());
     onClose();
   };
 
@@ -263,6 +284,47 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
       </div>
     );
   }
+
+  useEffect(() => {
+    onSaveRef.current = onSaveChanges;
+  }, [onSaveChanges]);
+
+  useEffect(() => {
+    if (groupFlowInstance) {
+      // Intentar obtener el viewport guardado del nodo del grupo
+      const groupNode = allNodes.find(n => n.id === focusedGroupId);
+      const savedViewport = groupNode?.data?.viewport;
+      
+      if (savedViewport) {
+        groupFlowInstance.setViewport(savedViewport);
+      } else if (initialViewport) {
+        groupFlowInstance.setViewport(initialViewport);
+      }
+    }
+  }, [groupFlowInstance, focusedGroupId, allNodes, initialViewport]);
+
+  // Añadir efecto para guardar el viewport cuando cambia
+  useEffect(() => {
+    const handleViewportChange = () => {
+      if (groupFlowInstance && onSaveRef.current) {
+        const viewport = groupFlowInstance.getViewport();
+        if (viewport.zoom !== 0) {
+          const flow = groupFlowInstance.toObject();
+          onSaveRef.current(flow.nodes, flow.edges, viewport);
+        }
+      }
+    };
+
+    // Usar un debounce para evitar demasiadas llamadas
+    const debouncedHandleViewportChange = debounce(handleViewportChange, 500);
+
+    // Suscribirse a los eventos de cambio de viewport
+    document.addEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
+    
+    return () => {
+      document.removeEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
+    };
+  }, [groupFlowInstance]);
 
   return (
     <div className="absolute inset-0 bg-white z-[100] flex flex-col" style={{ /* Aumentar z-index si es necesario */ }}>
@@ -348,6 +410,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
           <div ref={groupFlowWrapper} className="w-full h-full" style={{ cursor: activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default' }}>
            <style>{`.react-flow__pane { cursor: ${activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default'} !important; }`}</style>
             <ReactFlow
+              key={focusedGroupId} // Forzar re-montaje si el grupo enfocado cambia
               nodes={nodes}
               edges={edges}
               onDrop={onDropInGroup} 

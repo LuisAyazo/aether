@@ -13,7 +13,7 @@ import {
   ServerIcon,
   SquaresPlusIcon, 
   ArrowsUpDownIcon, 
-  ArrowsPointingOutIcon, 
+  // ArrowsPointingOutIcon, 
   ShareIcon, 
   BoltIcon as HeroBoltIcon, 
   PencilSquareIcon as HeroPencilSquareIcon,
@@ -25,12 +25,13 @@ import {
 import React from 'react';
 import { Tooltip } from 'antd';
 import { useSelectedEdgeType, SelectedEdgeTypeProvider } from '@/app/contexts/SelectedEdgeTypeContext'; 
-import { LogicalEdgeType, edgeTypeConfigs, EdgeTypeConfig, CustomEdgeData, getEdgeConfig } from '@/app/config/edgeConfig';
+import { LogicalEdgeType, edgeTypeConfigs, CustomEdgeData, getEdgeConfig } from '@/app/config/edgeConfig';
 import { Diagram } from '@/app/services/diagramService';
 import nodeTypesFromFile from '../nodes/NodeTypes'; 
 import { NodeExecutionState, NodeWithExecutionStatus } from '../../utils/customTypes';
 import ExecutionLog from './ExecutionLog';
 import GroupFocusView from './GroupFocusView'; 
+import { debounce } from 'lodash';
 
 const { 
   Background, 
@@ -46,7 +47,7 @@ const {
   BackgroundVariant,
   SelectionMode,
   applyNodeChanges, 
-  applyEdgeChanges,
+  // applyEdgeChanges,
   addEdge, 
 } = ReactFlowLibrary;
 
@@ -55,8 +56,8 @@ type EdgeTypes = ReactFlowLibrary.EdgeTypes;
 type Node = ReactFlowLibrary.Node;
 type ReactFlowNodeTypes = ReactFlowLibrary.NodeTypes;
 type OnConnect = ReactFlowLibrary.OnConnect;
-type OnEdgesChange = ReactFlowLibrary.OnEdgesChange;
-type OnNodesChange = ReactFlowLibrary.OnNodesChange;
+// type OnEdgesChange = ReactFlowLibrary.OnEdgesChange;
+// type OnNodesChange = ReactFlowLibrary.OnNodesChange;
 type Viewport = ReactFlowLibrary.Viewport;
 type Connection = ReactFlowLibrary.Connection;
 
@@ -69,8 +70,8 @@ interface SingleNodePreview {
     provider: string;
     changes: {
       properties: Record<string, {
-        before?: any;
-        after?: any;
+        before?: unknown;
+        after?: unknown;
         action: 'create' | 'update' | 'delete';
       }>;
     };
@@ -80,8 +81,8 @@ interface SingleNodePreview {
     type: string;
     action: 'create' | 'update' | 'delete';
     properties: Record<string, {
-      before?: any;
-      after?: any;
+      before?: unknown;
+      after?: unknown;
       action: 'create' | 'update' | 'delete';
     }>;
   }>;
@@ -94,7 +95,7 @@ interface SingleNodePreview {
 interface Dependency {
   name: string;
   type: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface ResourceCategory {
@@ -267,7 +268,6 @@ const FlowEditorContent = ({
   nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
   resourceCategories = [],
-  diagramId,
   initialDiagram,
 }: FlowEditorProps): JSX.Element => {
   
@@ -310,7 +310,7 @@ const FlowEditorContent = ({
   const [isToolbarDragging, setIsToolbarDragging] = useState(false); 
   const previousNodesRef = useRef<string | null>(null);
   const previousEdgesRef = useRef<string | null>(null);
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null); 
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const GROUP_HEADER_HEIGHT = 40; 
   const CHILD_NODE_PADDING_X = 20;
@@ -319,39 +319,35 @@ const FlowEditorContent = ({
   const MIN_EXPANDED_GROUP_WIDTH = 250;
   const MIN_EXPANDED_GROUP_HEIGHT = 150;
 
-  const handleSaveChangesInGroup = useCallback((updatedNodesInGroup: Node[], newEdgesInGroup: Edge[]) => {
-    setNodes(currentNodes => {
-      const otherNodes = currentNodes.filter(n => n.parentId !== expandedGroupId && n.id !== expandedGroupId);
-      const groupNodeFromState = currentNodes.find(n => n.id === expandedGroupId);
-      
-      const finalUpdatedNodes = updatedNodesInGroup.map(un => ({
-        ...un,
-        parentId: expandedGroupId!,
-        extent: 'parent' as const,
-      }));
+  const handleGroupSave = (updatedNodesInGroup: Node[], newEdgesInGroup: Edge[], viewport?: Viewport) => {
+    if (!expandedGroupId) return;
 
-      const updatedGroupNode = groupNodeFromState ? {
-        ...groupNodeFromState,
-        data: {
-          ...groupNodeFromState.data,
-          isExpandedView: false, 
-          isMinimized: groupNodeFromState.data.isMinimized, 
-        },
-      } : undefined;
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === expandedGroupId) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              nodes: updatedNodesInGroup,
+              edges: newEdgesInGroup,
+              viewport: viewport
+            },
+          };
+        }
+        return node;
+      })
+    );
 
-      return [...otherNodes, ...(updatedGroupNode ? [updatedGroupNode] : []), ...finalUpdatedNodes];
-    });
-
-    setEdges(currentEdges => {
-      const childNodeIdsInGroup = new Set(updatedNodesInGroup.map(n => n.id));
-      const edgesOutsideGroupOrNotRelated = currentEdges.filter(edge => 
-        !childNodeIdsInGroup.has(edge.source) || !childNodeIdsInGroup.has(edge.target)
+    setEdges((eds) => {
+      const edgesOutsideGroup = eds.filter(
+        (edge) => !edge.source.startsWith(expandedGroupId) && !edge.target.startsWith(expandedGroupId)
       );
-      return [...edgesOutsideGroupOrNotRelated, ...newEdgesInGroup];
+      return [...edgesOutsideGroup, ...newEdgesInGroup];
     });
 
-  }, [setNodes, setEdges, expandedGroupId]);
-
+    setExpandedGroupId(null);
+  };
 
   const [toolbarPosition, setToolbarPosition] = useState(() => {
     if (typeof window === 'undefined') return { x: 400, y: 20 }; 
@@ -557,14 +553,38 @@ const FlowEditorContent = ({
   
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveCurrentDiagramState = useCallback(() => {
-    if (!reactFlowInstance || !onSaveRef.current) return;
-    const flow = reactFlowInstance.toObject();
-    console.log('Saving viewport:', flow.viewport);
-    lastViewportRef.current = flow.viewport; // Guardar el viewport actual
-    onSaveRef.current(flow);
-    previousNodesRef.current = JSON.stringify(flow.nodes);
-    previousEdgesRef.current = JSON.stringify(flow.edges);
-  }, [reactFlowInstance, onSaveRef]); 
+    if (reactFlowInstance && onSaveRef.current) {
+      const flow = reactFlowInstance.toObject();
+      const viewport = reactFlowInstance.getViewport();
+      onSaveRef.current({
+        nodes: flow.nodes,
+        edges: flow.edges,
+        viewport: viewport
+      });
+    }
+  }, [reactFlowInstance]);
+
+  // Añadir efecto para guardar el viewport cuando cambia
+  useEffect(() => {
+    if (reactFlowInstance && onSaveRef.current) {
+      const handleViewportChange = () => {
+        const viewport = reactFlowInstance.getViewport();
+        if (viewport.zoom !== 0) {
+          saveCurrentDiagramState();
+        }
+      };
+
+      // Usar un debounce para evitar demasiadas llamadas
+      const debouncedHandleViewportChange = debounce(handleViewportChange, 500);
+
+      // Suscribirse a los eventos de cambio de viewport
+      document.addEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
+      
+      return () => {
+        document.removeEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
+      };
+    }
+  }, [reactFlowInstance, saveCurrentDiagramState]);
 
   useEffect(() => {
     if (onSaveRef.current && reactFlowInstance && !isDragging) {
@@ -767,6 +787,14 @@ const FlowEditorContent = ({
   useEffect(()=>{const h=(e:Event)=>{setSingleNodePreview((e as CustomEvent<SingleNodePreview>).detail);setShowSingleNodePreview(true);};window.addEventListener('showSingleNodePreview',h);return()=>window.removeEventListener('showSingleNodePreview',h);},[]);
   const handleApplyChanges=async()=>{if(!singleNodePreview)return;try{setLoadingState(true);setShowLogs(true);setExecutionLogs([]);setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.action} del recurso ${singleNodePreview.resource.name}`]);await new Promise(r=>setTimeout(r,1500));setExecutionLogs(p=>[...p,`Recurso ${singleNodePreview.resource.name} ${singleNodePreview.action==='create'?'creado':singleNodePreview.action==='update'?'actualizado':'eliminado'} exitosamente`]);if(singleNodePreview.estimated_cost)setExecutionLogs(p=>[...p,`Costo estimado: ${singleNodePreview.estimated_cost?.currency} ${singleNodePreview.estimated_cost?.monthly?.toFixed(2)}`]);if(singleNodePreview.dependencies?.length>0){setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.dependencies.length} dependencias...`]);for(const d of singleNodePreview.dependencies){setExecutionLogs(p=>[...p,`Procesando dependencia: ${d.name} (${d.type}) - ${d.action==='create'?'Creando':d.action==='update'?'Actualizando':'Eliminando'}`]);await new Promise(r=>setTimeout(r,500));setExecutionLogs(p=>[...p,`Dependencia ${d.name} procesada exitosamente`]);}}}catch(err){console.error('ApplyChanges Error:',err);setExecutionLogs(p=>[...p,`Error: ${err instanceof Error?err.message:'Unknown'}`]);message.error('Error ApplyChanges');}finally{setLoadingState(false);setShowSingleNodePreview(false);setSingleNodePreview(null);}};
 
+  const handleGroupClick = (nodeId: string) => {
+    const groupNode = nodes.find((n) => n.id === nodeId);
+    if (groupNode) {
+      setExpandedGroupId(nodeId);
+      // Ya no se usa setInitialViewport, el viewport se maneja por prop y por el estado del nodo
+    }
+  };
+
   // Si expandedGroupId tiene un valor, renderizamos la vista de enfoque del grupo
   if (expandedGroupId) {
     return (
@@ -779,7 +807,7 @@ const FlowEditorContent = ({
              handleCollapseGroupView(expandedGroupId);
           }
         }}
-        onSaveChanges={handleSaveChangesInGroup}
+        onSaveChanges={handleGroupSave}
         mainNodeTypes={memoizedNodeTypes}
         mainEdgeTypes={edgeTypes}
         edgeTypeConfigs={edgeTypeConfigs} 
@@ -822,8 +850,7 @@ const FlowEditorContent = ({
           .react-flow__node-areaNode:hover {
             z-index: -1000 !important;
           }
-          /* Estilos visuales para area-node (pueden ir dentro del componente AreaNode.tsx o aquí si son globales) */
-          .area-node { /* Esta clase es la raíz del componente AreaNode, no el wrapper de ReactFlow */
+          .area-node {
             background-color: rgba(59,130,246,0.1) !important;
             border: 1px solid rgba(59,130,246,0.5) !important;
             border-radius: 8px !important;
@@ -832,22 +859,31 @@ const FlowEditorContent = ({
             background-color: rgba(59,130,246,0.15) !important;
             border: 1px solid rgba(59,130,246,0.6) !important;
           }
-          .area-node[data-selected="true"] { /* Esto aplica al div interno del AreaNode si tiene data-selected */
+          .area-node[data-selected="true"] {
             background-color: rgba(59,130,246,0.2) !important;
             border: 1px solid rgba(59,130,246,0.7) !important;
           }
         `}</style>
         <ReactFlow
           defaultViewport={initialViewport || { x: 0, y: 0, zoom: 1 }}
-          minZoom={0.1} maxZoom={2} deleteKeyCode={[]} noDragClassName="nodrag"
-          nodes={nodes} edges={edges} nodeTypes={memoizedNodeTypes} edgeTypes={edgeTypes}
-          onNodesChange={onNodesChangeInternal} onEdgesChange={onEdgesChangeInternal}
-          onConnect={onConnectInternal} 
-          onPaneClick={handlePaneClick} onEdgeClick={onEdgeClick}
-          onNodeContextMenu={handleNodeContextMenu} onPaneContextMenu={handlePaneContextMenu}
+          minZoom={0.1}
+          maxZoom={2}
+          deleteKeyCode={[]}
+          noDragClassName="nodrag"
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={memoizedNodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChangeInternal}
+          onEdgesChange={onEdgesChangeInternal}
+          onConnect={onConnectInternal}
+          onPaneClick={handlePaneClick}
+          onEdgeClick={onEdgeClick}
+          onNodeContextMenu={handleNodeContextMenu}
+          onPaneContextMenu={handlePaneContextMenu}
           onNodeDragStart={() => setIsDragging(true)}
-          onNodeDragStop={(_event, draggedNode) => { 
-            setIsDragging(false); 
+          onNodeDragStop={(_event, draggedNode) => {
+            setIsDragging(false);
             
             const { getNodes, setNodes: rfSetNodes } = reactFlowInstance;
             const currentNodesOnDragStop = getNodes(); 
@@ -951,11 +987,22 @@ const FlowEditorContent = ({
           onMouseDown={e=>{if(activeTool==='area'&&reactFlowInstance){const t=e.target as HTMLElement;if(t.closest('.react-flow__node,.react-flow__edge,.react-flow__handle,.react-flow__controls,.react-flow__minimap'))return;if(!t.closest('.react-flow__pane'))return;e.preventDefault();e.stopPropagation();const p=reactFlowInstance.screenToFlowPosition({x:e.clientX,y:e.clientY});setIsDrawingArea(true);setAreaStartPos(p);setCurrentArea({x:p.x,y:p.y,width:0,height:0});document.body.classList.add('area-drawing-mode');}}}
           onMouseMove={e=>{if(isDrawingArea&&areaStartPos&&reactFlowInstance){const cP=reactFlowInstance.screenToFlowPosition({x:e.clientX,y:e.clientY});setCurrentArea({x:Math.min(areaStartPos.x,cP.x),y:Math.min(areaStartPos.y,cP.y),width:Math.abs(cP.x-areaStartPos.x),height:Math.abs(cP.y-areaStartPos.y)});}}}
           onMouseUp={()=>{if(isDrawingArea&&currentArea&&reactFlowInstance){if(currentArea.width>20&&currentArea.height>20){const newArea:Node={id:`area-${Date.now()}`,type:'areaNode',position:{x:currentArea.x,y:currentArea.y},data:{backgroundColor:'rgba(59,130,246,0.5)',borderColor:'rgba(59,130,246,1)',borderWidth:2,shape:'rectangle',label:'Area'},style:{width:currentArea.width,height:currentArea.height},width:currentArea.width,height:currentArea.height,selected:true,draggable:true,selectable:true};setNodes(nds=>applyNodeChanges([{type:'add',item:newArea}],nds));}setIsDrawingArea(false);setAreaStartPos(null);setCurrentArea(null);document.body.classList.remove('area-drawing-mode');}}}
-          onDrop={onDrop} onDragOver={onDragOver} onDragEnd={onDragEnd}
-          elementsSelectable={true} nodesDraggable={activeTool!=='area'} nodesConnectable={true}
-          panOnDrag={activeTool!=='lasso'&&activeTool!=='area'} panOnScroll={true} zoomOnScroll={true} zoomOnPinch={true} zoomOnDoubleClick={false}
-          selectionOnDrag={activeTool==='lasso'} selectionMode={SelectionMode.Partial}
-          multiSelectionKeyCode={['Shift']} snapToGrid={false} nodeDragThreshold={5}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragEnd={onDragEnd}
+          elementsSelectable={true}
+          nodesDraggable={activeTool !== 'area'}
+          nodesConnectable={true}
+          panOnDrag={activeTool !== 'lasso' && activeTool !== 'area'}
+          panOnScroll={true}
+          zoomOnScroll={true}
+          zoomOnPinch={true}
+          zoomOnDoubleClick={false}
+          selectionOnDrag={activeTool === 'lasso'}
+          selectionMode={SelectionMode.Partial}
+          multiSelectionKeyCode={['Shift']}
+          snapToGrid={false}
+          nodeDragThreshold={5}
         >
           <Background id="1" gap={10} color="#000000" variant={BackgroundVariant.Dots} size={1.2} style={{opacity:0.25,backgroundColor:'#E8F5E9'}}/>
           <Background id="2" gap={100} color="#000000" variant={BackgroundVariant.Dots} size={1.2} style={{opacity:0.25}}/>
@@ -1028,9 +1075,6 @@ const FlowEditorContent = ({
           {sidebarOpen&&(<Panel position="top-right"style={{width:'360px',background:'rgba(255,255,255,0.9)',padding:'0',borderRadius:'12px 0 0 12px',height:'calc(100vh - 7.5rem)',overflow:'hidden',boxShadow:'0 4px 20px rgba(0,0,0,0.15)',display:'flex',flexDirection:'column',position:'fixed',top:'7.5rem',right:'0px',zIndex:9999,transform:'none',transition:'transform 0.3s ease-out, opacity 0.3s ease-out, width 0.3s ease-out',backdropFilter:'blur(10px)'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',borderBottom:'1px solid rgba(230,230,230,0.9)',flexShrink:0,minHeight:'56px',backgroundColor:'rgba(250,250,250,0.95)',borderTopLeftRadius:'12px',borderTopRightRadius:'12px'}}><h4 style={{margin:0,fontSize:'16px',fontWeight:'600',color:'#333'}}>Recursos</h4><button onClick={()=>setSidebarOpen(false)}style={{border:'none',background:'transparent',cursor:'pointer',width:'28px',height:'28px',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',transition:'background-color 0.2s',color:'#555'}}title="Ocultar Panel de Recursos"onMouseOver={e=>(e.currentTarget.style.backgroundColor='#e9e9e9')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='transparent')}><XMarkIcon className="w-5 h-5"/></button></div><div style={{padding:'12px 16px',borderBottom:'1px solid rgba(230,230,230,0.9)',backgroundColor:'rgba(250,250,250,0.95)'}}><input type="text"placeholder="Buscar recursos..."value={searchTerm}onChange={e=>setSearchTerm(e.target.value)}style={{width:'100%',padding:'8px 12px',borderRadius:'6px',border:'1px solid #ddd',fontSize:'14px',outline:'none',boxShadow:'inset 0 1px 2px rgba(0,0,0,0.075)'}}/></div><div style={{overflowY:'auto',overflowX:'hidden',flexGrow:1,display:'flex',flexDirection:'column',backgroundColor:'rgba(255,255,255,0.9)',paddingBottom:'16px',scrollbarWidth:'thin',scrollbarColor:'#ccc #f1f1f1'}}>{resourceCategories.map(c=>({...c,items:c.items.filter(i=>i.name.toLowerCase().includes(searchTerm.toLowerCase())||i.description.toLowerCase().includes(searchTerm.toLowerCase()))})).filter(c=>c.items.length>0).map(cat=>(<div key={cat.name}style={{borderBottom:'1px solid #f0f0f0'}}><h5 onClick={()=>setCollapsedCategories(p=>({...p,[cat.name]:!p[cat.name]}))}style={{cursor:'pointer',margin:0,padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'14px',fontWeight:'600',backgroundColor:collapsedCategories[cat.name]?'#ffffff':'#f8f8f8',transition:'background-color 0.2s'}}onMouseOver={e=>{if(!collapsedCategories[cat.name])return;e.currentTarget.style.backgroundColor='#f5f5f5';}}onMouseOut={e=>{if(!collapsedCategories[cat.name])return;e.currentTarget.style.backgroundColor='#ffffff';}}><span>{cat.name}</span><span style={{color:'#666'}}>{collapsedCategories[cat.name]?'▸':'▾'}</span></h5>{!collapsedCategories[cat.name]&&(<ul style={{listStyleType:'none',padding:'2px 0',margin:0,backgroundColor:'#fdfdfd',maxHeight:'none',overflowY:'visible',position:'relative',zIndex:10001}}>{cat.items.map(item=>(<li key={cat.name+'-'+item.type+'-'+item.name}draggable onDragStart={e=>onDragStartSidebar(e,item)}style={{padding:'6px 16px',margin:'0',cursor:'grab',display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',color:'#444',transition:'background-color 0.15s'}}onMouseOver={e=>{e.currentTarget.style.backgroundColor='#f0f0f0'}}onMouseOut={e=>{e.currentTarget.style.backgroundColor='transparent'}}><div style={{minWidth:'24px',display:'flex',alignItems:'center',justifyContent:'center',marginRight:'8px'}}>{item.icon?React.cloneElement(item.icon,{className:'w-5 h-5 text-gray-500'}):<ServerIcon className="w-5 h-5 text-gray-400"/>}</div><div style={{flex:1}}><span style={{fontWeight:'500'}}>{item.name}</span><p style={{fontSize:'11px',color:'#777',margin:'2px 0 0 0',lineHeight:'1.3'}}>{item.description}</p></div></li>))}</ul>)}</div>))}</div></Panel>)}
         </ReactFlow>
       </div>
-      {runModalVisible&&(<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="bg-white p-6 rounded-lg shadow-xl"><h3 className="text-lg font-semibold mb-4">Run Deployment</h3><p className="mb-4">Are you sure you want to deploy this diagram?</p><div className="flex justify-end gap-2"><button onClick={()=>setRunModalVisible(false)}className="px-4 py-2 border rounded hover:bg-gray-100">Cancel</button><button onClick={handleRun}className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Run</button></div></div></div>)}
-      {previewModalVisible&&previewData&&(<div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50"><div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-8 relative animate-fade-in"><button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none"onClick={()=>setPreviewModalVisible(false)}aria-label="Cerrar">×</button><h2 className="text-2xl font-bold mb-2 flex items-center gap-2"><span className="inline-block bg-blue-100 text-blue-700 rounded-full px-3 py-1 text-lg">👁️</span>Vista Previa de Cambios</h2><p className="text-gray-500 mb-6">Revisa los cambios que se aplicarán al ejecutar el diagrama.</p><div className="grid grid-cols-3 gap-4 mb-8 text-center"><div className="bg-green-50 p-4 rounded-lg border border-green-200"><div className="text-3xl font-bold text-green-600 flex items-center justify-center gap-2"><span>＋</span>{previewData.resourcesToCreate.length}</div><div className="text-sm text-green-700 mt-1">Recursos a Crear</div></div><div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200"><div className="text-3xl font-bold text-yellow-600 flex items-center justify-center gap-2"><span>✎</span>{previewData.resourcesToUpdate.length}</div><div className="text-sm text-yellow-700 mt-1">Recursos a Actualizar</div></div><div className="bg-red-50 p-4 rounded-lg border border-red-200"><div className="text-3xl font-bold text-red-600 flex items-center justify-center gap-2"><span>－</span>{previewData.resourcesToDelete.length}</div><div className="text-sm text-red-700 mt-1">Recursos a Eliminar</div></div></div>{previewData.resourcesToCreate.length>0&&(<details open className="mb-6"><summary className="cursor-pointer text-green-700 font-semibold text-lg mb-2 flex items-center gap-2"><span className="inline-block bg-green-100 text-green-700 rounded-full px-3 py-1 text-lg">＋</span>Recursos a Crear ({previewData.resourcesToCreate.length})</summary><div className="space-y-3 mt-2">{previewData.resourcesToCreate.map(res=>(<div key={res.id}className="bg-white border border-green-200 rounded p-4 shadow-sm"><div className="flex items-center justify-between mb-2"><div><span className="font-bold text-green-700">{res.name}</span><span className="ml-2 text-xs text-gray-500">({res.type})</span></div><div className="flex items-center gap-2"><span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">Crear</span><span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">{res.provider}</span></div></div><div className="text-xs text-gray-600"><span className="font-medium">Propiedades:</span><pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-x-auto">{JSON.stringify(res.changes.properties,null,2)}</pre></div></div>))}</div></details>)}{previewData.resourcesToUpdate.length>0&&(<details open className="mb-6"><summary className="cursor-pointer text-yellow-700 font-semibold text-lg mb-2 flex items-center gap-2"><span className="inline-block bg-yellow-100 text-yellow-700 rounded-full px-3 py-1 text-lg">✎</span>Recursos a Actualizar ({previewData.resourcesToUpdate.length})</summary><div className="space-y-3 mt-2">{previewData.resourcesToUpdate.map(res=>(<div key={res.id}className="bg-white border border-yellow-200 rounded p-4 shadow-sm"><div className="flex items-center justify-between mb-2"><div><span className="font-bold text-yellow-700">{res.name}</span><span className="ml-2 text-xs text-gray-500">({res.type})</span></div><div className="flex items-center gap-2"><span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">Actualizar</span><span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">{res.provider}</span></div></div><div className="text-xs text-gray-600"><span className="font-medium">Cambios:</span><pre className="mt-1 bg-gray-50 p-2 rounded text-xs overflow-x-auto">{JSON.stringify(res.changes,null,2)}</pre></div></div>))}</div></details>)}{previewData.resourcesToDelete.length>0&&(<details open className="mb-6"><summary className="cursor-pointer text-red-700 font-semibold text-lg mb-2 flex items-center gap-2"><span className="inline-block bg-red-100 text-red-700 rounded-full px-3 py-1 text-lg">－</span>Recursos a Eliminar ({previewData.resourcesToDelete.length})</summary><div className="space-y-3 mt-2">{previewData.resourcesToDelete.map(res=>(<div key={res.id}className="bg-white border border-red-200 rounded p-4 shadow-sm"><div className="flex items-center justify-between mb-2"><div><span className="font-bold text-red-700">{res.name}</span><span className="ml-2 text-xs text-gray-500">({res.type})</span></div><div className="flex items-center gap-2"><span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded">Eliminar</span><span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">{res.provider}</span></div></div></div>))}</div></details>)}<div className="flex justify-end gap-3 mt-8"><button className="px-5 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold"onClick={()=>setPreviewModalVisible(false)}>Cancelar</button><button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"onClick={handleApplyChanges}disabled={loadingState}>{loadingState?'Aplicando...':'Aplicar cambios'}</button></div></div></div>)}
-      {showSingleNodePreview&&singleNodePreview&&(<div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center"><div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl overflow-hidden border border-gray-100"style={{maxHeight:'80vh'}}><div className="bg-white p-6 border-b border-gray-100"><div className="flex justify-between items-center"><div className="flex items-center gap-3">{singleNodePreview.action==='create'&&(<div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center"><span className="text-2xl text-green-600">＋</span></div>)}{singleNodePreview.action==='update'&&(<div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center"><span className="text-2xl text-yellow-600">✎</span></div>)}{singleNodePreview.action==='delete'&&(<div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center"><span className="text-2xl text-red-600">－</span></div>)}<div><h2 className="text-xl font-semibold text-gray-900">{singleNodePreview.resource.name}</h2><p className="text-sm text-gray-500 mt-1">{singleNodePreview.resource.type} • {singleNodePreview.resource.provider}</p></div></div><button onClick={()=>setShowSingleNodePreview(false)}className="text-gray-400 hover:text-gray-600 transition-colors p-2 hover:bg-gray-100 rounded-full"><XMarkIcon className="w-6 h-6"/></button></div></div><div className="p-6 overflow-y-auto"style={{maxHeight:'calc(80vh - 180px)'}}><div className="space-y-6"><div><h3 className="font-medium text-gray-900 mb-3">Cambios:</h3><div className="bg-gray-50 rounded-xl border border-gray-100 p-4"><div className="space-y-3">{Object.entries(singleNodePreview.resource.changes.properties).map(([key,value])=>{if(value&&typeof value==='object'&&'action'in value){return(<div key={key}className="flex justify-between items-start text-sm"><span className="text-gray-600">{key}</span><div className="flex flex-col items-end">{value.action==='update'&&(<><span className="text-red-500 line-through text-xs">- {value.before}</span><span className="text-green-500">+ {value.after}</span></>)}{value.action==='create'&&(<span className="text-green-500">+ {value.after}</span>)}{value.action==='delete'&&(<span className="text-red-500">- {value.before}</span>)}<span className="text-xs text-gray-400 mt-1">{value.action==='create'?'Nuevo':value.action==='update'?'Actualizado':'Eliminado'}</span></div></div>);}return(<div key={key}className="flex justify-between items-start text-sm"><span className="text-gray-600">{key}</span><span className="text-gray-500">{typeof value==='object'?JSON.stringify(value):String(value)}</span></div>);})}</div></div></div>{singleNodePreview.dependencies&&singleNodePreview.dependencies.length>0&&(<div><h3 className="font-medium text-gray-900 mb-3">Dependencias:</h3><div className="space-y-3">{singleNodePreview.dependencies.map((dep,index)=>(<div key={index}className="bg-gray-50 rounded-xl border border-gray-100 p-4"><div className="flex items-center gap-3 mb-3"><div className={`w-8 h-8 rounded-full ${dep.action==='create'?'bg-green-100':dep.action==='update'?'bg-yellow-100':'bg-red-100'} flex items-center justify-center`}><span className={dep.action==='create'?'text-green-600':dep.action==='update'?'text-yellow-600':'text-red-600'}>{dep.action==='create'?'＋':dep.action==='update'?'✎':'－'}</span></div><div><div className="font-medium text-gray-900">{dep.name}</div><div className="text-sm text-gray-500">{dep.type}</div></div></div>{Object.entries(dep.properties).length>0&&(<div className="ml-11 space-y-2">{Object.entries(dep.properties).map(([key,value])=>{if(value&&typeof value==='object'&&'action'in value){return(<div key={key}className="flex justify-between items-start text-sm"><span className="text-gray-600">{key}</span><div className="flex flex-col items-end">{value.action==='update'&&(<><span className="text-red-500 line-through text-xs">- {value.before}</span><span className="text-green-500">+ {value.after}</span></>)}{value.action==='create'&&(<span className="text-green-500">+ {value.after}</span>)}{value.action==='delete'&&(<span className="text-red-500">- {value.before}</span>)}<span className="text-xs text-gray-400 mt-1">{value.action==='create'?'Nuevo':value.action==='update'?'Actualizado':'Eliminado'}</span></div></div>);}return(<div key={key}className="flex justify-between items-start text-sm"><span className="text-gray-600">{key}</span><span className="text-gray-500">{typeof value==='object'?JSON.stringify(value):String(value)}</span></div>);})}</div>)}</div>))}</div></div>)}{singleNodePreview.estimated_cost&&(<div><h3 className="font-medium text-gray-900 mb-3">Costo estimado:</h3><div className="bg-gray-50 rounded-xl border border-gray-100 p-4"><div className="flex items-center justify-between"><span className="text-gray-600">Costo mensual</span><span className="font-medium text-gray-900">{singleNodePreview.estimated_cost?.currency} {singleNodePreview.estimated_cost?.monthly?.toFixed(2)}</span></div></div></div>)}</div></div><div className="p-6 border-t border-gray-100 bg-gray-50"><div className="flex justify-end gap-3"><button onClick={()=>setShowSingleNodePreview(false)}className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancelar</button><button onClick={handleApplyChanges}disabled={loadingState}className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">{loadingState?'Aplicando...':'Aplicar cambios'}</button></div></div></div></div>)}
       <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '480px' }}>
         <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} previewData={previewData} />
       </div>

@@ -320,7 +320,7 @@ export default function DiagramPage() {
       selected: node.selected || false,
       positionAbsolute: node.positionAbsolute,
       dragging: node.dragging || false,
-      parentNode: node.parentNode,
+      parentId: node.parentNode, // Mapear parentNode de la BD a parentId para ReactFlow
       style: { ...node.style, border: '2px solid transparent', borderRadius: '4px' },
       className: undefined, sourcePosition: undefined, targetPosition: undefined,
       hidden: false, draggable: true, selectable: true, connectable: true, deletable: true,
@@ -342,7 +342,8 @@ export default function DiagramPage() {
       id: node.id, type: node.type || 'default', position: node.position, data: node.data,
       width: node.width || undefined, height: node.height || undefined, selected: node.selected || false,
       positionAbsolute: node.positionAbsolute, dragging: node.dragging || false,
-      parentNode: node.parentNode, style: node.style
+      parentNode: node.parentId, // Mapear parentId de ReactFlow a parentNode para la BD
+      style: node.style
     }));
   };
 

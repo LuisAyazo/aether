@@ -81,32 +81,34 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     if (!groupNode) return;
 
     const newChildCount = childNodes.length;
-    let groupDataChanged = false;
-    if ((groupNode.data as GroupNodeData)?.childCount !== newChildCount || 
-        (groupNode.data as GroupNodeData)?.isMinimized !== isMinimized) {
-      groupDataChanged = true;
-    }
+    const currentGroupData = groupNode.data as GroupNodeData;
 
-    // Los nodos hijos se ocultan si el grupo está minimizado,
-    // o si el grupo NO está en "vista expandida" (lógica para Fase 2).
-    // Por ahora (Fase 1), si no está minimizado, los hijos deben estar "visibles" para RF,
-    // pero el GroupNode los renderizará como una lista.
-    // Si se quisiera que los nodos hijos reales no ocupen espacio ni sean seleccionables cuando
-    // el grupo los muestra como lista, se podrían marcar como hidden: !isMinimized.
-    // Pero para que el drag&drop funcione correctamente hacia ellos, deben existir en el flujo.
-    // La representación visual es lo que cambia.
-
-    if (groupDataChanged) {
+    // Solo actualizar el data del propio nodo de grupo si es necesario
+    // para reflejar el childCount o el estado local isMinimized.
+    if (currentGroupData?.childCount !== newChildCount || currentGroupData?.isMinimized !== isMinimized) {
       setNodes(nds => nds.map(n => {
         if (n.id === id) {
-          return { ...n, data: { ...(n.data as object), childCount: newChildCount, isMinimized: isMinimized } };
+          return { 
+            ...n, 
+            data: { 
+              ...(n.data as object), 
+              childCount: newChildCount, 
+              isMinimized: isMinimized // Sincronizar data.isMinimized con el estado local
+            } 
+          };
         }
-        // Los nodos hijos se manejan visualmente como una lista, no se ocultan aquí necesariamente
-        // a menos que la lógica de "vista expandida" (Fase 2) lo requiera.
         return n;
       }));
     }
-  }, [id, childNodes.length, isMinimized, getNode, setNodes]); // Eliminado data.isExpandedView de las dependencias
+    // El manejo de 'hidden' de los hijos se hará en toggleMinimize y en FlowEditorContent al cargar.
+  }, [id, childNodes.length, isMinimized, getNode, setNodes]);
+
+  // Sincronizar el estado local isMinimized con data.isMinimized de las props (al montar o si data.isMinimized cambia desde el exterior)
+  useEffect(() => {
+    if (typeof data.isMinimized === 'boolean' && data.isMinimized !== isMinimized) {
+      setIsMinimized(data.isMinimized);
+    }
+  }, [data.isMinimized]); // Solo depende de data.isMinimized para evitar bucles con el estado local
 
 
   const handleLabelSubmit = useCallback(() => {
@@ -154,28 +156,40 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
 
     setNodes(nds => 
       nds.map(n => {
-        if (n.id === id) {
-          const preservedWidth = n.width ?? (typeof n.style?.width === 'number' ? n.style.width : currentWidthState);
-          const currentHeight = n.height ?? (typeof n.style?.height === 'number' ? n.style.height : DEFAULT_HEIGHT);
-          
-          if (newMinimizedState) {
-            setCurrentWidthState(preservedWidth); // Guardar el ancho actual antes de minimizar
+        if (n.id === id) { // Es el nodo de grupo actual
+          let newWidth;
+          const currentActualWidth = n.width ?? (typeof n.style?.width === 'number' ? n.style.width : currentWidthState);
+          const currentActualHeight = n.height ?? (typeof n.style?.height === 'number' ? n.style.height : DEFAULT_HEIGHT);
+
+          if (newMinimizedState) { // Se está minimizando
+            setCurrentWidthState(currentActualWidth); // Guardar el ancho actual
+            newWidth = MINIMIZED_WIDTH;
+          } else { // Se está expandiendo
+            newWidth = currentWidthState; // Restaurar el ancho guardado
           }
 
           return {
             ...n,
-            data: { ...n.data, isMinimized: newMinimizedState },
+            data: { ...n.data, isMinimized: newMinimizedState, isExpandedView: false },
             style: { 
               ...n.style, 
-              width: preservedWidth, // Mantener el ancho preservado
-              height: newMinimizedState ? MINIMIZED_HEIGHT : currentHeight
+              width: newWidth, 
+              height: newMinimizedState ? MINIMIZED_HEIGHT : currentActualHeight
             },
+            // Actualizar también las propiedades width/height del nodo si NodeResizer las usa directamente
+            width: newWidth,
+            height: newMinimizedState ? MINIMIZED_HEIGHT : currentActualHeight,
           };
+        }
+        // Si el grupo se está expandiendo (newMinimizedState es false), hacer visibles a sus hijos directos
+        // Si el grupo se está minimizando (newMinimizedState es true), ocultar a sus hijos directos
+        if (n.parentId === id) {
+          return { ...n, hidden: newMinimizedState };
         }
         return n;
       })
     );
-  }, [id, isMinimized, setNodes, currentWidthState]); // Quitar width, height de props, usar currentWidthState
+  }, [id, isMinimized, setNodes, currentWidthState]); 
 
   const handleExpandViewClick = useCallback(() => {
     console.log(`Solicitando expandir vista para el grupo ${id}`);
