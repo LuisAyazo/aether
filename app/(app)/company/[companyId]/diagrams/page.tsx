@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { getDiagramsByEnvironment, getEnvironments, createEnvironment, deleteDiagram, Environment, Diagram } from '../../../services/diagramService';
-import { isAuthenticated } from '../../../services/authService';
+import { getDiagramsByEnvironment, getEnvironments, createEnvironment, deleteDiagram, Environment, Diagram } from '../../../../services/diagramService'; // Corregido
+import { isAuthenticated } from '../../../../services/authService'; // Corregido
 import { Modal, Input } from 'antd';
-import EnvironmentCategorySelect from '../../../components/ui/EnvironmentCategorySelect';
+import EnvironmentCategorySelect from '../../../../components/ui/EnvironmentCategorySelect'; // Corregido
 const { TextArea } = Input;
 
 export default function DiagramsListPage() {
