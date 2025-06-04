@@ -18,7 +18,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Button, Card, List, Modal, Input, message, Spin, Select, Switch, Typography, Space, Alert, Tabs } from 'antd';
 import { GithubOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import MonacoEditor from '@monaco-editor/react';
 import { 
   Deployment, 
@@ -26,11 +26,11 @@ import {
   DeploymentConfig, 
   DeploymentStep, 
   EnvironmentVariable,
-  EnvironmentDefinition, // Importar nuevo tipo
-  DeploymentTriggerTypeEnum // Importar enum
-  // DeploymentConfigurationOut // No se necesita importar si usamos DeploymentConfig o any
+  EnvironmentDefinition,
+  DeploymentTriggerTypeEnum
 } from '@/app/types/deployments';
 import { platformConfig } from '@/app/config/platforms';
+import { getAuthToken } from '@/app/services/authService';
 
 const mockDeployments: Deployment[] = [
   {
@@ -71,8 +71,6 @@ const statusConfig = {
   pending: { color: 'text-yellow-600 bg-yellow-50', icon: ClockIcon, label: 'Pendiente' }
 };
 
-// const AVAILABLE_ENVIRONMENTS = ['development', 'sandbox', 'qa', 'staging', 'production', 'demo']; // Se obtendrá del backend
-
 const environmentDisplayConfig: Record<string, { color: string; label: string }> = {
   production: { color: 'text-red-700 bg-red-100', label: 'Producción' },
   staging: { color: 'text-yellow-700 bg-yellow-100', label: 'Staging' },
@@ -91,23 +89,21 @@ const providerConfig = {
 };
 
 interface DeploymentsPageProps {
-  companyId?: string;
+  companyId: string; // Cambiado a obligatorio
 }
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPageProps) {
-  const params = useParams();
+export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { // Usar companyId de props
   const router = useRouter();
-  const companyIdFromParams = params.companyId as string;
   
-  const [deployments, setDeployments] = useState<Deployment[]>(mockDeployments); // Lista de despliegues ejecutados/históricos
+  const [deployments, setDeployments] = useState<Deployment[]>(mockDeployments);
   const [availableEnvironments, setAvailableEnvironments] = useState<EnvironmentDefinition[]>([]);
   const [expandedDeployment, setExpandedDeployment] = useState<string | null>(null);
   const [selectedEnvironmentFilter, _setSelectedEnvironmentFilter] = useState<string>('all'); 
   const [selectedProviderFilter, _setSelectedProviderFilter] = useState<string>('all'); 
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); // Para el modal simple de creación (placeholder)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); 
   const [newDeploymentName, setNewDeploymentName] = useState('');
   const [newDeploymentPlatform, setNewDeploymentPlatform] = useState<Deployment['platform'] | undefined>(undefined);
   
@@ -119,7 +115,7 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
   const [selectedDeploymentForYaml, setSelectedDeploymentForYaml] = useState<Deployment | null>(null);
   
   const [selectedPlatform, setSelectedPlatform] = useState<Deployment['platform'] | null>(null);
-  const [deploymentConfig, setDeploymentConfig] = useState<Partial<DeploymentConfig> | null>(null); // Usar Partial para el formulario
+  const [deploymentConfig, setDeploymentConfig] = useState<Partial<DeploymentConfig> | null>(null);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   
   const [isRepoSelectorModalOpen, setIsRepoSelectorModalOpen] = useState(false);
@@ -132,15 +128,35 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
   const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'deploying' | 'success' | 'error'>('idle');
 
   const fetchAvailableEnvironments = async () => {
-    if (!companyIdFromParams) return;
+    if (!companyId) {
+      console.warn("DeploymentsPage: companyId es undefined, no se pueden cargar ambientes.");
+      setAvailableEnvironments([]); // Asegurar que sea un array vacío
+      return;
+    }
+    console.log("DeploymentsPage: Iniciando fetchAvailableEnvironments con companyId:", companyId);
+    const token = getAuthToken();
+    if (!token) {
+      message.error("Usuario no autenticado.");
+      // Considerar si setLoading(false) es apropiado aquí o si la página debe quedar en error/loader
+      return;
+    }
     try {
-      const response = await fetch(`/api/v1/companies/${companyIdFromParams}/environments`); // Ajustar al endpoint real
-      if (!response.ok) throw new Error('Failed to fetch environments');
+      const response = await fetch(`/api/v1/companies/${companyId}/environments`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      }); 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Error al obtener ambientes y no se pudo parsear el error.'}));
+        throw new Error(errorData.detail || 'Failed to fetch environments');
+      }
       const data: EnvironmentDefinition[] = await response.json();
+      console.log("DeploymentsPage: Ambientes recibidos:", data);
       setAvailableEnvironments(data);
     } catch (error) {
-      console.error("Error fetching environments:", error);
-      message.error("Error al cargar los ambientes disponibles.");
+      console.error("Error fetching environments for DeploymentsPage:", error);
+      message.error(`Error al cargar los ambientes disponibles: ${error instanceof Error ? error.message : String(error)}`);
+      setAvailableEnvironments([]);
     }
   };
 
@@ -154,17 +170,27 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
         if (connData.connected) {
           await fetchRepositories();
         }
-        await fetchAvailableEnvironments();
+        // Llamar a fetchAvailableEnvironments solo si companyId es válido
+        if (companyId) {
+          await fetchAvailableEnvironments();
+        } else {
+          console.warn("DeploymentsPage: companyId no disponible en el montaje inicial, no se cargan ambientes.");
+          setAvailableEnvironments([]); // Inicializar como array vacío si no hay companyId
+        }
       } catch (error) { console.error('Error initializing page data:', error); } 
       finally { setLoading(false); }
     };
-    fetchData();
-  }, [companyIdFromParams]);
+    if (companyId) { // Solo ejecutar fetchData si companyId está presente
+        fetchData();
+    } else {
+        setLoading(false); // Si no hay companyId, no hay nada que cargar
+        setIsConnected(false); // Asumir no conectado si no hay companyId para verificar GitHub
+        setAvailableEnvironments([]);
+    }
+  }, [companyId]); // Depender de companyId de props
 
   const fetchRepositories = async () => {
-    // ... (sin cambios)
     try {
-      // setLoading(true); // setLoading ya está en fetchData
       const response = await fetch('/api/github/repositories');
       const repos = await response.json();
       setRepositories(repos);
@@ -172,7 +198,6 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
       console.error('Error fetching repositories:', error);
       message.error('Error al obtener los repositorios');
     } 
-    // finally { setLoading(false); }
   };
   
   const handleRepoSelectForConfig = (repo: Repository) => {
@@ -187,13 +212,13 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
       }, {} as Record<string, string | number | boolean>);
 
       setDeploymentConfig({
-        company_id: companyIdFromParams,
+        company_id: companyId,
         platform: selectedPlatform,
         repository: repo, 
         name: `${repo.name}-${selectedPlatform}-${availableEnvironments[0]?.name || 'default'}`, 
         region: 'us-central1', 
         environment_id: availableEnvironments[0]?.id || '', 
-        config: initialConfigValues, // Esto será platform_specific_config para el backend
+        config: initialConfigValues,
         branch: repo.default_branch || 'main',
         directory: '/',
         trigger_type: DeploymentTriggerTypeEnum.MANUAL,
@@ -224,10 +249,12 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
     setIsYamlModalOpen(true);
   };
 
-  const handleSaveYaml = async (_yaml: string) => {
+  const handleSaveYaml = async (yamlContent: string) => {
     if (!selectedDeploymentForYaml) return;
+    // Aquí iría la lógica para guardar el YAML, por ahora simulado
+    console.log("Guardando YAML:", yamlContent);
     try { message.success('YAML guardado exitosamente (simulado)'); setIsYamlModalOpen(false); } 
-    catch (_error) { message.error('Error al guardar el YAML'); }
+    catch (error) { message.error('Error al guardar el YAML'); }
   };
   
   const handlePlatformSelect = (platform: Deployment['platform']) => {
@@ -236,22 +263,19 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
     setDeploymentConfig(null); 
     if (availableEnvironments.length === 0) {
         message.warning("No hay ambientes configurados para esta compañía. Por favor, cree uno antes de configurar un despliegue.");
-        // Opcionalmente, no abrir el modal si no hay ambientes:
-        // return; 
+        return; 
     }
     setIsConfigModalOpen(true);
   };
 
   const handleSaveConfigurationOnly = async (currentConfig: Partial<DeploymentConfig> | null) => {
-    if (!currentConfig || !currentSelectedRepoForConfig || !companyIdFromParams || !currentConfig.environment_id) {
+    if (!currentConfig || !currentSelectedRepoForConfig || !companyId || !currentConfig.environment_id) {
       message.error("Faltan datos para guardar la configuración: Repositorio, ambiente o compañía no especificados.");
       return;
     }
 
-    // Construir el payload completo para el backend
-    // Este payload debe coincidir con DeploymentConfigurationCreate del backend
     const backendPayload = {
-      company_id: companyIdFromParams,
+      company_id: companyId,
       name: currentConfig.name || "Unnamed Deployment",
       repository_id: String(currentSelectedRepoForConfig.id),
       repository_full_name: currentSelectedRepoForConfig.full_name,
@@ -270,20 +294,17 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
       is_active: currentConfig.is_active !== undefined ? currentConfig.is_active : true,
     };
     
-    // Validar el objeto que se va a enviar (que es de tipo DeploymentConfig del frontend)
-    // La validación se hace sobre el objeto que tiene la estructura del frontend
-    // pero el payload enviado debe tener la estructura del backend.
     const frontendValidationObject: DeploymentConfig = {
         ...currentConfig,
-        company_id: companyIdFromParams,
-        repository: currentSelectedRepoForConfig, // Para que pase la validación del frontend
+        company_id: companyId,
+        repository: currentSelectedRepoForConfig, 
         name: backendPayload.name,
         platform: backendPayload.platform,
         environment_id: backendPayload.environment_id,
         region: backendPayload.region,
         branch: backendPayload.branch,
         directory: backendPayload.directory,
-        config: backendPayload.platform_specific_config, // Mapear de nuevo para la validación
+        config: backendPayload.platform_specific_config, 
         trigger_type: backendPayload.trigger_type,
         is_active: backendPayload.is_active
     };
@@ -295,21 +316,25 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
     }
 
     setIsSavingConfig(true);
+    const token = getAuthToken();
+    if (!token) {
+      message.error("Usuario no autenticado.");
+      setIsSavingConfig(false);
+      return;
+    }
     try {
-      const response = await fetch(`/api/v1/companies/${companyIdFromParams}/deployment-configurations`, {
+      const response = await fetch(`/api/v1/companies/${companyId}/deployment-configurations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(backendPayload),
       });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to save deployment configuration');
       }
-      const savedConfig: DeploymentConfig = await response.json(); // Usar el tipo DeploymentConfig del frontend
+      const savedConfig: DeploymentConfig = await response.json(); 
       message.success(`Configuración "${savedConfig.name}" guardada exitosamente.`);
-      // Actualizar el estado local con el ID de la configuración guardada
-      setDeploymentConfig(prev => ({...prev, id: savedConfig.id })); // Solo actualizar el ID, el resto ya está en el estado
-      // Opcionalmente, recargar la lista de configuraciones/despliegues si se muestra en la UI principal
+      setDeploymentConfig(prev => ({...prev, id: savedConfig.id })); 
     } catch (error) {
       console.error('Error saving configuration:', error);
       message.error(`Error al guardar la configuración: ${error instanceof Error ? error.message : String(error)}`);
@@ -319,18 +344,11 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
   };
   
   const handleDeploy = async (currentConfig: Partial<DeploymentConfig> | null) => {
-    // ... (lógica de despliegue simulada por ahora, podría llamar a un endpoint de backend en el futuro)
     if (!currentConfig || !currentConfig.id) {
         message.error("Guarda la configuración primero o selecciona una configuración existente para desplegar.");
-        // Opcionalmente, llamar a handleSaveConfigurationOnly y luego desplegar
-        // if (currentConfig && !currentConfig.id) {
-        //   await handleSaveConfigurationOnly(currentConfig);
-        //   // Aquí necesitarías obtener el ID de la config recién guardada para proceder
-        // }
         return;
     }
     message.info(`Simulando despliegue para la configuración ID: ${currentConfig.id}`);
-    // ... (resto de la lógica de simulación de despliegue)
   };
 
   const validateDeploymentConfig = (config: DeploymentConfig): string[] => {
@@ -356,7 +374,7 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
     const selectedEnv = availableEnvironments.find(e => e.id === config.environment_id);
 
     const replacements: Record<string, string | number | boolean | undefined> = {
-      ...(config.config || {}), // platform_specific_config
+      ...(config.config || {}), 
       service_name: config.name,
       app_name: config.name,
       function_name: config.name,
@@ -370,7 +388,6 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
         baseYaml = baseYaml.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
       }
     });
-    // ... (resto de la lógica de generación de YAML sin cambios)
     let finalYaml = baseYaml;
     const indent = '  '; 
   
@@ -434,18 +451,21 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
   }, [repositories, repoSearchTerm]);
 
 
-  if (loading && !isConnected) { 
+  if (loading && !isConnected && !companyId) { // Ajustar condición de loader inicial
     return <div className="p-6"><Title level={2}>Despliegues</Title><Card><div className="flex justify-center items-center p-8"><Spin size="large" /></div></Card></div>;
   }
 
+  if (!companyId) { // Si no hay companyId, mostrar mensaje de error o placeholder
+    return <div className="p-6"><Title level={2}>Despliegues</Title><Card><Alert message="Error" description="No se ha proporcionado un ID de compañía." type="error" showIcon /></Card></div>;
+  }
+  
   if (!isConnected) {
-    return <div className="p-6"><Title level={2}>Despliegues</Title><Card><Alert message="No conectado a GitHub" description={<Space direction="vertical"><Text>Para gestionar despliegues, primero necesitas conectar tu cuenta de GitHub.</Text><Button type="primary" onClick={() => router.push(`/company/${companyIdFromParams}#credentials`)}>Ir a Credenciales</Button></Space>} type="warning" showIcon /></Card></div>;
+    return <div className="p-6"><Title level={2}>Despliegues</Title><Card><Alert message="No conectado a GitHub" description={<Space direction="vertical"><Text>Para gestionar despliegues, primero necesitas conectar tu cuenta de GitHub.</Text><Button type="primary" onClick={() => router.push(`/dashboard?section=credentials`)}>Ir a Credenciales</Button></Space>} type="warning" showIcon /></Card></div>;
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        {/* ... (Header y Alert sin cambios) ... */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div><h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><RocketLaunchIcon className="h-8 w-8 text-blue-600" />Despliegues Universales</h1><p className="text-gray-600 mt-2">Gestiona, monitorea y lanza tus aplicaciones a múltiples plataformas cloud y on-premise.</p></div>
@@ -482,7 +502,6 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
           {selectedPlatform && (
             <div className="grid grid-cols-12 gap-x-6" style={{ minHeight: '75vh' }}>
               <div className="col-span-3 space-y-4 border-r border-gray-200 pr-4 overflow-y-auto" style={{ maxHeight: 'calc(75vh - 40px)' }}>
-                {/* ... (Panel de Repositorio sin cambios) ... */}
                 <h3 className="text-lg font-semibold text-gray-800 sticky top-0 bg-white py-2 z-10">Fuente del Repositorio</h3>
                 {currentSelectedRepoForConfig ? (
                   <Card size="small" className="shadow-sm">
@@ -512,7 +531,6 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
                   <>
                     <div><h3 className="font-medium mb-2 text-gray-700">Información Básica</h3><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Despliegue</label><Input value={deploymentConfig.name} onChange={e => setDeploymentConfig(prev => ({...prev!, name: e.target.value}))}/></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Ambiente</label><Select value={deploymentConfig.environment_id} onChange={value => setDeploymentConfig(prev => ({...prev!, environment_id: value}))} style={{ width: '100%' }} placeholder="Seleccionar ambiente" disabled={availableEnvironments.length === 0}>{availableEnvironments.map(env => (<Option key={env.id} value={env.id}>{env.name.charAt(0).toUpperCase() + env.name.slice(1)}</Option>))}</Select></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Región</label><Select value={deploymentConfig.region} onChange={value => setDeploymentConfig(prev => ({...prev!, region: value}))} style={{ width: '100%' }}><Option value="us-central1">us-central1</Option><Option value="us-east1">us-east1</Option><Option value="europe-west1">europe-west1</Option></Select></div></div></div>
                     <div><h3 className="font-medium mb-2 text-gray-700">Disparador de Despliegue</h3><Select value={deploymentConfig.trigger_type} onChange={value => setDeploymentConfig(prev => ({...prev!, trigger_type: value}))} style={{ width: '100%' }}>{Object.values(DeploymentTriggerTypeEnum).map(type => (<Option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</Option>))}</Select></div>
-                    {/* ... (Resto de los campos del formulario sin cambios significativos, solo asegurar que usan setDeploymentConfig(prev => ({...prev!, ...})) ) ... */}
                     <div><h3 className="font-medium mb-2 text-gray-700">Configuración del Repositorio</h3><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Rama</label><Select value={deploymentConfig.branch} onChange={value => setDeploymentConfig(prev => ({...prev!, branch: value}))} style={{ width: '100%' }}><Option value="main">main</Option><Option value="master">master</Option><Option value="develop">develop</Option></Select></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Directorio</label><Input value={deploymentConfig.directory} onChange={e => setDeploymentConfig(prev => ({...prev!, directory: e.target.value}))} placeholder="/"/></div></div></div>
                     <div><h3 className="font-medium mb-2 text-gray-700">Configuración de Build</h3><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Comando de Build</label><Input value={deploymentConfig.buildConfig?.buildCommand} onChange={e => setDeploymentConfig(prev => ({...prev!, buildConfig: {...prev!.buildConfig, buildCommand: e.target.value}}))} placeholder="npm run build"/></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Directorio de Salida</label><Input value={deploymentConfig.buildConfig?.outputDirectory} onChange={e => setDeploymentConfig(prev => ({...prev!, buildConfig: {...prev!.buildConfig, outputDirectory: e.target.value}}))} placeholder="dist"/></div></div></div>
                     <div><h3 className="font-medium mb-2 text-gray-700">Variables de Entorno</h3>{deploymentConfig.environmentVariables?.map((envVar, index) => (<div key={envVar.id} className="grid grid-cols-12 gap-2 mb-2 items-center"><Input placeholder="KEY" value={envVar.key} onChange={e => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].key = e.target.value;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} className="col-span-4"/><Input placeholder="VALUE" type={envVar.isSecret ? 'password' : 'text'} value={envVar.value} onChange={e => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].value = e.target.value;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} className="col-span-4"/><Space className="col-span-3"><Text>Secreto:</Text><Switch checked={envVar.isSecret} onChange={checked => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].isSecret = checked;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}}/></Space><Button icon={<DeleteOutlined />} onClick={() => {const newEnvVars = (deploymentConfig.environmentVariables || []).filter(ev => ev.id !== envVar.id);setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} danger className="col-span-1"/></div>))}<Button type="dashed" onClick={() => {const newEnvVar: EnvironmentVariable = {id: `env-${Date.now()}`,key: '',value: '',isSecret: false,enabled: true};setDeploymentConfig(prev => ({...prev!,environmentVariables: [...(prev!.environmentVariables || []), newEnvVar]}));}} icon={<PlusOutlined />} block>Añadir Variable</Button></div>
@@ -534,7 +552,6 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
               </div>
 
               <div className="col-span-4 space-y-6 overflow-y-auto" style={{ maxHeight: 'calc(75vh - 40px)' }}>
-                {/* ... (Panel YAML sin cambios) ... */}
                 <h3 className="text-lg font-semibold text-gray-800 sticky top-0 bg-white py-2 z-10">YAML de Configuración (Vista Previa)</h3>
                 {deploymentConfig && currentSelectedRepoForConfig ? (
                   <MonacoEditor
@@ -555,7 +572,6 @@ export default function DeploymentsPage({ companyId: _companyId }: DeploymentsPa
           )}
         </Modal>
 
-        {/* ... (Modal de Selección de Repositorio y Lista de Despliegues Activos sin cambios significativos) ... */}
         <Modal
           title="Seleccionar Repositorio de Origen"
           open={isRepoSelectorModalOpen}
