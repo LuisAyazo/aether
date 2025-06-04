@@ -97,13 +97,27 @@ export function generateAWSEfsFileSystemCode(config: AWSEfsFileSystemConfig): AW
 
 // Define la exportación del recurso para el registro
 const awsEfsFileSystemResource = {
-  type: 'aws_efs_file_system',
-  name: 'EFS File System',
-  schema: AWSEfsFileSystemSchema,
-  generateDefaultConfig: generateDefaultAWSEfsFileSystemConfig,
-  generateResourceSchema: generateAWSEfsFileSystemResourceSchema,
-  generateResourceName: generateAWSEfsFileSystemName,
-  generateTemplates: generateAWSEfsFileSystemCode,
+  // Las siguientes propiedades son las que espera getResourceConfig
+  schema: async () => AWSEfsFileSystemSchema,
+  fields: async () => awsEfsFileSystemFields, // Asumiendo que awsEfsFileSystemFields es el array de FieldConfig
+  defaults: async () => generateDefaultAWSEfsFileSystemConfig(),
+  templates: async (config: AWSEfsFileSystemConfig) => generateAWSEfsFileSystemTemplates(config),
+
+  // Propiedades originales (pueden ser usadas por otras partes del sistema o ser refactorizadas)
+  // Se pueden mantener con un prefijo o eliminar si no son necesarias fuera de este módulo.
+  originalSchema: AWSEfsFileSystemSchema, // El schema Zod crudo
+  originalGenerateDefaultConfig: generateDefaultAWSEfsFileSystemConfig,
+  originalGenerateResourceSchema: generateAWSEfsFileSystemResourceSchema, // Esta podría ser útil para obtener displayName, category, etc.
+  originalGenerateResourceName: generateAWSEfsFileSystemName,
+  originalGenerateTemplatesCode: generateAWSEfsFileSystemCode, // La función que devuelve el objeto completo
+  
+  // Información adicional que podría ser útil para la UI, si no se obtiene de 'fields' o 'schema' directamente
+  uiInfo: {
+    type: 'aws_efs_file_system',
+    displayName: 'EFS File System',
+    description: 'Crea un sistema de archivos elástico (EFS) en AWS para almacenamiento compartido.',
+    category: 'Almacenamiento',
+  }
 };
 
 export default awsEfsFileSystemResource;
