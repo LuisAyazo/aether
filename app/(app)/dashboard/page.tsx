@@ -1,53 +1,47 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef, JSX, useMemo } from 'react'; // Added useMemo, JSX
-import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
-import { Button, Select, Modal, Input, Spin, message, Typography } from 'antd';
+import React, { useState, useEffect, useCallback, JSX, useMemo } from 'react'; 
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'; 
+import { Button, Modal, Input, Spin, message, Typography } from 'antd';
 import { 
   PlusOutlined as AntPlusOutlined, 
   EyeOutlined, 
   PlayCircleOutlined, 
   FolderOpenOutlined as AntFolderIcon, 
-  SettingOutlined, 
-  DeleteOutlined 
+  SettingOutlined,
 } from '@ant-design/icons'; 
 import { 
   FolderIcon, 
-  PlusIcon,
   UserCircleIcon as UserCircleIconOutline, 
-  WrenchScrewdriverIcon as WrenchScrewdriverIconOutline, 
   DocumentDuplicateIcon as DocumentDuplicateIconOutline, 
   UsersIcon as UsersIconOutline,
-  ServerIcon, // Added for resourceCategories
-  CloudIcon,  // Added
-  CircleStackIcon, // Added
-  CpuChipIcon, // Added
-  CodeBracketIcon, // Added
-  ArchiveBoxIcon, // Added
-  TableCellsIcon, // Added
-  BoltIcon, // Added
-  ChatBubbleOvalLeftEllipsisIcon, // Added
-  CalendarDaysIcon, // Added
-  AdjustmentsHorizontalIcon, // Added
-  ListBulletIcon, // Added
-  RectangleGroupIcon, // Added
-  RssIcon, // Added
-  ComputerDesktopIcon, // Added
-  ServerStackIcon, // Added
-  CubeIcon, // Added
-  GlobeAltIcon, // Added
-  RectangleStackIcon, // Added
-  ShieldCheckIcon, // Added
-  ArrowsRightLeftIcon, // Added
-  DocumentTextIcon, // Added
-  // ChartBarIcon from solid is usually imported separately if needed
+  ServerIcon, 
+  CloudIcon,  
+  CircleStackIcon, 
+  CpuChipIcon, 
+  CodeBracketIcon, 
+  ArchiveBoxIcon, 
+  TableCellsIcon, 
+  BoltIcon, 
+  ChatBubbleOvalLeftEllipsisIcon, 
+  CalendarDaysIcon, 
+  AdjustmentsHorizontalIcon, 
+  ListBulletIcon, 
+  RectangleGroupIcon, 
+  RssIcon, 
+  ComputerDesktopIcon, 
+  ServerStackIcon, 
+  CubeIcon, 
+  GlobeAltIcon, 
+  RectangleStackIcon, 
+  ShieldCheckIcon, 
+  ArrowsRightLeftIcon, 
+  DocumentTextIcon, 
 } from '@heroicons/react/24/outline';
-// import ChartBarIcon from '@heroicons/react/24/solid/ChartBarIcon'; // Example if solid version is needed
 
 import {
   DocumentDuplicateIcon as DocumentDuplicateIconSolid,
-  WrenchScrewdriverIcon as WrenchScrewdriverIconSolid,
+  WrenchScrewdriverIcon as WrenchScrewdriverIconSolid, 
   UserCircleIcon as UserCircleIconSolid,
   UsersIcon as UsersIconSolid, 
   PlayCircleIcon as PlayCircleIconSolid 
@@ -60,9 +54,10 @@ import CompanySidebar from '../../components/ui/CompanySidebar';
 import CredentialsPage from '../../components/ui/CredentialsPage'; 
 import DeploymentsPage from '../../components/ui/DeploymentsPage';
 import SettingsPage from '../../components/ui/SettingsPage';
+import EnvironmentsPage from '../../components/ui/EnvironmentsPage'; 
 
 import { getCompanies, Company, createCompany } from '../../services/companyService';
-import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram as createDiagramService, createEnvironment as createEnvironmentService, updateDiagram, deleteDiagram as deleteDiagramService } from '../../services/diagramService';
+import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram as createDiagramService, updateDiagram, deleteDiagram as deleteDiagramService } from '../../services/diagramService';
 import { getCurrentUser, isAuthenticated, User } from '../../services/authService';
 
 import nodeTypes from '../../components/nodes/NodeTypes'; 
@@ -70,23 +65,16 @@ import { Node as CustomNode, Edge as CustomEdge } from '../../services/diagramSe
 import { 
   Node as ReactFlowNode, 
   Edge as ReactFlowEdge, 
-  Connection, 
-  NodeChange, 
-  EdgeChange, 
   Viewport as ReactFlowViewport, 
-  applyNodeChanges, 
-  applyEdgeChanges, 
-  addEdge,
-  OnNodesChange, 
-  OnEdgesChange, 
-  OnConnect      
 } from 'reactflow';
 
 const { Text } = Typography;
 
 const PERSONAL_SPACE_COMPANY_NAME_PREFIX = "Personal Space for ";
+type SidebarSectionKey = 'diagrams' | 'settings' | 'templates' | 'credentials' | 'deployments' | 'team' | 'environments';
+const VALID_SECTIONS: SidebarSectionKey[] = ['diagrams', 'settings', 'templates', 'credentials', 'deployments', 'team', 'environments'];
 
-// Types for Resource Sidebar (copied from company diagram page)
+
 interface ResourceItem {
   type: string;
   name: string;
@@ -166,13 +154,6 @@ const resourceCategories: ResourceCategory[] = [
       { type: 'azurerm_storage_share', name: 'File Share', description: 'Recurso compartido de Azure Files', provider: 'azure', icon: <FolderIcon /> },
     ]
   },
-  // { // Azure Analytics - commented out as ChartBarIcon from solid might need specific import
-  //   name: 'Azure - Analytics',
-  //   provider: 'azure',
-  //   items: [
-  //     { type: 'azurerm_synapse_workspace', name: 'Synapse Workspace', description: 'Espacio de trabajo de Azure Synapse Analytics', provider: 'azure', icon: <ChartBarIcon /> },
-  //   ]
-  // },
   {
     name: 'Azure - Caché',
     provider: 'azure',
@@ -184,7 +165,6 @@ const resourceCategories: ResourceCategory[] = [
     name: 'Azure - Aplicación',
     provider: 'azure',
     items: [
-      // { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless en Linux', provider: 'azure', icon: <BoltIcon /> }, // Duplicado, ya está en Cómputo
       { type: 'azurerm_api_management', name: 'API Management Service', description: 'Servicio de gestión de APIs', provider: 'azure', icon: <GlobeAltIcon /> },
       { type: 'azurerm_servicebus_namespace', name: 'Service Bus Namespace', description: 'Namespace para mensajería de Service Bus', provider: 'azure', icon: <ChatBubbleOvalLeftEllipsisIcon /> },
       { type: 'azurerm_eventgrid_topic', name: 'Event Grid Topic', description: 'Tema de Azure Event Grid', provider: 'azure', icon: <RssIcon /> },
@@ -243,7 +223,6 @@ const resourceCategories: ResourceCategory[] = [
     name: 'GCP - Aplicación',
     provider: 'gcp',
     items: [
-      // { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Función serverless (Aplicación)', provider: 'gcp', icon: <BoltIcon /> }, // Duplicado
       { type: 'gcp_api_gateway', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp', icon: <GlobeAltIcon /> }, 
       { type: 'gcp_pubsub_topic', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp', icon: <ChatBubbleOvalLeftEllipsisIcon /> }, 
       { type: 'gcp_cloud_tasks_queue', name: 'Cloud Tasks Queue', description: 'Colas de tareas', provider: 'gcp', icon: <ListBulletIcon /> },
@@ -257,7 +236,6 @@ const resourceCategories: ResourceCategory[] = [
     items: [
       { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos', provider: 'generic', icon: <RectangleGroupIcon /> },
       { type: 'areaNode', name: 'Área', description: 'Definir un área visual', provider: 'generic', icon: <CubeIcon /> },
-      // { type: 'group', name: 'Subsistema', description: 'Agrupar componentes relacionados', provider: 'generic', icon: <ServerStackIcon /> }, // Duplicado de Grupo
     ]
   }
 ];
@@ -265,6 +243,9 @@ const resourceCategories: ResourceCategory[] = [
 
 export default function DashboardPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -277,16 +258,10 @@ export default function DashboardPage() {
   const [selectedDiagram, setSelectedDiagram] = useState<string | null>(null);
   const [currentDiagram, setCurrentDiagram] = useState<Diagram | null>(null);
   
-  // El estado local de nodes/edges en DashboardPage ya no es necesario si FlowEditor maneja su propio estado
-  // y solo lo actualizamos a través de initialNodes/initialEdges cuando currentDiagram cambia.
-  // const [nodes, setNodes] = useState<ReactFlowNode[]>([]); 
-  // const [edges, setEdges] = useState<ReactFlowEdge[]>([]);
-
-  // Definiciones de convertToReactFlowNodes y convertToReactFlowEdges movidas aquí arriba
   const convertToReactFlowNodes = (customNodes: CustomNode[]): ReactFlowNode[] => {
     return customNodes.map(node => ({
       ...node,
-      parentId: node.parentNode, // Mapear parentNode de la BD a parentId para ReactFlow
+      parentId: node.parentNode, 
       data: { ...node.data }
     } as ReactFlowNode));
   };
@@ -303,7 +278,6 @@ export default function DashboardPage() {
   const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState<boolean>(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState<string>('');
   const [newEnvironmentDescription, setNewEnvironmentDescription] = useState<string>('');
-  const [newEnvironmentCategory, setNewEnvironmentCategory] = useState<string>('desarrollo');
 
   const [newDiagramModalVisible, setNewDiagramModalVisible] = useState<boolean>(false);
   const [newDiagramName, setNewDiagramName] = useState<string>('');
@@ -313,10 +287,17 @@ export default function DashboardPage() {
   const [deleteDiagramModalVisible, setDeleteDiagramModalVisible] = useState<boolean>(false); 
   const [diagramToDeleteId, setDiagramToDeleteId] = useState<string | null>(null); 
   
-  type SidebarSectionKey = 'diagrams' | 'settings' | 'templates' | 'credentials' | 'deployments' | 'team';
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [needsPersonalSpaceSetup, setNeedsPersonalSpaceSetup] = useState(false);
+
+  useEffect(() => {
+    const sectionFromQuery = searchParams.get('section') as SidebarSectionKey;
+    if (sectionFromQuery && VALID_SECTIONS.includes(sectionFromQuery)) {
+      setActiveSectionInSidebar(sectionFromQuery);
+    }
+  }, [searchParams]);
+
 
   useEffect(() => {
     if (!isAuthenticated()) {
@@ -338,12 +319,41 @@ export default function DashboardPage() {
     async function setupPersonalSpaceAndLoadData() {
       setLoading(true); setError(null);
       try {
-        let personalCompany = await findPersonalCompany(user!); 
+        const personalCompany = await findPersonalCompany(user!); 
         if (!personalCompany) {
           setNeedsPersonalSpaceSetup(true); setLoading(false); return;
         }
-        setNeedsPersonalSpaceSetup(false); setActiveCompany(personalCompany); setIsPersonalSpace(true);
-        await loadCompanyOrPersonalSpaceData(personalCompany);
+        setActiveCompany(personalCompany); setIsPersonalSpace(true);
+        
+        const companyIdToUse = personalCompany._id; // Usar _id que está garantizado por companyService
+        const token = localStorage.getItem('token');
+        if (!token) {
+          message.error("Usuario no autenticado. Por favor, inicie sesión.");
+          router.push('/login');
+          setLoading(false);
+          return;
+        }
+        const existingEnvs = await getEnvironments(companyIdToUse); 
+        const sandboxEnv = existingEnvs.find(env => env.name.toLowerCase() === "sandbox");
+
+        if (!sandboxEnv) {
+          const envPayload = { name: "Sandbox", description: "Ambiente personal de pruebas y desarrollo" };
+          const response = await fetch(`/api/v1/companies/${companyIdToUse}/environments`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(envPayload),
+          });
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente Sandbox para espacio personal'}));
+            throw new Error(errorData.detail || 'Failed to create default Sandbox environment for personal space.');
+          }
+          message.info("Ambiente Sandbox creado automáticamente para el espacio personal.");
+        }
+        setNeedsPersonalSpaceSetup(false);
+        await loadCompanyOrPersonalSpaceData(personalCompany); 
       } catch (e: any) {
         setError(e.message || 'Error al configurar el espacio personal.');
         message.error(e.message || 'Error al configurar el espacio personal.');
@@ -360,8 +370,6 @@ export default function DashboardPage() {
           await loadCompanyOrPersonalSpaceData(firstCompany);
         } else {
           setActiveCompany(null); setEnvironments([]); setDiagrams([]); setSelectedEnvironment(null); setSelectedDiagram(null); setCurrentDiagram(null); 
-          // setNodes([]); // Eliminado
-          // setEdges([]); // Eliminado
         }
       } catch (e: any) {
         setError(e.message || 'Error al cargar datos de compañía.');
@@ -372,7 +380,7 @@ export default function DashboardPage() {
     if (user.usage_type === 'personal') setupPersonalSpaceAndLoadData();
     else if (user.usage_type === 'company') loadCompanyData();
     else setLoading(false);
-  }, [user, router]);
+  }, [user, router]); 
 
   async function findPersonalCompany(currentUser: User): Promise<Company | null> {
     const currentUserId = currentUser._id;
@@ -389,21 +397,104 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const personalCompanyName = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${userIdToUse}`;
-      const newCompany = await createCompany({ name: personalCompanyName, description: "Espacio personal automático" });
-      if (!newCompany || (!newCompany._id && !newCompany.id)) throw new Error("La creación de la compañía personal no devolvió un ID válido.");
-      const companyIdToUse = newCompany._id || newCompany.id!;
-      await createEnvironmentService(companyIdToUse, { name: "Sandbox", description: "Ambiente personal de pruebas", category: "desarrollo" });
-      message.success("Espacio personal creado. ¡Listo para empezar!");
+      let companyToUse = await findPersonalCompany(user!);
+      let companyIdToUse: string;
+
+      if (!companyToUse) {
+        const newCompany = await createCompany({ name: personalCompanyName, description: "Espacio personal automático" });
+        companyIdToUse = newCompany._id; // Usar _id garantizado
+        companyToUse = newCompany; 
+      } else {
+        companyIdToUse = companyToUse._id; // Usar _id garantizado
+      }
+      setActiveCompany(companyToUse); 
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        message.error("Usuario no autenticado. Por favor, inicie sesión.");
+        router.push('/login');
+        setLoading(false);
+        return;
+      }
+
+      const existingEnvs = await getEnvironments(companyIdToUse); 
+      const sandboxEnv = existingEnvs.find(env => env.name.toLowerCase() === "sandbox");
+
+      if (!sandboxEnv) {
+        const envPayload = { name: "Sandbox", description: "Ambiente personal de pruebas y desarrollo" };
+        const response = await fetch(`/api/v1/companies/${companyIdToUse}/environments`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(envPayload),
+        });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente Sandbox'}));
+          throw new Error(errorData.detail || 'Failed to create default Sandbox environment for personal space.');
+        }
+        message.info("Ambiente Sandbox creado para el espacio personal.");
+      }
+      
+      message.success("Espacio personal configurado. ¡Listo para empezar!");
       setNeedsPersonalSpaceSetup(false);
-      setUser(getCurrentUser()); 
-    } catch (e: any) { message.error("Error al crear espacio personal: " + e.message);
+      const updatedUser = getCurrentUser(); 
+      if (updatedUser) { 
+        setUser(updatedUser); 
+      } else {
+        router.push('/login');
+      }
+    } catch (e: any) { 
+      message.error("Error al configurar espacio personal: " + e.message); 
     } finally { setLoading(false); }
   }
 
   async function loadCompanyOrPersonalSpaceData(company: Company) {
-    const companyId = company._id || company.id!;
-    const envs = await getEnvironments(companyId);
+    const companyId = company._id; // Usar _id garantizado
+    const envs = await getEnvironments(companyId); 
     setEnvironments(envs);
+
+    if (isPersonalSpace && envs.length === 0) {
+      const token = localStorage.getItem('token');
+      if (token && user) { 
+        try {
+          const envPayload = { name: "Sandbox", description: "Ambiente personal de pruebas y desarrollo" };
+          const response = await fetch(`/api/v1/companies/${companyId}/environments`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(envPayload),
+          });
+          if (response.ok) {
+            message.info("Ambiente Sandbox creado automáticamente.");
+            const updatedEnvs = await getEnvironments(companyId); 
+            setEnvironments(updatedEnvs);
+            if (updatedEnvs.length > 0) {
+              const defaultEnvId = updatedEnvs[0].id; 
+              setSelectedEnvironment(defaultEnvId);
+              const diags = await getDiagramsByEnvironment(companyId, defaultEnvId);
+              setDiagrams(diags);
+              if (diags.length > 0) {
+                setSelectedDiagram(diags[0].id);
+                const diagramData = await getDiagram(companyId, defaultEnvId, diags[0].id);
+                setCurrentDiagram(diagramData);
+              } else {
+                setCurrentDiagram(null); setSelectedDiagram(null);
+              }
+            }
+            return; 
+          } else {
+            console.error("No se pudo crear el ambiente Sandbox automáticamente para el espacio personal.");
+          }
+        } catch (creationError) {
+          console.error("Error al intentar crear ambiente Sandbox para espacio personal:", creationError);
+        }
+      }
+    }
+
     if (envs.length > 0) {
       const defaultEnvId = envs[0].id; 
       setSelectedEnvironment(defaultEnvId);
@@ -413,45 +504,28 @@ export default function DashboardPage() {
         setSelectedDiagram(diags[0].id);
         const diagramData = await getDiagram(companyId, defaultEnvId, diags[0].id);
         setCurrentDiagram(diagramData);
-        // setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []); // Ya no se usa el estado local nodes
-        // setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []); // Ya no se usa el estado local edges
       } else {
         setCurrentDiagram(null); 
-        // setNodes([]); // Ya no se usa el estado local nodes
-        // setEdges([]); // Ya no se usa el estado local edges
         setSelectedDiagram(null);
       }
     } else {
-      setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null); 
-      // setNodes([]); // Ya no se usa el estado local nodes
-      // setEdges([]); // Ya no se usa el estado local edges
+      setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null);
       setSelectedEnvironment(null);
     }
   }
-
-  // onNodesChange, onEdgesChange, onConnect ya no son necesarios aquí ya que FlowEditor los maneja internamente
-  // const onNodesChange: OnNodesChange = useCallback((changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
-  // const onEdgesChange: OnEdgesChange = useCallback((changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
-  // const onConnect: OnConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)), []);
-
-  // Las definiciones de convertToReactFlowNodes y convertToReactFlowEdges se movieron arriba.
   
   const handleEnvironmentChange = async (environmentId: string) => {
     if (!activeCompany) return;
     setSelectedEnvironment(environmentId); setLoading(true);
     try {
-      const diags = await getDiagramsByEnvironment(activeCompany._id || activeCompany.id!, environmentId);
+      const diags = await getDiagramsByEnvironment(activeCompany._id, environmentId); // Usar _id
       setDiagrams(diags);
       if (diags.length > 0) {
         setSelectedDiagram(diags[0].id);
-        const diagramData = await getDiagram(activeCompany._id || activeCompany.id!, environmentId, diags[0].id);
+        const diagramData = await getDiagram(activeCompany._id, environmentId, diags[0].id); // Usar _id
         setCurrentDiagram(diagramData);
-        // setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []); // Ya no se usa
-        // setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []); // Ya no se usa
       } else {
         setSelectedDiagram(null); setCurrentDiagram(null); 
-        // setNodes([]); // Ya no se usa
-        // setEdges([]); // Ya no se usa
       }
     } catch (e:any) { message.error("Error al cambiar de ambiente: " + e.message); }
     finally { setLoading(false); }
@@ -461,10 +535,8 @@ export default function DashboardPage() {
     if (!activeCompany || !selectedEnvironment) return;
     setSelectedDiagram(diagramId); setLoading(true);
     try {
-      const diagramData = await getDiagram(activeCompany._id || activeCompany.id!, selectedEnvironment, diagramId);
+      const diagramData = await getDiagram(activeCompany._id, selectedEnvironment, diagramId); // Usar _id
       setCurrentDiagram(diagramData);
-      // setNodes(diagramData?.nodes ? convertToReactFlowNodes(diagramData.nodes) : []); // Ya no se usa
-      // setEdges(diagramData?.edges ? convertToReactFlowEdges(diagramData.edges) : []); // Ya no se usa
     } catch (e:any) { message.error("Error al cambiar de diagrama: " + e.message); }
     finally { setLoading(false); }
   };
@@ -478,12 +550,12 @@ export default function DashboardPage() {
       data: n.data, 
       width: n.width, 
       height: n.height, 
-      parentNode: n.parentId, // Mapear parentId de ReactFlow a parentNode para la BD
+      parentNode: n.parentId, 
       style: n.style 
     } as CustomNode));
     const customEdges = data.edges.map(e => ({ id: e.id, source: e.source, target: e.target, type: e.type, animated: e.animated, label: e.label as string, data: e.data, style: e.style } as CustomEdge));
     try {
-      await updateDiagram(activeCompany._id || activeCompany.id!, selectedEnvironment, selectedDiagram, {
+      await updateDiagram(activeCompany._id, selectedEnvironment, selectedDiagram, { // Usar _id
         name: currentDiagram.name, description: currentDiagram.description, nodes: customNodes, edges: customEdges, viewport: data.viewport || currentDiagram.viewport
       });
       message.success("Diagrama guardado.");
@@ -499,17 +571,42 @@ export default function DashboardPage() {
     }
     setLoading(true);
     try {
-      const createdEnv = await createEnvironmentService(activeCompany._id || activeCompany.id!, { 
-        name: newEnvironmentName, description: newEnvironmentDescription, category: newEnvironmentCategory 
+      const token = localStorage.getItem('token');
+      if (!token) {
+        message.error("Usuario no autenticado.");
+        router.push('/login');
+        setLoading(false);
+        return;
+      }
+      const envPayload = {
+        name: newEnvironmentName,
+        description: newEnvironmentDescription,
+      };
+      const response = await fetch(`/api/v1/companies/${activeCompany._id}/environments`, { // Usar _id
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(envPayload),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente'}));
+        throw new Error(errorData.detail || 'Failed to create environment via API');
+      }
+      const createdEnv = await response.json();
+
       message.success("Ambiente creado.");
-      setNewEnvironmentName(''); setNewEnvironmentDescription(''); setNewEnvironmentCategory('desarrollo');
+      setNewEnvironmentName(''); setNewEnvironmentDescription(''); 
       setNewEnvironmentModalVisible(false);
-      const envs = await getEnvironments(activeCompany._id || activeCompany.id!);
+      
+      const envs = await getEnvironments(activeCompany._id); // Usar _id
       setEnvironments(envs);
       const newEnv = envs.find(e => e.id === createdEnv.id);
       if (newEnv) handleEnvironmentChange(newEnv.id);
       else if (!selectedEnvironment && envs.length > 0) handleEnvironmentChange(envs[0].id);
+
     } catch (e: any) { message.error("Error al crear ambiente: " + e.message); }
     finally { setLoading(false); }
   };
@@ -523,7 +620,7 @@ export default function DashboardPage() {
     }
     setLoading(true);
     try {
-      const newDiag = await createDiagramService(activeCompany._id || activeCompany.id!, selectedEnvironment, { 
+      const newDiag = await createDiagramService(activeCompany._id, selectedEnvironment, { // Usar _id
         name: newDiagramName, 
         description: newDiagramDescription, 
         path: newDiagramPath.trim() || undefined, 
@@ -532,7 +629,7 @@ export default function DashboardPage() {
         viewport: {x:0, y:0, zoom:1}
       });
       message.success("Diagrama creado.");
-      const diags = await getDiagramsByEnvironment(activeCompany._id || activeCompany.id!, selectedEnvironment);
+      const diags = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); // Usar _id
       setDiagrams(diags);
       handleDiagramChange(newDiag.id);
       
@@ -555,11 +652,11 @@ export default function DashboardPage() {
     }
     setLoading(true);
     try {
-      await deleteDiagramService(activeCompany._id || activeCompany.id!, selectedEnvironment, diagramToDeleteId);
+      await deleteDiagramService(activeCompany._id, selectedEnvironment, diagramToDeleteId); // Usar _id
       message.success("Diagrama eliminado.");
       setDeleteDiagramModalVisible(false);
       
-      const diags = await getDiagramsByEnvironment(activeCompany._id || activeCompany.id!, selectedEnvironment);
+      const diags = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); // Usar _id
       setDiagrams(diags);
 
       if (selectedDiagram === diagramToDeleteId) { 
@@ -568,8 +665,6 @@ export default function DashboardPage() {
         } else {
           setSelectedDiagram(null);
           setCurrentDiagram(null);
-          // setNodes([]); // Ya no se usa
-          // setEdges([]); // Ya no se usa
         }
       }
       setDiagramToDeleteId(null);
@@ -580,10 +675,61 @@ export default function DashboardPage() {
     }
   };
 
+  const handleSectionChange = (sectionString: string) => {
+    const section = sectionString as SidebarSectionKey;
+    if (VALID_SECTIONS.includes(section)) {
+      setActiveSectionInSidebar(section);
+      const current = new URLSearchParams(Array.from(searchParams.entries()));
+      current.set("section", section);
+      const search = current.toString();
+      const query = search ? `?${search}` : "";
+      router.push(`${pathname}${query}`);
+    } else {
+      console.warn(`Intento de navegar a sección inválida: ${sectionString}`);
+    }
+  };
 
-  if (loading) { /* ... */ }
-  if (user?.usage_type === 'personal' && needsPersonalSpaceSetup) { /* ... */ }
-  if (user?.usage_type === 'company' && !activeCompany && !loading) { /* ... */ }
+
+  if (loading && !activeCompany && !error) { 
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900">
+        <Spin size="large" />
+        <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando dashboard...</p>
+      </div>
+    );
+  }
+  if (user?.usage_type === 'personal' && needsPersonalSpaceSetup) { 
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 p-8">
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl text-center max-w-md">
+          <ServerStackIcon className="h-16 w-16 text-electric-purple-500 mx-auto mb-6" />
+          <h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-3">Configura tu Espacio Personal</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-8">
+            Para empezar a usar InfraUX, necesitamos configurar tu espacio de trabajo personal. 
+            Esto creará una compañía y un ambiente "Sandbox" por defecto para ti.
+          </p>
+          <Button type="primary" size="large" onClick={handleCreatePersonalSpace} loading={loading} className="bg-electric-purple-600 hover:bg-electric-purple-700 w-full">
+            {loading ? 'Configurando...' : 'Configurar Mi Espacio'}
+          </Button>
+          {error && <p className="text-red-500 mt-4">{error}</p>}
+        </div>
+      </div>
+    );
+  }
+  if (user?.usage_type === 'company' && !activeCompany && !loading) { 
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 p-8">
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl text-center max-w-md">
+          <UsersIconOutline className="h-16 w-16 text-electric-purple-500 mx-auto mb-6" />
+          <h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-3">Sin Compañías Asignadas</h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-8">
+            No estás asignado a ninguna compañía. Por favor, contacta a un administrador para que te añada a una o crea una nueva si tienes permisos.
+          </p>
+          {error && <p className="text-red-500 mt-4">{error}</p>}
+        </div>
+      </div>
+    );
+  }
 
   if ((user?.usage_type === 'company' && activeCompany) || (user?.usage_type === 'personal' && activeCompany && !needsPersonalSpaceSetup)) {
     const companyDisplayName = isPersonalSpace ? "Espacio Personal" : activeCompany?.name || 'Compañía';
@@ -591,6 +737,7 @@ export default function DashboardPage() {
       ? [
           { key: 'diagrams', name: 'Diagramas', icon: DocumentDuplicateIconOutline, iconSolid: DocumentDuplicateIconSolid, color: 'sky', description: 'Visualiza y gestiona tus arquitecturas personales.' },
           { key: 'credentials', name: 'Credenciales', icon: UserCircleIconOutline, iconSolid: UserCircleIconSolid, color: 'emerald', description: 'Conecta tus cuentas cloud para despliegues.' },
+          { key: 'environments', name: 'Ambientes', icon: ServerStackIcon, iconSolid: ServerStackIcon, color: 'teal', description: 'Gestiona tu ambiente Sandbox.' },
           { key: 'deployments', name: 'Despliegues', icon: PlayCircleOutlined, iconSolid: PlayCircleIconSolid, color: 'violet', description: 'Administra tus despliegues personales.' },
           { key: 'templates', name: 'Plantillas', icon: WrenchScrewdriverIconSolid, iconSolid: WrenchScrewdriverIconSolid, color: 'amber', description: 'Usa y gestiona plantillas de diagramas.' },
           { key: 'settings', name: 'Configuración', icon: SettingOutlined, iconSolid: SettingOutlined, color: 'gray', description: 'Ajusta tu perfil y plan.' },
@@ -598,6 +745,7 @@ export default function DashboardPage() {
       : [ 
           { key: 'diagrams', name: 'Diagramas', icon: DocumentDuplicateIconOutline, iconSolid: DocumentDuplicateIconSolid, color: 'blue', description: 'Visualiza y gestiona tus arquitecturas.' },
           { key: 'credentials', name: 'Credenciales', icon: UserCircleIconOutline, iconSolid: UserCircleIconSolid, color: 'emerald', description: 'Conecta tus cuentas cloud.' },
+          { key: 'environments', name: 'Ambientes', icon: ServerStackIcon, iconSolid: ServerStackIcon, color: 'teal', description: 'Gestiona tus ambientes de despliegue.' }, 
           { key: 'deployments', name: 'Despliegues', icon: PlayCircleOutlined, iconSolid: PlayCircleIconSolid, color: 'violet', description: 'Administra tus despliegues.' },
           { key: 'settings', name: 'Ajustes Compañía', icon: SettingOutlined, iconSolid: SettingOutlined, color: 'gray', description: 'Configura los detalles de la compañía.' },
           { key: 'team', name: 'Equipo', icon: UsersIconOutline, iconSolid: UsersIconSolid, color: 'orange', description: 'Gestiona miembros y permisos.' },
@@ -607,13 +755,13 @@ export default function DashboardPage() {
       <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 3.5rem)' }}>
         <CompanySidebar 
           companyName={companyDisplayName} activeSection={activeSectionInSidebar} 
-          onSectionChange={(section: string) => setActiveSectionInSidebar(section as SidebarSectionKey)} 
+          onSectionChange={handleSectionChange} 
           isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
           sections={sidebarSections} isPersonalSpace={isPersonalSpace}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
           { activeSectionInSidebar === 'diagrams' && (selectedEnvironment || environments.length > 0 || isPersonalSpace) && ( 
-            <div className="bg-white dark:bg-slate-800 py-10 px-4 border-b border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between flex-shrink-0 h-16"> {/* Panel superior con padding ajustado */}
+            <div className="bg-white dark:bg-slate-800 py-2 px-4 border-b border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between flex-shrink-0 h-16"> 
               <div className="flex items-center gap-x-4">
                 {environments.length > 0 || isPersonalSpace ? (
                   <div className="flex items-center h-[40px]"> 
@@ -622,7 +770,7 @@ export default function DashboardPage() {
                       environments={environments} value={selectedEnvironment ?? undefined} 
                       onChange={handleEnvironmentChange} placeholder="Seleccionar Ambiente"
                     />
-                    {!(isPersonalSpace && environments.length >= 1) && (
+                    {!(isPersonalSpace && environments.length >= 1) && ( 
                        <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewEnvironmentModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Ambiente" />
                     )}
                   </div>
@@ -632,7 +780,7 @@ export default function DashboardPage() {
                     <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mr-2 self-center whitespace-nowrap">Diagrama:</span>
                     <DiagramTreeSelect 
                       diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} 
-                      companyId={activeCompany?._id || activeCompany?.id || ''} environmentId={selectedEnvironment}
+                      companyId={activeCompany._id} environmentId={selectedEnvironment} // Usar _id
                       showDeleteButton={true} 
                       onDeleteDiagram={(diagramId) => showDeleteDiagramModal(diagramId)} 
                     />
@@ -648,12 +796,12 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
-          <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' ? 'calc(100% - 4rem)' : '100%' }}> {/* Ajustado a 4rem */}
-            {loading && <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>}
+          <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' ? 'calc(100% - 4rem)' : '100%' }}> 
+            {loading && activeSectionInSidebar === 'diagrams' && <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>}
             {!loading && activeSectionInSidebar === 'diagrams' && selectedDiagram && currentDiagram && activeCompany && ( 
               <FlowEditor 
-                key={`${activeCompany?._id}-${selectedEnvironment}-${selectedDiagram}`} 
-                companyId={activeCompany._id!} 
+                key={`${activeCompany._id}-${selectedEnvironment}-${selectedDiagram}`} 
+                companyId={activeCompany._id} 
                 environmentId={selectedEnvironment!} 
                 diagramId={selectedDiagram!} 
                 initialDiagram={currentDiagram} 
@@ -661,36 +809,34 @@ export default function DashboardPage() {
                 initialEdges={initialEdgesForFlow} 
                 onSave={handleSaveDiagram} 
                 nodeTypes={nodeTypes}
-                resourceCategories={resourceCategories} // Pasar resourceCategories aquí
+                resourceCategories={resourceCategories} 
               /> 
             )}
             {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && !selectedEnvironment && environments.length === 0 && ( <div className="flex items-center justify-center h-full p-10"><div className="text-center"><AntFolderIcon className="mx-auto text-5xl text-slate-400 mb-4" /><h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300">Sin Ambientes</h3><p className="text-slate-500 dark:text-slate-400 mt-2 mb-6">{isPersonalSpace ? "Tu espacio personal no tiene ambientes. " : "Esta compañía no tiene ambientes. "}Crea uno para empezar a organizar tus diagramas.</p>{!(isPersonalSpace && environments.length >=1) && <Button type="primary" onClick={() => setNewEnvironmentModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Ambiente</Button>}</div></div> )}
-            {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && selectedEnvironment && diagrams.length === 0 && ( <div className="flex items-center justify-center h-full p-10"><div className="text-center"><DocumentDuplicateIconOutline className="mx-auto h-16 w-16 text-slate-400 mb-4" /><h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300">Sin Diagramas</h3><p className="text-sm text-slate-500 dark:text-slate-400 mt-2 mb-6">Este ambiente no tiene diagramas. Crea uno para empezar a diseñar.</p>{!(isPersonalSpace && diagrams.length >=3) && <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Diagrama</Button>}</div></div> )}
-            {!loading && activeSectionInSidebar === 'credentials' && activeCompany && ( <CredentialsPage companyId={activeCompany._id!} /> )}
-            {!loading && activeSectionInSidebar === 'deployments' && activeCompany && ( <DeploymentsPage companyId={activeCompany._id!} /> )}
+            {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && selectedEnvironment && diagrams.length === 0 && ( <div className="flex items-center justify-center h-full p-10"><div className="text-center"><DocumentDuplicateIconOutline className="mx-auto h-16 w-16 text-slate-400 mb-4" /><h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300">Sin Diagramas</h3><p className="text-sm text-slate-500 dark:text-slate-400 mt-2 mb-6">Este ambiente no tiene diagramas. Crea uno para empezar a diseñar.</p>{!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >=3) && <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Diagrama</Button>}</div></div> )}
+            
+            {!loading && activeSectionInSidebar === 'credentials' && activeCompany && ( <CredentialsPage companyId={activeCompany._id} /> )}
+            {!loading && activeSectionInSidebar === 'environments' && activeCompany && activeCompany._id && ( <EnvironmentsPage companyId={activeCompany._id} isPersonalSpace={isPersonalSpace} /> )}
+            {!loading && activeSectionInSidebar === 'deployments' && activeCompany && ( <DeploymentsPage companyId={activeCompany._id} /> )}
             {!loading && activeSectionInSidebar === 'templates' && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Plantillas</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de plantillas próximamente.</p></div> )}
-            {!loading && activeSectionInSidebar === 'settings' && activeCompany && ( <SettingsPage companyId={activeCompany._id!} /> )}
-            {!loading && activeSectionInSidebar === 'team' && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Equipo</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de miembros del equipo (solo para planes de compañía).</p></div> )}
+            {!loading && activeSectionInSidebar === 'settings' && activeCompany && ( <SettingsPage companyId={activeCompany._id} /> )}
+            {!loading && activeSectionInSidebar === 'team' && !isPersonalSpace && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Equipo</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de miembros del equipo (solo para planes de compañía).</p></div> )}
           </div>
         </div>
 
         <Modal 
           title="Crear Nuevo Ambiente" 
           open={newEnvironmentModalVisible} 
-          onCancel={() => { setNewEnvironmentModalVisible(false); setNewEnvironmentName(''); setNewEnvironmentDescription(''); setNewEnvironmentCategory('desarrollo'); }} 
+          onCancel={() => { setNewEnvironmentModalVisible(false); setNewEnvironmentName(''); setNewEnvironmentDescription(''); }} 
           onOk={handleCreateNewEnvironment} 
           confirmLoading={loading} 
-          okButtonProps={{disabled: newEnvironmentName.trim() === ''}}
+          okButtonProps={{disabled: newEnvironmentName.trim() === '' || (isPersonalSpace && environments.length >= 1) }}
         >
-          <Input placeholder="Nombre del Ambiente (ej. Sandbox, Desarrollo)" value={newEnvironmentName} onChange={e => setNewEnvironmentName(e.target.value)} style={{ marginBottom: 16 }}/>
-          <Input.TextArea placeholder="Descripción del ambiente (opcional)" value={newEnvironmentDescription} onChange={e => setNewEnvironmentDescription(e.target.value)} rows={3} style={{ marginBottom: 16 }}/>
-          <Select value={newEnvironmentCategory} onChange={(value) => setNewEnvironmentCategory(value)} style={{ width: '100%' }} aria-label="Categoría del Ambiente">
-            <Select.Option value="desarrollo">Desarrollo</Select.Option>
-            <Select.Option value="pruebas">Pruebas/QA</Select.Option>
-            <Select.Option value="staging">Staging</Select.Option>
-            <Select.Option value="producción">Producción</Select.Option>
-            <Select.Option value="otros">Otros</Select.Option>
-          </Select>
+          <Input placeholder="Nombre del Ambiente (ej. Sandbox, Desarrollo)" value={newEnvironmentName} onChange={e => setNewEnvironmentName(e.target.value)} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
+          <Input.TextArea placeholder="Descripción del ambiente (opcional)" value={newEnvironmentDescription} onChange={e => setNewEnvironmentDescription(e.target.value)} rows={3} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
+          {isPersonalSpace && environments.length >= 1 && (
+            <p className="text-sm text-orange-600 mt-2">Los espacios personales solo pueden tener un ambiente ("Sandbox").</p>
+          )}
         </Modal>
         <Modal 
           title="Crear Nuevo Diagrama"
@@ -704,7 +850,7 @@ export default function DashboardPage() {
           onOk={handleCreateNewDiagram} 
           confirmLoading={loading} 
           okButtonProps={{disabled: newDiagramName.trim() === ''}}
-          destroyOnHidden
+          destroyOnHidden 
         >
           <Input 
             placeholder="Nombre del Diagrama*" 
@@ -753,7 +899,7 @@ export default function DashboardPage() {
       {error ? <p className="text-red-500 p-4 bg-red-100 border border-red-300 rounded-md">{error}</p> 
              : <>
                  <Spin size="large" />
-                 <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando...</p>
+                 <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando dashboard...</p>
                </>}
     </div>
   );

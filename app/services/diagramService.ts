@@ -123,8 +123,16 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
     }
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Error obteniendo ambientes');
+      let errorDetail = 'Error obteniendo ambientes';
+      try {
+        const errorData = await response.json();
+        errorDetail = errorData.detail || errorData.message || `Error ${response.status} del servidor.`;
+      } catch (e) {
+        // Si el cuerpo del error no es JSON o está vacío
+        errorDetail = `Error ${response.status}: ${response.statusText}. No se pudo obtener más detalle del error.`;
+      }
+      console.error(`Error en la respuesta de getEnvironments: ${errorDetail}`);
+      throw new Error(errorDetail);
     }
 
     // Devolver los ambientes del backend

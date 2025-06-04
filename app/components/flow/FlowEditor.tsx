@@ -1005,7 +1005,7 @@ const FlowEditorContent = ({
             if (targetGroup && targetGroup.id) {
               let nodesToUpdate = currentNodesOnDragStop.map(n => {
                 if (n.id === draggedNode.id) {
-                  const newPosition = { 
+                  const newPosition = { // Ensure this is 'let'
                     x: (draggedNode.positionAbsolute?.x ?? 0) - (targetGroup.positionAbsolute?.x ?? 0),
                     y: (draggedNode.positionAbsolute?.y ?? 0) - (targetGroup.positionAbsolute?.y ?? 0),
                   };

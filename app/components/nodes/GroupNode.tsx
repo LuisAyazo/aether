@@ -60,11 +60,19 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
 
   const [isMinimized, setIsMinimized] = useState(data.isMinimized || false);
   const [currentWidthState, setCurrentWidthState] = useState(width || DEFAULT_WIDTH);
+  const [currentHeightState, setCurrentHeightState] = useState(height || DEFAULT_HEIGHT); // Added for height
+
   useEffect(() => {
-    if (width && !isMinimized) { // Solo actualizar si no está minimizado y width es válido
+    if (width && !isMinimized) {
       setCurrentWidthState(width);
     }
   }, [width, isMinimized]);
+
+  useEffect(() => { // Added for height
+    if (height && !isMinimized) {
+      setCurrentHeightState(height);
+    }
+  }, [height, isMinimized]);
 
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editedLabel, setEditedLabel] = useState(data.label || 'Group');
@@ -157,15 +165,19 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     setNodes(nds => 
       nds.map(n => {
         if (n.id === id) { // Es el nodo de grupo actual
-          let newWidth;
-          const currentActualWidth = n.width ?? (typeof n.style?.width === 'number' ? n.style.width : currentWidthState);
-          const currentActualHeight = n.height ?? (typeof n.style?.height === 'number' ? n.style.height : DEFAULT_HEIGHT);
-
+          let newWidth, newHeight;
+          
           if (newMinimizedState) { // Se está minimizando
-            setCurrentWidthState(currentActualWidth); // Guardar el ancho actual
+            // Guardar las dimensiones actuales (que podrían haber sido establecidas por NodeResizer)
+            // n.width y n.height son las props actuales del nodo antes de esta actualización.
+            setCurrentWidthState(n.width || currentWidthState || DEFAULT_WIDTH);
+            setCurrentHeightState(n.height || currentHeightState || DEFAULT_HEIGHT);
             newWidth = MINIMIZED_WIDTH;
+            newHeight = MINIMIZED_HEIGHT;
           } else { // Se está expandiendo
-            newWidth = currentWidthState; // Restaurar el ancho guardado
+            // Restaurar las dimensiones guardadas
+            newWidth = currentWidthState;
+            newHeight = currentHeightState;
           }
 
           return {
@@ -174,11 +186,10 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
             style: { 
               ...n.style, 
               width: newWidth, 
-              height: newMinimizedState ? MINIMIZED_HEIGHT : currentActualHeight
+              height: newHeight 
             },
-            // Actualizar también las propiedades width/height del nodo si NodeResizer las usa directamente
             width: newWidth,
-            height: newMinimizedState ? MINIMIZED_HEIGHT : currentActualHeight,
+            height: newHeight,
           };
         }
         // Si el grupo se está expandiendo (newMinimizedState es false), hacer visibles a sus hijos directos
@@ -292,7 +303,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     >
       {/* Header */}
       <div 
-        className="flex items-center justify-between p-2 border-b border-gray-300 nodrag cursor-move"
+        className="flex items-center justify-between p-2 border-b border-gray-300 cursor-move group-header"
         style={{ height: `${HEADER_HEIGHT}px`, flexShrink: 0 }}
       >
         <div className="flex items-center gap-2 overflow-hidden flex-grow">
@@ -388,8 +399,8 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
           isVisible={selected && !dragging} // Solo visible si seleccionado y no arrastrando
           minWidth={200}
           minHeight={HEADER_HEIGHT + MIN_CONTENT_HEIGHT_FOR_MESSAGE + CONTENT_PADDING_TOP + CONTENT_PADDING_BOTTOM + 20} // +20 para algo de espacio extra
-          lineClassName="border-blue-500/50"
-          handleClassName="bg-blue-500 border-2 border-white rounded-full w-2 h-2"
+          lineClassName="border-blue-600 opacity-75"
+          handleClassName="bg-blue-600 border-2 border-white rounded-full w-3.5 h-3.5 hover:bg-blue-700"
         />
       )}
       

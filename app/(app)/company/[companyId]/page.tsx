@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
-import { getCompany, Company, getCompanies } from '../../services/companyService';
-import { getDiagramsByEnvironment, Diagram, createEnvironment, Environment, deleteEnvironment } from '../../services/diagramService';
-import { isAuthenticated, logoutUser } from '../../services/authService';
+import { getCompany, Company, getCompanies } from '../../../services/companyService';
+import { getDiagramsByEnvironment, Diagram, createEnvironment, deleteEnvironment } from '../../../services/diagramService';
+import { isAuthenticated, logoutUser } from '../../../services/authService';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { Modal } from 'antd';
-import EnvironmentCategorySelect from '../../components/ui/EnvironmentCategorySelect';
+import EnvironmentCategorySelect from '../../../components/ui/EnvironmentCategorySelect';
 
 export default function CompanyPage() {
   const [company, setCompany] = useState<Company | null>(null);

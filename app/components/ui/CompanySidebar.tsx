@@ -1,51 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation'; 
 import { 
-  ChartBarIcon, 
-  KeyIcon, 
-  RocketLaunchIcon,
-  CogIcon,
+  // ChartBarIcon, // No usado en defaultCompanySections actualizado
+  // KeyIcon, // No usado en defaultCompanySections actualizado
+  // RocketLaunchIcon, // No usado en defaultCompanySections actualizado
+  CogIcon, 
   BuildingOfficeIcon,
-  UsersIcon,
+  UsersIcon, 
   ChevronLeftIcon,
   ChevronRightIcon,
-  // Añadir iconos que se usarán en las secciones personalizadas si es necesario
+  ServerStackIcon, 
   DocumentDuplicateIcon as DocumentDuplicateIconOutline,
-  WrenchScrewdriverIcon as WrenchScrewdriverIconOutline,
-  CogIcon as CogIconOutline, // Ya estaba, pero para claridad
-  UserCircleIcon as UserCircleIconOutline, // Para credenciales y equipo
-  PlayCircleIcon as PlayCircleIconOutline, // Para despliegues
+  WrenchScrewdriverIcon as WrenchScrewdriverIconOutline, // Usado por DashboardPage
+  UserCircleIcon as UserCircleIconOutline,
+  PlayCircleIcon as PlayCircleIconOutline
 } from '@heroicons/react/24/outline';
 import { 
-  ChartBarIcon as ChartBarIconSolid, 
-  KeyIcon as KeyIconSolid, 
-  RocketLaunchIcon as RocketLaunchIconSolid,
-  // Añadir versiones sólidas si se usan para secciones personalizadas
+  // ChartBarIcon as ChartBarIconSolid, // No usado
+  // KeyIcon as KeyIconSolid, // No usado
+  // RocketLaunchIcon as RocketLaunchIconSolid, // No usado
   DocumentDuplicateIcon as DocumentDuplicateIconSolid,
-  WrenchScrewdriverIcon as WrenchScrewdriverIconSolid,
-  CogIcon as CogIconSolid, // Ya estaba
+  WrenchScrewdriverIcon as WrenchScrewdriverIconSolid, // Usado por DashboardPage
+  CogIcon as CogIconSolid,
   UserCircleIcon as UserCircleIconSolid,
-  PlayCircleIcon as PlayCircleIconSolid
+  PlayCircleIcon as PlayCircleIconSolid,
+  ServerStackIcon as ServerStackIconSolid,
+  UsersIcon as UsersIconSolid
 } from '@heroicons/react/24/solid';
 
-// Tipo para las secciones, permitiendo flexibilidad
 export interface SidebarSection {
-  key: string; // Usar 'key' en lugar de 'id' para ser más genérico
+  key: string; 
   name: string;
   description?: string;
   icon: React.ElementType;
   iconSolid?: React.ElementType;
-  color?: string; // Color para el tema activo
+  color?: string; 
 }
 
 interface CompanySidebarProps {
-  activeSection?: string; // Hacer string para flexibilidad
-  onSectionChange?: (section: string) => void; // Hacer string para flexibilidad
+  activeSection?: string; 
+  onSectionChange?: (section: string) => void; 
   companyName?: string;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  sections?: SidebarSection[]; // Prop para secciones personalizadas
-  isPersonalSpace?: boolean; // Para lógica específica si es necesario
+  sections?: SidebarSection[]; 
+  isPersonalSpace?: boolean; 
 }
 
 const defaultCompanySections: SidebarSection[] = [
@@ -53,31 +52,39 @@ const defaultCompanySections: SidebarSection[] = [
     key: 'diagrams',
     name: 'Diagramas',
     description: 'Gestiona diagramas de infraestructura',
-    icon: ChartBarIcon, // Usar el importado ChartBarIcon
-    iconSolid: ChartBarIconSolid,
+    icon: DocumentDuplicateIconOutline, // Coincidir con DashboardPage
+    iconSolid: DocumentDuplicateIconSolid,
     color: 'blue'
   },
   {
     key: 'credentials',
     name: 'Credenciales',
     description: 'Configurar credenciales de cloud',
-    icon: KeyIcon, // Usar el importado KeyIcon
-    iconSolid: KeyIconSolid,
+    icon: UserCircleIconOutline, // Coincidir con DashboardPage
+    iconSolid: UserCircleIconSolid,
     color: 'emerald'
+  },
+  {
+    key: 'environments', 
+    name: 'Ambientes',
+    description: 'Gestionar ambientes de despliegue',
+    icon: ServerStackIcon,
+    iconSolid: ServerStackIconSolid,
+    color: 'teal'
   },
   {
     key: 'deployments',
     name: 'Despliegues',
     description: 'Gestionar deployments universales',
-    icon: RocketLaunchIcon, // Usar el importado RocketLaunchIcon
-    iconSolid: RocketLaunchIconSolid,
+    icon: PlayCircleIconOutline, // Coincidir con DashboardPage (Heroicon)
+    iconSolid: PlayCircleIconSolid,
     color: 'violet'
   },
   {
     key: 'settings',
     name: 'Configuración',
     description: 'Configuración de la empresa',
-    icon: CogIconOutline, // Usar el importado CogIcon
+    icon: CogIcon, // Usar CogIcon directamente
     iconSolid: CogIconSolid,
     color: 'gray'
   },
@@ -85,8 +92,8 @@ const defaultCompanySections: SidebarSection[] = [
     key: 'team',
     name: 'Equipo',
     description: 'Gestionar miembros del equipo',
-    icon: UsersIcon, // Usar el importado UsersIcon
-    iconSolid: UsersIcon, // Asumir que existe UsersIconSolid o usar el mismo
+    icon: UsersIcon, 
+    iconSolid: UsersIconSolid, // Usar UsersIconSolid
     color: 'orange'
   }
 ];
@@ -98,38 +105,27 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   companyName = 'Company',
   isCollapsed: propIsCollapsed = false,
   onToggleCollapse,
-  sections: customSections, // Recibir secciones personalizadas
-  isPersonalSpace = false   // Recibir si es espacio personal
+  sections: customSections, 
+  isPersonalSpace = false   
 }) => {
   const params = useParams();
-  const router = useRouter();
   const companyId = params.companyId as string;
 
-  // 1. Inicializar con propIsCollapsed. 
-  //    El useEffect subsiguiente cargará desde localStorage si existe un valor.
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(propIsCollapsed);
 
-  // 2. Cargar desde localStorage cuando companyId esté disponible.
-  //    Este efecto se ejecuta si companyId cambia.
   useEffect(() => {
-    if (typeof window !== 'undefined' && companyId) { // Solo operar si hay un companyId válido
+    if (typeof window !== 'undefined' && companyId) { 
       const savedState = localStorage.getItem(`companySidebarCollapsed_${companyId}`);
       if (savedState !== null) {
         try {
           setInternalIsCollapsed(JSON.parse(savedState));
         } catch (e) {
           console.error("Error parsing companySidebarCollapsed from localStorage", e);
-          // Si hay error al parsear, el estado se mantiene como fue inicializado por useState (propIsCollapsed).
         }
       }
-      // Si no hay savedState para este companyId, internalIsCollapsed mantiene el valor 
-      // con el que fue inicializado por useState (propIsCollapsed), lo cual es correcto.
     }
-    // Si no hay companyId, no se intenta leer de localStorage, y el estado se mantiene
-    // como fue inicializado por useState (propIsCollapsed).
-  }, [companyId]); // Depender solo de companyId.
+  }, [companyId]); 
 
-  // 3. Guardar en localStorage cuando internalIsCollapsed o companyId cambien.
   useEffect(() => {
     if (typeof window !== 'undefined' && companyId) {
       localStorage.setItem(`companySidebarCollapsed_${companyId}`, JSON.stringify(internalIsCollapsed));
@@ -138,22 +134,18 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
 
   const handleToggleCollapse = () => {
     const newState = !internalIsCollapsed;
-    setInternalIsCollapsed(newState); // Actualiza el estado interno
-    // El useEffect anterior se encargará de guardar en localStorage.
+    setInternalIsCollapsed(newState); 
     if (onToggleCollapse) {
-      onToggleCollapse(); // Notificar al padre. El padre puede actualizar su propIsCollapsed.
+      onToggleCollapse(); 
     }
   };
 
   const navigationItemsToRender = customSections || defaultCompanySections;
   const defaultSectionKey = navigationItemsToRender.length > 0 ? navigationItemsToRender[0].key : 'diagrams';
 
-
-  // Get current section from sessionStorage or default
   const getCurrentSection = (): string => {
     if (typeof window !== 'undefined' && companyId) {
       const stored = sessionStorage.getItem(`activeSection_${companyId}`);
-      // Validar si la sección almacenada existe en las secciones actuales
       if (stored && navigationItemsToRender.some(item => item.key === stored)) {
         return stored;
       }
@@ -163,7 +155,6 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
 
   const [currentActiveSection, setCurrentActiveSection] = useState<string>(defaultSectionKey);
 
-  // Initialize current section on mount
   useEffect(() => {
     const savedSection = getCurrentSection();
     setCurrentActiveSection(savedSection);
@@ -172,12 +163,10 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
       onSectionChange(savedSection);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, propActiveSection]); // No incluir onSectionChange para evitar bucles si el padre no lo memoiza
+  }, [companyId, propActiveSection]); 
 
-  // Check for new prop value
   useEffect(() => {
     if (propActiveSection && propActiveSection !== currentActiveSection) {
-      // Validar si la nueva propActiveSection es válida antes de actualizar
       if (navigationItemsToRender.some(item => item.key === propActiveSection)) {
         setCurrentActiveSection(propActiveSection);
       }
@@ -189,23 +178,17 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
     if (typeof window !== 'undefined' && companyId) {
       sessionStorage.setItem(`activeSection_${companyId}`, sectionKey);
     }
-    
     setCurrentActiveSection(sectionKey);
-    
     if (onSectionChange) {
       onSectionChange(sectionKey);
     }
   };
 
   const companyHeaderTitle = isPersonalSpace ? "Espacio Personal" : companyName;
-  // Simplificar subtítulo para espacio personal, ya que 'user' no está disponible aquí.
-  // El nombre del usuario podría pasarse como prop si es necesario.
   const companyHeaderSubtitle = isPersonalSpace ? "Cuenta Personal" : "Empresa";
-
 
   return (
     <div className={`bg-white dark:bg-slate-900 flex flex-col h-full transition-all duration-300 border-r border-slate-200 dark:border-slate-700 ${internalIsCollapsed ? 'w-20' : 'w-72'}`}>
-      {/* Company Header with Toggle */}
       <div className={`border-b border-slate-200 dark:border-slate-700 ${internalIsCollapsed ? 'p-3' : 'p-4'}`}>
         <div className={`flex items-center ${internalIsCollapsed ? 'flex-col space-y-2 items-center' : 'justify-between'}`}>
           {internalIsCollapsed ? (
@@ -244,13 +227,11 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className={`flex-1 space-y-1 ${internalIsCollapsed ? 'p-2' : 'p-3'}`}>
         {navigationItemsToRender.map((item) => {
           const isActive = currentActiveSection === item.key;
-          // Usa item.iconSolid si existe y está activo, de lo contrario usa item.icon
           const IconToRender = (isActive && item.iconSolid) ? item.iconSolid : item.icon;
-          const itemColor = item.color || 'gray'; // Color por defecto si no se especifica
+          const itemColor = item.color || 'gray'; 
           
           return (
             <button
@@ -271,7 +252,7 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
                 className={`
                   w-6 h-6 flex-shrink-0 transition-colors
                   ${isActive 
-                    ? `text-${itemColor}-600 dark:text-${itemColor}-400` // Ajustar color activo para dark mode
+                    ? `text-${itemColor}-600 dark:text-${itemColor}-400` 
                     : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'
                   }
                 `} 
@@ -308,7 +289,6 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
         })}
       </nav>
 
-      {/* Footer */}
       {!internalIsCollapsed && (
         <div className="p-4 border-t border-slate-200 dark:border-slate-700">
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-700 rounded-lg p-4">
