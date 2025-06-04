@@ -280,11 +280,24 @@ const FlowEditorContent = ({
     return initialNodes.map(node => {
       if (node.parentId) {
         const parentNode = initialNodes.find(n => n.id === node.parentId);
-        const isHidden = !parentNode?.data?.isExpandedView;
+        // const isHidden = !parentNode?.data?.isExpandedView; // Original logic
+        // Corrected logic: if parent is minimized, child is hidden. Otherwise, child is not hidden by this rule.
+        const isHidden = parentNode?.data?.isMinimized === true; 
         return {
           ...node,
           hidden: isHidden,
           extent: 'parent' as const
+        };
+      }
+      // Ensure group nodes have isExpandedView set, defaulting to false
+      if (node.type === 'group') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isExpandedView: node.data?.isExpandedView || false,
+            // viewport: node.data.viewport // Viewport for group focus view, handle with care
+          }
         };
       }
       return node;
@@ -326,6 +339,8 @@ const FlowEditorContent = ({
   const [isToolbarDragging, setIsToolbarDragging] = useState(false); 
   const previousNodesRef = useRef<string | null>(null);
   const previousEdgesRef = useRef<string | null>(null);
+  const previousInitialNodesJSONRef = useRef<string | null>(null); 
+  const previousInitialEdgesJSONRef = useRef<string | null>(null); 
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const GROUP_HEADER_HEIGHT = 40; 
@@ -335,35 +350,71 @@ const FlowEditorContent = ({
   const MIN_EXPANDED_GROUP_WIDTH = 250;
   const MIN_EXPANDED_GROUP_HEIGHT = 150;
 
-  const handleGroupSave = (updatedNodesInGroup: Node[], newEdgesInGroup: Edge[], viewport?: Viewport) => {
+  const handleGroupSave = (updatedNodesInGroup: Node[], newEdgesInGroup: Edge[], groupViewport?: Viewport) => {
     if (!expandedGroupId) return;
 
-    setNodes((nds) =>
-      nds.map((node) => {
-        if (node.id === expandedGroupId) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              nodes: updatedNodesInGroup,
-              edges: newEdgesInGroup,
-              viewport: viewport
-            },
-          };
-        }
-        return node;
-      })
-    );
+    setNodes((currentNodes) => {
+      const groupNodeFromState = currentNodes.find(n => n.id === expandedGroupId);
+      let updatedGroupNodeData = groupNodeFromState?.data ? { ...groupNodeFromState.data } : {};
+      
+      updatedGroupNodeData.isExpandedView = false; 
+      updatedGroupNodeData.isMinimized = groupNodeFromState?.data?.isMinimized || false; // Preserve minimized state
+      
+      // Store the viewport from GroupFocusView into the group node's data
+      if (groupViewport) {
+        updatedGroupNodeData.viewport = groupViewport;
+      }
+      
+      // Remove anidada nodes/edges from group data, as they are managed globally
+      delete updatedGroupNodeData.nodes;
+      delete updatedGroupNodeData.edges;
 
-    setEdges((eds) => {
-      const edgesOutsideGroup = eds.filter(
-        (edge) => !edge.source.startsWith(expandedGroupId) && !edge.target.startsWith(expandedGroupId)
-      );
-      return [...edgesOutsideGroup, ...newEdgesInGroup];
+      const updatedGroupNode = groupNodeFromState ? {
+        ...groupNodeFromState,
+        data: updatedGroupNodeData,
+      } : undefined;
+      
+      const finalUpdatedNodesFromGroupView = updatedNodesInGroup.map(un => ({
+        ...un,
+        // parentId and extent are set by GroupFocusView's handleSaveChanges
+      }));
+      
+      const updatedNodesMap = new Map(finalUpdatedNodesFromGroupView.map(n => [n.id, n]));
+
+      const newNodesList: Node[] = [];
+      for (const node of currentNodes) {
+        if (node.id === expandedGroupId) continue; 
+        if (node.parentId === expandedGroupId && !updatedNodesMap.has(node.id)) {
+          continue;
+        }
+        if (updatedNodesMap.has(node.id)) {
+          continue;
+        }
+        newNodesList.push(node);
+      }
+
+      if (updatedGroupNode) {
+        newNodesList.push(updatedGroupNode);
+      }
+      newNodesList.push(...finalUpdatedNodesFromGroupView);
+
+      return newNodesList;
     });
 
-    setExpandedGroupId(null);
+    setEdges((currentEdges) => {
+      // Remove old edges that were internal to the group
+      const childNodeIdsInGroup = new Set(updatedNodesInGroup.map(n => n.id));
+      const edgesOutsideOrUnrelated = currentEdges.filter(edge => 
+        !(childNodeIdsInGroup.has(edge.source) && childNodeIdsInGroup.has(edge.target)) && // Not an edge fully within the group
+        !(edge.source === expandedGroupId || edge.target === expandedGroupId) // Not an edge connected to the group itself (if any)
+      );
+      // Add new edges from GroupFocusView
+      return [...edgesOutsideOrUnrelated, ...newEdgesInGroup];
+    });
+
+    setExpandedGroupId(null); // Collapse the group view
   };
+
 
   const [toolbarPosition, setToolbarPosition] = useState(() => {
     if (typeof window === 'undefined') return { x: 400, y: 20 }; 
@@ -404,27 +455,22 @@ const FlowEditorContent = ({
 
   useEffect(() => {
     if (initialViewport && reactFlowInstance) {
-      // Siempre intentar aplicar el initialViewport si está definido
-      // y es diferente del viewport actual o si lastViewportRef no coincide.
       const currentViewport = reactFlowInstance.getViewport();
       const viewportChangedSignificantly = 
         Math.abs(currentViewport.x - initialViewport.x) > 0.001 ||
         Math.abs(currentViewport.y - initialViewport.y) > 0.001 ||
         Math.abs(currentViewport.zoom - initialViewport.zoom) > 0.0001;
 
-      // Si el initialViewport es diferente del viewport actual, o si es la primera carga con un viewport válido
       if (initialViewport.zoom !== 0 && (viewportChangedSignificantly || !lastViewportRef.current)) {
         const timeoutId = setTimeout(() => {
-          if (reactFlowInstance) { // Re-check reactFlowInstance
+          if (reactFlowInstance) { 
             reactFlowInstance.setViewport(initialViewport);
-            lastViewportRef.current = initialViewport; // Sincronizar siempre
+            lastViewportRef.current = initialViewport; 
             console.log('Applied initialViewport:', initialViewport);
           }
-        }, 50); // Delay para permitir que RF procese otros cambios
+        }, 50); 
         return () => clearTimeout(timeoutId);
       } else if (!lastViewportRef.current && initialViewport.zoom !== 0) {
-        // Caso borde: si el viewport actual ya coincide con initialViewport en la primera carga,
-        // aún así, inicializar lastViewportRef.
         lastViewportRef.current = initialViewport;
         console.log('Initialized lastViewportRef with initialViewport:', initialViewport);
       }
@@ -602,6 +648,7 @@ const FlowEditorContent = ({
     }
   }, [reactFlowInstance, saveCurrentDiagramState]);
 
+  // Modificar el efecto que maneja el guardado del estado para incluir el viewport de los grupos
   useEffect(() => {
     if (onSaveRef.current && reactFlowInstance && !isDragging) {
       const currentNodesJSON = JSON.stringify(nodes);
@@ -609,21 +656,92 @@ const FlowEditorContent = ({
       if (currentNodesJSON !== previousNodesRef.current || currentEdgesJSON !== previousEdgesRef.current) {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
-          saveCurrentDiagramState(); 
-        }, 1000); 
+          if (reactFlowInstance && onSaveRef.current) {
+            const flow = reactFlowInstance.toObject();
+            const viewport = reactFlowInstance.getViewport();
+            
+            // Actualizar el viewport de los grupos expandidos
+            const updatedNodes = flow.nodes.map(node => {
+              if (node.type === 'group' && node.data?.isExpandedView) {
+                return {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    viewport: viewport
+                  }
+                };
+              }
+              return node;
+            });
+
+            onSaveRef.current({
+              nodes: updatedNodes,
+              edges: flow.edges,
+              viewport: viewport
+            });
+          }
+        }, 1000);
       }
     }
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [nodes, edges, reactFlowInstance, isDragging, saveCurrentDiagramState, onSaveRef]);
+  }, [nodes, edges, reactFlowInstance, isDragging, onSaveRef]);
+
+  // Modificar el efecto que maneja la expansión de grupos para restaurar el viewport
+  useEffect(() => {
+    if (expandedGroupId && reactFlowInstance) {
+      const groupNode = nodes.find(n => n.id === expandedGroupId);
+      if (groupNode?.data?.viewport) {
+        // Aplicar el viewport guardado después de un pequeño delay para asegurar que el grupo esté expandido
+        setTimeout(() => {
+          if (reactFlowInstance) {
+            reactFlowInstance.setViewport(groupNode.data.viewport);
+          }
+        }, 50);
+      }
+
+      setNodes(nds => nds.map(n => {
+        if (n.id === expandedGroupId) {
+          const currentViewport = reactFlowInstance.getViewport();
+          return {
+            ...n,
+            data: { 
+              ...n.data, 
+              isExpandedView: true, 
+              isMinimized: false,
+              viewport: n.data.viewport || currentViewport
+            }
+          };
+        }
+        if (n.parentId === expandedGroupId) {
+          return { ...n, hidden: false };
+        }
+        return n;
+      }));
+    }
+  }, [expandedGroupId, setNodes, reactFlowInstance, nodes]);
 
   const handleExpandGroupView = useCallback((groupId: string) => {
     if (reactFlowInstance) {
       lastViewportRef.current = reactFlowInstance.getViewport(); 
     }
     setExpandedGroupId(groupId);
-    setNodes(nds => nds.map(n => n.id === groupId ? { ...n, data: { ...n.data, isExpandedView: true, isMinimized: false } } : n));
+    setNodes(nds => nds.map(n => {
+      if (n.id === groupId) {
+        const groupData = { ...n.data, isExpandedView: true, isMinimized: false };
+        // Limpiar datos anidados que son manejados por GroupFocusView o no deben persistir en el data del nodo grupo
+        delete groupData.nodes; 
+        delete groupData.edges;
+        // El viewport de la vista de enfoque se puede pasar como prop separada a GroupFocusView si se necesita restaurar,
+        // pero no debe vivir permanentemente en el data.nodes del grupo en el estado principal.
+        // Si se quiere restaurar el viewport de la última sesión de GroupFocusView, se debe leer de groupData.viewport ANTES de este delete.
+        // Por ahora, lo eliminamos para simplificar y evitar bucles. GroupFocusView usará su defaultViewport.
+        delete groupData.viewport; 
+        return { ...n, data: groupData };
+      }
+      return n;
+    }));
   }, [reactFlowInstance, setNodes, setExpandedGroupId]);
 
   useEffect(() => {
@@ -733,7 +851,40 @@ const FlowEditorContent = ({
     setSelectedEdge(null);
   }, [reactFlowInstance]);
 
-  const handleToolClick = useCallback((tool:ToolType)=>{ if(tool===activeTool&&tool!=='lasso'&&tool!=='area')return; document.body.classList.remove('lasso-selection-mode','area-drawing-mode');document.body.style.cursor='default'; if(tool==='lasso'){document.body.classList.add('lasso-selection-mode');document.body.style.cursor='crosshair';reactFlowInstance.setNodes(ns=>ns.map(n=>({...n,selected:false,selectable:true})));}else if(tool==='area'){document.body.classList.add('area-drawing-mode');document.body.style.cursor='crosshair';reactFlowInstance.setNodes(ns=>ns.map(n=>({...n,selected:false})));}else if(tool==='note'||tool==='text'){document.body.style.cursor='crosshair';} setActiveTool(tool); const lStyle=document.getElementById('lasso-select-compatibility'); if(tool==='lasso'&&!lStyle){const s=document.createElement('style');s.id='lasso-select-compatibility';s.innerHTML=`.react-flow__node{pointer-events:all !important;}.lasso-selection-mode .react-flow__pane{cursor:crosshair !important;}`;document.head.appendChild(s);}else if(tool!=='lasso'&&lStyle){lStyle.remove();}},[activeTool,reactFlowInstance,setActiveTool]);
+  const handleToolClick = useCallback((tool: ToolType) => {
+    if (tool === activeTool && tool !== 'lasso' && tool !== 'area') return;
+    
+    document.body.classList.remove('lasso-selection-mode', 'area-drawing-mode');
+    document.body.style.cursor = 'default';
+    
+    if (tool === 'lasso') {
+      document.body.classList.add('lasso-selection-mode');
+      document.body.style.cursor = 'crosshair';
+      reactFlowInstance.setNodes(ns => ns.map(n => ({ ...n, selected: false, selectable: true })));
+    } else if (tool === 'area') {
+      document.body.classList.add('area-drawing-mode');
+      document.body.style.cursor = 'crosshair';
+      reactFlowInstance.setNodes(ns => ns.map(n => ({ ...n, selected: false })));
+    } else if (tool === 'note' || tool === 'text') {
+      document.body.style.cursor = 'crosshair';
+    }
+    
+    setActiveTool(tool);
+    
+    const lStyle = document.getElementById('lasso-select-compatibility');
+    if (tool === 'lasso' && !lStyle) {
+      const s = document.createElement('style');
+      s.id = 'lasso-select-compatibility';
+      s.innerHTML = `
+        .react-flow__node { pointer-events: all !important; }
+        .lasso-selection-mode .react-flow__pane { cursor: crosshair !important; }
+      `;
+      document.head.appendChild(s);
+    } else if (tool !== 'lasso' && lStyle) {
+      lStyle.remove();
+    }
+  }, [activeTool, reactFlowInstance, setActiveTool]);
+
   const onDragStartSidebar = (evt:React.DragEvent,item:ResourceItem)=>{if(activeTool==='area'||activeTool==='text'){evt.preventDefault();return;}evt.dataTransfer.setData('application/reactflow',JSON.stringify(item));evt.dataTransfer.effectAllowed='move';const el=evt.currentTarget as HTMLDivElement;const r=el.getBoundingClientRect();setActiveDrag({item,offset:{x:evt.clientX-r.left,y:evt.clientY-r.top},elementSize:{width:r.width,height:r.height}});document.body.style.cursor='crosshair';};
   const [highlightedGroupId,setHighlightedGroupId]=useState<string|null>(null);
   const isInsideGroup=useCallback((pos:{x:number,y:number},grp:Node)=>(pos.x>=grp.position.x&&pos.x<=grp.position.x+(grp.style?.width as number||300)&&pos.y>=grp.position.y&&pos.y<=grp.position.y+(grp.style?.height as number||200)),[]);

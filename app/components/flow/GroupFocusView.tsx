@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -14,25 +14,23 @@ import ReactFlow, {
   EdgeTypes,
   Viewport,
   applyNodeChanges,
-  OnNodesChange,
-  OnEdgesChange,
-  applyEdgeChanges,
-  useReactFlow, // Importar useReactFlow
-  Panel, // Importar Panel si se va a usar para el sidebar
-  applyNodeChanges as applyNodeChangesRf, // Renombrar para evitar conflicto si se usa localmente
-  ReactFlowInstance,
+  OnNodesChange, 
+  OnEdgesChange, 
+  useReactFlow, 
+  Panel, 
+  applyNodeChanges as applyNodeChangesRf,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import nodeTypesFromFile from '../nodes/NodeTypes'; // Asumiendo que los tipos de nodo son los mismos
-import { LogicalEdgeType, EdgeTypeConfig } from '@/app/config/edgeConfig'; // Importar tipos necesarios
-import { ResourceItem, ResourceCategory } from './FlowEditor'; // Importar tipos desde FlowEditor
+import nodeTypesFromFile from '../nodes/NodeTypes'; 
+import { LogicalEdgeType, EdgeTypeConfig } from '@/app/config/edgeConfig'; 
+import { ResourceItem, ResourceCategory } from './FlowEditor'; 
 import { 
   SquaresPlusIcon, 
   XMarkIcon, 
   ServerIcon as HeroServerIcon,
-  DocumentTextIcon, // Icono para Nota
-  PencilIcon,       // Icono para Texto
-  RectangleGroupIcon // Icono para Area
+  DocumentTextIcon, 
+  PencilIcon,       
+  RectangleGroupIcon 
 } from '@heroicons/react/24/outline'; 
 import { debounce } from 'lodash';
 
@@ -46,13 +44,10 @@ interface GroupFocusViewProps {
   mainNodeTypes: NodeTypes;
   mainEdgeTypes?: EdgeTypes;
   initialViewport?: Viewport;
-  // Props para la barra de herramientas de tipos de arista
   edgeTypeConfigs: Record<string, EdgeTypeConfig>; 
   edgeToolbarIcons: Record<string, React.ElementType>;
-  resourceCategories?: ResourceCategory[]; // Prop para el sidebar de recursos
+  resourceCategories?: ResourceCategory[]; 
 }
-
-// Las definiciones de ResourceItem y ResourceCategory ahora se importan.
 
 const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   focusedGroupId,
@@ -65,7 +60,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   initialViewport,
   edgeTypeConfigs,
   edgeToolbarIcons,
-  resourceCategories = [], // Añadir prop y valor por defecto
+  resourceCategories = [], 
 }) => {
   const parentNode = useMemo(() => allNodes.find(n => n.id === focusedGroupId), [allNodes, focusedGroupId]);
   const [localSelectedEdgeType, setLocalSelectedEdgeType] = React.useState<LogicalEdgeType | null>(null);
@@ -79,36 +74,41 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   
   const groupFlowInstance = useReactFlow(); 
   const groupFlowWrapper = React.useRef<HTMLDivElement>(null);
-  const onSaveRef = useRef(onSaveChanges);
+  const onSaveRef = useRef(onSaveChanges); 
+  const [isDragging, setIsDragging] = useState(false); // Not currently used for auto-save, but kept for potential future use
 
-  // Declaraciones de useMemo para initialGroupNodes e initialGroupEdges PRIMERO
+  // Memoize nodeTypes and edgeTypes passed to the internal ReactFlow instance
+  const memoizedInternalNodeTypes = useMemo(() => mainNodeTypes, [mainNodeTypes]);
+  const memoizedInternalEdgeTypes = useMemo(() => mainEdgeTypes, [mainEdgeTypes]);
+  
+  // const previousNodesRef = useRef<string | null>(null); // For auto-save, currently commented out
+  // const previousEdgesRef = useRef<string | null>(null); // For auto-save, currently commented out
+  // const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null); // For auto-save, currently commented out
+
+
   const initialGroupNodes = useMemo(() => {
     if (!parentNode) return [];
     const childrenOfFocusedGroup = allNodes
       .filter(n => n.parentId === focusedGroupId)
       .map(n => {
-        // Crear un objeto nodo nuevo y limpio para la vista de enfoque
         const focusedViewNode: Node = {
           id: n.id,
           type: n.type,
-          position: n.position, // Esta posición es relativa al padre si extent:'parent' fue usado.
-                                // En GroupFocusView, se tratará como absoluta dentro de su propio canvas.
-          data: n.data ? { ...n.data } : {}, // Copia de data
+          position: n.position, 
+          data: n.data ? { ...n.data } : {}, 
           width: n.width,
           height: n.height,
-          selected: n.selected || false, // Propagar el estado de selección
-          style: n.style ? { ...n.style } : undefined, // Copia de style
+          selected: n.selected || false, 
+          style: n.style ? { ...n.style } : undefined, 
           draggable: typeof n.draggable === 'boolean' ? n.draggable : true,
           selectable: typeof n.selectable === 'boolean' ? n.selectable : true,
           connectable: typeof n.connectable === 'boolean' ? n.connectable : true,
-          // Propiedades como parentId, extent, positionAbsolute, hidden son omitidas
-          // ya que no aplican o se manejan de forma diferente en esta vista aislada.
         };
         return focusedViewNode;
       });
     console.log('[GroupFocusView] focusedGroupId:', focusedGroupId);
     console.log('[GroupFocusView] parentNode (the group itself):', JSON.stringify(parentNode ? {id: parentNode.id, data: parentNode.data, type: parentNode.type} : null));
-    console.log('[GroupFocusView] Children found for group:', JSON.stringify(childrenOfFocusedGroup.map(n => ({id: n.id, type: n.type, data: n.data, parentId: n.parentId}))));
+    console.log('[GroupFocusView] Children found for group:', JSON.stringify(childrenOfFocusedGroup.map(n => ({id: n.id, type: n.type, data: n.data, parentId: n.parentId /* should be undefined here */}))));
     return childrenOfFocusedGroup;
   }, [allNodes, focusedGroupId, parentNode]);
 
@@ -117,16 +117,31 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
     return allEdges.filter(edge => childNodeIds.has(edge.source) && childNodeIds.has(edge.target));
   }, [allEdges, initialGroupNodes]);
 
-  // LUEGO, useNodesState y useEdgesState
   const [nodes, setNodes, onNodesChangeInternal] = useNodesState(initialGroupNodes);
   const [edges, setEdges, onEdgesChangeInternal] = useEdgesState(initialGroupEdges);
 
-  // Los callbacks deben ir después de la inicialización de los estados que utilizan
-  // onDropInGroup está definido más adelante
+  const previousInitialGroupNodesJSON = useRef<string | null>(null);
+  const previousInitialGroupEdgesJSON = useRef<string | null>(null);
+
+  useEffect(() => {
+    const currentInitialGroupNodesJSON = JSON.stringify(initialGroupNodes);
+    if (currentInitialGroupNodesJSON !== previousInitialGroupNodesJSON.current) {
+      setNodes(initialGroupNodes);
+      previousInitialGroupNodesJSON.current = currentInitialGroupNodesJSON;
+    }
+  }, [initialGroupNodes, setNodes]);
+
+  useEffect(() => {
+    const currentInitialGroupEdgesJSON = JSON.stringify(initialGroupEdges);
+    if (currentInitialGroupEdgesJSON !== previousInitialGroupEdgesJSON.current) {
+      setEdges(initialGroupEdges);
+      previousInitialGroupEdgesJSON.current = currentInitialGroupEdgesJSON;
+    }
+  }, [initialGroupEdges, setEdges]);
 
   const handleToolClickInGroup = (tool: 'select' | 'note' | 'text' | 'area') => {
     setActiveToolInGroup(prevTool => {
-      if (prevTool === tool && tool !== 'area') return 'select'; // Deseleccionar si se hace clic de nuevo, excepto para 'area'
+      if (prevTool === tool && tool !== 'area') return 'select'; 
       return tool;
     });
     if (groupFlowWrapper.current) {
@@ -136,7 +151,6 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
         groupFlowWrapper.current.style.cursor = 'default';
       }
     }
-     // Limpiar estados de dibujo de área si se selecciona otra herramienta
     if (tool !== 'area') {
       setIsDrawingAreaInGroup(false);
       setAreaStartPosInGroup(null);
@@ -145,7 +159,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   };
   
   const onPaneClickInGroup = useCallback((event: React.MouseEvent) => {
-    if (activeToolInGroup === 'area') { // No hacer nada en pane click si estamos en modo área
+    if (activeToolInGroup === 'area') { 
       return;
     }
     if ((activeToolInGroup === 'note' || activeToolInGroup === 'text') && groupFlowInstance) {
@@ -163,10 +177,9 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
         type, 
         position, 
         data, 
-        // No parentId aquí, se maneja al guardar
       };
       setNodes((nds) => nds.concat(newNodeToAdd));
-      setActiveToolInGroup('select'); // Volver a select después de crear
+      setActiveToolInGroup('select'); 
       if (groupFlowWrapper.current) {
         groupFlowWrapper.current.style.cursor = 'default';
       }
@@ -175,7 +188,6 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
 
 
   const onDragStartSidebarInGroup = (event: React.DragEvent, item: ResourceItem) => {
-    // Usar un tipo de datos diferente para el drag-and-drop dentro del grupo para evitar conflictos
     event.dataTransfer.setData('application/reactflow-group-internal', JSON.stringify(item));
     event.dataTransfer.effectAllowed = 'move';
   };
@@ -193,22 +205,20 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
     }
     const itemData = JSON.parse(dataString) as ResourceItem;
 
-    // Ajustar la posición del drop relativa al canvas del GroupFocusView
     const position = groupFlowInstance.screenToFlowPosition({
       x: event.clientX - reactFlowBounds.left,
       y: event.clientY - reactFlowBounds.top,
     });
     
-    let nodeW = 200, nodeH = 100; // Default sizes
+    let nodeW = 200, nodeH = 100; 
     if (itemData.type === 'noteNode' || itemData.type === 'note') { nodeW = 200; nodeH = 120; }
     else if (itemData.type === 'textNode' || itemData.type === 'text') { nodeW = 150; nodeH = 80; }
 
     const newNode: Node = {
       id: `${itemData.type}-${Date.now()}`,
-      type: itemData.type, // Asegurarse que el tipo es el correcto (ej. 'aws_s3_bucket' y no 'ResourceItem')
+      type: itemData.type, 
       position,
       data: { label: itemData.name, description: itemData.description, provider: itemData.provider },
-      // parentId se asignará al guardar en FlowEditorContent
       style: { width: nodeW, height: nodeH },
     };
     setNodes((nds) => nds.concat(newNode));
@@ -219,29 +229,19 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
     setLocalSelectedEdgeType((prev: LogicalEdgeType | null) => (prev === type ? null : type));
   };
 
-  // Actualizar nodos si los nodos iniciales del grupo cambian (ej. si se añade un nodo desde fuera mientras esta vista está abierta)
-  useEffect(() => {
-    setNodes(initialGroupNodes);
-  }, [initialGroupNodes, setNodes]);
-
-  useEffect(() => {
-    setEdges(initialGroupEdges);
-  }, [initialGroupEdges, setEdges]);
-
   const onConnect = useCallback(
     (params: Connection) => {
       if (!params.source || !params.target) {
-        // No se puede crear una arista sin origen y destino definidos
         console.warn('onConnect en GroupFocusView: source o target es null', params);
         return;
       }
-      const typeToUse = localSelectedEdgeType || LogicalEdgeType.CONNECTS_TO; // Usar tipo seleccionado o default
+      const typeToUse = localSelectedEdgeType || LogicalEdgeType.CONNECTS_TO; 
       const config = edgeTypeConfigs[typeToUse] || edgeTypeConfigs[LogicalEdgeType.CONNECTS_TO];
       
       const newEdge: Edge = {
         ...params,
-        source: params.source, // Ahora sabemos que no es null
-        target: params.target, // Ahora sabemos que no es null
+        source: params.source, 
+        target: params.target, 
         id: `group-edge-${Date.now()}-${params.source}-${params.target}`,
         type: config.visualType,
         style: config.style,
@@ -254,18 +254,13 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   );
 
   const handleSaveChanges = () => {
-    // Antes de guardar, transformar las posiciones de los nodos de vuelta para que sean relativas al parentNode si es necesario,
-    // y re-establecer el parentId.
     const nodesToSave = nodes.map(n => ({
       ...n,
-      parentId: focusedGroupId, // Re-asignar el parentId
-      // La posición ya es relativa al (0,0) del canvas del grupo, que es lo que React Flow espera para nodos hijos con extent: 'parent'
-      // Si el GroupNode.tsx no usa extent: 'parent' para sus hijos directos cuando isExpandedView es true,
-      // entonces necesitaríamos ajustar la posición aquí.
-      // Por ahora, asumimos que la posición es correcta como está.
-      extent: 'parent' as const, // Restablecer extent
+      parentId: focusedGroupId, 
+      extent: 'parent' as const, 
     }));
-    onSaveRef.current?.(nodesToSave, edges, groupFlowInstance.getViewport());
+    const currentGroupViewport = groupFlowInstance.getViewport();
+    onSaveRef.current?.(nodesToSave, edges, currentGroupViewport);
     onClose();
   };
 
@@ -290,44 +285,81 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   }, [onSaveChanges]);
 
   useEffect(() => {
-    if (groupFlowInstance) {
-      // Intentar obtener el viewport guardado del nodo del grupo
-      const groupNode = allNodes.find(n => n.id === focusedGroupId);
-      const savedViewport = groupNode?.data?.viewport;
-      
-      if (savedViewport) {
-        groupFlowInstance.setViewport(savedViewport);
-      } else if (initialViewport) {
-        groupFlowInstance.setViewport(initialViewport);
-      }
-    }
-  }, [groupFlowInstance, focusedGroupId, allNodes, initialViewport]);
-
-  // Añadir efecto para guardar el viewport cuando cambia
-  useEffect(() => {
-    const handleViewportChange = () => {
-      if (groupFlowInstance && onSaveRef.current) {
-        const viewport = groupFlowInstance.getViewport();
-        if (viewport.zoom !== 0) {
-          const flow = groupFlowInstance.toObject();
-          onSaveRef.current(flow.nodes, flow.edges, viewport);
+    if (groupFlowInstance && initialViewport) {
+      const timeoutId = setTimeout(() => {
+        if (groupFlowInstance) {
+          groupFlowInstance.setViewport(initialViewport);
         }
+      }, 50);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [groupFlowInstance, initialViewport]);
+
+  // Auto-save useEffects are commented out to prevent loops
+  /*
+  useEffect(() => {
+    if (onSaveChanges && groupFlowInstance && !isDragging) {
+      const currentNodesJSON = JSON.stringify(nodes);
+      const currentEdgesJSON = JSON.stringify(edges);
+      
+      if (currentNodesJSON !== previousNodesRef.current || currentEdgesJSON !== previousEdgesRef.current) {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        
+        saveTimeoutRef.current = setTimeout(() => {
+          if (groupFlowInstance) {
+            const flow = groupFlowInstance.toObject();
+            const viewport = groupFlowInstance.getViewport();
+            onSaveChanges(flow.nodes, flow.edges, viewport);
+          }
+        }, 1000);
       }
-    };
-
-    // Usar un debounce para evitar demasiadas llamadas
-    const debouncedHandleViewportChange = debounce(handleViewportChange, 500);
-
-    // Suscribirse a los eventos de cambio de viewport
-    document.addEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
+      
+      previousNodesRef.current = currentNodesJSON;
+      previousEdgesRef.current = currentEdgesJSON;
+    }
     
     return () => {
-      document.removeEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [groupFlowInstance]);
+  }, [nodes, edges, groupFlowInstance, isDragging, onSaveChanges]);
+
+  useEffect(() => {
+    if (groupFlowInstance && onSaveChanges) {
+      const handleViewportChange = debounce(() => {
+        const viewport = groupFlowInstance.getViewport();
+        if (viewport.zoom !== 0) {
+          onSaveChanges(nodes, edges, viewport);
+        }
+      }, 500);
+
+      document.addEventListener('reactflow.viewportchange', handleViewportChange as EventListener);
+      return () => {
+        document.removeEventListener('reactflow.viewportchange', handleViewportChange as EventListener);
+      };
+    }
+  }, [groupFlowInstance, nodes, edges, onSaveChanges]);
+
+  useEffect(() => {
+    if (groupFlowInstance && onSaveChanges) {
+      const handleNodesChange = debounce(() => {
+        const flow = groupFlowInstance.toObject();
+        const viewport = groupFlowInstance.getViewport();
+        onSaveChanges(flow.nodes, flow.edges, viewport);
+      }, 500);
+
+      document.addEventListener('reactflow.nodeschange', handleNodesChange as EventListener);
+      document.addEventListener('reactflow.edgeschange', handleNodesChange as EventListener);
+      
+      return () => {
+        document.removeEventListener('reactflow.nodeschange', handleNodesChange as EventListener);
+        document.removeEventListener('reactflow.edgeschange', handleNodesChange as EventListener);
+      };
+    }
+  }, [groupFlowInstance, onSaveChanges]);
+  */
 
   return (
-    <div className="absolute inset-0 bg-white z-[100] flex flex-col" style={{ /* Aumentar z-index si es necesario */ }}>
+    <div className="absolute inset-0 bg-white z-[100] flex flex-col">
       <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
         <h2 className="text-lg font-semibold">Editando Grupo: {parentNode.data.label || parentNode.id}</h2>
         <div>
@@ -346,7 +378,6 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
         </div>
       </div>
       <div className="flex-grow relative">
-        {/* Mini barra de herramientas para GroupFocusView */}
         <div className="absolute top-2 left-2 z-10 bg-white p-1 rounded shadow flex gap-1">
           <button 
             onClick={handleDeleteSelected}
@@ -357,7 +388,6 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12.56 0c1.153 0 2.242.078 3.324.235m0 0a48.667 48.667 0 0 0 3.913 0c1.282 0 2.517.093 3.707.277M6.08 8.982l6.23-1.437m5.13 1.437-6.23 1.437m0 0V5.79m0 0a5.006 5.006 0 0 1-5.006-5.006c0-1.763 1.126-3.223 2.772-3.798A5.007 5.007 0 0 1 12 2.25a5.007 5.007 0 0 1 4.228 2.254c1.646.576 2.772 2.035 2.772 3.798a5.006 5.006 0 0 1-5.006 5.006Z" />
             </svg>
           </button>
-          {/* Botón para abrir sidebar de recursos */}
           <button
             onClick={() => setIsGroupSidebarOpen(prev => !prev)}
             title="Mostrar Recursos"
@@ -365,7 +395,6 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
           >
             <SquaresPlusIcon className="w-5 h-5" />
           </button>
-          {/* Herramientas de Nota y Texto */}
           <button
             onClick={() => handleToolClickInGroup('note')}
             title="Añadir Nota"
@@ -387,9 +416,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
           >
             <RectangleGroupIcon className="w-5 h-5" />
           </button>
-          {/* Separador */}
           <div className="h-5 w-px bg-gray-300 mx-1"></div>
-          {/* Botones de tipo de arista */}
           {Object.values(edgeTypeConfigs).map(cfg => {
             const IconComponent = edgeToolbarIcons[cfg.logicalType];
             const isSelected = localSelectedEdgeType === cfg.logicalType;
@@ -406,11 +433,11 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
             );
           })}
         </div>
-        <ReactFlowProvider> {/* Necesario si usamos hooks de React Flow dentro */}
+        <ReactFlowProvider> 
           <div ref={groupFlowWrapper} className="w-full h-full" style={{ cursor: activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default' }}>
            <style>{`.react-flow__pane { cursor: ${activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default'} !important; }`}</style>
             <ReactFlow
-              key={focusedGroupId} // Forzar re-montaje si el grupo enfocado cambia
+              key={focusedGroupId} 
               nodes={nodes}
               edges={edges}
               onDrop={onDropInGroup} 
@@ -448,7 +475,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
                   if (currentAreaInGroup.width > 20 && currentAreaInGroup.height > 20) {
                     const newAreaNode: Node = {
                       id: `area-group-${Date.now()}`,
-                      type: 'areaNode', // Asegúrate que 'areaNode' esté en mainNodeTypes
+                      type: 'areaNode', 
                       position: { x: currentAreaInGroup.x, y: currentAreaInGroup.y },
                       data: { backgroundColor:'rgba(59,130,246,0.5)',borderColor:'rgba(59,130,246,1)',borderWidth:2,shape:'rectangle',label:'Area in Group' },
                       style: { width: currentAreaInGroup.width, height: currentAreaInGroup.height },
@@ -462,16 +489,15 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
                   setIsDrawingAreaInGroup(false);
                   setAreaStartPosInGroup(null);
                   setCurrentAreaInGroup(null);
-                  setActiveToolInGroup('select'); // Volver a select
+                  setActiveToolInGroup('select'); 
                    if (groupFlowWrapper.current) {
                     groupFlowWrapper.current.style.cursor = 'default';
                   }
                 }
               }}
-            nodeTypes={mainNodeTypes} // Usar los mismos tipos de nodo que el editor principal
-            edgeTypes={mainEdgeTypes}
-            // fitView // Quitar fitView para tener más control sobre el zoom inicial
-            defaultViewport={initialViewport || { x: 50, y: 50, zoom: 0.85 }} // Usar viewport inicial o un default razonable
+            nodeTypes={memoizedInternalNodeTypes} 
+            edgeTypes={memoizedInternalEdgeTypes}
+            defaultViewport={initialViewport || { x: 50, y: 50, zoom: 0.85 }} 
             className="bg-gray-100"
           >
             <Background />
@@ -511,18 +537,18 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
             {isGroupSidebarOpen && (
               <Panel 
                 position="top-right"
-                className="!m-0 !p-0" // Resetear estilos de Panel
+                className="!m-0 !p-0" 
                 style={{
-                  width:'300px', // Ancho del sidebar
+                  width:'300px', 
                   background:'rgba(250,250,250,0.95)',
                   borderRadius:'8px 0 0 8px',
-                  height:'calc(100% - 16px)', // Ajustar altura, considerando padding del Panel
-                  margin: '8px', // Margen para que no pegue a los bordes
+                  height:'calc(100% - 16px)', 
+                  margin: '8px', 
                   overflow:'hidden',
                   boxShadow:'0 2px 10px rgba(0,0,0,0.1)',
                   display:'flex',
                   flexDirection:'column',
-                  zIndex: 20, // Asegurar que esté sobre otros elementos del canvas
+                  zIndex: 20, 
                   backdropFilter: 'blur(8px)',
                 }}
               >
@@ -564,7 +590,6 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
                               className="hover:bg-gray-100"
                             >
                               <div style={{minWidth:'20px',display:'flex',alignItems:'center',justifyContent:'center'}}>
-                                {/* Simplificar temporalmente el renderizado del icono para evitar error de cloneElement */}
                                 <HeroServerIcon className="w-4 h-4 text-gray-400"/>
                               </div>
                               <div style={{flex:1}}>
@@ -588,4 +613,4 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   );
 };
 
-export default GroupFocusView;
+export default memo(GroupFocusView);
