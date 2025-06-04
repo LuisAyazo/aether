@@ -308,7 +308,7 @@ const FlowEditorContent = ({
   const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [isDragging, setIsDragging] = useState(false); 
-  const [isToolbarDragging, setIsToolbarDragging] = useState(false);
+  const [isToolbarDragging, setIsToolbarDragging] = useState(false); // Se mantendrá por ahora, aunque la barra sea fija, para el botón de orientación
   const previousNodesRef = useRef<string | null>(null);
   const previousEdgesRef = useRef<string | null>(null);
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null); // Nuevo estado para la vista de grupo expandida
@@ -393,18 +393,32 @@ const FlowEditorContent = ({
   }, [selectedLogicalType, setEdges, onConnectProp]);
 
   useEffect(() => {
-    const move = (e: MouseEvent) => { if(isToolbarDragging) setToolbarPosition({ x: e.clientX - dragStartOffset.x, y: e.clientY - dragStartOffset.y }); };
-    const up = () => setIsToolbarDragging(false);
-    if (isToolbarDragging) { window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); }
-    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    // Ya no se necesita la lógica de arrastre para la posición de la barra de herramientas si es fija.
+    // const move = (e: MouseEvent) => { if(isToolbarDragging) setToolbarPosition({ x: e.clientX - dragStartOffset.x, y: e.clientY - dragStartOffset.y }); };
+    // const up = () => setIsToolbarDragging(false);
+    // if (isToolbarDragging) { window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); }
+    // return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
   }, [isToolbarDragging, dragStartOffset]);
 
   useEffect(() => {
     if (initialViewport && reactFlowInstance) {
       const rfVp = reactFlowInstance.getViewport();
-      if (rfVp.x !== initialViewport.x || rfVp.y !== initialViewport.y || rfVp.zoom !== initialViewport.zoom) {
-        const tId = setTimeout(() => { if (reactFlowInstance?.getViewport?.().zoom !== 0) { reactFlowInstance.setViewport(initialViewport); lastViewportRef.current = initialViewport; } }, 50);
+      // Solo aplicar initialViewport si es significativamente diferente o si el zoom actual es 0 (no inicializado)
+      if (rfVp.zoom === 0 || initialViewport.zoom === 0 || // Evitar aplicar si alguno es inválido o no inicializado
+          rfVp.x !== initialViewport.x || 
+          rfVp.y !== initialViewport.y || 
+          rfVp.zoom !== initialViewport.zoom) {
+        const tId = setTimeout(() => { 
+          if (reactFlowInstance?.getViewport?.().zoom !== 0 || initialViewport.zoom !== 0) { 
+            reactFlowInstance.setViewport(initialViewport); 
+            lastViewportRef.current = initialViewport; // Sincronizar lastViewportRef con el initialViewport aplicado
+          }
+        }, 50);
         return () => clearTimeout(tId);
+      } else if (!lastViewportRef.current && initialViewport.zoom !== 0) {
+        // Si lastViewportRef no está seteado y el initialViewport es válido, setearlo.
+        // Esto es importante para que al abrir un grupo por primera vez, se guarde el viewport correcto.
+        lastViewportRef.current = initialViewport;
       }
     }
   }, [initialViewport, reactFlowInstance]);
@@ -436,15 +450,6 @@ const FlowEditorContent = ({
 
   const handleNodeContextMenu = useCallback((evt: React.MouseEvent, node: Node) => { evt.preventDefault(); evt.stopPropagation(); if(!node.selected) return; setContextMenu({visible:true,x:evt.clientX,y:evt.clientY,nodeId:node.id,nodeType:node.type||null,isPane:false,parentInfo:null}); }, []);
   const handlePaneContextMenu = useCallback((evt: React.MouseEvent) => { evt.preventDefault(); setContextMenu(p => ({...p, visible:false})); }, []);
-
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  useEffect(() => {
-    if (onSaveRef.current && reactFlowInstance && !isDragging) {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => { const flow = reactFlowInstance.toObject(); onSaveRef.current?.(flow); }, 1000);
-    }
-    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, [nodes, edges, reactFlowInstance, isDragging]);
 
   const [editingGroup, setEditingGroup] = useState<{id:string,label:string}|null>(null);
   const startEditingGroupName = useCallback((id:string,lbl:string)=>setEditingGroup({id,label:lbl}),[]);
@@ -553,18 +558,68 @@ const FlowEditorContent = ({
     setSelectedNodes([]); 
     setSelectedEdge(null); 
   }, [reactFlowInstance, selectedNodes, edges]);
+  
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveCurrentDiagramState = useCallback(() => {
+    if (!reactFlowInstance || !onSaveRef.current) return;
+    const flow = reactFlowInstance.toObject();
+    console.log('Saving viewport:', flow.viewport);
+    lastViewportRef.current = flow.viewport;
+    onSaveRef.current(flow);
+    previousNodesRef.current = JSON.stringify(flow.nodes);
+    previousEdgesRef.current = JSON.stringify(flow.edges);
+  }, [reactFlowInstance, onSaveRef]); // Agregado onSaveRef a las dependencias
+
+  useEffect(() => {
+    // Este useEffect maneja el guardado automático basado en cambios en nodes, edges, etc.
+    // Asegúrate de que onSaveRef.current y reactFlowInstance existan.
+    if (onSaveRef.current && reactFlowInstance && !isDragging) {
+      // Compara el estado actual con el guardado previamente para evitar guardados innecesarios.
+      const currentNodesJSON = JSON.stringify(nodes);
+      const currentEdgesJSON = JSON.stringify(edges);
+      if (currentNodesJSON !== previousNodesRef.current || currentEdgesJSON !== previousEdgesRef.current) {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+          // Llama a saveCurrentDiagramState que ahora tiene sus propias dependencias correctas.
+          saveCurrentDiagramState(); 
+        }, 1000); // Delay para el guardado
+      }
+    }
+    // Limpieza del timeout si el componente se desmonta o las dependencias cambian.
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [nodes, edges, reactFlowInstance, isDragging, saveCurrentDiagramState]); // saveCurrentDiagramState es una dependencia
 
   const handleExpandGroupView = useCallback((groupId: string) => {
-    // Nueva lógica: Simplemente establece el ID del grupo que se va a expandir en un "nuevo stage"
+    if (reactFlowInstance) {
+      lastViewportRef.current = reactFlowInstance.getViewport(); // Guardar viewport actual
+    }
     setExpandedGroupId(groupId);
-    // Opcionalmente, actualiza el nodo de grupo en el canvas principal para indicar que está "enfocado"
-    // Esto podría ser útil si el canvas principal sigue visible de alguna manera.
-    // Por ahora, nos centraremos en cambiar la vista.
-    // La lógica anterior de redimensionamiento y organización de hijos se manejará
-    // dentro de la nueva vista de grupo o al entrar/salir de ella.
     setNodes(nds => nds.map(n => n.id === groupId ? { ...n, data: { ...n.data, isExpandedView: true, isMinimized: false } } : n));
+  }, [reactFlowInstance, setNodes, setExpandedGroupId]);
 
-  }, [setNodes, setExpandedGroupId]); // reactFlowInstance no es necesario aquí si solo actualizamos estado
+  useEffect(() => {
+    // Efecto para restaurar el viewport cuando se cierra la vista de grupo
+    if (!expandedGroupId && lastViewportRef.current && reactFlowInstance) {
+      const currentViewport = reactFlowInstance.getViewport();
+      // Solo restaurar si el viewport guardado es válido (zoom no es 0) y es diferente al actual.
+      if (lastViewportRef.current.zoom !== 0 && 
+          (Math.abs(currentViewport.x - lastViewportRef.current.x) > 0.01 ||
+           Math.abs(currentViewport.y - lastViewportRef.current.y) > 0.01 ||
+           Math.abs(currentViewport.zoom - lastViewportRef.current.zoom) > 0.001)
+      ) {
+        // Usar setTimeout para asegurar que React Flow haya procesado cambios de nodos
+        setTimeout(() => {
+          if (reactFlowInstance && lastViewportRef.current) { // Re-verificar instancias
+            reactFlowInstance.setViewport(lastViewportRef.current);
+            // Opcional: limpiar la referencia después de usarla para evitar restauraciones no deseadas
+            // lastViewportRef.current = null; 
+          }
+        }, 50); // Pequeño delay
+      }
+    }
+  }, [expandedGroupId, reactFlowInstance]);
 
   const handleCollapseGroupView = useCallback((groupIdToCollapse: string) => {
     // Si se está colapsando un grupo que no es el actualmente expandido en GroupFocusView,
@@ -617,7 +672,10 @@ const FlowEditorContent = ({
         return n;
       })
     );
-  }, [reactFlowInstance, setNodes, expandedGroupId, setExpandedGroupId]);
+    // Forzar un guardado del estado actual del diagrama después de colapsar/cerrar la vista de grupo
+    // para asegurar que los cambios en parentId y hidden se persistan antes de otras interacciones.
+    saveCurrentDiagramState(); 
+  }, [reactFlowInstance, setNodes, expandedGroupId, setExpandedGroupId, saveCurrentDiagramState]);
 
 
   useEffect(() => {
@@ -714,7 +772,7 @@ const FlowEditorContent = ({
       if(newNodeToAdd.parentId){
         const parentNodeDetails=reactFlowInstance.getNode(newNodeToAdd.parentId);
         if(parentNodeDetails?.data.isExpandedView){
-          setTimeout(()=>handleExpandGroupView(newNodeToAdd.parentId!),0);
+  // Function already defined above
         }
       }
       setActiveTool('select');
@@ -724,8 +782,7 @@ const FlowEditorContent = ({
     }
   },[reactFlowInstance,findGroupAtPosition,setNodes,activeDrag,activeTool,setActiveTool, handleExpandGroupView]);
 
-  const saveCurrentDiagramState=useCallback(()=>{if(!reactFlowInstance||!onSaveRef.current)return;const flow=reactFlowInstance.toObject();console.log('Saving viewport:',flow.viewport);lastViewportRef.current=flow.viewport;onSaveRef.current(flow);previousNodesRef.current=JSON.stringify(flow.nodes);previousEdgesRef.current=JSON.stringify(flow.edges);},[reactFlowInstance]);
-  useEffect(()=>{if(!reactFlowInstance||!onSaveRef.current)return;const nJSON=JSON.stringify(nodes);const eJSON=JSON.stringify(edges);if(nJSON!==previousNodesRef.current||eJSON!==previousEdgesRef.current){if(saveTimeoutRef.current)clearTimeout(saveTimeoutRef.current);saveTimeoutRef.current=setTimeout(saveCurrentDiagramState,1000);}},[nodes,edges,reactFlowInstance,isDragging,saveCurrentDiagramState]);
+  // useEffect duplicado eliminado. El correcto está ahora más arriba con saveCurrentDiagramState.
   useEffect(()=>{const kd=(e:KeyboardEvent)=>{if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;switch(e.key.toLowerCase()){case'v':handleToolClick('select');break;case'n':handleToolClick('note');break;case't':handleToolClick('text');break;case'a':if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey)handleToolClick('area');break;case'g':if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey)createEmptyGroup();break;case's':if(e.shiftKey)handleToolClick('lasso');break;}};document.addEventListener('keydown',kd);return()=>document.removeEventListener('keydown',kd);},[handleToolClick,createEmptyGroup]);
   const renderEditGroupModal=()=>{if(!editingGroup)return null;return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,backgroundColor:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}}onClick={()=>setEditingGroup(null)}><div style={{backgroundColor:'white',padding:'20px',borderRadius:'8px',width:'300px',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}onClick={e=>e.stopPropagation()}><h3 style={{marginTop:0,marginBottom:'16px',fontSize:'16px'}}>Edit Group Name</h3><input type="text"defaultValue={editingGroup.label}style={{width:'100%',padding:'8px 12px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'14px',marginBottom:'16px'}}autoFocus onKeyDown={e=>{if(e.key==='Enter')saveGroupName((e.target as HTMLInputElement).value);if(e.key==='Escape')setEditingGroup(null);}}/><div style={{display:'flex',justifyContent:'flex-end',gap:'8px'}}><button onClick={()=>setEditingGroup(null)}style={{padding:'6px 12px',border:'1px solid #ddd',borderRadius:'4px',backgroundColor:'#f5f5f5',cursor:'pointer',fontSize:'14px'}}>Cancel</button><button onClick={e=>saveGroupName((e.currentTarget.parentElement?.querySelector('input')as HTMLInputElement).value)}style={{padding:'6px 12px',border:'none',borderRadius:'4px',backgroundColor:'#0088ff',color:'white',cursor:'pointer',fontSize:'14px'}}>Save</button></div></div></div>);};
   const moveNodesToBack=useCallback((ids:string[])=>{const cN=reactFlowInstance.getNodes();const sIds=new Set(ids);const mZ=Math.min(...cN.map(n=>n.zIndex||0));reactFlowInstance.setNodes(cN.map(n=>sIds.has(n.id)?{...n,zIndex:mZ-1}:n)as Node[]);},[reactFlowInstance]);
@@ -895,9 +952,65 @@ const FlowEditorContent = ({
           {isDrawingArea&&currentArea&&reactFlowInstance&&(<div className="area-drawing-overlay"style={{position:'absolute',pointerEvents:'none',zIndex:1000,left:`${(currentArea.x*reactFlowInstance.getViewport().zoom)+reactFlowInstance.getViewport().x}px`,top:`${(currentArea.y*reactFlowInstance.getViewport().zoom)+reactFlowInstance.getViewport().y}px`,width:`${currentArea.width*reactFlowInstance.getViewport().zoom}px`,height:`${currentArea.height*reactFlowInstance.getViewport().zoom}px`,border:'2px dashed rgba(59,130,246,1)',backgroundColor:'rgba(59,130,246,0.1)',borderRadius:'4px',boxShadow:'0 0 10px rgba(59,130,246,0.3)',transition:'none'}}/>)}
           {contextMenu.visible&&(<div style={{position:'fixed',left:contextMenu.x,top:contextMenu.y,background:'white',border:'1px solid #ddd',zIndex:1000,padding:'0px',borderRadius:'8px',boxShadow:'0 4px 10px rgba(0,0,0,0.2)',display:'flex',flexDirection:'column',gap:'0px',minWidth:'180px',overflow:'hidden',transform:'translate(8px, 8px)'}}onClick={e=>e.stopPropagation()}onContextMenu={e=>e.preventDefault()}><div style={{padding:'8px 12px',backgroundColor:'#f7f7f7',borderBottom:'1px solid #eee'}}>{!contextMenu.isPane&&contextMenu.nodeId&&(<><p style={{margin:'0 0 2px 0',fontSize:'13px',fontWeight:'bold'}}>{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.label||'Node'}</p><p style={{margin:0,fontSize:'11px',color:'#777'}}>ID: {contextMenu.nodeId}</p><p style={{margin:0,fontSize:'11px',color:'#777'}}>Type: {contextMenu.nodeType} {reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider&&(<span className="ml-1 px-1.5 py-0.5 rounded-full bg-gray-100 text-xs">{reactFlowInstance.getNode(contextMenu.nodeId!)?.data.provider.toUpperCase()}</span>)}</p></>)}{contextMenu.isPane&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>0?(<p style={{margin:0,fontSize:'13px',fontWeight:'bold'}}>{selN.length} nodos seleccionados</p>):(<p style={{margin:0,fontSize:'13px',fontWeight:'bold'}}>Canvas Options</p>);})()}</>)}</div><div>{!contextMenu.isPane&&contextMenu.nodeId&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>1&&selN.some(n=>n.id===contextMenu.nodeId);})()?(<><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)groupSelectedNodes();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{`📦 Group Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{deleteSelectedElements(); setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>{`Delete Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)moveNodesToBack(selN.map(n=>n.id));setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⬇️ Move Selected to Back</button></>):reactFlowInstance.getNode(contextMenu.nodeId!)?.type==='group'?(<><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n)startEditingGroupName(n.id,n.data?.label||'Group');setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>✏️ Edit Group Name</button><button onClick={()=>{if(contextMenu.nodeId)ungroupNodes(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup</button><button onClick={()=>{if(contextMenu.nodeId)handleDeleteNodeFromContextMenu(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Group</button></>):(<><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){setLoadingState(true);setIsExecutionLogVisible(true);simulateNodeExecution(n as NodeWithExecutionStatus,'creating').then(()=>simulateNodeExecution(n as NodeWithExecutionStatus,'success')).finally(()=>setLoadingState(false));}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>▶️ Run Node</button><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const np:SingleNodePreview={action:'create',resource:{name:n.data?.label||'Unnamed',type:n.type||'unknown',provider:n.data?.provider||'generic',changes:{properties:{label:{after:n.data?.label||'Unnamed',action:'create'},description:{after:n.data?.description||'',action:'create'},provider:{after:n.data?.provider||'generic',action:'create'},status:{after:n.data?.status||'success',action:'create'},lastUpdated:{after:n.data?.lastUpdated||new Date().toISOString(),action:'create'},version:{after:n.data?.version||1,action:'create'}}}},dependencies:n.data?.dependencies?.map((d:Dependency)=>({name:d.name,type:d.type,action:'create',properties:{...Object.entries(d).reduce((acc:Record<string,any>,[k,v])=>{if(k!=='name'&&k!=='type')acc[k]={after:v,action:'create'};return acc;},{})}}))||[],estimated_cost:n.data?.estimated_cost};setSingleNodePreview(np);setShowSingleNodePreview(true);}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>👁️ Preview</button><button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const ev=new CustomEvent('openIaCPanel',{detail:{nodeId:n.id,resourceData:{label:n.data.label,provider:n.data.provider,resourceType:n.data.resourceType}}});window.dispatchEvent(ev);document.dispatchEvent(ev);}setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⚙️ Configuración</button></>)}{!(selectedNodes.length>1&&selectedNodes.some(n=>n.id===contextMenu.nodeId))&&(<button onClick={()=>{if(contextMenu.nodeId)handleDeleteNodeFromContextMenu(contextMenu.nodeId);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Node</button>)}</>)}{contextMenu.isPane&&(<>{(()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);return selN.length>0;})()?(<><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)groupSelectedNodes();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{`📦 Group Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{ungroupNodes(); setContextMenu(p=>({...p,visible:false}));}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup Selected Nodes</button><button onClick={()=>{deleteSelectedElements(); setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>{`Delete Selected Nodes (${reactFlowInstance.getNodes().filter(n=>n.selected).length})`}</button><button onClick={()=>{const selN=reactFlowInstance.getNodes().filter(n=>n.selected);if(selN.length>0)moveNodesToBack(selN.map(n=>n.id));setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⬇️ Move Selected to Back</button></>):(<><button onClick={()=>{createEmptyGroup();setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>📦 Create Empty Group</button><button onClick={()=>{setSidebarOpen(true);setContextMenu(p=>({...p,visible:false}));}}style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>📚 Show Resources Panel</button></>)}</>)}{contextMenu.customItems&&(<>{contextMenu.customItems.map((item,idx)=>(<button key={idx}onClick={()=>{item.onClick();setContextMenu(p=>({...p,visible:false}));}}style={{display:'flex',alignItems:'center',gap:'8px',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:idx<(contextMenu.customItems?.length||0)-1?'1px solid #eee':'none',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>{item.icon}{item.label}</button>))}</>)}</div></div>)}
           {selectedEdge&&<EdgeDeleteButton edge={selectedEdge}onEdgeDelete={onEdgeDelete}/>}
-          <div style={{position:'absolute',top:`${toolbarPosition.y}px`,left:`${toolbarPosition.x}px`,zIndex:10,background:'rgba(255,255,255,0.9)',borderRadius:'8px',boxShadow:'0 2px 8px rgba(0,0,0,0.1)'}}><Panel position="top-left"style={{all:'unset',display:'flex'}}><div style={{display:'flex',flexDirection:toolbarLayout==='horizontal'?'row':'column',alignItems:'center',gap:'8px',padding:'5px'}}onMouseDown={e=>e.stopPropagation()}><button onMouseDown={e=>{e.stopPropagation();setIsToolbarDragging(true);setDragStartOffset({x:e.clientX-toolbarPosition.x,y:e.clientY-toolbarPosition.y});}}title="Drag Toolbar"style={{cursor:isToolbarDragging?'grabbing':'grab',padding:'4px',background:'transparent',border:'none',display:'flex',alignItems:'center',justifyContent:'center',order:toolbarLayout==='horizontal'?-2:0}}><ArrowsPointingOutIcon className="h-5 w-5 text-gray-500"/></button><button onClick={()=>{const nL=toolbarLayout==='horizontal'?'vertical':'horizontal';setToolbarLayout(nL);if(nL==='vertical')setToolbarPosition({x:20,y:70});else setToolbarPosition({x:(typeof window!=='undefined'?window.innerWidth/2-200:400),y:20});}}title={toolbarLayout==='horizontal'?"Switch to Vertical Toolbar":"Switch to Horizontal Toolbar"}style={{background:'transparent',border:'none',borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',transition:'background 0.2s',order:toolbarLayout==='horizontal'?-1:0}}><ArrowsUpDownIcon className="h-5 w-5"/></button><button onClick={saveCurrentDiagramState}title="Guardar estado actual (zoom y posición)"style={{background:'#4CAF50',border:'none',borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',color:'white',fontWeight:'bold',fontSize:'16px'}}>💾</button><button onClick={()=>handleToolClick('select')}title="Select (V)"style={{background:activeTool==='select'?'#f0f7ff':'transparent',border:'none',borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',transition:'background 0.2s'}}><CursorArrowRaysIcon className="h-5 w-5"/></button><button onClick={()=>handleToolClick('lasso')}title="Lasso Select (Shift+S)"style={{background:activeTool==='lasso'?'#f0f7ff':'transparent',border:'none',borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',transition:'background 0.2s'}}><SwatchIcon className="h-5 w-5"/></button><button onClick={()=>handleToolClick('note')}onMouseDown={e=>e.preventDefault()}draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'note',name:'New Note',description:'Add a note',provider:'generic'});}}title="Add Note (N) - Click to activate tool or drag to canvas"style={{background:activeTool==='note'?'#f0f7ff':'transparent',border:'none',borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',transition:'background 0.2s'}}><DocumentTextIcon className="h-5 w-5"/></button><button onClick={()=>handleToolClick('text')}onMouseDown={e=>e.preventDefault()}draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'text',name:'New Text',description:'Add text',provider:'generic'});}}title="Add Text (T) - Click to activate tool or drag to canvas"style={{background:activeTool==='text'?'#f0f7ff':'transparent',border:'none',borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',transition:'background 0.2s'}}><PencilIcon className="h-5 w-5"/></button><button onClick={()=>handleToolClick('area')}title="Draw Area (A) - Click and drag to create areas"style={{background:activeTool==='area'?'#f0f7ff':'transparent',border:'none',borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',transition:'background 0.2s'}}><RectangleGroupIcon className="h-5 w-5"/></button><button onClick={()=>createEmptyGroup()}title="Create Group (G)"style={{background:'transparent',border:'none',borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',transition:'background 0.2s'}}><Square3Stack3DIcon className="h-5 w-5"/></button><div style={{width:toolbarLayout==='horizontal'?'1px':'80%',height:toolbarLayout==='horizontal'?'20px':'1px',backgroundColor:'#e0e0e0',margin:toolbarLayout==='horizontal'?'0 4px':'4px 0'}}/>{Object.values(edgeTypeConfigs).map(cfg=>{const Icon=edgeToolbarIcons[cfg.logicalType];const isSel=selectedLogicalType===cfg.logicalType;return(<Tooltip title={`Edge: ${cfg.label}`}placement="bottom"key={cfg.logicalType}><button onClick={()=>handleEdgeTypeSelect(cfg.logicalType)}style={{background:isSel?cfg.style.stroke:'transparent',color:isSel?'white':cfg.style.stroke,border:`1.5px solid ${cfg.style.stroke}`,borderRadius:'4px',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:'0',transition:'background 0.2s, color 0.2s'}}>{Icon&&<Icon className="h-5 w-5"/>}</button></Tooltip>);})}</div></Panel></div>
-          {!sidebarOpen&&(<Panel position="top-right"><button style={{padding:'10px 14px',background:'rgba(255,255,255,0.95)',borderRadius:'8px',boxShadow:'0 2px 8px rgba(0,0,0,0.1)',cursor:'pointer',display:'flex',alignItems:'center',gap:'8px',border:'1px solid rgba(0,0,0,0.05)',transition:'background-color 0.2s, box-shadow 0.2s'}}onClick={()=>setSidebarOpen(true)}onMouseOver={e=>{e.currentTarget.style.backgroundColor='rgba(245,245,245,0.95)';e.currentTarget.style.boxShadow='0 3px 10px rgba(0,0,0,0.15)';}}onMouseOut={e=>{e.currentTarget.style.backgroundColor='rgba(255,255,255,0.95)';e.currentTarget.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)';}}title="Show Resources Panel"><SquaresPlusIcon className="h-5 w-5 text-gray-700"/><span style={{fontSize:'14px',fontWeight:500,color:'#333'}}>Resources</span></button></Panel>)}
-          {sidebarOpen&&(<Panel position="top-right"style={{width:'360px',background:'rgba(255,255,255,0.9)',padding:'0',borderRadius:'12px 0 0 12px',height:'calc(100vh - 7.5rem)',overflow:'hidden',boxShadow:'0 4px 20px rgba(0,0,0,0.15)',display:'flex',flexDirection:'column',position:'fixed',top:'7.5rem',right:'0px',zIndex:9999,transform:'none',transition:'transform 0.3s ease-out, opacity 0.3s ease-out, width 0.3s ease-out',backdropFilter:'blur(10px)'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',borderBottom:'1px solid rgba(230,230,230,0.9)',flexShrink:0,minHeight:'56px',backgroundColor:'rgba(250,250,250,0.95)',borderTopLeftRadius:'12px',borderTopRightRadius:'12px'}}><h4 style={{margin:0,fontSize:'16px',fontWeight:'600',color:'#333'}}>Resources</h4><button onClick={()=>setSidebarOpen(false)}style={{border:'none',background:'transparent',cursor:'pointer',width:'28px',height:'28px',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',transition:'background-color 0.2s',color:'#555'}}title="Hide Resources Panel"onMouseOver={e=>(e.currentTarget.style.backgroundColor='#e9e9e9')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='transparent')}><XMarkIcon className="w-5 h-5"/></button></div><div style={{padding:'12px 16px',borderBottom:'1px solid rgba(230,230,230,0.9)',backgroundColor:'rgba(250,250,250,0.95)'}}><input type="text"placeholder="Buscar recursos..."value={searchTerm}onChange={e=>setSearchTerm(e.target.value)}style={{width:'100%',padding:'8px 12px',borderRadius:'6px',border:'1px solid #ddd',fontSize:'14px',outline:'none',boxShadow:'inset 0 1px 2px rgba(0,0,0,0.075)'}}/></div><div style={{overflowY:'auto',overflowX:'hidden',flexGrow:1,display:'flex',flexDirection:'column',backgroundColor:'rgba(255,255,255,0.9)',paddingBottom:'16px',scrollbarWidth:'thin',scrollbarColor:'#ccc #f1f1f1'}}>{resourceCategories.map(c=>({...c,items:c.items.filter(i=>i.name.toLowerCase().includes(searchTerm.toLowerCase())||i.description.toLowerCase().includes(searchTerm.toLowerCase()))})).filter(c=>c.items.length>0).map(cat=>(<div key={cat.name}style={{borderBottom:'1px solid #f0f0f0'}}><h5 onClick={()=>setCollapsedCategories(p=>({...p,[cat.name]:!p[cat.name]}))}style={{cursor:'pointer',margin:0,padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'14px',fontWeight:'600',backgroundColor:collapsedCategories[cat.name]?'#ffffff':'#f8f8f8',transition:'background-color 0.2s'}}onMouseOver={e=>{if(!collapsedCategories[cat.name])return;e.currentTarget.style.backgroundColor='#f5f5f5';}}onMouseOut={e=>{if(!collapsedCategories[cat.name])return;e.currentTarget.style.backgroundColor='#ffffff';}}><span>{cat.name}</span><span style={{color:'#666'}}>{collapsedCategories[cat.name]?'▸':'▾'}</span></h5>{!collapsedCategories[cat.name]&&(<ul style={{listStyleType:'none',padding:'2px 0',margin:0,backgroundColor:'#fdfdfd',maxHeight:'none',overflowY:'visible',position:'relative',zIndex:10001}}>{cat.items.map(item=>(<li key={cat.name+'-'+item.type+'-'+item.name}draggable onDragStart={e=>onDragStartSidebar(e,item)}style={{padding:'6px 16px',margin:'0',cursor:'grab',display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',color:'#444',transition:'background-color 0.15s'}}onMouseOver={e=>{e.currentTarget.style.backgroundColor='#f0f0f0'}}onMouseOut={e=>{e.currentTarget.style.backgroundColor='transparent'}}><div style={{minWidth:'24px',display:'flex',alignItems:'center',justifyContent:'center',marginRight:'8px'}}>{item.icon?React.cloneElement(item.icon,{className:'w-5 h-5 text-gray-500'}):<ServerIcon className="w-5 h-5 text-gray-400"/>}</div><div style={{flex:1}}><span style={{fontWeight:'500'}}>{item.name}</span><p style={{fontSize:'11px',color:'#777',margin:'2px 0 0 0',lineHeight:'1.3'}}>{item.description}</p></div></li>))}</ul>)}</div>))}</div></Panel>)}
+          {/* Barra de herramientas principal - Ahora fija y con estilo similar a GroupFocusView */}
+          <div 
+            className="absolute top-2 left-2 z-10 bg-white p-1 rounded shadow flex items-center gap-1"
+            style={{ flexDirection: toolbarLayout === 'horizontal' ? 'row' : 'column' }}
+            onMouseDown={e => e.stopPropagation()} // Evitar que el click en la barra interactúe con el pane
+          >
+            {/* Botón para cambiar orientación */}
+            <button 
+              onClick={() => {
+                const newLayout = toolbarLayout === 'horizontal' ? 'vertical' : 'horizontal';
+                setToolbarLayout(newLayout);
+                localStorage.setItem('toolbarLayout', newLayout); // Guardar preferencia
+              }}
+              title={toolbarLayout === 'horizontal' ? "Cambiar a barra vertical" : "Cambiar a barra horizontal"}
+              className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+            >
+              <ArrowsUpDownIcon className="h-5 w-5" />
+            </button>
+
+            {/* Botón de Guardar (opcional, si se quiere mantener visible) */}
+            <button 
+              onClick={saveCurrentDiagramState} 
+              title="Guardar estado actual (zoom y posición)"
+              className="p-1.5 bg-green-500 text-white hover:bg-green-600 rounded flex items-center justify-center"
+            >
+              💾 {/* Icono simple de guardar, puedes usar un HeroIcon si prefieres */}
+            </button>
+
+            {/* Herramientas principales */}
+            <button onClick={()=>handleToolClick('select')} title="Select (V)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='select'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><CursorArrowRaysIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('lasso')} title="Lasso Select (Shift+S)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='lasso'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><SwatchIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('note')} onMouseDown={e=>e.preventDefault()} draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'note',name:'New Note',description:'Add a note',provider:'generic'});}} title="Add Note (N)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='note'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><DocumentTextIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('text')} onMouseDown={e=>e.preventDefault()} draggable onDragStart={e=>{e.stopPropagation();onDragStartSidebar(e,{type:'text',name:'New Text',description:'Add text',provider:'generic'});}} title="Add Text (T)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='text'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><PencilIcon className="h-5 w-5"/></button>
+            <button onClick={()=>handleToolClick('area')} title="Draw Area (A)" className={`p-1.5 hover:bg-gray-100 rounded ${activeTool==='area'?'bg-blue-100 text-blue-600':'text-gray-700'}`}><RectangleGroupIcon className="h-5 w-5"/></button>
+            <button onClick={()=>createEmptyGroup()} title="Create Group (G)" className="p-1.5 hover:bg-gray-100 rounded text-gray-700"><Square3Stack3DIcon className="h-5 w-5"/></button>
+            
+            {/* Separador */}
+            <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-5 mx-1' : 'h-px w-full my-1'}`}></div>
+
+            {/* Botones de tipo de arista */}
+            {Object.values(edgeTypeConfigs).map(cfg => {
+              const IconComponent = edgeToolbarIcons[cfg.logicalType];
+              const isSelected = selectedLogicalType === cfg.logicalType;
+              return (
+                <Tooltip title={`Edge: ${cfg.label}`} placement="bottom" key={cfg.logicalType}>
+                  <button
+                    onClick={() => handleEdgeTypeSelect(cfg.logicalType)}
+                    className={`p-1.5 rounded hover:bg-gray-200 ${isSelected ? 'bg-blue-100 ring-1 ring-blue-500' : 'bg-transparent'}`}
+                    style={{ color: isSelected ? cfg.style?.stroke || 'blue' : cfg.style?.stroke || 'black' }}
+                  >
+                    {IconComponent && <IconComponent className="w-5 h-5" />}
+                  </button>
+                </Tooltip>
+              );
+            })}
+          </div>
+          
+          {!sidebarOpen&&(<Panel position="top-right"><button style={{padding:'10px 14px',background:'rgba(255,255,255,0.95)',borderRadius:'8px',boxShadow:'0 2px 8px rgba(0,0,0,0.1)',cursor:'pointer',display:'flex',alignItems:'center',gap:'8px',border:'1px solid rgba(0,0,0,0.05)',transition:'background-color 0.2s, box-shadow 0.2s'}}onClick={()=>setSidebarOpen(true)}onMouseOver={e=>{e.currentTarget.style.backgroundColor='rgba(245,245,245,0.95)';e.currentTarget.style.boxShadow='0 3px 10px rgba(0,0,0,0.15)';}}onMouseOut={e=>{e.currentTarget.style.backgroundColor='rgba(255,255,255,0.95)';e.currentTarget.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)';}}title="Mostrar Panel de Recursos"><SquaresPlusIcon className="h-5 w-5 text-gray-700"/><span style={{fontSize:'14px',fontWeight:500,color:'#333'}}>Recursos</span></button></Panel>)}
+          {sidebarOpen&&(<Panel position="top-right"style={{width:'360px',background:'rgba(255,255,255,0.9)',padding:'0',borderRadius:'12px 0 0 12px',height:'calc(100vh - 7.5rem)',overflow:'hidden',boxShadow:'0 4px 20px rgba(0,0,0,0.15)',display:'flex',flexDirection:'column',position:'fixed',top:'7.5rem',right:'0px',zIndex:9999,transform:'none',transition:'transform 0.3s ease-out, opacity 0.3s ease-out, width 0.3s ease-out',backdropFilter:'blur(10px)'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',borderBottom:'1px solid rgba(230,230,230,0.9)',flexShrink:0,minHeight:'56px',backgroundColor:'rgba(250,250,250,0.95)',borderTopLeftRadius:'12px',borderTopRightRadius:'12px'}}><h4 style={{margin:0,fontSize:'16px',fontWeight:'600',color:'#333'}}>Recursos</h4><button onClick={()=>setSidebarOpen(false)}style={{border:'none',background:'transparent',cursor:'pointer',width:'28px',height:'28px',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',transition:'background-color 0.2s',color:'#555'}}title="Ocultar Panel de Recursos"onMouseOver={e=>(e.currentTarget.style.backgroundColor='#e9e9e9')}onMouseOut={e=>(e.currentTarget.style.backgroundColor='transparent')}><XMarkIcon className="w-5 h-5"/></button></div><div style={{padding:'12px 16px',borderBottom:'1px solid rgba(230,230,230,0.9)',backgroundColor:'rgba(250,250,250,0.95)'}}><input type="text"placeholder="Buscar recursos..."value={searchTerm}onChange={e=>setSearchTerm(e.target.value)}style={{width:'100%',padding:'8px 12px',borderRadius:'6px',border:'1px solid #ddd',fontSize:'14px',outline:'none',boxShadow:'inset 0 1px 2px rgba(0,0,0,0.075)'}}/></div><div style={{overflowY:'auto',overflowX:'hidden',flexGrow:1,display:'flex',flexDirection:'column',backgroundColor:'rgba(255,255,255,0.9)',paddingBottom:'16px',scrollbarWidth:'thin',scrollbarColor:'#ccc #f1f1f1'}}>{resourceCategories.map(c=>({...c,items:c.items.filter(i=>i.name.toLowerCase().includes(searchTerm.toLowerCase())||i.description.toLowerCase().includes(searchTerm.toLowerCase()))})).filter(c=>c.items.length>0).map(cat=>(<div key={cat.name}style={{borderBottom:'1px solid #f0f0f0'}}><h5 onClick={()=>setCollapsedCategories(p=>({...p,[cat.name]:!p[cat.name]}))}style={{cursor:'pointer',margin:0,padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'14px',fontWeight:'600',backgroundColor:collapsedCategories[cat.name]?'#ffffff':'#f8f8f8',transition:'background-color 0.2s'}}onMouseOver={e=>{if(!collapsedCategories[cat.name])return;e.currentTarget.style.backgroundColor='#f5f5f5';}}onMouseOut={e=>{if(!collapsedCategories[cat.name])return;e.currentTarget.style.backgroundColor='#ffffff';}}><span>{cat.name}</span><span style={{color:'#666'}}>{collapsedCategories[cat.name]?'▸':'▾'}</span></h5>{!collapsedCategories[cat.name]&&(<ul style={{listStyleType:'none',padding:'2px 0',margin:0,backgroundColor:'#fdfdfd',maxHeight:'none',overflowY:'visible',position:'relative',zIndex:10001}}>{cat.items.map(item=>(<li key={cat.name+'-'+item.type+'-'+item.name}draggable onDragStart={e=>onDragStartSidebar(e,item)}style={{padding:'6px 16px',margin:'0',cursor:'grab',display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',color:'#444',transition:'background-color 0.15s'}}onMouseOver={e=>{e.currentTarget.style.backgroundColor='#f0f0f0'}}onMouseOut={e=>{e.currentTarget.style.backgroundColor='transparent'}}><div style={{minWidth:'24px',display:'flex',alignItems:'center',justifyContent:'center',marginRight:'8px'}}>{item.icon?React.cloneElement(item.icon,{className:'w-5 h-5 text-gray-500'}):<ServerIcon className="w-5 h-5 text-gray-400"/>}</div><div style={{flex:1}}><span style={{fontWeight:'500'}}>{item.name}</span><p style={{fontSize:'11px',color:'#777',margin:'2px 0 0 0',lineHeight:'1.3'}}>{item.description}</p></div></li>))}</ul>)}</div>))}</div></Panel>)}
         </ReactFlow>
       </div>
       {runModalVisible&&(<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"><div className="bg-white p-6 rounded-lg shadow-xl"><h3 className="text-lg font-semibold mb-4">Run Deployment</h3><p className="mb-4">Are you sure you want to deploy this diagram?</p><div className="flex justify-end gap-2"><button onClick={()=>setRunModalVisible(false)}className="px-4 py-2 border rounded hover:bg-gray-100">Cancel</button><button onClick={handleRun}className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Run</button></div></div></div>)}
@@ -910,13 +1023,11 @@ const FlowEditorContent = ({
   );
 };
 
-const FlowEditor = (props: FlowEditorProps): JSX.Element => {
+const FlowEditor: React.FC<FlowEditorProps> = (props) => {
   return (
     <ReactFlowProvider>
-      <SelectedEdgeTypeProvider> {/* Envolver con SelectedEdgeTypeProvider */}
-        <div className="relative w-full h-full">
-          <FlowEditorContent {...props} />
-        </div>
+      <SelectedEdgeTypeProvider>
+        <FlowEditorContent {...props} />
       </SelectedEdgeTypeProvider>
     </ReactFlowProvider>
   );

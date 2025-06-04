@@ -19,12 +19,20 @@ import ReactFlow, {
   applyEdgeChanges,
   useReactFlow, // Importar useReactFlow
   Panel, // Importar Panel si se va a usar para el sidebar
+  applyNodeChanges as applyNodeChangesRf, // Renombrar para evitar conflicto si se usa localmente
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import nodeTypesFromFile from '../nodes/NodeTypes'; // Asumiendo que los tipos de nodo son los mismos
 import { LogicalEdgeType, EdgeTypeConfig } from '@/app/config/edgeConfig'; // Importar tipos necesarios
 import { ResourceItem, ResourceCategory } from './FlowEditor'; // Importar tipos desde FlowEditor
-import { SquaresPlusIcon, XMarkIcon, ServerIcon as HeroServerIcon } from '@heroicons/react/24/outline'; // Re-añadir importación de iconos si se eliminó
+import { 
+  SquaresPlusIcon, 
+  XMarkIcon, 
+  ServerIcon as HeroServerIcon,
+  DocumentTextIcon, // Icono para Nota
+  PencilIcon,       // Icono para Texto
+  // RectangleGroupIcon // Icono para Area (para después)
+} from '@heroicons/react/24/outline'; 
 
 
 interface GroupFocusViewProps {
@@ -62,6 +70,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
   const [groupSearchTerm, setGroupSearchTerm] = React.useState('');
   const [groupCollapsedCategories, setGroupCollapsedCategories] = React.useState<Record<string, boolean>>({});
+  const [activeToolInGroup, setActiveToolInGroup] = React.useState<'select' | 'note' | 'text'>('select');
   
   const groupFlowInstance = useReactFlow(); 
   const groupFlowWrapper = React.useRef<HTMLDivElement>(null);
@@ -87,6 +96,48 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   // LUEGO, useNodesState y useEdgesState
   const [nodes, setNodes, onNodesChangeInternal] = useNodesState(initialGroupNodes);
   const [edges, setEdges, onEdgesChangeInternal] = useEdgesState(initialGroupEdges);
+
+  // Los callbacks deben ir después de la inicialización de los estados que utilizan
+  // onDropInGroup está definido más adelante
+
+  const handleToolClickInGroup = (tool: 'select' | 'note' | 'text') => {
+    setActiveToolInGroup(prevTool => prevTool === tool ? 'select' : tool);
+    // Cambiar cursor si es necesario
+    if (groupFlowWrapper.current) {
+      if (tool === 'note' || tool === 'text') {
+        groupFlowWrapper.current.style.cursor = 'crosshair';
+      } else {
+        groupFlowWrapper.current.style.cursor = 'default';
+      }
+    }
+  };
+  
+  const onPaneClickInGroup = useCallback((event: React.MouseEvent) => {
+    if ((activeToolInGroup === 'note' || activeToolInGroup === 'text') && groupFlowInstance) {
+      event.preventDefault();
+      event.stopPropagation();
+      const position = groupFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const type = activeToolInGroup === 'note' ? 'noteNode' : 'textNode';
+      const data = activeToolInGroup === 'note' 
+        ? { text: 'Click to edit', backgroundColor: '#FEF08A', textColor: '#1F2937', fontSize: 14 } 
+        : { text: 'Click to edit', fontSize: 16, fontWeight: 'normal', textAlign: 'left', textColor: '#000000', backgroundColor: 'transparent', borderStyle: 'none' };
+      
+      const newNodeId = `${activeToolInGroup}-${Date.now()}`;
+      const newNodeToAdd: Node = { 
+        id: newNodeId, 
+        type, 
+        position, 
+        data, 
+        // No parentId aquí, se maneja al guardar
+      };
+      setNodes((nds) => nds.concat(newNodeToAdd));
+      setActiveToolInGroup('select'); // Volver a select después de crear
+      if (groupFlowWrapper.current) {
+        groupFlowWrapper.current.style.cursor = 'default';
+      }
+    }
+  }, [activeToolInGroup, groupFlowInstance, setNodes, setActiveToolInGroup]);
+
 
   const onDragStartSidebarInGroup = (event: React.DragEvent, item: ResourceItem) => {
     // Usar un tipo de datos diferente para el drag-and-drop dentro del grupo para evitar conflictos
@@ -234,9 +285,24 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
           <button
             onClick={() => setIsGroupSidebarOpen(prev => !prev)}
             title="Mostrar Recursos"
-            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+            className={`p-1.5 hover:bg-gray-100 rounded ${isGroupSidebarOpen ? 'bg-blue-100 text-blue-600' : 'text-gray-700'}`}
           >
             <SquaresPlusIcon className="w-5 h-5" />
+          </button>
+          {/* Herramientas de Nota y Texto */}
+          <button
+            onClick={() => handleToolClickInGroup('note')}
+            title="Añadir Nota"
+            className={`p-1.5 hover:bg-gray-100 rounded ${activeToolInGroup === 'note' ? 'bg-blue-100 text-blue-600' : 'text-gray-700'}`}
+          >
+            <DocumentTextIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => handleToolClickInGroup('text')}
+            title="Añadir Texto"
+            className={`p-1.5 hover:bg-gray-100 rounded ${activeToolInGroup === 'text' ? 'bg-blue-100 text-blue-600' : 'text-gray-700'}`}
+          >
+            <PencilIcon className="w-5 h-5" />
           </button>
           {/* Separador */}
           <div className="h-5 w-px bg-gray-300 mx-1"></div>
@@ -262,8 +328,9 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
             <ReactFlow
               nodes={nodes}
               edges={edges}
-              onDrop={onDropInGroup} // Habilitar drop
-              onDragOver={(event) => event.preventDefault()} // Necesario para onDrop
+              onDrop={onDropInGroup} 
+              onDragOver={(event) => event.preventDefault()} 
+              onPaneClick={onPaneClickInGroup} // Añadir onPaneClick
             onNodesChange={onNodesChangeInternal}
             onEdgesChange={onEdgesChangeInternal}
             onConnect={onConnect}
