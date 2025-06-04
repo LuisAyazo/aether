@@ -47,7 +47,7 @@ const getChildNodeIcon = (nodeType?: string) => {
 };
 
 
-const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height, dragging }) => {
+const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height, dragging, isOver: isNodeOver }) => {
   // Mover constantes aquí para intentar resolver error de "Cannot find name"
   const CONTENT_PADDING_TOP = 8;
   const CONTENT_PADDING_BOTTOM = 8;
@@ -347,8 +347,13 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
           </div>
         ))}
         {/* Siempre mostrar el área de drop, pero podría tener un texto diferente si está expandido */}
-        <div 
-          className={`mt-2 text-center text-gray-400 text-xs py-2 border-2 border-dashed border-gray-300 rounded-md ${data.isExpandedView && childNodes.length > 0 ? 'min-h-[50px]' : ''}`}
+        <div
+          className={`
+            mt-2 text-center text-xs py-2 border-2 rounded-md transition-colors duration-200 ease-in-out
+            ${isNodeOver && !data.isExpandedView ? 'border-blue-500 text-blue-600' : 'border-dashed border-gray-300 text-gray-400'}
+            ${data.isExpandedView && childNodes.length > 0 ? 'min-h-[50px]' : ''}
+            ${!data.isExpandedView ? 'sticky bottom-2 left-2 right-2 bg-white/90 z-10' : ''}
+          `}
           style={{ flexGrow: data.isExpandedView ? 1 : 0 }} // Ocupar espacio si está expandido
         >
           {data.isExpandedView ? (childNodes.length === 0 ? 'Área de grupo expandida (vacía)' : 'Nodos hijos renderizados por el flujo') : 'Arrastra nodos aquí'}
