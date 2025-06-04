@@ -794,7 +794,49 @@ const FlowEditorContent = ({
     <div className="relative w-full h-full">
       {renderEditGroupModal()}
       <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapper}>
-        <style>{`.react-flow__pane{cursor:${activeTool==='note'||activeTool==='text'||activeTool==='area'||activeTool==='lasso'?'crosshair':'default'};}.react-flow__node,.react-flow__node:active,.react-flow__node:hover,.react-flow__node[data-dragging="true"],.react-flow__node[data-selected="true"],.react-flow__node[data-selected="true"]:active,.react-flow__node[data-selected="true"]:hover,.note-node,.note-node:hover,.note-node:active,.note-node[data-selected="true"],.note-node[data-selected="true"]:hover,.note-node[data-selected="true"]:active{cursor:move !important;}.area-node{background-color:rgba(59,130,246,0.1)!important;border:1px solid rgba(59,130,246,0.5)!important;border-radius:8px !important;}.area-node:hover{background-color:rgba(59,130,246,0.15)!important;border:1px solid rgba(59,130,246,0.6)!important;}.area-node[data-selected="true"]{background-color:rgba(59,130,246,0.2)!important;border:1px solid rgba(59,130,246,0.7)!important;}`}</style>
+        <style>{`
+          .react-flow__pane {
+            cursor: ${activeTool === 'note' || activeTool === 'text' || activeTool === 'area' || activeTool === 'lasso' ? 'crosshair' : 'default'};
+          }
+          .react-flow__node,
+          .react-flow__node:active,
+          .react-flow__node:hover,
+          .react-flow__node[data-dragging="true"],
+          .react-flow__node[data-selected="true"],
+          .react-flow__node[data-selected="true"]:active,
+          .react-flow__node[data-selected="true"]:hover,
+          .note-node,
+          .note-node:hover,
+          .note-node:active,
+          .note-node[data-selected="true"],
+          .note-node[data-selected="true"]:hover,
+          .note-node[data-selected="true"]:active {
+            cursor: move !important;
+          }
+          .react-flow__node-areaNode {
+            z-index: -1000 !important;
+          }
+          .react-flow__node-areaNode.selected {
+            z-index: -1000 !important;
+          }
+          .react-flow__node-areaNode:hover {
+            z-index: -1000 !important;
+          }
+          /* Estilos visuales para area-node (pueden ir dentro del componente AreaNode.tsx o aquí si son globales) */
+          .area-node { /* Esta clase es la raíz del componente AreaNode, no el wrapper de ReactFlow */
+            background-color: rgba(59,130,246,0.1) !important;
+            border: 1px solid rgba(59,130,246,0.5) !important;
+            border-radius: 8px !important;
+          }
+          .area-node:hover {
+            background-color: rgba(59,130,246,0.15) !important;
+            border: 1px solid rgba(59,130,246,0.6) !important;
+          }
+          .area-node[data-selected="true"] { /* Esto aplica al div interno del AreaNode si tiene data-selected */
+            background-color: rgba(59,130,246,0.2) !important;
+            border: 1px solid rgba(59,130,246,0.7) !important;
+          }
+        `}</style>
         <ReactFlow
           defaultViewport={initialViewport || { x: 0, y: 0, zoom: 1 }}
           minZoom={0.1} maxZoom={2} deleteKeyCode={[]} noDragClassName="nodrag"

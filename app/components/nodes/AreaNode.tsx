@@ -86,6 +86,7 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
         position: 'relative',
         width: '100%',
         height: '100%',
+        zIndex: -1, // Asegura que el área esté detrás de otros nodos
       }}
     >
       <NodeResizer
