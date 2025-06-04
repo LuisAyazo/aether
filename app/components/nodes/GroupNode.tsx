@@ -152,7 +152,8 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
             data: { ...n.data, isMinimized: newMinimizedState },
             style: { 
               ...n.style, 
-              width: newMinimizedState ? MINIMIZED_WIDTH : (width || DEFAULT_WIDTH), 
+              // Mantener el ancho actual al minimizar, solo cambiar el alto
+              width: (width || DEFAULT_WIDTH), 
               height: newMinimizedState ? MINIMIZED_HEIGHT : (height || DEFAULT_HEIGHT)
             },
             // El dragging se resetea por React Flow al cambiar nodos, no debería ser problema aquí.
@@ -201,7 +202,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
       <div
         className={`relative px-2 py-1 border rounded-lg bg-white shadow-sm ${getProviderColor()} flex items-center justify-between`}
         style={{ 
-          width: `${MINIMIZED_WIDTH}px`,
+          width: `${width || DEFAULT_WIDTH}px`, // Usar el ancho actual del nodo
           height: `${MINIMIZED_HEIGHT}px`,
         }}
       >
