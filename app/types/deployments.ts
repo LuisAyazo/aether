@@ -3,14 +3,17 @@ export interface Deployment {
   name: string;
   environment: 'production' | 'staging' | 'development';
   provider: 'aws' | 'gcp' | 'azure' | 'kubernetes' | 'docker';
-  platform: 'ecs' | 'cloud-run' | 'fargate' | 'cloud-function' | 'kubernetes' | 'docker-instance' | 'unknown';
+  platform: 'ecs' | 'cloud-run' | 'fargate' | 'cloud-function' | 'kubernetes' | 'docker-instance' | 'unknown' | 'functions';
   status: 'running' | 'stopped' | 'deploying' | 'failed' | 'pending';
   region: string;
+  repositoryFullName?: string; // Añadido para la información del repositorio
+  deploymentDirectory?: string; // Añadido para el directorio de despliegue
   lastDeployed: string;
   resources: number;
   cost: number;
   version: string;
   description?: string;
+  repository?: Repository; // Añadido para almacenar el objeto repo reconstruido
 }
 
 export interface Repository {

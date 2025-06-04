@@ -32,37 +32,6 @@ import {
 import { platformConfig } from '@/app/config/platforms';
 import { getAuthToken } from '@/app/services/authService';
 
-const mockDeployments: Deployment[] = [
-  {
-    id: '1',
-    name: 'Web App Frontend',
-    environment: 'production',
-    provider: 'aws',
-    platform: 'ecs',
-    status: 'running',
-    region: 'us-east-1',
-    lastDeployed: '2024-01-15T10:30:00Z',
-    resources: 12,
-    cost: 245.50,
-    version: 'v1.2.3',
-    description: 'React frontend application with CDN distribution'
-  },
-  {
-    id: '2',
-    name: 'API Backend',
-    environment: 'production',
-    provider: 'gcp',
-    platform: 'cloud-run',
-    status: 'running',
-    region: 'us-central1',
-    lastDeployed: '2024-01-14T15:45:00Z',
-    resources: 8,
-    cost: 189.20,
-    version: 'v2.1.0',
-    description: 'Node.js API with Cloud SQL database'
-  },
-];
-
 const statusConfig = {
   running: { color: 'text-green-600 bg-green-50', icon: CheckCircleIcon, label: 'Ejecutándose' },
   stopped: { color: 'text-gray-600 bg-gray-50', icon: StopIcon, label: 'Detenido' },
@@ -77,7 +46,8 @@ const environmentDisplayConfig: Record<string, { color: string; label: string }>
   development: { color: 'text-green-700 bg-green-100', label: 'Desarrollo' },
   sandbox: { color: 'text-purple-700 bg-purple-100', label: 'Sandbox'},
   qa: { color: 'text-cyan-700 bg-cyan-100', label: 'QA'},
-  demo: { color: 'text-pink-700 bg-pink-100', label: 'Demo'}
+  demo: { color: 'text-pink-700 bg-pink-100', label: 'Demo'},
+  unknown: { color: 'text-gray-700 bg-gray-100', label: 'Desconocido'}
 };
 
 const providerConfig = {
@@ -89,20 +59,35 @@ const providerConfig = {
 };
 
 interface DeploymentsPageProps {
-  companyId: string; // Cambiado a obligatorio
+  companyId: string; 
 }
+
+// Tipo para la respuesta del API de listar configuraciones
+type ApiDeploymentListItem = Omit<DeploymentConfig, 'repository'> & {
+  id: string;
+  repository_id: string;
+  repository_full_name: string;
+  updated_at: string; 
+  // El backend podría no enviar todos los campos de DeploymentConfig,
+  // así que hacemos opcionales los que podrían faltar en una lista.
+  preDeploySteps?: DeploymentStep[];
+  postDeploySteps?: DeploymentStep[];
+  environmentVariables?: EnvironmentVariable[];
+  buildConfig?: DeploymentConfig['buildConfig'];
+};
+
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { // Usar companyId de props
+export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { 
   const router = useRouter();
   
-  const [deployments, setDeployments] = useState<Deployment[]>(mockDeployments);
+  const [deployments, setDeployments] = useState<Deployment[]>([]); 
   const [availableEnvironments, setAvailableEnvironments] = useState<EnvironmentDefinition[]>([]);
   const [expandedDeployment, setExpandedDeployment] = useState<string | null>(null);
-  const [selectedEnvironmentFilter, _setSelectedEnvironmentFilter] = useState<string>('all'); 
-  const [selectedProviderFilter, _setSelectedProviderFilter] = useState<string>('all'); 
+  const [selectedPlatformFilter, setSelectedPlatformFilter] = useState<string>('all'); 
+  const [selectedProviderFilter, _setSelectedProviderFilter] = useState<string>('all'); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); 
   const [newDeploymentName, setNewDeploymentName] = useState('');
   const [newDeploymentPlatform, setNewDeploymentPlatform] = useState<Deployment['platform'] | undefined>(undefined);
@@ -122,7 +107,7 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
   const [repoSearchTerm, setRepoSearchTerm] = useState('');
   const [currentSelectedRepoForConfig, setCurrentSelectedRepoForConfig] = useState<Repository | null>(null);
 
-  const [isDeploying, setIsDeploying] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [deploymentLogs, setDeploymentLogs] = useState<string[]>([]);
   const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'deploying' | 'success' | 'error'>('idle');
@@ -130,14 +115,13 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
   const fetchAvailableEnvironments = async () => {
     if (!companyId) {
       console.warn("DeploymentsPage: companyId es undefined, no se pueden cargar ambientes.");
-      setAvailableEnvironments([]); // Asegurar que sea un array vacío
+      setAvailableEnvironments([]); 
       return;
     }
     console.log("DeploymentsPage: Iniciando fetchAvailableEnvironments con companyId:", companyId);
     const token = getAuthToken();
     if (!token) {
       message.error("Usuario no autenticado.");
-      // Considerar si setLoading(false) es apropiado aquí o si la página debe quedar en error/loader
       return;
     }
     try {
@@ -160,9 +144,82 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
     }
   };
 
+  const fetchDeploymentConfigurations = async () => {
+    if (!companyId) {
+      console.warn("DeploymentsPage: companyId es undefined, no se pueden cargar configuraciones.");
+      setDeployments([]);
+      return;
+    }
+    const token = getAuthToken();
+    if (!token) {
+      message.error("Usuario no autenticado. No se pueden cargar configuraciones.");
+      setDeployments([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/v1/companies/${companyId}/deployment-configurations`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Error al obtener configuraciones de despliegue.' }));
+        throw new Error(errorData.detail || 'Failed to fetch deployment configurations');
+      }
+      const data: ApiDeploymentListItem[] = await response.json(); 
+      
+      const uiDeployments: Deployment[] = data.map(config => {
+        const envName = availableEnvironments.find(e => e.id === config.environment_id)?.name.toLowerCase() as Deployment['environment'] || 'unknown';
+        const repoForUI: Repository = {
+            id: parseInt(config.repository_id) || Date.now(), // Simular ID si no es numérico
+            name: config.repository_full_name.split('/')[1] || config.repository_full_name,
+            full_name: config.repository_full_name,
+            private: false, // Placeholder
+            html_url: '', // Placeholder
+            description: config.description || '', // Placeholder
+            default_branch: config.branch,
+        };
+        return {
+          id: config.id,
+          name: config.name,
+          environment: envName,
+          provider: 'gcp', 
+          platform: config.platform,
+          status: 'pending', 
+          region: config.region,
+          lastDeployed: config.updated_at || new Date().toISOString(), 
+          resources: 0, 
+          cost: 0, 
+          version: 'v0.0.0', 
+          description: config.description || '',
+          repositoryFullName: config.repository_full_name, 
+          deploymentDirectory: config.directory,
+          repository: repoForUI, // Almacenar el objeto repo reconstruido
+          // Mantener otros campos de DeploymentConfig si se mapean desde ApiDeploymentListItem
+          branch: config.branch,
+          config: config.config, 
+          trigger_type: config.trigger_type,
+          is_active: config.is_active,
+          preDeploySteps: config.preDeploySteps,
+          postDeploySteps: config.postDeploySteps,
+          environmentVariables: config.environmentVariables,
+          buildConfig: config.buildConfig,
+        };
+      });
+      setDeployments(uiDeployments);
+      console.log("DeploymentsPage: Configuraciones de despliegue recibidas y mapeadas:", uiDeployments);
+
+    } catch (error) {
+      console.error("Error fetching deployment configurations for DeploymentsPage:", error);
+      message.error(`Error al cargar las configuraciones de despliegue: ${error instanceof Error ? error.message : String(error)}`);
+      setDeployments([]);
+    } finally {
+      setLoading(false); 
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
+      setLoading(true); 
       try {
         const connResponse = await fetch('/api/auth/github/check');
         const connData = await connResponse.json();
@@ -170,24 +227,41 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
         if (connData.connected) {
           await fetchRepositories();
         }
-        // Llamar a fetchAvailableEnvironments solo si companyId es válido
         if (companyId) {
-          await fetchAvailableEnvironments();
+          await fetchAvailableEnvironments(); 
         } else {
-          console.warn("DeploymentsPage: companyId no disponible en el montaje inicial, no se cargan ambientes.");
-          setAvailableEnvironments([]); // Inicializar como array vacío si no hay companyId
+          console.warn("DeploymentsPage: companyId no disponible en el montaje inicial.");
+          setAvailableEnvironments([]); 
+          setDeployments([]);
+          setLoading(false); // Detener carga si no hay companyId
         }
-      } catch (error) { console.error('Error initializing page data:', error); } 
-      finally { setLoading(false); }
+      } catch (error) { 
+        console.error('Error initializing page data (connection/repos/environments):', error); 
+        setLoading(false); // Detener carga en caso de error aquí
+      } 
     };
-    if (companyId) { // Solo ejecutar fetchData si companyId está presente
+    if (companyId) { 
         fetchData();
     } else {
-        setLoading(false); // Si no hay companyId, no hay nada que cargar
-        setIsConnected(false); // Asumir no conectado si no hay companyId para verificar GitHub
+        setLoading(false); 
+        setIsConnected(false); 
         setAvailableEnvironments([]);
+        setDeployments([]);
     }
-  }, [companyId]); // Depender de companyId de props
+  }, [companyId]); 
+
+  useEffect(() => {
+    if (companyId && availableEnvironments.length > 0 && isConnected) { // Solo cargar configs si hay ambientes Y conexión a GH
+      fetchDeploymentConfigurations();
+    } else if (companyId && !isConnected && availableEnvironments.length > 0) {
+      // Si hay ambientes pero no conexión a GH, podríamos querer cargar configs que no dependan de repo?
+      // Por ahora, asumimos que la mayoría de las configs necesitarán info de repo.
+      // O podríamos llamar a fetchDeploymentConfigurations y que maneje la ausencia de repos.
+      // setLoading(false); // Asegurar que el loader se detenga si no se llama a fetchDeploymentConfigurations
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, availableEnvironments, isConnected]); // Depender también de isConnected
+
 
   const fetchRepositories = async () => {
     try {
@@ -233,14 +307,63 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
     setIsRepoSelectorModalOpen(false);
   };
 
-  const filteredDeployments = deployments.filter(deployment => {
-    const environmentMatch = selectedEnvironmentFilter === 'all' || deployment.environment === selectedEnvironmentFilter;
-    const providerMatch = selectedProviderFilter === 'all' || deployment.provider === selectedProviderFilter;
-    return environmentMatch && providerMatch;
-  });
+  const filteredDeployments = useMemo(() => {
+    return deployments.filter(deployment => {
+      const platformMatch = selectedPlatformFilter === 'all' || deployment.platform === selectedPlatformFilter;
+      const providerMatch = selectedProviderFilter === 'all' || deployment.provider === selectedProviderFilter; 
+      return platformMatch && providerMatch; 
+    });
+  }, [deployments, selectedPlatformFilter, selectedProviderFilter]);
 
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const handleDeploymentAction = (deploymentId: string, action: string) => console.log(`Performing ${action} on deployment ${deploymentId}`);
+  
+  const handleEditDeployment = (deploymentToEdit: Deployment) => {
+    // `deploymentToEdit` ahora debería tener el campo `repository` poblado desde `fetchDeploymentConfigurations`
+    const repoToUse = deploymentToEdit.repository || repositories.find(r => r.full_name === deploymentToEdit.repositoryFullName);
+    const selectedEnvDef = availableEnvironments.find(e => e.name.toLowerCase() === deploymentToEdit.environment.toLowerCase());
+
+    if (!repoToUse && deploymentToEdit.repositoryFullName) {
+      message.error(`Repositorio "${deploymentToEdit.repositoryFullName}" no encontrado. No se puede editar completamente.`);
+    }
+    if (!selectedEnvDef) {
+      message.error(`Definición de ambiente "${deploymentToEdit.environment}" no encontrada. No se puede editar completamente.`);
+    }
+    
+    const reconstructedConfig: Partial<DeploymentConfig> = {
+      id: deploymentToEdit.id,
+      company_id: companyId,
+      name: deploymentToEdit.name,
+      platform: deploymentToEdit.platform,
+      repository: repoToUse!, // Asumimos que repoToUse será encontrado o es parte de deploymentToEdit
+      region: deploymentToEdit.region,
+      environment_id: selectedEnvDef?.id || (deploymentToEdit as any).environment_id,
+      directory: deploymentToEdit.deploymentDirectory || '/',
+      description: deploymentToEdit.description,
+      branch: (deploymentToEdit as any).branch || repoToUse?.default_branch || 'main',
+      config: (deploymentToEdit as any).config || {},
+      trigger_type: (deploymentToEdit as any).trigger_type || DeploymentTriggerTypeEnum.MANUAL,
+      is_active: (deploymentToEdit as any).is_active !== undefined ? (deploymentToEdit as any).is_active : true,
+      preDeploySteps: (deploymentToEdit as any).preDeploySteps || [],
+      postDeploySteps: (deploymentToEdit as any).postDeploySteps || [],
+      environmentVariables: (deploymentToEdit as any).environmentVariables || [],
+      buildConfig: (deploymentToEdit as any).buildConfig || undefined,
+    };
+
+    setSelectedPlatform(deploymentToEdit.platform);
+    setCurrentSelectedRepoForConfig(repoToUse || null);
+    setDeploymentConfig(reconstructedConfig);
+    setIsConfigModalOpen(true);
+    setDeploymentStatus('idle');
+    setDeploymentLogs([]);
+  };
+  
+  const handleDeploymentAction = (deploymentId: string, action: string, deployment?: Deployment) => {
+    if (action === 'edit' && deployment) {
+      handleEditDeployment(deployment);
+    } else {
+      console.log(`Performing ${action} on deployment ${deploymentId}`);
+    }
+  };
   
   const handleViewYaml = (deployment: Deployment) => {
     setSelectedDeploymentForYaml(deployment);
@@ -251,10 +374,9 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
 
   const handleSaveYaml = async (yamlContent: string) => {
     if (!selectedDeploymentForYaml) return;
-    // Aquí iría la lógica para guardar el YAML, por ahora simulado
     console.log("Guardando YAML:", yamlContent);
     try { message.success('YAML guardado exitosamente (simulado)'); setIsYamlModalOpen(false); } 
-    catch (error) { message.error('Error al guardar el YAML'); }
+    catch { message.error('Error al guardar el YAML'); } 
   };
   
   const handlePlatformSelect = (platform: Deployment['platform']) => {
@@ -322,22 +444,50 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
       setIsSavingConfig(false);
       return;
     }
+
     try {
-      const response = await fetch(`/api/v1/companies/${companyId}/deployment-configurations`, {
-        method: 'POST',
+      const isUpdate = !!currentConfig.id && !currentConfig.id.startsWith("sim-");
+      const method = isUpdate ? 'PUT' : 'POST';
+      const endpoint = isUpdate 
+        ? `/api/v1/deployment-configurations/${currentConfig.id}` 
+        : `/api/v1/companies/${companyId}/deployment-configurations`;
+
+      const response = await fetch(endpoint, {
+        method: method,
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(backendPayload),
       });
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to save deployment configuration');
+        let errorDetail = 'Error desconocido del servidor.';
+        try {
+          const errorData = await response.json();
+          errorDetail = errorData.detail || `Error del servidor: ${response.status}`;
+        } catch { 
+          errorDetail = `Error del servidor: ${response.status} (Respuesta no es JSON válido)`;
+        }
+        throw new Error(errorDetail); 
       }
-      const savedConfig: DeploymentConfig = await response.json(); 
-      message.success(`Configuración "${savedConfig.name}" guardada exitosamente.`);
-      setDeploymentConfig(prev => ({...prev, id: savedConfig.id })); 
+
+      const savedOrUpdatedConfig: DeploymentConfig = await response.json(); 
+      
+      if (isUpdate) {
+        message.success(`Configuración "${savedOrUpdatedConfig.name}" actualizada exitosamente.`);
+      } else {
+        message.success(`Configuración "${savedOrUpdatedConfig.name}" guardada exitosamente.`);
+      }
+      
+      await fetchDeploymentConfigurations(); 
+      
+      setDeploymentConfig(prev => ({...prev, id: savedOrUpdatedConfig.id })); 
+
     } catch (error) {
-      console.error('Error saving configuration:', error);
-      message.error(`Error al guardar la configuración: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('Error saving/updating configuration:', error);
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido al guardar/actualizar.";
+      message.error(errorMessage);
+      if (!currentConfig.id || currentConfig.id.startsWith("sim-")) {
+         setDeploymentConfig(prev => ({...prev, id: undefined }));
+      }
     } finally {
       setIsSavingConfig(false);
     }
@@ -450,12 +600,23 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
     return repositories.filter(repo => repo.full_name.toLowerCase().includes(repoSearchTerm.toLowerCase()));
   }, [repositories, repoSearchTerm]);
 
+  const platformDeploymentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (Array.isArray(deployments)) {
+      for (const dep of deployments) {
+        if (dep && dep.platform) { 
+          counts[dep.platform] = (counts[dep.platform] || 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }, [deployments]);
 
-  if (loading && !isConnected && !companyId) { // Ajustar condición de loader inicial
+  if (loading && !isConnected && !companyId) { 
     return <div className="p-6"><Title level={2}>Despliegues</Title><Card><div className="flex justify-center items-center p-8"><Spin size="large" /></div></Card></div>;
   }
 
-  if (!companyId) { // Si no hay companyId, mostrar mensaje de error o placeholder
+  if (!companyId) { 
     return <div className="p-6"><Title level={2}>Despliegues</Title><Card><Alert message="Error" description="No se ha proporcionado un ID de compañía." type="error" showIcon /></Card></div>;
   }
   
@@ -480,6 +641,11 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
               <button key={key} onClick={() => handlePlatformSelect(key as Deployment['platform'])} className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center justify-center ${selectedPlatform === key ? 'border-blue-600 bg-blue-50 shadow-lg' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}`}>
                 <span className="text-3xl mb-2">{config.icon}</span>
                 <h3 className="font-medium text-gray-900 text-center">{config.name}</h3>
+                {platformDeploymentCounts[key as Deployment['platform']] > 0 && (
+                  <span className="mt-2 text-xs text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                    {platformDeploymentCounts[key as Deployment['platform']]} config(s)
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -502,22 +668,47 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
           {selectedPlatform && (
             <div className="grid grid-cols-12 gap-x-6" style={{ minHeight: '75vh' }}>
               <div className="col-span-3 space-y-4 border-r border-gray-200 pr-4 overflow-y-auto" style={{ maxHeight: 'calc(75vh - 40px)' }}>
-                <h3 className="text-lg font-semibold text-gray-800 sticky top-0 bg-white py-2 z-10">Fuente del Repositorio</h3>
-                {currentSelectedRepoForConfig ? (
-                  <Card size="small" className="shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      <GithubOutlined className="text-gray-600" />
-                      <Text strong className="text-gray-700">{currentSelectedRepoForConfig.full_name}</Text>
-                    </div>
-                    <Button onClick={() => setIsRepoSelectorModalOpen(true)} block icon={<PlusOutlined />}>
-                      Cambiar Repositorio
+                <div className="sticky top-0 bg-white py-2 z-10">
+                  <h3 className="text-lg font-semibold text-gray-800">Configuración Actual</h3>
+                  {currentSelectedRepoForConfig ? (
+                    <Card size="small" className="shadow-sm mt-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <GithubOutlined className="text-gray-600" />
+                        <Text strong className="text-gray-700 truncate" title={currentSelectedRepoForConfig.full_name}>{currentSelectedRepoForConfig.full_name}</Text>
+                      </div>
+                      <Button onClick={() => setIsRepoSelectorModalOpen(true)} block icon={<PlusOutlined />}>
+                        Cambiar Repositorio
+                      </Button>
+                    </Card>
+                  ) : (
+                    <Button type="dashed" onClick={() => setIsRepoSelectorModalOpen(true)} icon={<PlusOutlined />} block className="h-20 mt-2">
+                      Seleccionar Repositorio
                     </Button>
-                  </Card>
-                ) : (
-                  <Button type="dashed" onClick={() => setIsRepoSelectorModalOpen(true)} icon={<PlusOutlined />} block className="h-20">
-                    Seleccionar Repositorio
-                  </Button>
-                )}
+                  )}
+                </div>
+
+                <div className="mt-6">
+                  <h4 className="text-md font-semibold text-gray-700 mb-2">Configuraciones Existentes ({platformConfig[selectedPlatform]?.name})</h4>
+                  <div className="max-h-96 overflow-y-auto space-y-2">
+                    {deployments.filter(d => d.platform === selectedPlatform).length === 0 && (
+                      <Text type="secondary" className="text-sm">No hay configuraciones para {platformConfig[selectedPlatform]?.name}.</Text>
+                    )}
+                    {deployments
+                      .filter(d => d.platform === selectedPlatform)
+                      .map(dep => (
+                        <Card 
+                          key={dep.id} 
+                          size="small" 
+                          hoverable 
+                          onClick={() => handleEditDeployment(dep)}
+                          className={`cursor-pointer ${deploymentConfig?.id === dep.id ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-200'}`}
+                        >
+                          <Text strong className="block truncate" title={dep.name}>{dep.name}</Text>
+                          {dep.repositoryFullName && <Text type="secondary" className="text-xs block truncate" title={dep.repositoryFullName}><FolderIcon className="h-3 w-3 inline-block mr-1" />{dep.repositoryFullName}</Text>}
+                        </Card>
+                      ))}
+                  </div>
+                </div>
               </div>
 
               <div className="col-span-5 space-y-6 overflow-y-auto pr-4" style={{ maxHeight: 'calc(75vh - 40px)' }}>
@@ -611,7 +802,29 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
         </Modal>
         
         <div className="space-y-4 mt-12">
-          <h2 className="text-2xl font-semibold mb-4">Despliegues Activos</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold">Despliegues Activos</h2>
+            <div className="flex items-center gap-4">
+              <Text>Filtrar por plataforma:</Text>
+              <Select
+                value={selectedPlatformFilter}
+                onChange={(value) => setSelectedPlatformFilter(value)}
+                style={{ width: 200 }}
+              >
+                <Option value="all">Todas las Plataformas</Option>
+                {Object.entries(platformConfig)
+                  .filter(([key]) => key !== 'unknown')
+                  .map(([key, config]) => (
+                    <Option key={key} value={key}>
+                      <Space>
+                        {config.icon}
+                        {config.name}
+                      </Space>
+                    </Option>
+                  ))}
+              </Select>
+            </div>
+          </div>
           {filteredDeployments.length === 0 && !loading && (
              <Card><Text type="secondary">No hay despliegues activos que coincidan con los filtros.</Text></Card>
           )}
@@ -631,6 +844,12 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">{deployment.name}</h3>
                         <p className="text-sm text-gray-600">{deployment.description}</p>
+                        {(deployment.repositoryFullName || deployment.deploymentDirectory) && (
+                          <div className="mt-1 text-xs text-gray-500">
+                            {deployment.repositoryFullName && <span><FolderIcon className="h-3 w-3 inline-block mr-1" />{deployment.repositoryFullName}</span>}
+                            {deployment.deploymentDirectory && <span className="ml-2"><CodeBracketIcon className="h-3 w-3 inline-block mr-1" />{deployment.deploymentDirectory}</span>}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -649,10 +868,15 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) { /
                         {platformConfig[deployment.platform]?.name || platformConfig.unknown.name}
                       </div>
                       <div className="flex items-center gap-2">
+                        <button onClick={() => handleDeploymentAction(deployment.id, 'edit', deployment)} className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg" title="Editar Configuración">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                          </svg>
+                        </button>
                         <button onClick={() => handleViewYaml(deployment)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Ver YAML"><CodeBracketIcon className="h-4 w-4" /></button>
-                        <button onClick={() => handleDeploymentAction(deployment.id, 'view')} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Ver detalles"><EyeIcon className="h-4 w-4" /></button>
-                        {deployment.status === 'running' ? (<button onClick={() => handleDeploymentAction(deployment.id, 'stop')} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Detener"><StopIcon className="h-4 w-4" /></button>) : (<button onClick={() => handleDeploymentAction(deployment.id, 'start')} className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg" title="Iniciar"><PlayIcon className="h-4 w-4" /></button>)}
-                        <button onClick={() => handleDeploymentAction(deployment.id, 'redeploy')} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Redesplegar"><ArrowPathIcon className="h-4 w-4" /></button>
+                        <button onClick={() => handleDeploymentAction(deployment.id, 'view', deployment)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Ver detalles"><EyeIcon className="h-4 w-4" /></button>
+                        {deployment.status === 'running' ? (<button onClick={() => handleDeploymentAction(deployment.id, 'stop', deployment)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Detener"><StopIcon className="h-4 w-4" /></button>) : (<button onClick={() => handleDeploymentAction(deployment.id, 'start', deployment)} className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg" title="Iniciar"><PlayIcon className="h-4 w-4" /></button>)}
+                        <button onClick={() => handleDeploymentAction(deployment.id, 'redeploy', deployment)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg" title="Redesplegar"><ArrowPathIcon className="h-4 w-4" /></button>
                       </div>
                     </div>
                   </div>
