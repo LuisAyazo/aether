@@ -30,6 +30,7 @@ import { Diagram } from '@/app/services/diagramService';
 import nodeTypesFromFile from '../nodes/NodeTypes'; 
 import { NodeExecutionState, NodeWithExecutionStatus } from '../../utils/customTypes';
 import ExecutionLog from './ExecutionLog';
+import GroupFocusView from './GroupFocusView'; // Importar el nuevo componente
 
 const { 
   Background, 
@@ -102,7 +103,7 @@ interface ResourceCategory {
   provider: 'aws' | 'gcp' | 'azure' | 'generic';
 }
 
-interface ResourceItem {
+export interface ResourceItem { // Exportar interfaz
   type: string;
   name: string;
   description: string;
@@ -128,6 +129,9 @@ interface ContextMenu {
     onClick: () => void;
   }>;
 }
+
+// Exportar ResourceCategory también si GroupFocusView la necesita directamente para su prop
+export type { ResourceCategory }; // Re-exportar el tipo si ya está definido arriba o definir y exportar
 
 type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea' | 'note' | 'text' | 'area';
 
@@ -307,6 +311,7 @@ const FlowEditorContent = ({
   const [isToolbarDragging, setIsToolbarDragging] = useState(false);
   const previousNodesRef = useRef<string | null>(null);
   const previousEdgesRef = useRef<string | null>(null);
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null); // Nuevo estado para la vista de grupo expandida
 
   // Constantes para el layout de la vista expandida del grupo
   const GROUP_HEADER_HEIGHT = 40; 
@@ -315,6 +320,43 @@ const FlowEditorContent = ({
   const CHILD_NODE_HEIGHT = 50; 
   const MIN_EXPANDED_GROUP_WIDTH = 250;
   const MIN_EXPANDED_GROUP_HEIGHT = 150;
+
+  const handleSaveChangesInGroup = useCallback((updatedNodesInGroup: Node[], newEdgesInGroup: Edge[]) => {
+    setNodes(currentNodes => {
+      const otherNodes = currentNodes.filter(n => n.parentId !== expandedGroupId && n.id !== expandedGroupId);
+      const groupNodeFromState = currentNodes.find(n => n.id === expandedGroupId);
+      
+      const finalUpdatedNodes = updatedNodesInGroup.map(un => ({
+        ...un,
+        parentId: expandedGroupId!,
+        extent: 'parent' as const,
+        // hidden: true, // Dejar que handleCollapseGroupView maneje el estado 'hidden' final
+      }));
+
+      // Asegurar que el groupNode principal también se actualice para no estar en isExpandedView
+      const updatedGroupNode = groupNodeFromState ? {
+        ...groupNodeFromState,
+        data: {
+          ...groupNodeFromState.data,
+          isExpandedView: false, // El grupo ya no está en "vista detallada"
+          isMinimized: groupNodeFromState.data.isMinimized, // Mantener estado de minimizado
+        },
+      } : undefined;
+
+      return [...otherNodes, ...(updatedGroupNode ? [updatedGroupNode] : []), ...finalUpdatedNodes];
+    });
+
+    setEdges(currentEdges => {
+      // Eliminar aristas antiguas que estaban solo entre los nodos del grupo
+      const childNodeIdsInGroup = new Set(updatedNodesInGroup.map(n => n.id));
+      const edgesOutsideGroupOrNotRelated = currentEdges.filter(edge => 
+        !childNodeIdsInGroup.has(edge.source) || !childNodeIdsInGroup.has(edge.target)
+      );
+      // Añadir las nuevas/actualizadas aristas del grupo
+      return [...edgesOutsideGroupOrNotRelated, ...newEdgesInGroup];
+    });
+
+  }, [setNodes, setEdges, expandedGroupId]);
 
 
   const [toolbarPosition, setToolbarPosition] = useState(() => {
@@ -513,83 +555,69 @@ const FlowEditorContent = ({
   }, [reactFlowInstance, selectedNodes, edges]);
 
   const handleExpandGroupView = useCallback((groupId: string) => {
-    const { getNode, getNodes, setNodes: rfSetNodes } = reactFlowInstance;
-    const groupNode = getNode(groupId);
-    if (!groupNode ) { 
-      return;
+    // Nueva lógica: Simplemente establece el ID del grupo que se va a expandir en un "nuevo stage"
+    setExpandedGroupId(groupId);
+    // Opcionalmente, actualiza el nodo de grupo en el canvas principal para indicar que está "enfocado"
+    // Esto podría ser útil si el canvas principal sigue visible de alguna manera.
+    // Por ahora, nos centraremos en cambiar la vista.
+    // La lógica anterior de redimensionamiento y organización de hijos se manejará
+    // dentro de la nueva vista de grupo o al entrar/salir de ella.
+    setNodes(nds => nds.map(n => n.id === groupId ? { ...n, data: { ...n.data, isExpandedView: true, isMinimized: false } } : n));
+
+  }, [setNodes, setExpandedGroupId]); // reactFlowInstance no es necesario aquí si solo actualizamos estado
+
+  const handleCollapseGroupView = useCallback((groupIdToCollapse: string) => {
+    // Si se está colapsando un grupo que no es el actualmente expandido en GroupFocusView,
+    // simplemente se actualiza su estado en el canvas principal (lógica original).
+    // Si es el mismo, se cierra GroupFocusView.
+    if (expandedGroupId && expandedGroupId !== groupIdToCollapse) {
+        // Lógica para colapsar un grupo en el canvas principal que no está en GroupFocusView
+        // (Esta es la lógica que tenías antes para el colapso in-canvas)
+        const { getNode, setNodes: rfSetNodes } = reactFlowInstance;
+        const groupNode = getNode(groupIdToCollapse);
+        if (!groupNode || !groupNode.data.isExpandedView) {
+          return;
+        }
+        const defaultWidth = 300; 
+        const defaultHeight = 200; 
+
+        rfSetNodes((currentNodesMap) =>
+          currentNodesMap.map((n) => {
+            if (n.id === groupIdToCollapse) {
+              return {
+                ...n,
+                data: { ...n.data, isExpandedView: false },
+                style: { ...n.style, width: defaultWidth, height: defaultHeight }, 
+              };
+            }
+            if (n.parentId === groupIdToCollapse) {
+               return { ...n, hidden: true }; 
+            }
+            return n;
+          })
+        );
+        return; // Salir para no afectar expandedGroupId
     }
+    
+    // Si estamos cerrando la vista de GroupFocusView (expandedGroupId === groupIdToCollapse)
+    setExpandedGroupId(null);
 
-    const currentAllNodes = getNodes(); 
-    const freshChildNodesOfGroup = currentAllNodes.filter(n => n.parentId === groupId);
-
-    const newGroupWidth = Math.max(MIN_EXPANDED_GROUP_WIDTH, (groupNode.width || MIN_EXPANDED_GROUP_WIDTH));
-    let accumulatedHeight = GROUP_HEADER_HEIGHT + CHILD_NODE_PADDING_Y;
-
-    freshChildNodesOfGroup.forEach(() => { 
-      accumulatedHeight += CHILD_NODE_HEIGHT + CHILD_NODE_PADDING_Y;
-    });
-    accumulatedHeight += CHILD_NODE_PADDING_Y; 
-    const newGroupHeight = Math.max(MIN_EXPANDED_GROUP_HEIGHT, accumulatedHeight);
-
-    rfSetNodes((currentNodesMap) => 
-      currentNodesMap.map((n) => {
-        if (n.id === groupId) {
+    // Restaurar el estado del nodo de grupo en el canvas principal y ocultar sus hijos
+    setNodes(nds =>
+      nds.map(n => {
+        if (n.id === groupIdToCollapse) {
           return {
             ...n,
-            data: { ...n.data, isExpandedView: true, isMinimized: false },
-            style: { ...n.style, width: newGroupWidth, height: newGroupHeight },
+            data: { ...n.data, isExpandedView: false }, // Asegurar que isExpandedView sea false
           };
         }
-        if (n.parentId === groupId) {
-          const childIndex = freshChildNodesOfGroup.findIndex(cn => cn.id === n.id);
-          return {
-            ...n,
-            hidden: false, 
-            position: {
-              x: CHILD_NODE_PADDING_X,
-              y: GROUP_HEADER_HEIGHT + CHILD_NODE_PADDING_Y + (childIndex * (CHILD_NODE_HEIGHT + CHILD_NODE_PADDING_Y)),
-            },
-            style: {
-              ...n.style,
-              width: newGroupWidth - 2 * CHILD_NODE_PADDING_X,
-              height: CHILD_NODE_HEIGHT,
-            },
-            draggable: true, 
-            selectable: true,
-            connectable: true,
-            extent: 'parent', 
-          };
+        if (n.parentId === groupIdToCollapse) {
+          return { ...n, hidden: true }; // Ocultar siempre los hijos al colapsar/cerrar GroupFocusView
         }
         return n;
       })
     );
-  }, [reactFlowInstance, setNodes]); 
-
-  const handleCollapseGroupView = useCallback((groupId: string) => {
-    const { getNode, setNodes: rfSetNodes } = reactFlowInstance;
-    const groupNode = getNode(groupId);
-    if (!groupNode || !groupNode.data.isExpandedView) {
-      return;
-    }
-    const defaultWidth = 300; 
-    const defaultHeight = 200; 
-
-    rfSetNodes((currentNodesMap) =>
-      currentNodesMap.map((n) => {
-        if (n.id === groupId) {
-          return {
-            ...n,
-            data: { ...n.data, isExpandedView: false },
-            style: { ...n.style, width: defaultWidth, height: defaultHeight }, 
-          };
-        }
-        if (n.parentId === groupId) {
-           return { ...n, hidden: true }; 
-        }
-        return n;
-      })
-    );
-  }, [reactFlowInstance, setNodes]);
+  }, [reactFlowInstance, setNodes, expandedGroupId, setExpandedGroupId]);
 
 
   useEffect(() => {
@@ -708,6 +736,33 @@ const FlowEditorContent = ({
   useEffect(()=>{const h=(e:Event)=>{setSingleNodePreview((e as CustomEvent<SingleNodePreview>).detail);setShowSingleNodePreview(true);};window.addEventListener('showSingleNodePreview',h);return()=>window.removeEventListener('showSingleNodePreview',h);},[]);
   const handleApplyChanges=async()=>{if(!singleNodePreview)return;try{setLoadingState(true);setShowLogs(true);setExecutionLogs([]);setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.action} del recurso ${singleNodePreview.resource.name}`]);await new Promise(r=>setTimeout(r,1500));setExecutionLogs(p=>[...p,`Recurso ${singleNodePreview.resource.name} ${singleNodePreview.action==='create'?'creado':singleNodePreview.action==='update'?'actualizado':'eliminado'} exitosamente`]);if(singleNodePreview.estimated_cost)setExecutionLogs(p=>[...p,`Costo estimado: ${singleNodePreview.estimated_cost?.currency} ${singleNodePreview.estimated_cost?.monthly?.toFixed(2)}`]);if(singleNodePreview.dependencies?.length>0){setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.dependencies.length} dependencias...`]);for(const d of singleNodePreview.dependencies){setExecutionLogs(p=>[...p,`Procesando dependencia: ${d.name} (${d.type}) - ${d.action==='create'?'Creando':d.action==='update'?'Actualizando':'Eliminando'}`]);await new Promise(r=>setTimeout(r,500));setExecutionLogs(p=>[...p,`Dependencia ${d.name} procesada exitosamente`]);}}}catch(err){console.error('ApplyChanges Error:',err);setExecutionLogs(p=>[...p,`Error: ${err instanceof Error?err.message:'Unknown'}`]);message.error('Error ApplyChanges');}finally{setLoadingState(false);setShowSingleNodePreview(false);setSingleNodePreview(null);}};
 
+  // Si expandedGroupId tiene un valor, renderizamos la vista de enfoque del grupo
+  if (expandedGroupId) {
+    return (
+      <GroupFocusView
+        focusedGroupId={expandedGroupId}
+        allNodes={nodes}
+        allEdges={edges}
+        onClose={() => {
+          // La lógica de 'handleCollapseGroupView' se encarga de limpiar expandedGroupId
+          // y actualizar el nodo grupo principal.
+          if (expandedGroupId) { // Verificar por si acaso
+             handleCollapseGroupView(expandedGroupId);
+          }
+        }}
+        onSaveChanges={handleSaveChangesInGroup}
+        mainNodeTypes={memoizedNodeTypes}
+        mainEdgeTypes={edgeTypes}
+        // Props para la barra de herramientas interna de GroupFocusView
+        edgeTypeConfigs={edgeTypeConfigs} // Pasar la configuración de tipos de arista
+        edgeToolbarIcons={edgeToolbarIcons} // Pasar los iconos de la barra de herramientas de aristas
+        resourceCategories={resourceCategories} // Pasar las categorías de recursos para el sidebar
+        // initialViewport={ { x:0, y:0, zoom:1 }} // Opcional: definir un viewport inicial para la vista de grupo
+      />
+    );
+  }
+
+  // Renderizado normal del FlowEditor
   return (
     <div className="relative w-full h-full">
       {renderEditGroupModal()}

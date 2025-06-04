@@ -36,6 +36,7 @@ interface GroupNodeData {
 interface GroupNodeProps extends NodeProps<GroupNodeData> {
   width?: number;
   height?: number;
+  isOver?: boolean; // Añadir explícitamente para asegurar que TypeScript lo reconozca
 }
 
 // Helper para obtener un ícono basado en el tipo de nodo hijo (simplificado)
@@ -47,7 +48,7 @@ const getChildNodeIcon = (nodeType?: string) => {
 };
 
 
-const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height, dragging, isOver: isNodeOver }) => {
+const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height, dragging, isOver }) => { // Usar isOver directamente
   // Mover constantes aquí para intentar resolver error de "Cannot find name"
   const CONTENT_PADDING_TOP = 8;
   const CONTENT_PADDING_BOTTOM = 8;
@@ -350,7 +351,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
         <div
           className={`
             mt-2 text-center text-xs py-2 border-2 rounded-md transition-colors duration-200 ease-in-out
-            ${isNodeOver && !data.isExpandedView ? 'border-blue-500 text-blue-600' : 'border-dashed border-gray-300 text-gray-400'}
+            ${isOver && !data.isExpandedView ? 'border-blue-500 text-blue-600' : 'border-dashed border-gray-300 text-gray-400'}
             ${data.isExpandedView && childNodes.length > 0 ? 'min-h-[50px]' : ''}
             ${!data.isExpandedView ? 'sticky bottom-2 left-2 right-2 bg-white/90 z-10' : ''}
           `}

@@ -1,0 +1,371 @@
+import React, { useCallback, useEffect, useMemo } from 'react';
+import ReactFlow, {
+  Background,
+  Controls,
+  MiniMap,
+  Node,
+  Edge,
+  useNodesState,
+  useEdgesState,
+  addEdge,
+  Connection,
+  ReactFlowProvider,
+  NodeTypes,
+  EdgeTypes,
+  Viewport,
+  applyNodeChanges,
+  OnNodesChange,
+  OnEdgesChange,
+  applyEdgeChanges,
+  useReactFlow, // Importar useReactFlow
+  Panel, // Importar Panel si se va a usar para el sidebar
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+import nodeTypesFromFile from '../nodes/NodeTypes'; // Asumiendo que los tipos de nodo son los mismos
+import { LogicalEdgeType, EdgeTypeConfig } from '@/app/config/edgeConfig'; // Importar tipos necesarios
+import { ResourceItem, ResourceCategory } from './FlowEditor'; // Importar tipos desde FlowEditor
+import { SquaresPlusIcon, XMarkIcon, ServerIcon as HeroServerIcon } from '@heroicons/react/24/outline'; // Re-añadir importación de iconos si se eliminó
+
+
+interface GroupFocusViewProps {
+  focusedGroupId: string;
+  allNodes: Node[];
+  allEdges: Edge[];
+  onClose: () => void;
+  onSaveChanges: (updatedNodesInGroup: Node[], newEdgesInGroup: Edge[]) => void;
+  mainNodeTypes: NodeTypes;
+  mainEdgeTypes?: EdgeTypes;
+  initialViewport?: Viewport;
+  // Props para la barra de herramientas de tipos de arista
+  edgeTypeConfigs: Record<string, EdgeTypeConfig>; 
+  edgeToolbarIcons: Record<string, React.ElementType>;
+  resourceCategories?: ResourceCategory[]; // Prop para el sidebar de recursos
+}
+
+// Las definiciones de ResourceItem y ResourceCategory ahora se importan.
+
+const GroupFocusView: React.FC<GroupFocusViewProps> = ({
+  focusedGroupId,
+  allNodes,
+  allEdges,
+  onClose,
+  onSaveChanges,
+  mainNodeTypes,
+  mainEdgeTypes,
+  initialViewport,
+  edgeTypeConfigs,
+  edgeToolbarIcons,
+  resourceCategories = [], // Añadir prop y valor por defecto
+}) => {
+  const parentNode = useMemo(() => allNodes.find(n => n.id === focusedGroupId), [allNodes, focusedGroupId]);
+  const [localSelectedEdgeType, setLocalSelectedEdgeType] = React.useState<LogicalEdgeType | null>(null);
+  const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
+  const [groupSearchTerm, setGroupSearchTerm] = React.useState('');
+  const [groupCollapsedCategories, setGroupCollapsedCategories] = React.useState<Record<string, boolean>>({});
+  
+  const groupFlowInstance = useReactFlow(); 
+  const groupFlowWrapper = React.useRef<HTMLDivElement>(null);
+
+  // Declaraciones de useMemo para initialGroupNodes e initialGroupEdges PRIMERO
+  const initialGroupNodes = useMemo(() => {
+    if (!parentNode) return [];
+    return allNodes
+      .filter(n => n.parentId === focusedGroupId)
+      .map(n => ({
+        ...n,
+        parentId: undefined, 
+        extent: undefined, 
+        hidden: false, 
+      }));
+  }, [allNodes, focusedGroupId, parentNode]);
+
+  const initialGroupEdges = useMemo(() => {
+    const childNodeIds = new Set(initialGroupNodes.map(n => n.id));
+    return allEdges.filter(edge => childNodeIds.has(edge.source) && childNodeIds.has(edge.target));
+  }, [allEdges, initialGroupNodes]);
+
+  // LUEGO, useNodesState y useEdgesState
+  const [nodes, setNodes, onNodesChangeInternal] = useNodesState(initialGroupNodes);
+  const [edges, setEdges, onEdgesChangeInternal] = useEdgesState(initialGroupEdges);
+
+  const onDragStartSidebarInGroup = (event: React.DragEvent, item: ResourceItem) => {
+    // Usar un tipo de datos diferente para el drag-and-drop dentro del grupo para evitar conflictos
+    event.dataTransfer.setData('application/reactflow-group-internal', JSON.stringify(item));
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
+  const onDropInGroup = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    const reactFlowBounds = groupFlowWrapper.current?.getBoundingClientRect();
+    if (!groupFlowInstance || !reactFlowBounds) {
+      return;
+    }
+
+    const dataString = event.dataTransfer.getData('application/reactflow-group-internal');
+    if (!dataString) {
+      return;
+    }
+    const itemData = JSON.parse(dataString) as ResourceItem;
+
+    // Ajustar la posición del drop relativa al canvas del GroupFocusView
+    const position = groupFlowInstance.screenToFlowPosition({
+      x: event.clientX - reactFlowBounds.left,
+      y: event.clientY - reactFlowBounds.top,
+    });
+    
+    let nodeW = 200, nodeH = 100; // Default sizes
+    if (itemData.type === 'noteNode' || itemData.type === 'note') { nodeW = 200; nodeH = 120; }
+    else if (itemData.type === 'textNode' || itemData.type === 'text') { nodeW = 150; nodeH = 80; }
+
+    const newNode: Node = {
+      id: `${itemData.type}-${Date.now()}`,
+      type: itemData.type, // Asegurarse que el tipo es el correcto (ej. 'aws_s3_bucket' y no 'ResourceItem')
+      position,
+      data: { label: itemData.name, description: itemData.description, provider: itemData.provider },
+      // parentId se asignará al guardar en FlowEditorContent
+      style: { width: nodeW, height: nodeH },
+    };
+    setNodes((nds) => nds.concat(newNode));
+  }, [groupFlowInstance, setNodes]);
+
+
+  const handleLocalEdgeTypeSelect = (type: LogicalEdgeType) => {
+    setLocalSelectedEdgeType((prev: LogicalEdgeType | null) => (prev === type ? null : type));
+  };
+
+  // Actualizar nodos si los nodos iniciales del grupo cambian (ej. si se añade un nodo desde fuera mientras esta vista está abierta)
+  useEffect(() => {
+    setNodes(initialGroupNodes);
+  }, [initialGroupNodes, setNodes]);
+
+  useEffect(() => {
+    setEdges(initialGroupEdges);
+  }, [initialGroupEdges, setEdges]);
+
+  const onConnect = useCallback(
+    (params: Connection) => {
+      if (!params.source || !params.target) {
+        // No se puede crear una arista sin origen y destino definidos
+        console.warn('onConnect en GroupFocusView: source o target es null', params);
+        return;
+      }
+      const typeToUse = localSelectedEdgeType || LogicalEdgeType.CONNECTS_TO; // Usar tipo seleccionado o default
+      const config = edgeTypeConfigs[typeToUse] || edgeTypeConfigs[LogicalEdgeType.CONNECTS_TO];
+      
+      const newEdge: Edge = {
+        ...params,
+        source: params.source, // Ahora sabemos que no es null
+        target: params.target, // Ahora sabemos que no es null
+        id: `group-edge-${Date.now()}-${params.source}-${params.target}`,
+        type: config.visualType,
+        style: config.style,
+        markerEnd: config.markerEnd,
+        data: { label: config.label, edgeKind: config.logicalType },
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
+    },
+    [setEdges, localSelectedEdgeType, edgeTypeConfigs]
+  );
+
+  const handleSaveChanges = () => {
+    // Antes de guardar, transformar las posiciones de los nodos de vuelta para que sean relativas al parentNode si es necesario,
+    // y re-establecer el parentId.
+    const nodesToSave = nodes.map(n => ({
+      ...n,
+      parentId: focusedGroupId, // Re-asignar el parentId
+      // La posición ya es relativa al (0,0) del canvas del grupo, que es lo que React Flow espera para nodos hijos con extent: 'parent'
+      // Si el GroupNode.tsx no usa extent: 'parent' para sus hijos directos cuando isExpandedView es true,
+      // entonces necesitaríamos ajustar la posición aquí.
+      // Por ahora, asumimos que la posición es correcta como está.
+      extent: 'parent' as const, // Restablecer extent
+    }));
+    onSaveChanges(nodesToSave, edges);
+    onClose();
+  };
+
+  const handleDeleteSelected = useCallback(() => {
+    setNodes((nds) => nds.filter(n => !n.selected));
+    setEdges((eds) => eds.filter(e => !e.selected));
+  }, [setNodes, setEdges]);
+  
+  if (!parentNode) {
+    return (
+      <div className="absolute inset-0 bg-gray-100 z-50 flex flex-col items-center justify-center p-4">
+        <p className="text-red-500">Error: Grupo no encontrado.</p>
+        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+          Cerrar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute inset-0 bg-white z-[100] flex flex-col" style={{ /* Aumentar z-index si es necesario */ }}>
+      <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+        <h2 className="text-lg font-semibold">Editando Grupo: {parentNode.data.label || parentNode.id}</h2>
+        <div>
+          <button 
+            onClick={handleSaveChanges}
+            className="mr-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Guardar y Cerrar
+          </button>
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+      <div className="flex-grow relative">
+        {/* Mini barra de herramientas para GroupFocusView */}
+        <div className="absolute top-2 left-2 z-10 bg-white p-1 rounded shadow flex gap-1">
+          <button 
+            onClick={handleDeleteSelected}
+            title="Eliminar Seleccionado"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12.56 0c1.153 0 2.242.078 3.324.235m0 0a48.667 48.667 0 0 0 3.913 0c1.282 0 2.517.093 3.707.277M6.08 8.982l6.23-1.437m5.13 1.437-6.23 1.437m0 0V5.79m0 0a5.006 5.006 0 0 1-5.006-5.006c0-1.763 1.126-3.223 2.772-3.798A5.007 5.007 0 0 1 12 2.25a5.007 5.007 0 0 1 4.228 2.254c1.646.576 2.772 2.035 2.772 3.798a5.006 5.006 0 0 1-5.006 5.006Z" />
+            </svg>
+          </button>
+          {/* Botón para abrir sidebar de recursos */}
+          <button
+            onClick={() => setIsGroupSidebarOpen(prev => !prev)}
+            title="Mostrar Recursos"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <SquaresPlusIcon className="w-5 h-5" />
+          </button>
+          {/* Separador */}
+          <div className="h-5 w-px bg-gray-300 mx-1"></div>
+          {/* Botones de tipo de arista */}
+          {Object.values(edgeTypeConfigs).map(cfg => {
+            const IconComponent = edgeToolbarIcons[cfg.logicalType];
+            const isSelected = localSelectedEdgeType === cfg.logicalType;
+            return (
+              <button
+                key={cfg.logicalType}
+                onClick={() => handleLocalEdgeTypeSelect(cfg.logicalType)}
+                title={`Edge: ${cfg.label}`}
+                className={`p-1.5 rounded hover:bg-gray-200 ${isSelected ? 'bg-blue-100 ring-1 ring-blue-500' : 'bg-transparent'}`}
+                style={{ color: isSelected ? cfg.style?.stroke || 'blue' : cfg.style?.stroke || 'black' }}
+              >
+                {IconComponent && <IconComponent className="w-5 h-5" />}
+              </button>
+            );
+          })}
+        </div>
+        <ReactFlowProvider> {/* Necesario si usamos hooks de React Flow dentro */}
+          <div ref={groupFlowWrapper} className="w-full h-full"> {/* Añadir ref y asegurar tamaño */}
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onDrop={onDropInGroup} // Habilitar drop
+              onDragOver={(event) => event.preventDefault()} // Necesario para onDrop
+            onNodesChange={onNodesChangeInternal}
+            onEdgesChange={onEdgesChangeInternal}
+            onConnect={onConnect}
+            nodeTypes={mainNodeTypes} // Usar los mismos tipos de nodo que el editor principal
+            edgeTypes={mainEdgeTypes}
+            // fitView // Quitar fitView para tener más control sobre el zoom inicial
+            defaultViewport={initialViewport || { x: 50, y: 50, zoom: 0.85 }} // Usar viewport inicial o un default razonable
+            className="bg-gray-100"
+          >
+            <Background />
+            <Controls />
+            <MiniMap />
+            {!isGroupSidebarOpen && (
+              <Panel position="top-right">
+                <button
+                  style={{padding:'8px 12px',background:'rgba(255,255,255,0.95)',borderRadius:'8px',boxShadow:'0 1px 4px rgba(0,0,0,0.1)',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px',border:'1px solid rgba(0,0,0,0.05)'}}
+                  onClick={() => setIsGroupSidebarOpen(true)}
+                  title="Mostrar Recursos"
+                >
+                  <SquaresPlusIcon className="w-4 h-4 text-gray-600"/>
+                  <span style={{fontSize:'13px',fontWeight:500,color:'#444'}}>Recursos</span>
+                </button>
+              </Panel>
+            )}
+            {isGroupSidebarOpen && (
+              <Panel 
+                position="top-right"
+                className="!m-0 !p-0" // Resetear estilos de Panel
+                style={{
+                  width:'300px', // Ancho del sidebar
+                  background:'rgba(250,250,250,0.95)',
+                  borderRadius:'8px 0 0 8px',
+                  height:'calc(100% - 16px)', // Ajustar altura, considerando padding del Panel
+                  margin: '8px', // Margen para que no pegue a los bordes
+                  overflow:'hidden',
+                  boxShadow:'0 2px 10px rgba(0,0,0,0.1)',
+                  display:'flex',
+                  flexDirection:'column',
+                  zIndex: 20, // Asegurar que esté sobre otros elementos del canvas
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 12px',borderBottom:'1px solid rgba(220,220,220,0.9)',flexShrink:0}}>
+                  <h4 style={{margin:0,fontSize:'14px',fontWeight:'600',color:'#333'}}>Recursos</h4>
+                  <button onClick={()=>setIsGroupSidebarOpen(false)} style={{border:'none',background:'transparent',cursor:'pointer',padding:'4px'}} title="Ocultar Recursos">
+                    <XMarkIcon className="w-5 h-5 text-gray-500 hover:text-gray-700"/>
+                  </button>
+                </div>
+                <div style={{padding:'8px 12px',borderBottom:'1px solid rgba(220,220,220,0.9)'}}>
+                  <input 
+                    type="text" 
+                    placeholder="Buscar..." 
+                    value={groupSearchTerm} 
+                    onChange={e=>setGroupSearchTerm(e.target.value)} 
+                    style={{width:'100%',padding:'6px 10px',borderRadius:'4px',border:'1px solid #ccc',fontSize:'13px'}}
+                  />
+                </div>
+                <div style={{overflowY:'auto',flexGrow:1,paddingBottom:'8px'}}>
+                  {resourceCategories.filter(c => c.items.some(i => i.name.toLowerCase().includes(groupSearchTerm.toLowerCase()) || i.description.toLowerCase().includes(groupSearchTerm.toLowerCase())))
+                    .map(cat => (
+                    <div key={`group-sb-${cat.name}`} style={{borderBottom:'1px solid #eee'}}>
+                      <h5 
+                        onClick={()=>setGroupCollapsedCategories(p=>({...p,[cat.name]:!p[cat.name]}))}
+                        style={{cursor:'pointer',margin:0,padding:'8px 12px',display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'13px',fontWeight:'500',backgroundColor:groupCollapsedCategories[cat.name]?'#f9f9f9':'#f0f0f0'}}
+                      >
+                        <span>{cat.name}</span>
+                        <span style={{color:'#555'}}>{groupCollapsedCategories[cat.name]?'▸':'▾'}</span>
+                      </h5>
+                      {!groupCollapsedCategories[cat.name] && (
+                        <ul style={{listStyleType:'none',padding:'0',margin:0,backgroundColor:'#fff'}}>
+                          {cat.items.filter(i=>i.name.toLowerCase().includes(groupSearchTerm.toLowerCase())||i.description.toLowerCase().includes(groupSearchTerm.toLowerCase()))
+                            .map(item => (
+                            <li 
+                              key={`group-sb-item-${item.type}-${item.name}`}
+                              draggable 
+                              onDragStart={e=>onDragStartSidebarInGroup(e,item)}
+                              style={{padding:'6px 12px',margin:'0',cursor:'grab',display:'flex',alignItems:'center',gap:'8px',fontSize:'12px',color:'#333',borderBottom:'1px solid #f5f5f5'}}
+                              className="hover:bg-gray-100"
+                            >
+                              <div style={{minWidth:'20px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                                {/* Simplificar temporalmente el renderizado del icono para evitar error de cloneElement */}
+                                <HeroServerIcon className="w-4 h-4 text-gray-400"/>
+                              </div>
+                              <div style={{flex:1}}>
+                                <span style={{fontWeight:'500'}}>{item.name}</span>
+                                <p style={{fontSize:'10px',color:'#666',margin:'1px 0 0 0',lineHeight:'1.2'}}>{item.description}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            )}
+          </ReactFlow>
+        </div>
+        </ReactFlowProvider>
+      </div>
+    </div>
+  );
+};
+
+export default GroupFocusView;
