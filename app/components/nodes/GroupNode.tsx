@@ -1,57 +1,120 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
+import React, { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
+import { Handle, Position, NodeProps, useReactFlow, useNodes, Node } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
 import { 
   EyeSlashIcon,
-  Squares2X2Icon
+  Squares2X2Icon,
+  PlusCircleIcon,
+  MinusCircleIcon, // Añadir para el botón de colapsar vista expandida
+  ServerIcon // Icono genérico para la lista de nodos hijos
 } from '@heroicons/react/24/outline';
+
+// Constantes
+const HEADER_HEIGHT = 40;
+const MINIMIZED_WIDTH = 150; // Ancho cuando está minimizado
+const MINIMIZED_HEIGHT = HEADER_HEIGHT; // Alto cuando está minimizado (solo header)
+const DEFAULT_WIDTH = 300;
+const DEFAULT_HEIGHT = 200;
+const CHILD_ITEM_HEIGHT = 28; // Altura de cada item en la lista visual
+const CHILD_ITEM_SPACING = 4;
+// Constantes que daban error, movidas dentro del componente
+// const CONTENT_PADDING_TOP = 8;
+// const CONTENT_PADDING_BOTTOM = 8;
+// const CONTENT_PADDING_HORIZONTAL = 8;
+// const MIN_CONTENT_HEIGHT_FOR_MESSAGE = 50;
 
 interface GroupNodeData {
   label: string;
   provider?: 'aws' | 'gcp' | 'azure' | 'generic';
-  isCollapsed?: boolean;
+  isCollapsed?: boolean; // Considerar unificar con isMinimized
   isMinimized?: boolean;
+  childCount?: number; 
+  isExpandedView?: boolean; // Nueva propiedad para controlar la vista expandida
 }
 
 interface GroupNodeProps extends NodeProps<GroupNodeData> {
-  data: GroupNodeData;
+  width?: number;
+  height?: number;
 }
 
-const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
+// Helper para obtener un ícono basado en el tipo de nodo hijo (simplificado)
+// En una implementación real, esto podría ser más sofisticado o usar props del nodo hijo.
+const getChildNodeIcon = (nodeType?: string) => {
+  // Ejemplo: mapear tipos de nodo a iconos o usar un genérico
+  // if (nodeType === 'aws_ec2_instance') return <ServerIcon className="w-4 h-4 text-orange-500" />;
+  return <ServerIcon className="w-4 h-4 text-gray-500" />;
+};
+
+
+const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height, dragging }) => {
+  // Mover constantes aquí para intentar resolver error de "Cannot find name"
+  const CONTENT_PADDING_TOP = 8;
+  const CONTENT_PADDING_BOTTOM = 8;
+  const CONTENT_PADDING_HORIZONTAL = 8;
+  const MIN_CONTENT_HEIGHT_FOR_MESSAGE = 50;
+
+  const { setNodes, getNode } = useReactFlow();
+  const allNodes = useNodes();
+
   const [isMinimized, setIsMinimized] = useState(data.isMinimized || false);
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editedLabel, setEditedLabel] = useState(data.label || 'Group');
   const labelInputRef = useRef<HTMLInputElement>(null);
-  const reactFlowInstance = useReactFlow();
-  
-  // Ensure DOM node size matches minimized state on mount and updates
+
+  const childNodes = useMemo(() => {
+    return allNodes.filter(n => n.parentId === id)
+                   .sort((a, b) => (((a.data as any)?.label || a.id).localeCompare(((b.data as any)?.label || b.id))));
+  }, [allNodes, id]);
+
+  // Efecto para actualizar el contador de hijos en data y ocultar/mostrar hijos (para React Flow)
   useEffect(() => {
-    const nodeElement = document.querySelector(`[data-id="${id}"]`) as HTMLElement;
-    if (nodeElement && (isMinimized || data.isMinimized)) {
-      nodeElement.style.width = '140px';
-      nodeElement.style.height = '28px';
-      nodeElement.setAttribute('data-minimized', 'true');
+    const groupNode = getNode(id);
+    if (!groupNode) return;
+
+    const newChildCount = childNodes.length;
+    let groupDataChanged = false;
+    if ((groupNode.data as GroupNodeData)?.childCount !== newChildCount || 
+        (groupNode.data as GroupNodeData)?.isMinimized !== isMinimized) {
+      groupDataChanged = true;
     }
-  }, [id, isMinimized, data.isMinimized]);
+
+    // Los nodos hijos se ocultan si el grupo está minimizado,
+    // o si el grupo NO está en "vista expandida" (lógica para Fase 2).
+    // Por ahora (Fase 1), si no está minimizado, los hijos deben estar "visibles" para RF,
+    // pero el GroupNode los renderizará como una lista.
+    // Si se quisiera que los nodos hijos reales no ocupen espacio ni sean seleccionables cuando
+    // el grupo los muestra como lista, se podrían marcar como hidden: !isMinimized.
+    // Pero para que el drag&drop funcione correctamente hacia ellos, deben existir en el flujo.
+    // La representación visual es lo que cambia.
+
+    if (groupDataChanged) {
+      setNodes(nds => nds.map(n => {
+        if (n.id === id) {
+          return { ...n, data: { ...(n.data as object), childCount: newChildCount, isMinimized: isMinimized } };
+        }
+        // Los nodos hijos se manejan visualmente como una lista, no se ocultan aquí necesariamente
+        // a menos que la lógica de "vista expandida" (Fase 2) lo requiera.
+        return n;
+      }));
+    }
+  }, [id, childNodes.length, isMinimized, getNode, setNodes]); // Eliminado data.isExpandedView de las dependencias
+
 
   const handleLabelSubmit = useCallback(() => {
     setIsEditingLabel(false);
     if (editedLabel !== data.label) {
-      reactFlowInstance.setNodes(nodes =>
+      setNodes(nodes =>
         nodes.map(node =>
-          node.id === id
-            ? { ...node, data: { ...node.data, label: editedLabel } }
-            : node
+          node.id === id ? { ...node, data: { ...node.data, label: editedLabel } } : node
         )
       );
     }
-  }, [id, editedLabel, data.label, reactFlowInstance]);
+  }, [id, editedLabel, data.label, setNodes]);
 
   const handleLabelKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleLabelSubmit();
-    } else if (e.key === 'Escape') {
+    if (e.key === 'Enter') handleLabelSubmit();
+    else if (e.key === 'Escape') {
       setEditedLabel(data.label || 'Group');
       setIsEditingLabel(false);
     }
@@ -64,110 +127,86 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
     }
   }, [isEditingLabel]);
 
-  // Color mapping based on cloud provider
   const getProviderColor = useCallback(() => {
-    switch (data.provider) {
-      case 'aws':
-        return selected ? 'border-purple-500/50 bg-orange-100' : 'border-orange-400 bg-orange-50';
-      case 'gcp':
-        return selected ? 'border-purple-500/50 bg-blue-100' : 'border-blue-400 bg-blue-50';
-      case 'azure':
-        return selected ? 'border-purple-500/50 bg-blue-100' : 'border-blue-300 bg-blue-50';
-      default:
-        return selected ? 'border-purple-500/50 bg-gray-100' : 'border-gray-400 bg-gray-50';
-    }
+    const baseColor = (() => {
+        switch (data.provider) {
+            case 'aws': return 'border-orange-400 bg-orange-50';
+            case 'gcp': return 'border-blue-400 bg-blue-50';
+            case 'azure': return 'border-sky-400 bg-sky-50';
+            default: return 'border-gray-400 bg-gray-50';
+        }
+    })();
+    return selected ? `border-blue-600 ring-2 ring-blue-500/50 ${baseColor.split(' ')[1]}` : baseColor;
   }, [data.provider, selected]);
 
   const toggleMinimize = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     const newMinimizedState = !isMinimized;
     setIsMinimized(newMinimizedState);
-    
-    // Get reference to the DOM node to adjust it directly
-    setTimeout(() => {
-      const nodeElement = document.querySelector(`[data-id="${id}"]`) as HTMLElement;
-      if (nodeElement) {
-        if (newMinimizedState) {
-          nodeElement.style.width = '140px';
-          nodeElement.style.height = '28px';
-          nodeElement.setAttribute('data-minimized', 'true');
-        } else {
-          const originalWidth = nodeElement.style.width;
-          const originalHeight = nodeElement.style.height;
-          nodeElement.style.width = originalWidth === '140px' ? '300px' : originalWidth;
-          nodeElement.style.height = originalHeight === '28px' ? '200px' : originalHeight;
-          nodeElement.removeAttribute('data-minimized');
-        }
-      }
-    }, 0);
-    
-    reactFlowInstance.setNodes(nds => 
+
+    setNodes(nds => 
       nds.map(n => {
         if (n.id === id) {
           return {
             ...n,
-            data: {
-              ...n.data,
-              isMinimized: newMinimizedState
+            data: { ...n.data, isMinimized: newMinimizedState },
+            style: { 
+              ...n.style, 
+              width: newMinimizedState ? MINIMIZED_WIDTH : (width || DEFAULT_WIDTH), 
+              height: newMinimizedState ? MINIMIZED_HEIGHT : (height || DEFAULT_HEIGHT)
             },
-            style: {
-              ...n.style,
-              width: newMinimizedState ? 140 : (n.style?.width || 300),
-              height: newMinimizedState ? 28 : (n.style?.height || 200),
-              backgroundColor: 'transparent',
-            }
+            // El dragging se resetea por React Flow al cambiar nodos, no debería ser problema aquí.
           };
         }
+        // Ocultar/mostrar nodos hijos reales (si se decide hacerlo)
+        // if (n.parentId === id) {
+        //    return { ...n, hidden: newMinimizedState /* || !data.isExpandedView */ };
+        // }
         return n;
       })
     );
+  }, [id, isMinimized, setNodes, width, height]);
 
-    reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
-        if (n.parentId === id) {
-          return {
-            ...n,
-            hidden: newMinimizedState
-          };
-        }
-        return n;
-      })
-    );
-  }, [id, isMinimized, reactFlowInstance]);
+  const handleExpandViewClick = useCallback(() => {
+    console.log(`Solicitando expandir vista para el grupo ${id}`);
+    const event = new CustomEvent('expandGroupView', { detail: { groupId: id } });
+    window.dispatchEvent(event);
+    // Si está minimizado, desminimizarlo para que FlowEditor pueda trabajar con él.
+    // FlowEditor será responsable de ajustar el tamaño si es necesario.
+    if (isMinimized) {
+      // Se simula un evento de mouse porque toggleMinimize espera uno, aunque no lo use directamente.
+      toggleMinimize(new MouseEvent('click') as unknown as React.MouseEvent); 
+    }
+  }, [id, isMinimized, toggleMinimize]);
 
-  // Provider icon helper
-  const getProviderIcon = () => {
-    switch (data.provider) {
-      case 'aws':
-        return '☁️';
-      case 'gcp':
-        return '🔵';
-      case 'azure':
-        return '🔷';
-      default:
-        return '📦';
+  const handleCollapseViewClick = useCallback(() => {
+    console.log(`Solicitando colapsar vista para el grupo ${id}`);
+    const event = new CustomEvent('collapseGroupView', { detail: { groupId: id } });
+    window.dispatchEvent(event);
+    // FlowEditor se encargará de actualizar data.isExpandedView y el tamaño del grupo.
+  }, [id]);
+  
+  const getProviderIconForNode = (nodeData: any) => {
+    switch (nodeData?.provider) {
+      case 'aws': return '☁️';
+      case 'gcp': return '🔵';
+      case 'azure': return '🔷';
+      default: return '📦'; // Icono genérico para nodos dentro de la lista
     }
   };
+
 
   if (isMinimized) {
     return (
       <div
-        className={`relative px-2 py-1 border rounded-lg bg-white shadow-sm ${getProviderColor()}`}
+        className={`relative px-2 py-1 border rounded-lg bg-white shadow-sm ${getProviderColor()} flex items-center justify-between`}
         style={{ 
-          fontSize: '11px',
-          width: '140px',
-          height: '28px',
-          minWidth: '140px',
-          minHeight: '28px',
-          maxWidth: '140px',
-          maxHeight: '28px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
+          width: `${MINIMIZED_WIDTH}px`,
+          height: `${MINIMIZED_HEIGHT}px`,
         }}
       >
-        <div className="flex items-center gap-1" style={{ overflow: 'hidden', maxWidth: '100px' }}>
-          <span style={{ fontSize: '10px', flexShrink: 0 }}>{getProviderIcon()}</span>
+        <div className="flex items-center gap-1 overflow-hidden flex-grow">
+          <span className="text-xs flex-shrink-0">{getProviderIconForNode(data)}</span>
           {isEditingLabel ? (
             <input
               ref={labelInputRef}
@@ -175,123 +214,65 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
               onChange={(e) => setEditedLabel(e.target.value)}
               onBlur={handleLabelSubmit}
               onKeyDown={handleLabelKeyDown}
-              style={{
-                border: 'none',
-                outline: 'none',
-                background: 'transparent',
-                fontSize: '10px',
-                color: '#1F2937',
-                padding: 0,
-                width: '100%',
-              }}
+              className="bg-transparent border-none outline-none text-xs text-gray-800 p-0 w-full"
             />
           ) : (
             <span 
-              className="font-medium text-gray-700" 
-              style={{ 
-                fontSize: '10px', 
-                whiteSpace: 'nowrap', 
-                overflow: 'hidden', 
-                textOverflow: 'ellipsis',
-                cursor: 'pointer'
-              }}
+              className="font-medium text-gray-700 text-xs cursor-pointer truncate"
               onClick={() => setIsEditingLabel(true)}
+              title={data.label}
             >
               {data.label}
             </span>
           )}
+          {childNodes.length > 0 && (
+            <span className="ml-1 text-xs text-gray-500 bg-gray-200 px-1 rounded-full flex-shrink-0">
+              {childNodes.length}
+            </span>
+          )}
         </div>
-        <button
-          onClick={toggleMinimize}
-          className="p-0.5 hover:bg-gray-200 rounded transition-colors"
-          title="Expand group"
-          style={{ flexShrink: 0, width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Squares2X2Icon className="w-2.5 h-2.5 text-gray-600" />
-        </button>
+        <div className="flex items-center space-x-0.5 flex-shrink-0">
+          <button
+            onClick={handleExpandViewClick}
+            className="p-0.5 hover:bg-gray-200/70 rounded"
+            title="Ampliar vista del grupo"
+          >
+            <PlusCircleIcon className="w-3.5 h-3.5 text-gray-600" />
+          </button>
+          <button
+            onClick={toggleMinimize}
+            className="p-0.5 hover:bg-gray-200/70 rounded"
+            title={isMinimized ? "Expandir grupo" : "Minimizar grupo"}
+          >
+            <Squares2X2Icon className="w-3.5 h-3.5 text-gray-600" />
+          </button>
+        </div>
         
-        <Handle
-          type="target"
-          position={Position.Top}
-          id="top"
-          style={{
-            width: '6px',
-            height: '6px',
-            background: '#666',
-            border: '1px solid white',
-            borderRadius: '50%',
-            top: -3,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 2
-          }}
-        />
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          id="bottom"
-          style={{
-            width: '6px',
-            height: '6px',
-            background: '#666',
-            border: '1px solid white',
-            borderRadius: '50%',
-            bottom: -3,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 2
-          }}
-        />
-        <Handle
-          type="target"
-          position={Position.Left}
-          id="left"
-          style={{
-            width: '6px',
-            height: '6px',
-            background: '#666',
-            border: '1px solid white',
-            borderRadius: '50%',
-            left: -3,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            zIndex: 2
-          }}
-        />
-        <Handle
-          type="source"
-          position={Position.Right}
-          id="right"
-          style={{
-            width: '6px',
-            height: '6px',
-            background: '#666',
-            border: '1px solid white',
-            borderRadius: '50%',
-            right: -3,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            zIndex: 2
-          }}
-        />
+        {/* Handles para el modo minimizado */}
+        <Handle type="target" position={Position.Top} style={{ width: 8, height: 8, background: '#9ca3af' }} />
+        <Handle type="source" position={Position.Bottom} style={{ width: 8, height: 8, background: '#9ca3af' }} />
+        <Handle type="target" position={Position.Left} style={{ width: 8, height: 8, background: '#9ca3af' }} />
+        <Handle type="source" position={Position.Right} style={{ width: 8, height: 8, background: '#9ca3af' }} />
       </div>
     );
   }
 
+  // Renderizado normal (no minimizado)
   return (
     <div
-      className={`border rounded-lg bg-white/80 shadow-lg ${getProviderColor()} relative`}
+      className={`border rounded-lg bg-white/90 shadow-lg ${getProviderColor()} flex flex-col overflow-hidden`}
       style={{ 
-        minWidth: '250px', 
-        minHeight: '150px',
-        width: '100%',
-        height: '100%'
+        width: width || DEFAULT_WIDTH, // Controlado por NodeResizer o default
+        height: height || DEFAULT_HEIGHT, // Controlado por NodeResizer o default
       }}
     >
-      {/* Group header */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-white/50 rounded-t-lg">
-        <div className="flex items-center gap-2">
-          <span className="text-sm">{getProviderIcon()}</span>
+      {/* Header */}
+      <div 
+        className="flex items-center justify-between p-2 border-b border-gray-300 nodrag cursor-move"
+        style={{ height: `${HEADER_HEIGHT}px`, flexShrink: 0 }}
+      >
+        <div className="flex items-center gap-2 overflow-hidden flex-grow">
+          <span className="text-sm flex-shrink-0">{getProviderIconForNode(data)}</span>
           {isEditingLabel ? (
             <input
               ref={labelInputRef}
@@ -299,123 +280,97 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected }) => {
               onChange={(e) => setEditedLabel(e.target.value)}
               onBlur={handleLabelSubmit}
               onKeyDown={handleLabelKeyDown}
-              style={{
-                border: 'none',
-                outline: 'none',
-                background: 'transparent',
-                fontSize: '14px',
-                color: '#1F2937',
-                padding: 0,
-                width: '100%',
-                fontFamily: 'inherit',
-                fontWeight: 600
-              }}
+              className="bg-transparent border-none outline-none text-sm font-semibold text-gray-800 p-0 w-full"
             />
           ) : (
             <span 
-              className="font-semibold text-gray-800 text-sm cursor-pointer"
+              className="font-semibold text-gray-800 text-sm cursor-pointer truncate"
               onClick={() => setIsEditingLabel(true)}
+              title={data.label}
             >
               {data.label}
             </span>
           )}
+           {childNodes.length > 0 && (
+            <span className="ml-auto mr-1 text-xs text-gray-500 bg-gray-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+              {childNodes.length}
+            </span>
+          )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 flex-shrink-0 ml-2">
+           {data.isExpandedView ? (
+            <button
+              onClick={handleCollapseViewClick}
+              className="p-1 hover:bg-gray-200/70 rounded"
+              title="Colapsar vista del grupo"
+            >
+              <MinusCircleIcon className="w-4 h-4 text-gray-600" />
+            </button>
+           ) : (
+            <button
+              onClick={handleExpandViewClick}
+              className="p-1 hover:bg-gray-200/70 rounded"
+              title="Ampliar vista del grupo"
+            >
+              <PlusCircleIcon className="w-4 h-4 text-gray-600" />
+            </button>
+           )}
           <button
             onClick={toggleMinimize}
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
-            title="Minimize group"
+            className="p-1 hover:bg-gray-200/70 rounded"
+            title="Minimizar grupo"
           >
             <EyeSlashIcon className="w-4 h-4 text-gray-600" />
           </button>
         </div>
       </div>
       
-      {/* Group content area */}
-      <div className="p-2 h-full">
-        {/* This is where child nodes will be rendered */}
+      {/* Área de Contenido: Lista de nodos hijos y mensaje "Arrastra aquí" */}
+      <div 
+        className="flex-grow p-2 space-y-1 overflow-y-auto relative" // Permitir scroll si la lista es larga
+        style={{ 
+          paddingTop: `${CONTENT_PADDING_TOP}px`,
+          paddingBottom: `${CONTENT_PADDING_BOTTOM}px`,
+          paddingLeft: `${CONTENT_PADDING_HORIZONTAL}px`,
+          paddingRight: `${CONTENT_PADDING_HORIZONTAL}px`,
+        }}
+      >
+        {/* Si la vista está expandida, FlowEditor renderizará los nodos. GroupNode solo muestra el área. */}
+        {/* Si no está expandida (y no minimizada), muestra la lista de hijos. */}
+        {!data.isExpandedView && childNodes.map(node => (
+          <div key={node.id} className="flex items-center p-1 bg-gray-50 rounded border border-gray-200 text-xs">
+            {getChildNodeIcon(node.type)}
+            <span className="ml-2 truncate" title={(node.data as any)?.label || node.id}>
+              {(node.data as any)?.label || node.id}
+            </span>
+          </div>
+        ))}
+        {/* Siempre mostrar el área de drop, pero podría tener un texto diferente si está expandido */}
+        <div 
+          className={`mt-2 text-center text-gray-400 text-xs py-2 border-2 border-dashed border-gray-300 rounded-md ${data.isExpandedView && childNodes.length > 0 ? 'min-h-[50px]' : ''}`}
+          style={{ flexGrow: data.isExpandedView ? 1 : 0 }} // Ocupar espacio si está expandido
+        >
+          {data.isExpandedView ? (childNodes.length === 0 ? 'Área de grupo expandida (vacía)' : 'Nodos hijos renderizados por el flujo') : 'Arrastra nodos aquí'}
+        </div>
       </div>
 
-      {/* Node resizer for adjusting group size */}
-      <NodeResizer 
-        isVisible={selected}
-        minWidth={250}
-        minHeight={150}
-        lineStyle={{
-          borderColor: '#3b82f6',
-          borderWidth: 1,
-          opacity: 0.5
-        }}
-        handleStyle={{
-          width: 6,
-          height: 6,
-          backgroundColor: '#3b82f6',
-          border: '1px solid white',
-          opacity: 0.8
-        }}
-      />
+      {!isMinimized && (
+        <NodeResizer 
+          isVisible={selected && !dragging} // Solo visible si seleccionado y no arrastrando
+          minWidth={200}
+          minHeight={HEADER_HEIGHT + MIN_CONTENT_HEIGHT_FOR_MESSAGE + CONTENT_PADDING_TOP + CONTENT_PADDING_BOTTOM + 20} // +20 para algo de espacio extra
+          lineClassName="border-blue-500/50"
+          handleClassName="bg-blue-500 border-2 border-white rounded-full w-2 h-2"
+        />
+      )}
       
-      {/* Handles for connections */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        id="top"
-        style={{
-          width: '6px',
-          height: '6px',
-          background: '#666',
-          border: '1px solid white',
-          borderRadius: '50%',
-          top: -3,
-          zIndex: 2
-        }}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="bottom"
-        style={{
-          width: '6px',
-          height: '6px',
-          background: '#666',
-          border: '1px solid white',
-          borderRadius: '50%',
-          bottom: -3,
-          zIndex: 2
-        }}
-      />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="left"
-        style={{
-          width: '6px',
-          height: '6px',
-          background: '#666',
-          border: '1px solid white',
-          borderRadius: '50%',
-          left: -3,
-          zIndex: 2
-        }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="right"
-        style={{
-          width: '6px',
-          height: '6px',
-          background: '#666',
-          border: '1px solid white',
-          borderRadius: '50%',
-          right: -3,
-          zIndex: 2
-        }}
-      />
+      <Handle type="target" position={Position.Top} style={{ width: 10, height: 10, background: '#cbd5e1' }} />
+      <Handle type="source" position={Position.Bottom} style={{ width: 10, height: 10, background: '#cbd5e1' }} />
+      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: '#cbd5e1' }} />
+      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: '#cbd5e1' }} />
     </div>
   );
 };
 
 GroupNode.displayName = 'GroupNode';
-
-export default GroupNode;
+export default memo(GroupNode);
