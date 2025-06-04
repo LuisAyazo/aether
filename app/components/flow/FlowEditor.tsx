@@ -1,4 +1,3 @@
-import { message } from 'antd';
 import * as ReactFlowLibrary from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useCallback, useEffect, useRef, useState, useMemo, JSX } from 'react';
@@ -280,9 +279,9 @@ const FlowEditorContent = ({
     return initialNodes.map(node => {
       if (node.parentId) {
         const parentNode = initialNodes.find(n => n.id === node.parentId);
-        // const isHidden = !parentNode?.data?.isExpandedView; // Original logic
-        // Corrected logic: if parent is minimized, child is hidden. Otherwise, child is not hidden by this rule.
-        const isHidden = parentNode?.data?.isMinimized === true; 
+        // Children of group nodes should be hidden in the main flow,
+        // as the GroupNode component is responsible for rendering them.
+        const isHidden = parentNode?.type === 'group';
         return {
           ...node,
           hidden: isHidden,
@@ -325,22 +324,25 @@ const FlowEditorContent = ({
   const lastViewportRef = useRef<Viewport | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu>({ visible: false, x: 0, y: 0, nodeId: null, nodeType: null, isPane: false, parentInfo: null, customItems: undefined });
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
-  const [isExecutionLogVisible, setIsExecutionLogVisible] = useState(false);
-  const [loadingState, setLoadingState] = useState(false);
-  const currentDiagram = initialDiagram;
-  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
+  // const [isExecutionLogVisible, setIsExecutionLogVisible] = useState(false); 
+  // const [loadingState, setLoadingState] = useState(false); 
+  // const currentDiagram = initialDiagram; // Unused
+  // const [, setPreviewData] = useState<PreviewData | null>(null); 
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
-  const [runModalVisible, setRunModalVisible] = useState(false);
-  const [previewModalVisible, setPreviewModalVisible] = useState(false);
-  const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null);
-  const [showSingleNodePreview, setShowSingleNodePreview] = useState(false);
+  // const [runModalVisible, setRunModalVisible] = useState(false); 
+  // const [, setRunModalVisible] = useState(false); 
+  // const [previewModalVisible, setPreviewModalVisible] = useState(false); 
+  // const [, setPreviewModalVisible] = useState(false); 
+  // const [singleNodePreview, setSingleNodePreview] = useState<SingleNodePreview | null>(null); // Unused
+  const [, setShowSingleNodePreview] = useState(false); 
   const [showLogs, setShowLogs] = useState(false);
   const [isDragging, setIsDragging] = useState(false); 
-  const [isToolbarDragging, setIsToolbarDragging] = useState(false); 
+  // const [isToolbarDragging, setIsToolbarDragging] = useState(false); 
+  // const [, setIsToolbarDragging] = useState(false); 
   const previousNodesRef = useRef<string | null>(null);
   const previousEdgesRef = useRef<string | null>(null);
-  const previousInitialNodesJSONRef = useRef<string | null>(null); 
-  const previousInitialEdgesJSONRef = useRef<string | null>(null); 
+  // const previousInitialNodesJSONRef = useRef<string | null>(null); 
+  // const previousInitialEdgesJSONRef = useRef<string | null>(null); 
   const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
 
   const GROUP_HEADER_HEIGHT = 40; 
@@ -355,28 +357,27 @@ const FlowEditorContent = ({
 
     setNodes((currentNodes) => {
       const groupNodeFromState = currentNodes.find(n => n.id === expandedGroupId);
-      let updatedGroupNodeData = groupNodeFromState?.data ? { ...groupNodeFromState.data } : {};
+      const groupNodeData = groupNodeFromState?.data ? { ...groupNodeFromState.data } : {};
       
-      updatedGroupNodeData.isExpandedView = false; 
-      updatedGroupNodeData.isMinimized = groupNodeFromState?.data?.isMinimized || false; // Preserve minimized state
+      groupNodeData.isExpandedView = false; 
+      groupNodeData.isMinimized = groupNodeFromState?.data?.isMinimized || false; // Preserve minimized state
       
-      // Store the viewport from GroupFocusView into the group node's data
       if (groupViewport) {
-        updatedGroupNodeData.viewport = groupViewport;
+        groupNodeData.viewport = groupViewport;
       }
       
-      // Remove anidada nodes/edges from group data, as they are managed globally
-      delete updatedGroupNodeData.nodes;
-      delete updatedGroupNodeData.edges;
+      delete groupNodeData.nodes;
+      delete groupNodeData.edges;
 
       const updatedGroupNode = groupNodeFromState ? {
         ...groupNodeFromState,
-        data: updatedGroupNodeData,
+        data: groupNodeData,
       } : undefined;
       
       const finalUpdatedNodesFromGroupView = updatedNodesInGroup.map(un => ({
         ...un,
-        // parentId and extent are set by GroupFocusView's handleSaveChanges
+        hidden: true, 
+        // parentId and extent are already set by GroupFocusView's handleSaveChanges
       }));
       
       const updatedNodesMap = new Map(finalUpdatedNodesFromGroupView.map(n => [n.id, n]));
@@ -402,28 +403,26 @@ const FlowEditorContent = ({
     });
 
     setEdges((currentEdges) => {
-      // Remove old edges that were internal to the group
       const childNodeIdsInGroup = new Set(updatedNodesInGroup.map(n => n.id));
       const edgesOutsideOrUnrelated = currentEdges.filter(edge => 
-        !(childNodeIdsInGroup.has(edge.source) && childNodeIdsInGroup.has(edge.target)) && // Not an edge fully within the group
-        !(edge.source === expandedGroupId || edge.target === expandedGroupId) // Not an edge connected to the group itself (if any)
+        !(childNodeIdsInGroup.has(edge.source) && childNodeIdsInGroup.has(edge.target)) && 
+        !(edge.source === expandedGroupId || edge.target === expandedGroupId) 
       );
-      // Add new edges from GroupFocusView
       return [...edgesOutsideOrUnrelated, ...newEdgesInGroup];
     });
 
-    setExpandedGroupId(null); // Collapse the group view
+    setExpandedGroupId(null); 
   };
 
 
-  const [toolbarPosition, setToolbarPosition] = useState(() => {
-    if (typeof window === 'undefined') return { x: 400, y: 20 }; 
-    const saved = localStorage.getItem('toolbarPosition');
-    try { if (saved) { const p = JSON.parse(saved); if (typeof p.x === 'number' && typeof p.y === 'number') return p; }
-    } catch (e) { console.error("Error parsing toolbarPosition", e); }
-    return { x: (typeof window !== 'undefined' ? window.innerWidth / 2 - 200 : 400), y: 20 };
-  });
-  const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 });
+  // const [toolbarPosition, setToolbarPosition] = useState(() => { 
+  //   if (typeof window === 'undefined') return { x: 400, y: 20 }; 
+  //   const saved = localStorage.getItem('toolbarPosition');
+  //   try { if (saved) { const p = JSON.parse(saved); if (typeof p.x === 'number' && typeof p.y === 'number') return p; }
+  //   } catch (e) { console.error("Error parsing toolbarPosition", e); }
+  //   return { x: (typeof window !== 'undefined' ? window.innerWidth / 2 - 200 : 400), y: 20 };
+  // });
+  // const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 }); 
   const [toolbarLayout, setToolbarLayout] = useState<'horizontal' | 'vertical'>(() => (typeof window !== 'undefined' ? (localStorage.getItem('toolbarLayout') as 'horizontal' | 'vertical' || 'horizontal') : 'horizontal'));
 
   const { selectedLogicalType, setSelectedLogicalType } = useSelectedEdgeType();
@@ -513,7 +512,7 @@ const FlowEditorContent = ({
   const findGroupAtPosition = useCallback((pos:{x:number,y:number})=>reactFlowInstance.getNodes().find(n=>n.type==='group'&&!n.data?.isMinimized&&pos.x>=n.position.x&&pos.x<=n.position.x+(n.width||300)&&pos.y>=n.position.y&&pos.y<=n.position.y+(n.height||200)),[reactFlowInstance]);
   const createEmptyGroup = useCallback((prov:'aws'|'gcp'|'azure'|'generic'='generic')=>{ const{width:w,height:h}=reactFlowWrapper.current?.getBoundingClientRect()||{width:1000,height:800}; const pos=reactFlowInstance.screenToFlowPosition({x:w/2,y:h/2}); const id=`group-${Date.now()}`; const grp:Node={id,type:'group',position:pos,data:{label:'New Group',provider:prov,isCollapsed:false,isMinimized:false},style:{width:300,height:200}}; setNodes(ns=>applyNodeChanges([{type:'add',item:grp}],ns)); setTimeout(()=>document.dispatchEvent(new CustomEvent('nodesChanged',{detail:{action:'nodeAdded',nodeIds:[id]}})),100); return id; },[reactFlowInstance,setNodes,reactFlowWrapper]);
   const optimizeNodesInGroup = useCallback((gid:string)=>{ const grp=reactFlowInstance.getNode(gid); if(!grp||grp.data?.isMinimized)return; const children=reactFlowInstance.getNodes().filter(n=>n.parentId===gid); if(children.length===0)return; const grpW=(grp.style?.width as number)||300; const hH=40,vM=20,hM=20,nS=8; const availW=grpW-2*hM; const sorted=children.sort((a,b)=>a.id.localeCompare(b.id)); setNodes(ns=>ns.map(n=>{if(n.parentId!==gid)return n; const idx=sorted.findIndex(c=>c.id===n.id); const y=hH+vM+idx*(40+nS); return{...n,position:{x:hM,y},style:{...n.style,width:availW,height:40,transition:'none'},draggable:true,selectable:true};})); },[reactFlowInstance,setNodes]);
-  const groupSelectedNodes = useCallback(()=>{ if(selectedNodes.length<2){console.warn("Need >=2 nodes to group");return;} let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity; const provCounts:Record<string,number>={}; selectedNodes.forEach(n=>{const w=n.width||150,h=n.height||80;minX=Math.min(minX,n.position.x);minY=Math.min(minY,n.position.y);maxX=Math.max(maxX,n.position.x+w);maxY=Math.max(maxY,n.position.y+h);const p=n.data?.provider||'generic';provCounts[p]=(provCounts[p]||0)+1;}); let commonProv:any='generic';let maxCt=0;Object.entries(provCounts).forEach(([p,c])=>{if(c>maxCt){commonProv=p;maxCt=c;}}); const pX=50,pVT=60,pVB=40;minX-=pX;minY-=pVT;maxX+=pX;maxY+=pVB; const w=Math.max(250,maxX-minX),h=Math.max(180,maxY-minY); const id=`group-${Date.now()}`; const grp:Node={id,type:'group',position:{x:minX,y:minY},data:{label:'Grupo',provider:commonProv,isCollapsed:false,isMinimized:false},style:{width:w,height:h}}; setNodes(ns=>{const upd=ns.map(n=>selectedNodes.some(s=>s.id===n.id)?{...n,parentId:id,extent:'parent'as const,position:{x:n.position.x-minX,y:n.position.y-minY},selected:false}:n); return[...upd,grp];}); setTimeout(()=>optimizeNodesInGroup(id),50); return id; },[selectedNodes,reactFlowInstance,optimizeNodesInGroup,setNodes]);
+  const groupSelectedNodes = useCallback(()=>{ if(selectedNodes.length<2){console.warn("Need >=2 nodes to group");return;} let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity; const provCounts:Record<string,number>={}; selectedNodes.forEach(n=>{const w=n.width||150,h=n.height||80;minX=Math.min(minX,n.position.x);minY=Math.min(minY,n.position.y);maxX=Math.max(maxX,n.position.x+w);maxY=Math.max(maxY,n.position.y+h);const p=n.data?.provider||'generic';provCounts[p]=(provCounts[p]||0)+1;}); let commonProv: 'aws' | 'gcp' | 'azure' | 'generic' = 'generic';let maxCt=0;Object.entries(provCounts).forEach(([p,c])=>{if(c>maxCt){commonProv=p as 'aws' | 'gcp' | 'azure' | 'generic';maxCt=c;}}); const pX=50,pVT=60,pVB=40;minX-=pX;minY-=pVT;maxX+=pX;maxY+=pVB; const w=Math.max(250,maxX-minX),h=Math.max(180,maxY-minY); const id=`group-${Date.now()}`; const grp:Node={id,type:'group',position:{x:minX,y:minY},data:{label:'Grupo',provider:commonProv,isCollapsed:false,isMinimized:false},style:{width:w,height:h}}; setNodes(ns=>{const upd=ns.map(n=>selectedNodes.some(s=>s.id===n.id)?{...n,parentId:id,extent:'parent'as const,position:{x:n.position.x-minX,y:n.position.y-minY},selected:false}:n); return[...upd,grp];}); setTimeout(()=>optimizeNodesInGroup(id),50); return id; },[selectedNodes,reactFlowInstance,optimizeNodesInGroup,setNodes]);
   
   const ungroupNodes = useCallback((groupIdToUngroup?: string) => {
     const { getNodes, setNodes: rfSetNodes } = reactFlowInstance;
@@ -688,78 +687,50 @@ const FlowEditorContent = ({
     };
   }, [nodes, edges, reactFlowInstance, isDragging, onSaveRef]);
 
-  // Modificar el efecto que maneja la expansión de grupos para restaurar el viewport
+  // Efecto para restaurar el viewport cuando se colapsa un grupo
   useEffect(() => {
-    if (expandedGroupId && reactFlowInstance) {
-      const groupNode = nodes.find(n => n.id === expandedGroupId);
-      if (groupNode?.data?.viewport) {
-        // Aplicar el viewport guardado después de un pequeño delay para asegurar que el grupo esté expandido
-        setTimeout(() => {
-          if (reactFlowInstance) {
-            reactFlowInstance.setViewport(groupNode.data.viewport);
-          }
-        }, 50);
-      }
+    if (expandedGroupId || !reactFlowInstance) return;
 
-      setNodes(nds => nds.map(n => {
-        if (n.id === expandedGroupId) {
-          const currentViewport = reactFlowInstance.getViewport();
-          return {
-            ...n,
-            data: { 
-              ...n.data, 
-              isExpandedView: true, 
-              isMinimized: false,
-              viewport: n.data.viewport || currentViewport
-            }
-          };
+    const lastViewport = lastViewportRef.current;
+    if (!lastViewport) return;
+
+    const currentViewport = reactFlowInstance.getViewport();
+
+    if (lastViewport.zoom !== 0 && 
+        (Math.abs(currentViewport.x - lastViewport.x) > 0.01 ||
+         Math.abs(currentViewport.y - lastViewport.y) > 0.01 ||
+         Math.abs(currentViewport.zoom - lastViewport.zoom) > 0.001)) {
+      setTimeout(() => {
+        if (reactFlowInstance) {
+          reactFlowInstance.setViewport(lastViewport);
         }
-        if (n.parentId === expandedGroupId) {
-          return { ...n, hidden: false };
-        }
-        return n;
-      }));
+      }, 50);
     }
-  }, [expandedGroupId, setNodes, reactFlowInstance, nodes]);
+  }, [expandedGroupId, reactFlowInstance]);
 
   const handleExpandGroupView = useCallback((groupId: string) => {
     if (reactFlowInstance) {
-      lastViewportRef.current = reactFlowInstance.getViewport(); 
+      lastViewportRef.current = reactFlowInstance.getViewport(); // Save current main viewport
     }
-    setExpandedGroupId(groupId);
     setNodes(nds => nds.map(n => {
       if (n.id === groupId) {
         const groupData = { ...n.data, isExpandedView: true, isMinimized: false };
-        // Limpiar datos anidados que son manejados por GroupFocusView o no deben persistir en el data del nodo grupo
+        // Ensure viewport for focus view is initialized if not present
+        if (!groupData.viewport && reactFlowInstance) {
+          groupData.viewport = reactFlowInstance.getViewport(); // Store current main viewport as initial for focus
+        }
+        // These are internal to GroupFocusView, not needed in FlowEditor's group node data
         delete groupData.nodes; 
         delete groupData.edges;
-        // El viewport de la vista de enfoque se puede pasar como prop separada a GroupFocusView si se necesita restaurar,
-        // pero no debe vivir permanentemente en el data.nodes del grupo en el estado principal.
-        // Si se quiere restaurar el viewport de la última sesión de GroupFocusView, se debe leer de groupData.viewport ANTES de este delete.
-        // Por ahora, lo eliminamos para simplificar y evitar bucles. GroupFocusView usará su defaultViewport.
-        delete groupData.viewport; 
+        // Do NOT delete groupData.viewport here if we want to preserve it for GroupFocusView's initialViewport
         return { ...n, data: groupData };
       }
+      // Children's 'hidden' status in FlowEditor is managed by processedInitialNodes, onNodeDragStop, and handleCollapseGroupView.
+      // No need to change child visibility here when just setting up for GroupFocusView.
       return n;
     }));
-  }, [reactFlowInstance, setNodes, setExpandedGroupId]);
-
-  useEffect(() => {
-    if (!expandedGroupId && lastViewportRef.current && reactFlowInstance) {
-      const currentViewport = reactFlowInstance.getViewport();
-      if (lastViewportRef.current.zoom !== 0 && 
-          (Math.abs(currentViewport.x - lastViewportRef.current.x) > 0.01 ||
-           Math.abs(currentViewport.y - lastViewportRef.current.y) > 0.01 ||
-           Math.abs(currentViewport.zoom - lastViewportRef.current.zoom) > 0.001)
-      ) {
-        setTimeout(() => {
-          if (reactFlowInstance && lastViewportRef.current) { 
-            reactFlowInstance.setViewport(lastViewportRef.current);
-          }
-        }, 50); 
-      }
-    }
-  }, [expandedGroupId, reactFlowInstance]);
+    setExpandedGroupId(groupId); // Set this after updating node data, to ensure GroupFocusView gets updated node data
+  }, [reactFlowInstance, setNodes]);
 
   // Modificar el efecto que maneja el colapso de grupos
   const handleCollapseGroupView = useCallback((groupIdToCollapse: string) => {
@@ -947,20 +918,28 @@ const FlowEditorContent = ({
   useEffect(()=>{const kd=(e:KeyboardEvent)=>{if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;switch(e.key.toLowerCase()){case'v':handleToolClick('select');break;case'n':handleToolClick('note');break;case't':handleToolClick('text');break;case'a':if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey)handleToolClick('area');break;case'g':if(!e.shiftKey&&!e.ctrlKey&&!e.metaKey)createEmptyGroup();break;case's':if(e.shiftKey)handleToolClick('lasso');break;}};document.addEventListener('keydown',kd);return()=>document.removeEventListener('keydown',kd);},[handleToolClick,createEmptyGroup]);
   const renderEditGroupModal=()=>{if(!editingGroup)return null;return(<div style={{position:'fixed',top:0,left:0,right:0,bottom:0,backgroundColor:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}}onClick={()=>setEditingGroup(null)}><div style={{backgroundColor:'white',padding:'20px',borderRadius:'8px',width:'300px',boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}onClick={e=>e.stopPropagation()}><h3 style={{marginTop:0,marginBottom:'16px',fontSize:'16px'}}>Edit Group Name</h3><input type="text"defaultValue={editingGroup.label}style={{width:'100%',padding:'8px 12px',border:'1px solid #ddd',borderRadius:'4px',fontSize:'14px',marginBottom:'16px'}}autoFocus onKeyDown={e=>{if(e.key==='Enter')saveGroupName((e.target as HTMLInputElement).value);if(e.key==='Escape')setEditingGroup(null);}}/><div style={{display:'flex',justifyContent:'flex-end',gap:'8px'}}><button onClick={()=>setEditingGroup(null)}style={{padding:'6px 12px',border:'1px solid #ddd',borderRadius:'4px',backgroundColor:'#f5f5f5',cursor:'pointer',fontSize:'14px'}}>Cancel</button><button onClick={e=>saveGroupName((e.currentTarget.parentElement?.querySelector('input')as HTMLInputElement).value)}style={{padding:'6px 12px',border:'none',borderRadius:'4px',backgroundColor:'#0088ff',color:'white',cursor:'pointer',fontSize:'14px'}}>Save</button></div></div></div>);};
   const moveNodesToBack=useCallback((ids:string[])=>{const cN=reactFlowInstance.getNodes();const sIds=new Set(ids);const mZ=Math.min(...cN.map(n=>n.zIndex||0));reactFlowInstance.setNodes(cN.map(n=>sIds.has(n.id)?{...n,zIndex:mZ-1}:n)as Node[]);},[reactFlowInstance]);
-  const simulateNodeExecution=async(n:NodeWithExecutionStatus,s:NodeExecutionState)=>{setExecutionLogs(p=>[...p,getExecutionMessage(n,s)]);await new Promise(r=>setTimeout(r,1000));};
-  const getExecutionMessage=(node:NodeWithExecutionStatus,state:NodeExecutionState):string=>{const n=node as Node;const name=n.data?.label||'Unnamed';const dets=[];if(n.data?.provider)dets.push(`Provider: ${n.data.provider}`);if(n.data?.resourceType)dets.push(`Type: ${n.data.resourceType}`);const detStr=dets.length>0?` (${dets.join(', ')})`:'';switch(state){case'creating':return`Iniciando creación de ${name}${detStr}...`;case'updating':return`Iniciando actualización de ${name}${detStr}...`;case'deleting':return`Iniciando eliminación de ${name}${detStr}...`;case'success':return`${name} procesado exitosamente`;case'error':return`Error al procesar ${name}`;default:return`Procesando ${name}...`;}};
-  const handlePreview=useCallback(()=>{if(!currentDiagram)return;try{setIsExecutionLogVisible(true);setExecutionLogs([]);const exN=currentDiagram.nodes.filter(n=>n.type!=='group');(async()=>{for(const n of exN){let s:NodeExecutionState='creating';const d=(n as Node).data;if(d?.status==='creating'||d?.status==='new'||(!d?.status&&d?.isNew))s='creating';else if(d?.status==='updating'||d?.status==='modified'||d?.hasChanges)s='updating';else if(d?.status==='deleting'||d?.status==='toDelete'||d?.markedForDeletion)s='deleting';const name=d?.label||'Unnamed';setExecutionLogs(p=>[...p,`Procesando ${s} para ${name}...`]);await new Promise(r=>setTimeout(r,1000));setExecutionLogs(p=>[...p,`${s} completado para ${name}`,`Costo estimado para ${name}: $${d?.estimated_cost?.monthly||0} USD/mes`]);}})();}catch(err){console.error('Preview Error:',err);message.error('Error en Preview');}},[currentDiagram]);
-  const handleRun=useCallback(()=>{if(!currentDiagram)return;try{setIsExecutionLogVisible(true);setExecutionLogs([]);const exN=currentDiagram.nodes.filter(n=>n.type!=='group');(async()=>{for(const n of exN){let s:NodeExecutionState='creating';const d=(n as Node).data;if(d?.status==='creating'||d?.status==='new'||(!d?.status&&d?.isNew))s='creating';else if(d?.status==='updating'||d?.status==='modified'||d?.hasChanges)s='updating';else if(d?.status==='deleting'||d?.status==='toDelete'||d?.markedForDeletion)s='deleting';const name=d?.label||'Unnamed';setExecutionLogs(p=>[...p,`Procesando ${s} para ${name}...`]);await new Promise(r=>setTimeout(r,1000));setExecutionLogs(p=>[...p,`${s} completado para ${name}`,`Costo estimado para ${name}: $${d?.estimated_cost?.monthly||0} USD/mes`]);}})();}catch(err){console.error('Run Error:',err);message.error('Error en Run');}},[currentDiagram]);
-  useEffect(()=>{const h=(e:Event)=>{setSingleNodePreview((e as CustomEvent<SingleNodePreview>).detail);setShowSingleNodePreview(true);};window.addEventListener('showSingleNodePreview',h);return()=>window.removeEventListener('showSingleNodePreview',h);},[]);
-  const handleApplyChanges=async()=>{if(!singleNodePreview)return;try{setLoadingState(true);setShowLogs(true);setExecutionLogs([]);setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.action} del recurso ${singleNodePreview.resource.name}`]);await new Promise(r=>setTimeout(r,1500));setExecutionLogs(p=>[...p,`Recurso ${singleNodePreview.resource.name} ${singleNodePreview.action==='create'?'creado':singleNodePreview.action==='update'?'actualizado':'eliminado'} exitosamente`]);if(singleNodePreview.estimated_cost)setExecutionLogs(p=>[...p,`Costo estimado: ${singleNodePreview.estimated_cost?.currency} ${singleNodePreview.estimated_cost?.monthly?.toFixed(2)}`]);if(singleNodePreview.dependencies?.length>0){setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.dependencies.length} dependencias...`]);for(const d of singleNodePreview.dependencies){setExecutionLogs(p=>[...p,`Procesando dependencia: ${d.name} (${d.type}) - ${d.action==='create'?'Creando':d.action==='update'?'Actualizando':'Eliminando'}`]);await new Promise(r=>setTimeout(r,500));setExecutionLogs(p=>[...p,`Dependencia ${d.name} procesada exitosamente`]);}}}catch(err){console.error('ApplyChanges Error:',err);setExecutionLogs(p=>[...p,`Error: ${err instanceof Error?err.message:'Unknown'}`]);message.error('Error ApplyChanges');}finally{setLoadingState(false);setShowSingleNodePreview(false);setSingleNodePreview(null);}};
-
-  const handleGroupClick = (nodeId: string) => {
-    const groupNode = nodes.find((n) => n.id === nodeId);
-    if (groupNode) {
-      setExpandedGroupId(nodeId);
-      // Ya no se usa setInitialViewport, el viewport se maneja por prop y por el estado del nodo
-    }
+  const simulateNodeExecution=async(n:NodeWithExecutionStatus,s:NodeExecutionState)=>{
+    // setLoadingState(true); 
+    // setIsExecutionLogVisible(true); 
+    setExecutionLogs(p=>[...p,getExecutionMessage(n,s)]);
+    await new Promise(r=>setTimeout(r,1000));
+    // setLoadingState(false); 
   };
+  const getExecutionMessage=(node:NodeWithExecutionStatus,state:NodeExecutionState):string=>{const n=node as Node;const name=n.data?.label||'Unnamed';const dets=[];if(n.data?.provider)dets.push(`Provider: ${n.data.provider}`);if(n.data?.resourceType)dets.push(`Type: ${n.data.resourceType}`);const detStr=dets.length>0?` (${dets.join(', ')})`:'';switch(state){case'creating':return`Iniciando creación de ${name}${detStr}...`;case'updating':return`Iniciando actualización de ${name}${detStr}...`;case'deleting':return`Iniciando eliminación de ${name}${detStr}...`;case'success':return`${name} procesado exitosamente`;case'error':return`Error al procesar ${name}`;default:return`Procesando ${name}...`;}};
+  // const handlePreview=useCallback(()=>{if(!currentDiagram)return;try{setIsExecutionLogVisible(true);setExecutionLogs([]);const exN=currentDiagram.nodes.filter(n=>n.type!=='group');(async()=>{for(const n of exN){let s:NodeExecutionState='creating';const d=(n as Node).data;if(d?.status==='creating'||d?.status==='new'||(!d?.status&&d?.isNew))s='creating';else if(d?.status==='updating'||d?.status==='modified'||d?.hasChanges)s='updating';else if(d?.status==='deleting'||d?.status==='toDelete'||d?.markedForDeletion)s='deleting';const name=d?.label||'Unnamed';setExecutionLogs(p=>[...p,`Procesando ${s} para ${name}...`]);await new Promise(r=>setTimeout(r,1000));setExecutionLogs(p=>[...p,`${s} completado para ${name}`,`Costo estimado para ${name}: $${d?.estimated_cost?.monthly||0} USD/mes`]);}})();}catch(err){console.error('Preview Error:',err);message.error('Error en Preview');}},[currentDiagram]); // ESLint: 'handlePreview' is assigned a value but never used.
+  // const handleRun=useCallback(()=>{if(!currentDiagram)return;try{setIsExecutionLogVisible(true);setExecutionLogs([]);const exN=currentDiagram.nodes.filter(n=>n.type!=='group');(async()=>{for(const n of exN){let s:NodeExecutionState='creating';const d=(n as Node).data;if(d?.status==='creating'||d?.status==='new'||(!d?.status&&d?.isNew))s='creating';else if(d?.status==='updating'||d?.status==='modified'||d?.hasChanges)s='updating';else if(d?.status==='deleting'||d?.status==='toDelete'||d?.markedForDeletion)s='deleting';const name=d?.label||'Unnamed';setExecutionLogs(p=>[...p,`Procesando ${s} para ${name}...`]);await new Promise(r=>setTimeout(r,1000));setExecutionLogs(p=>[...p,`${s} completado para ${name}`,`Costo estimado para ${name}: $${d?.estimated_cost?.monthly||0} USD/mes`]);}})();}catch(err){console.error('Run Error:',err);message.error('Error en Run');}},[currentDiagram]); // ESLint: 'handleRun' is assigned a value but never used.
+  useEffect(()=>{const h=(e:Event)=>{
+    // setSingleNodePreview((e as CustomEvent<SingleNodePreview>).detail); // singleNodePreview state is commented
+    // setShowSingleNodePreview(true); // showSingleNodePreview state is commented
+  };window.addEventListener('showSingleNodePreview',h);return()=>window.removeEventListener('showSingleNodePreview',h);},[/*setShowSingleNodePreview*/]); // dependency also commented
+  // const handleApplyChanges=async()=>{if(!singleNodePreview)return;try{setLoadingState(true);setShowLogs(true);setExecutionLogs([]);setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.action} del recurso ${singleNodePreview.resource.name}`]);await new Promise(r=>setTimeout(r,1500));setExecutionLogs(p=>[...p,`Recurso ${singleNodePreview.resource.name} ${singleNodePreview.action==='create'?'creado':singleNodePreview.action==='update'?'actualizado':'eliminado'} exitosamente`]);if(singleNodePreview.estimated_cost)setExecutionLogs(p=>[...p,`Costo estimado: ${singleNodePreview.estimated_cost?.currency} ${singleNodePreview.estimated_cost?.monthly?.toFixed(2)}`]);if(singleNodePreview.dependencies?.length>0){setExecutionLogs(p=>[...p,`Procesando ${singleNodePreview.dependencies.length} dependencias...`]);for(const d of singleNodePreview.dependencies){setExecutionLogs(p=>[...p,`Procesando dependencia: ${d.name} (${d.type}) - ${d.action==='create'?'Creando':d.action==='update'?'Actualizando':'Eliminando'}`]);await new Promise(r=>setTimeout(r,500));setExecutionLogs(p=>[...p,`Dependencia ${d.name} procesada exitosamente`]);}}}catch(err){console.error('ApplyChanges Error:',err);setExecutionLogs(p=>[...p,`Error: ${err instanceof Error?err.message:'Unknown'}`]);message.error('Error ApplyChanges');}finally{setLoadingState(false);setShowSingleNodePreview(false);setSingleNodePreview(null);}}; // ESLint: 'handleApplyChanges' is assigned a value but never used.
+
+  // const handleGroupClick = (nodeId: string) => { // ESLint: 'handleGroupClick' is assigned a value but never used.
+  //   const groupNode = nodes.find((n) => n.id === nodeId);
+  //   if (groupNode) {
+  //     setExpandedGroupId(nodeId);
+  //   }
+  // };
 
   // Si expandedGroupId tiene un valor, renderizamos la vista de enfoque del grupo
   if (expandedGroupId) {
@@ -1072,28 +1051,29 @@ const FlowEditorContent = ({
             if (targetGroup && targetGroup.id) {
               let nodesToUpdate = currentNodesOnDragStop.map(n => {
                 if (n.id === draggedNode.id) {
-                  const isTargetGroupExpanded = targetGroup.data.isExpandedView;
-                  let newPosition = n.position; 
-                  let newExtent = undefined;
-                  let newHidden = !isTargetGroupExpanded;
+                  // Calculate new relative position
+                  const newPosition = { // This needs to be 'let' if potentially modified by the if block below
+                    x: (draggedNode.positionAbsolute?.x ?? 0) - (targetGroup.positionAbsolute?.x ?? 0),
+                    y: (draggedNode.positionAbsolute?.y ?? 0) - (targetGroup.positionAbsolute?.y ?? 0),
+                  };
 
-                  if(isTargetGroupExpanded){
-                    newPosition = {
-                      x: (draggedNode.positionAbsolute?.x ?? 0) - (targetGroup.positionAbsolute?.x ?? 0),
-                      y: (draggedNode.positionAbsolute?.y ?? 0) - (targetGroup.positionAbsolute?.y ?? 0),
-                    };
-                    newPosition.x = Math.max(CHILD_NODE_PADDING_X, Math.min(newPosition.x, (targetGroup.width ?? MIN_EXPANDED_GROUP_WIDTH) - (draggedNode.width ?? 150) - CHILD_NODE_PADDING_X));
-                    newPosition.y = Math.max(GROUP_HEADER_HEIGHT + CHILD_NODE_PADDING_Y, Math.min(newPosition.y, (targetGroup.height ?? MIN_EXPANDED_GROUP_HEIGHT) - (draggedNode.height ?? 50) - CHILD_NODE_PADDING_Y));
-                    newExtent = 'parent' as const;
-                    newHidden = false;
+                  // If the target group is visually expanded in the FlowEditor (not focus view),
+                  // adjust position to be within bounds.
+                  // Note: 'isExpandedView' is a bit of a misnomer here if it's also used for internal group expansion state.
+                  // Assuming targetGroup.data.isExpandedView means its content is visible in FlowEditor.
+                  if (targetGroup.data.isExpandedView) {
+                     newPosition.x = Math.max(CHILD_NODE_PADDING_X, Math.min(newPosition.x, (targetGroup.width ?? MIN_EXPANDED_GROUP_WIDTH) - (draggedNode.width ?? 150) - CHILD_NODE_PADDING_X));
+                     newPosition.y = Math.max(GROUP_HEADER_HEIGHT + CHILD_NODE_PADDING_Y, Math.min(newPosition.y, (targetGroup.height ?? MIN_EXPANDED_GROUP_HEIGHT) - (draggedNode.height ?? 50) - CHILD_NODE_PADDING_Y));
                   }
+                  // If group is not 'expanded' (i.e., it's collapsed/minimized), position might not need such strict clamping
+                  // or could be a default small offset. For now, use the calculated relative position.
 
                   return {
                     ...n,
                     parentId: targetGroup.id,
-                    extent: newExtent,
+                    extent: 'parent' as const, // Child nodes of a group should always have extent: 'parent'
                     position: newPosition,
-                    hidden: newHidden, 
+                    hidden: true, // Children of groups are always hidden in the main list; GroupNode renders them.
                     style: { ...n.style, width: n.width || undefined, height: n.height || undefined },
                   };
                 }
@@ -1243,7 +1223,7 @@ const FlowEditorContent = ({
         </ReactFlow>
       </div>
       <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '480px' }}>
-        <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} previewData={previewData} />
+        <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} /* previewData={previewData} TS Error, and previewData state is commented */ />
       </div>
     </div>
   );

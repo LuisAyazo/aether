@@ -43,8 +43,8 @@ import {
   BoltIcon as AzureEventHubNamespaceIcon, // Reutilizando BoltIcon para Event Hubs
   GlobeAltIcon as AzureVirtualNetworkIcon, // Reutilizando para VNet
   ShieldCheckIcon as AzureNetworkSecurityGroupIcon, // Reutilizando para NSG
-  GlobeAltIcon as AzureApplicationGatewayIcon, // Reutilizando para App Gateway
-  ShieldCheckIcon as AzureFirewallIcon // Reutilizando para Firewall
+  // GlobeAltIcon as AzureApplicationGatewayIcon, // Reutilizando para App Gateway
+  // ShieldCheckIcon as AzureFirewallIcon // Reutilizando para Firewall
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';

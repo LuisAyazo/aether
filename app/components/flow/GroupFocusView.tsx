@@ -129,7 +129,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
       setNodes(initialGroupNodes);
       previousInitialGroupNodesJSON.current = currentInitialGroupNodesJSON;
     }
-  }, [initialGroupNodes, setNodes]);
+  }, [initialGroupNodes]);
 
   useEffect(() => {
     const currentInitialGroupEdgesJSON = JSON.stringify(initialGroupEdges);
@@ -137,7 +137,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
       setEdges(initialGroupEdges);
       previousInitialGroupEdgesJSON.current = currentInitialGroupEdgesJSON;
     }
-  }, [initialGroupEdges, setEdges]);
+  }, [initialGroupEdges]);
 
   const handleToolClickInGroup = (tool: 'select' | 'note' | 'text' | 'area') => {
     setActiveToolInGroup(prevTool => {
@@ -293,7 +293,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
       }, 50);
       return () => clearTimeout(timeoutId);
     }
-  }, [groupFlowInstance, initialViewport]);
+  }, [groupFlowInstance, initialViewport?.x, initialViewport?.y, initialViewport?.zoom]);
 
   // Auto-save useEffects are commented out to prevent loops
   /*
