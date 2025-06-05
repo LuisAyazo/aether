@@ -13,7 +13,38 @@ import {
   TableCellsIcon,
   DocumentTextIcon as FirestoreIcon,
   BoltIcon,
-  FolderIcon as FilestoreIcon // Usando FolderIcon para Filestore
+  FolderIcon as FilestoreIcon, // Usando FolderIcon para Filestore
+  FolderIcon, // Importando FolderIcon directamente para EFS
+  ArrowsRightLeftIcon as LoadBalancerIcon, // Reutilizando para AWS ALB y Azure LB
+  GlobeAltIcon as ApiGatewayIcon, // Usando GlobeAltIcon para API Gateway y Azure App Gateway
+  RectangleStackIcon as SqsQueueIcon, // Usando RectangleStackIcon para SQS
+  ChatBubbleOvalLeftEllipsisIcon as SnsTopicIcon, // Usando para SNS
+  CalendarDaysIcon as EventBridgeRuleIcon, // Usando para EventBridge
+  AdjustmentsHorizontalIcon as SfnStateMachineIcon, // Usando para Step Functions
+  ListBulletIcon as GcpCloudTasksQueueIcon, // Usando para GCP Cloud Tasks
+  RectangleGroupIcon as GcpWorkflowsWorkflowIcon, // Usando para GCP Workflows
+  RssIcon as GcpEventarcTriggerIcon, // Usando para GCP Eventarc
+  ComputerDesktopIcon as AzureVirtualMachineIcon, // Usando para Azure VM
+  ServerStackIcon as AzureLinuxVmssIcon, // Usando para Azure Linux VMSS
+  CpuChipIcon as AzureAKSClusterIcon, // Usando para Azure AKS Cluster
+  GlobeAltIcon as AzureLinuxWebAppIcon, // Usando para Azure App Service (Linux)
+  CubeIcon as AzureContainerGroupIcon, // Usando para Azure Container Group
+  BoltIcon as AzureLinuxFunctionAppIcon, // Usando para Azure Linux Function App
+  ArchiveBoxIcon as AzureStorageContainerIcon, // Usando para Azure Storage Container
+  CircleStackIcon as AzureCosmosDbAccountIcon, // Usando para Azure Cosmos DB Account
+  CircleStackIcon as AzureMsSqlDatabaseIcon, // Reutilizando para Azure SQL Database
+  BoltIcon as AzureRedisCacheIcon, // Reutilizando BoltIcon para Azure Cache for Redis
+  ChartBarIcon as AzureSynapseWorkspaceIcon, // Usando ChartBarIcon para Synapse
+  FolderIcon as AzureStorageShareIcon, // Reutilizando FolderIcon para Azure File Share
+  GlobeAltIcon as AzureApiManagementServiceIcon, // Reutilizando GlobeAltIcon para API Management
+  ChatBubbleOvalLeftEllipsisIcon as AzureServiceBusNamespaceIcon, // Reutilizando para Service Bus
+  RssIcon as AzureEventGridTopicIcon, // Reutilizando RssIcon para Event Grid Topic
+  RectangleGroupIcon as AzureLogicAppWorkflowIcon, // Reutilizando para Logic Apps
+  BoltIcon as AzureEventHubNamespaceIcon, // Reutilizando BoltIcon para Event Hubs
+  GlobeAltIcon as AzureVirtualNetworkIcon, // Reutilizando para VNet
+  ShieldCheckIcon as AzureNetworkSecurityGroupIcon, // Reutilizando para NSG
+  // GlobeAltIcon as AzureApplicationGatewayIcon, // Reutilizando para App Gateway
+  // ShieldCheckIcon as AzureFirewallIcon // Reutilizando para Firewall
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
 import GroupNode from './GroupNode';
@@ -26,7 +57,7 @@ export function EC2Node(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <ServerIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'EC2 Instance', resourceType: 'ec2' }}
+      data={{ ...props.data, provider: 'aws', icon: <ServerIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'EC2 Instance', resourceType: 'aws_ec2_instance' }}
     />
   );
 }
@@ -36,7 +67,7 @@ export function S3BucketNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CloudIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'S3 Bucket', resourceType: 's3' }}
+      data={{ ...props.data, provider: 'aws', icon: <CloudIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'S3 Bucket', resourceType: 'aws_s3_bucket' }}
     />
   );
 }
@@ -46,7 +77,7 @@ export function LambdaFunctionNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CodeBracketIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'Lambda Function', resourceType: 'lambda' }}
+      data={{ ...props.data, provider: 'aws', icon: <CodeBracketIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'Lambda Function', resourceType: 'aws_lambda_function' }}
     />
   );
 }
@@ -56,13 +87,183 @@ export function RDSInstanceNode(props: NodeProps) {
   return (
     <BaseResourceNode
       {...props}
-      data={{ ...props.data, provider: 'aws', icon: <CircleStackIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'RDS Instance', resourceType: 'rds' }}
+      data={{ ...props.data, provider: 'aws', icon: <CircleStackIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'RDS Instance', resourceType: 'aws_rds_instance' }}
     />
   );
 }
 RDSInstanceNode.displayName = 'RDSInstanceNode';
 
+export function ApplicationLoadBalancerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <LoadBalancerIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'ALB', resourceType: 'aws_elbv2_load_balancer' }}
+    />
+  );
+}
+ApplicationLoadBalancerNode.displayName = 'ApplicationLoadBalancerNode';
+
+export function AutoScalingGroupNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <RectangleStackIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'ASG', resourceType: 'aws_autoscaling_group' }}
+    />
+  );
+}
+AutoScalingGroupNode.displayName = 'AutoScalingGroupNode';
+
+export function ElasticBeanstalkEnvironmentNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <CloudIcon className="w-6 h-6 text-green-600" />, label: props.data.label || 'EB Env', resourceType: 'aws_elasticbeanstalk_environment' }}
+    />
+  );
+}
+ElasticBeanstalkEnvironmentNode.displayName = 'ElasticBeanstalkEnvironmentNode';
+
+export function ECSServiceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <CpuChipIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'ECS Service', resourceType: 'aws_ecs_service' }}
+    />
+  );
+}
+ECSServiceNode.displayName = 'ECSServiceNode';
+
+export function EKSClusterNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <CpuChipIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'EKS Cluster', resourceType: 'aws_eks_cluster' }}
+    />
+  );
+}
+EKSClusterNode.displayName = 'EKSClusterNode';
+
+export function DynamoDBTableNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <TableCellsIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'DynamoDB Table', resourceType: 'aws_dynamodb_table' }}
+    />
+  );
+}
+DynamoDBTableNode.displayName = 'DynamoDBTableNode';
+
+export function ElastiCacheClusterNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <BoltIcon className="w-6 h-6 text-orange-600" />, label: props.data.label || 'ElastiCache Cluster', resourceType: 'aws_elasticache_cluster' }}
+    />
+  );
+}
+ElastiCacheClusterNode.displayName = 'ElastiCacheClusterNode';
+
+export function RedshiftClusterNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <CircleStackIcon className="w-6 h-6 text-red-600" />, label: props.data.label || 'Redshift Cluster', resourceType: 'aws_redshift_cluster' }}
+    />
+  );
+}
+RedshiftClusterNode.displayName = 'RedshiftClusterNode';
+
+export function EFSFileSystemNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <FolderIcon className="w-6 h-6 text-green-600" />, label: props.data.label || 'EFS File System', resourceType: 'aws_efs_file_system' }}
+    />
+  );
+}
+EFSFileSystemNode.displayName = 'EFSFileSystemNode';
+
+export function ApiGatewayRestApiNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <ApiGatewayIcon className="w-6 h-6 text-yellow-500" />, label: props.data.label || 'API Gateway REST', resourceType: 'aws_api_gateway_rest_api' }}
+    />
+  );
+}
+ApiGatewayRestApiNode.displayName = 'ApiGatewayRestApiNode';
+
+export function SqsQueueNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <SqsQueueIcon className="w-6 h-6 text-purple-500" />, label: props.data.label || 'SQS Queue', resourceType: 'aws_sqs_queue' }}
+    />
+  );
+}
+SqsQueueNode.displayName = 'SqsQueueNode';
+
+export function SnsTopicNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <SnsTopicIcon className="w-6 h-6 text-cyan-500" />, label: props.data.label || 'SNS Topic', resourceType: 'aws_sns_topic' }}
+    />
+  );
+}
+SnsTopicNode.displayName = 'SnsTopicNode';
+
+export function EventBridgeRuleNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <EventBridgeRuleIcon className="w-6 h-6 text-orange-700" />, label: props.data.label || 'EventBridge Rule', resourceType: 'aws_cloudwatch_event_rule' }}
+    />
+  );
+}
+EventBridgeRuleNode.displayName = 'EventBridgeRuleNode';
+
+export function SfnStateMachineNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'aws', icon: <SfnStateMachineIcon className="w-6 h-6 text-teal-600" />, label: props.data.label || 'State Machine', resourceType: 'aws_sfn_state_machine' }}
+    />
+  );
+}
+SfnStateMachineNode.displayName = 'SfnStateMachineNode';
+
 // --- GCP Node Implementations ---
+export function GcpCloudTasksQueueNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <GcpCloudTasksQueueIcon className="w-6 h-6 text-green-600" />, label: props.data.label || 'Cloud Tasks Queue', resourceType: 'gcp_cloud_tasks_queue' }}
+    />
+  );
+}
+GcpCloudTasksQueueNode.displayName = 'GcpCloudTasksQueueNode';
+
+export function GcpWorkflowsWorkflowNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <GcpWorkflowsWorkflowIcon className="w-6 h-6 text-orange-500" />, label: props.data.label || 'Workflow', resourceType: 'gcp_workflows_workflow' }}
+    />
+  );
+}
+GcpWorkflowsWorkflowNode.displayName = 'GcpWorkflowsWorkflowNode';
+
+export function GcpEventarcTriggerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <GcpEventarcTriggerIcon className="w-6 h-6 text-red-500" />, label: props.data.label || 'Eventarc Trigger', resourceType: 'gcp_eventarc_trigger' }}
+    />
+  );
+}
+GcpEventarcTriggerNode.displayName = 'GcpEventarcTriggerNode';
+
 export function ComputeEngineNode(props: NodeProps) {
   return (
     <BaseResourceNode
@@ -285,16 +486,253 @@ export function AzureFunctionNode(props: NodeProps) {
 }
 AzureFunctionNode.displayName = 'AzureFunctionNode';
 
+export function AzureVirtualMachineNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureVirtualMachineIcon className="w-6 h-6 text-blue-500" />, label: props.data.label || 'Azure VM', resourceType: 'azurerm_virtual_machine' }}
+    />
+  );
+}
+AzureVirtualMachineNode.displayName = 'AzureVirtualMachineNode';
+
+export function AzureLinuxVmssNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureLinuxVmssIcon className="w-6 h-6 text-blue-600" />, label: props.data.label || 'Linux VMSS', resourceType: 'azurerm_linux_virtual_machine_scale_set' }}
+    />
+  );
+}
+AzureLinuxVmssNode.displayName = 'AzureLinuxVmssNode';
+
+export function AzureAKSClusterNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureAKSClusterIcon className="w-6 h-6 text-blue-700" />, label: props.data.label || 'AKS Cluster', resourceType: 'azurerm_kubernetes_cluster' }}
+    />
+  );
+}
+AzureAKSClusterNode.displayName = 'AzureAKSClusterNode';
+
+export function AzureLinuxWebAppNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureLinuxWebAppIcon className="w-6 h-6 text-sky-600" />, label: props.data.label || 'Linux Web App', resourceType: 'azurerm_linux_web_app' }}
+    />
+  );
+}
+AzureLinuxWebAppNode.displayName = 'AzureLinuxWebAppNode';
+
+export function AzureContainerGroupNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureContainerGroupIcon className="w-6 h-6 text-teal-500" />, label: props.data.label || 'Container Group', resourceType: 'azurerm_container_group' }}
+    />
+  );
+}
+AzureContainerGroupNode.displayName = 'AzureContainerGroupNode';
+
+export function AzureLinuxFunctionAppNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureLinuxFunctionAppIcon className="w-6 h-6 text-yellow-500" />, label: props.data.label || 'Linux Function App', resourceType: 'azurerm_linux_function_app' }}
+    />
+  );
+}
+AzureLinuxFunctionAppNode.displayName = 'AzureLinuxFunctionAppNode';
+
+export function AzureStorageContainerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureStorageContainerIcon className="w-6 h-6 text-blue-500" />, label: props.data.label || 'Storage Container', resourceType: 'azurerm_storage_container' }}
+    />
+  );
+}
+AzureStorageContainerNode.displayName = 'AzureStorageContainerNode';
+
+export function AzureCosmosDbAccountNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureCosmosDbAccountIcon className="w-6 h-6 text-emerald-500" />, label: props.data.label || 'Cosmos DB Account', resourceType: 'azurerm_cosmosdb_account' }}
+    />
+  );
+}
+AzureCosmosDbAccountNode.displayName = 'AzureCosmosDbAccountNode';
+
+export function AzureMsSqlDatabaseNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureMsSqlDatabaseIcon className="w-6 h-6 text-sky-500" />, label: props.data.label || 'SQL Database', resourceType: 'azurerm_mssql_database' }}
+    />
+  );
+}
+AzureMsSqlDatabaseNode.displayName = 'AzureMsSqlDatabaseNode';
+
+export function AzureRedisCacheNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureRedisCacheIcon className="w-6 h-6 text-red-500" />, label: props.data.label || 'Redis Cache', resourceType: 'azurerm_redis_cache' }}
+    />
+  );
+}
+AzureRedisCacheNode.displayName = 'AzureRedisCacheNode';
+
+export function AzureSynapseWorkspaceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureSynapseWorkspaceIcon className="w-6 h-6 text-purple-600" />, label: props.data.label || 'Synapse Workspace', resourceType: 'azurerm_synapse_workspace' }}
+    />
+  );
+}
+AzureSynapseWorkspaceNode.displayName = 'AzureSynapseWorkspaceNode';
+
+export function AzureStorageShareNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureStorageShareIcon className="w-6 h-6 text-blue-500" />, label: props.data.label || 'File Share', resourceType: 'azurerm_storage_share' }}
+    />
+  );
+}
+AzureStorageShareNode.displayName = 'AzureStorageShareNode';
+
+export function AzureApiManagementServiceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureApiManagementServiceIcon className="w-6 h-6 text-teal-600" />, label: props.data.label || 'API Management', resourceType: 'azurerm_api_management' }}
+    />
+  );
+}
+AzureApiManagementServiceNode.displayName = 'AzureApiManagementServiceNode';
+
+export function AzureServiceBusNamespaceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureServiceBusNamespaceIcon className="w-6 h-6 text-purple-700" />, label: props.data.label || 'Service Bus Namespace', resourceType: 'azurerm_servicebus_namespace' }}
+    />
+  );
+}
+AzureServiceBusNamespaceNode.displayName = 'AzureServiceBusNamespaceNode';
+
+export function AzureEventGridTopicNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureEventGridTopicIcon className="w-6 h-6 text-orange-500" />, label: props.data.label || 'Event Grid Topic', resourceType: 'azurerm_eventgrid_topic' }}
+    />
+  );
+}
+AzureEventGridTopicNode.displayName = 'AzureEventGridTopicNode';
+
+export function AzureLogicAppWorkflowNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureLogicAppWorkflowIcon className="w-6 h-6 text-cyan-600" />, label: props.data.label || 'Logic App Workflow', resourceType: 'azurerm_logic_app_workflow' }}
+    />
+  );
+}
+AzureLogicAppWorkflowNode.displayName = 'AzureLogicAppWorkflowNode';
+
+export function AzureEventHubNamespaceNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureEventHubNamespaceIcon className="w-6 h-6 text-emerald-600" />, label: props.data.label || 'Event Hubs Namespace', resourceType: 'azurerm_eventhub_namespace' }}
+    />
+  );
+}
+AzureEventHubNamespaceNode.displayName = 'AzureEventHubNamespaceNode';
+
+export function AzureVirtualNetworkNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureVirtualNetworkIcon className="w-6 h-6 text-indigo-600" />, label: props.data.label || 'Virtual Network', resourceType: 'azurerm_virtual_network' }}
+    />
+  );
+}
+AzureVirtualNetworkNode.displayName = 'AzureVirtualNetworkNode';
+
+export function AzureSubnetNode(props: NodeProps) { 
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <RectangleStackIcon className="w-6 h-6 text-sky-600" />, label: props.data.label || 'Subnet', resourceType: 'azurerm_subnet' }}
+    />
+  );
+}
+AzureSubnetNode.displayName = 'AzureSubnetNode';
+
+export function AzureNetworkSecurityGroupNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <AzureNetworkSecurityGroupIcon className="w-6 h-6 text-teal-600" />, label: props.data.label || 'NSG', resourceType: 'azurerm_network_security_group' }}
+    />
+  );
+}
+AzureNetworkSecurityGroupNode.displayName = 'AzureNetworkSecurityGroupNode';
+
+export function AzureLoadBalancerNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <LoadBalancerIcon className="w-6 h-6 text-orange-500" />, label: props.data.label || 'Load Balancer', resourceType: 'azurerm_lb' }}
+    />
+  );
+}
+AzureLoadBalancerNode.displayName = 'AzureLoadBalancerNode';
+
+export function AzureApplicationGatewayNode(props: NodeProps) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'azure', icon: <ApiGatewayIcon className="w-6 h-6 text-emerald-500" />, label: props.data.label || 'App Gateway', resourceType: 'azurerm_application_gateway' }}
+    />
+  );
+}
+AzureApplicationGatewayNode.displayName = 'AzureApplicationGatewayNode';
+
 // --- Node Types Object ---
 const nodeTypes = {
   // AWS nodes
-  ec2: EC2Node,
-  lambda: LambdaFunctionNode,
-  s3: S3BucketNode,
-  rds: RDSInstanceNode,
+  aws_ec2_instance: EC2Node,
+  aws_lambda_function: LambdaFunctionNode, 
+  aws_s3_bucket: S3BucketNode,           
+  aws_rds_instance: RDSInstanceNode,
+  aws_elbv2_load_balancer: ApplicationLoadBalancerNode,
+  aws_autoscaling_group: AutoScalingGroupNode,
+  aws_elasticbeanstalk_environment: ElasticBeanstalkEnvironmentNode,
+  aws_ecs_service: ECSServiceNode,
+  aws_eks_cluster: EKSClusterNode,
+  aws_dynamodb_table: DynamoDBTableNode,
+  aws_elasticache_cluster: ElastiCacheClusterNode,
+  aws_redshift_cluster: RedshiftClusterNode,
+  aws_efs_file_system: EFSFileSystemNode,
+  aws_api_gateway_rest_api: ApiGatewayRestApiNode,
+  aws_sqs_queue: SqsQueueNode,
+  aws_sns_topic: SnsTopicNode,
+  aws_cloudwatch_event_rule: EventBridgeRuleNode,
+  aws_sfn_state_machine: SfnStateMachineNode,
   
   // GCP nodes
   gcp_compute_instance: ComputeEngineNode,
+  gcp_cloud_tasks_queue: GcpCloudTasksQueueNode,
+  gcp_workflows_workflow: GcpWorkflowsWorkflowNode,
+  gcp_eventarc_trigger: GcpEventarcTriggerNode,
   gcp_compute_instance_group_manager: InstanceGroupManagerNode,
   gcp_appengine_app: AppEngineNode,
   gcp_gke_cluster: GKENode,
@@ -305,7 +743,7 @@ const nodeTypes = {
   gcp_bigquery_dataset: BigQueryDatasetNode,
   gcp_firestore_database: FirestoreDatabaseNode,
   gcp_memorystore_instance: MemorystoreInstanceNode,
-  gcp_filestore_instance: FilestoreInstanceNode, // Añadido Filestore Instance
+  gcp_filestore_instance: FilestoreInstanceNode,
   
   gcp_compute_disk: ComputeDiskNode,
   gcp_compute_network: ComputeNetworkNode,
@@ -316,7 +754,7 @@ const nodeTypes = {
   gcp_api_gateway: BaseResourceNode, 
   gcp_pubsub_topic: BaseResourceNode,
   
-  // Fallbacks genéricos (pueden eliminarse si todos los nodos usan tipos específicos)
+  // Fallbacks genéricos
   compute: ComputeEngineNode, 
   storage: CloudStorageNode,  
   sql: CloudSQLNode,          
@@ -326,9 +764,31 @@ const nodeTypes = {
   generic: GenericNode,
   
   // Azure nodes
+  azurerm_virtual_machine: AzureVirtualMachineNode,
+  azurerm_linux_virtual_machine_scale_set: AzureLinuxVmssNode,
+  azurerm_kubernetes_cluster: AzureAKSClusterNode,
+  azurerm_linux_web_app: AzureLinuxWebAppNode,
+  azurerm_container_group: AzureContainerGroupNode,
+  azurerm_linux_function_app: AzureLinuxFunctionAppNode,
+  azurerm_storage_container: AzureStorageContainerNode,
+  azurerm_cosmosdb_account: AzureCosmosDbAccountNode,
+  azurerm_mssql_database: AzureMsSqlDatabaseNode,
+  azurerm_redis_cache: AzureRedisCacheNode,
+  azurerm_synapse_workspace: AzureSynapseWorkspaceNode,
+  azurerm_storage_share: AzureStorageShareNode,
+  azurerm_api_management: AzureApiManagementServiceNode,
+  azurerm_servicebus_namespace: AzureServiceBusNamespaceNode,
+  azurerm_eventgrid_topic: AzureEventGridTopicNode,
+  azurerm_logic_app_workflow: AzureLogicAppWorkflowNode,
+  azurerm_eventhub_namespace: AzureEventHubNamespaceNode,
+  azurerm_virtual_network: AzureVirtualNetworkNode,
+  azurerm_subnet: AzureSubnetNode,
+  azurerm_network_security_group: AzureNetworkSecurityGroupNode,
+  azurerm_lb: AzureLoadBalancerNode,
+  azurerm_application_gateway: AzureApplicationGatewayNode, // Añadido Azure App Gateway
   vm: AzureVMNode,
-  blob: AzureBlobNode,
-  cosmos: AzureCosmosNode,
+  blob: AzureBlobNode, 
+  cosmos: AzureCosmosNode, 
   function: AzureFunctionNode, 
   
   // Group node

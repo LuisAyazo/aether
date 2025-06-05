@@ -7,6 +7,9 @@ import { gcpFunctionsResources } from './functions'; // Importar el registro de 
 import { gcpStorageResources } from './storage'; // Importar el registro de Storage
 import { gcpDatabaseResources } from './database'; // Importar el registro de Database
 import { gcpCacheResources } from './cache'; // Importar el registro de Cache
+import gcpCloudTasksResources from './cloudtasks'; // Importar el registro de Cloud Tasks
+import gcpWorkflowsResources from './workflows'; // Importar el registro de Workflows
+import gcpEventarcResources from './eventarc'; // Importar el registro de Eventarc
 
 // export * from './networking';  // Para futuros recursos
 
@@ -20,6 +23,9 @@ export const GCP_RESOURCE_REGISTRY = {
   storage: gcpStorageResources, // Añadir el registro de Storage
   database: gcpDatabaseResources, // Añadir el registro de Database
   cache: gcpCacheResources, // Añadir el registro de Cache
+  cloudtasks: gcpCloudTasksResources, // Añadir Cloud Tasks al registro
+  workflows: gcpWorkflowsResources, // Añadir Workflows al registro
+  eventarc: gcpEventarcResources, // Añadir Eventarc al registro
   // networking: { ... } // Ejemplo para futuros recursos de Networking
 } as const;
 

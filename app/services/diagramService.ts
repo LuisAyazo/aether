@@ -63,6 +63,7 @@ export interface Diagram {
   viewport?: Viewport;
   created_at: string;
   updated_at: string;
+  isFolder?: boolean; // Añadido para distinguir diagramas de directorios
   // Nuevos campos para manejar relaciones y metadatos
   nodeGroups?: Record<string, {
     nodeIds: string[];
@@ -102,9 +103,12 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
   }
 
   const token = localStorage.getItem('token');
+  // API_BASE_URL es http://localhost:8000/api
+  // El backend espera /api/v1/companies/...
+  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments`;
   
   try {
-    const response = await fetch(`${API_BASE_URL}/companies/${companyId}/environments`, {
+    const response = await fetch(correctApiUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -119,8 +123,22 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
     }
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || 'Error obteniendo ambientes');
+      if (response.status === 401) {
+        // Redirigir a login si no está autorizado
+        localStorage.removeItem('token'); // Limpiar token potencialmente inválido
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
+      let errorDetail = 'Error obteniendo ambientes';
+      try {
+        const errorData = await response.json();
+        errorDetail = errorData.detail || errorData.message || `Error ${response.status} del servidor.`;
+      } catch (e) {
+        // Si el cuerpo del error no es JSON o está vacío
+        errorDetail = `Error ${response.status}: ${response.statusText}. No se pudo obtener más detalle del error.`;
+      }
+      console.error(`Error en la respuesta de getEnvironments: ${errorDetail}`);
+      throw new Error(errorDetail);
     }
 
     // Devolver los ambientes del backend
@@ -144,7 +162,11 @@ export const createEnvironment = async (companyId: string, environmentData: { na
     console.log(`Intentando crear ambiente para compañía ${companyId}:`, environmentData);
     
     // Crear el ambiente usando el endpoint del backend
-    const response = await fetch(`${API_BASE_URL}/companies/${companyId}/environments`, {
+    // API_BASE_URL es http://localhost:8000/api
+    // El backend espera /api/v1/companies/...
+    const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments`;
+    console.log('URL para crear ambiente:', correctApiUrl); // Log para depurar URL
+    const response = await fetch(correctApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -163,6 +185,11 @@ export const createEnvironment = async (companyId: string, environmentData: { na
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
       console.error('Error al crear ambiente:', errorData);
       throw new Error(errorData.detail || 'Error creando ambiente');
@@ -183,7 +210,10 @@ export const updateEnvironment = async (companyId: string, environmentId: string
   }
 
   const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/environments/${environmentId}`, {
+  // API_BASE_URL es http://localhost:8000/api
+  // El backend espera /api/v1/companies/...
+  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
+  const response = await fetch(correctApiUrl, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -193,6 +223,11 @@ export const updateEnvironment = async (companyId: string, environmentId: string
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login?session_expired=true';
+      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    }
     const errorData = await response.json();
     throw new Error(errorData.detail || 'Error actualizando ambiente');
   }
@@ -206,7 +241,10 @@ export const deleteEnvironment = async (companyId: string, environmentId: string
   }
 
   const token = localStorage.getItem('token');
-  const response = await fetch(`${API_BASE_URL}/companies/${companyId}/environments/${environmentId}`, {
+  // API_BASE_URL es http://localhost:8000/api
+  // El backend espera /api/v1/companies/...
+  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
+  const response = await fetch(correctApiUrl, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -215,6 +253,11 @@ export const deleteEnvironment = async (companyId: string, environmentId: string
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login?session_expired=true';
+      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    }
     const errorData = await response.json();
     throw new Error(errorData.detail || 'Error eliminando ambiente');
   }
@@ -244,9 +287,16 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       if (response.status === 404) {
         console.log('No se encontraron diagramas en el servidor.');
-        throw new Error('El endpoint para obtener diagramas no está disponible en el backend. Contacta al administrador.');
+        // Considerar si esto debe ser un error o un array vacío. Por ahora, mantenemos el error.
+        // throw new Error('El endpoint para obtener diagramas no está disponible en el backend. Contacta al administrador.');
+        return []; // Devolver array vacío si es 404 y no hay diagramas
       }
       const errorData = await response.json();
       throw new Error(errorData.detail || 'Error obteniendo diagramas');
@@ -284,6 +334,11 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       if (response.status === 404) {
         throw new Error('El diagrama solicitado no se encuentra en la base de datos.');
       }
@@ -331,6 +386,11 @@ export const createDiagram = async (companyId: string, environmentId: string, di
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       let errorMessage = 'Error creando diagrama';
       try {
         const errorData = await response.json();
@@ -387,7 +447,7 @@ export const updateDiagram = async (
 
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`,
+      `${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, // Usar API_BASE_URL consistentemente
       {
         method: 'PUT',
         headers: {
@@ -399,6 +459,11 @@ export const updateDiagram = async (
     );
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       let errorMessage = 'Error actualizando diagrama';
       try {
         const errorData = await response.json();
@@ -437,6 +502,11 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
       console.error('Error eliminando diagrama:', errorData);
       throw new Error(errorData.detail || 'Error eliminando diagrama');
@@ -468,6 +538,11 @@ export async function updateDiagramPaths(companyId: string, environmentId: strin
     );
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       const error = await response.json();
       throw new Error(error.detail || 'Failed to update diagram paths');
     }

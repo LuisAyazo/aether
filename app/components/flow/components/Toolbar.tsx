@@ -1,0 +1,113 @@
+import React from 'react';
+import { Tooltip } from 'antd';
+import {
+  CursorArrowRaysIcon,
+  Square3Stack3DIcon,
+  SwatchIcon,
+  DocumentTextIcon,
+  PencilIcon,
+  RectangleGroupIcon,
+  ArrowsUpDownIcon,
+  ShareIcon,
+  BoltIcon as HeroBoltIcon,
+  PencilSquareIcon as HeroPencilSquareIcon,
+  LinkIcon as HeroLinkIcon,
+  PhoneArrowUpRightIcon as HeroPhoneArrowUpRightIcon,
+} from '@heroicons/react/24/outline';
+import { useEditorStore } from '../hooks/useEditorStore';
+import { useSelectedEdgeType } from '@/app/contexts/SelectedEdgeTypeContext';
+import { LogicalEdgeType, edgeTypeConfigs, EdgeTypeConfig } from '@/app/config/edgeConfig'; // Corregido EdgeConfig a EdgeTypeConfig
+import type { ToolType as EditorToolType } from '../types/editorTypes'; // Corregido EditorToolType a ToolType
+
+interface ToolbarProps {
+  onSaveDiagram: () => void;
+  onCreateEmptyGroup: () => void;
+  onToolClick: (tool: EditorToolType) => void;
+}
+
+const edgeToolbarIcons: Record<LogicalEdgeType, React.ElementType> = {
+  [LogicalEdgeType.DEPENDS_ON]: ShareIcon,
+  [LogicalEdgeType.CALLS]: HeroPhoneArrowUpRightIcon,
+  [LogicalEdgeType.TRIGGERS]: HeroBoltIcon,
+  [LogicalEdgeType.WRITES_TO]: HeroPencilSquareIcon,
+  [LogicalEdgeType.CONNECTS_TO]: HeroLinkIcon,
+};
+
+export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick }: ToolbarProps) {
+  // Seleccionar cada pieza del estado individualmente
+  const activeTool = useEditorStore(state => state.activeTool);
+  const toolbarLayout = useEditorStore(state => state.toolbarLayout);
+  const setToolbarLayout = useEditorStore(state => state.setToolbarLayout);
+
+  const { selectedLogicalType, setSelectedLogicalType } = useSelectedEdgeType();
+
+  const handleEdgeTypeSelect = (type: LogicalEdgeType) => {
+    setSelectedLogicalType(prev => (prev === type ? null : type));
+  };
+
+  const tools: { name: EditorToolType; title: string; icon: React.ElementType, action?: () => void }[] = [
+    { name: 'select', title: 'Select (V)', icon: CursorArrowRaysIcon },
+    { name: 'lasso', title: 'Lasso Select (Shift+S)', icon: SwatchIcon },
+    { name: 'note', title: 'Add Note (N)', icon: DocumentTextIcon },
+    { name: 'text', title: 'Add Text (T)', icon: PencilIcon },
+    { name: 'area', title: 'Draw Area (A)', icon: RectangleGroupIcon },
+    { name: 'createGroup', title: 'Create Group (G)', icon: Square3Stack3DIcon, action: onCreateEmptyGroup },
+  ];
+
+  return (
+    <div
+      className="absolute top-4 left-4 z-10 bg-white p-1 rounded-md shadow-lg flex items-center gap-1 border border-gray-200"
+      style={{ flexDirection: toolbarLayout === 'horizontal' ? 'row' : 'column' }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={() => {
+          const newLayout = toolbarLayout === 'horizontal' ? 'vertical' : 'horizontal';
+          setToolbarLayout(newLayout);
+        }}
+        title={toolbarLayout === 'horizontal' ? "Cambiar a barra vertical" : "Cambiar a barra horizontal"}
+        className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+      >
+        <ArrowsUpDownIcon className="h-5 w-5" />
+      </button>
+      <button
+        onClick={onSaveDiagram}
+        title="Guardar estado actual (zoom y posición)"
+        className="p-1.5 bg-green-500 text-white hover:bg-green-600 rounded flex items-center justify-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+      </button>
+
+      {tools.map(tool => (
+        <button 
+          key={tool.name}
+          onClick={() => tool.action ? tool.action() : onToolClick(tool.name)} 
+          title={tool.title} 
+          className={`p-1.5 hover:bg-gray-200 rounded ${activeTool === tool.name ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-500' : 'text-gray-600'}`}
+        >
+          <tool.icon className="h-5 w-5" />
+        </button>
+      ))}
+      
+      <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-6 mx-1' : 'h-px w-full my-1'}`}></div>
+      
+      {Object.values(edgeTypeConfigs).map((cfg: EdgeTypeConfig) => { // Corregido EdgeConfig a EdgeTypeConfig
+        const IconComponent = edgeToolbarIcons[cfg.logicalType];
+        const isSelected = selectedLogicalType === cfg.logicalType;
+        return (
+          <Tooltip title={`Edge: ${cfg.label}`} placement="bottom" key={cfg.logicalType}>
+            <button
+              onClick={() => handleEdgeTypeSelect(cfg.logicalType)}
+              className={`p-1.5 rounded hover:bg-gray-200 ${isSelected ? 'bg-blue-100 ring-1 ring-blue-500' : 'bg-transparent'}`}
+              style={{ color: isSelected ? cfg.style?.stroke || 'blue' : cfg.style?.stroke || 'black' }}
+            >
+              {IconComponent && <IconComponent className="w-5 h-5" />}
+            </button>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
