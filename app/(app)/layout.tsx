@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Navigation from "../components/Navigation";
-import { getCurrentUser, isAuthenticated, saveAuthData, getAuthToken } from '../services/authService'; // Añadir saveAuthData, getAuthToken
-import { User, AuthResponse } from '../services/authService'; // Importar la interfaz User y AuthResponse
+import { getCurrentUser, isAuthenticated, saveAuthData } from '../services/authService'; // getAuthToken eliminado
+import { User } from '../services/authService'; // AuthResponse eliminado
 
 // Función para obtener datos del usuario desde /me
 async function fetchCurrentUser(token: string): Promise<User | null> {
@@ -122,10 +122,12 @@ export default function AppLayout({
     );
   }
 
+  const showNavigation = pathname !== '/onboarding/select-usage';
+
   return (
     <>
-      <Navigation />
-      <main className="pt-14"> {/* Ajustado pt-16 a pt-14 para coincidir con h-14 del Nav */}
+      {showNavigation && <Navigation />}
+      <main className={showNavigation ? "pt-14" : ""}> {/* Ajustado pt-16 a pt-14 para coincidir con h-14 del Nav */}
         {children}
       </main>
     </>

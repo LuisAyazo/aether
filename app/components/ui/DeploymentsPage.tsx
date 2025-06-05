@@ -27,7 +27,10 @@ import {
   DeploymentStep, 
   EnvironmentVariable,
   EnvironmentDefinition,
-  DeploymentTriggerTypeEnum
+  DeploymentTriggerTypeEnum,
+  DeploymentStrategyType,
+  type DeploymentStrategy, 
+  type SemanticVersionRule
 } from '@/app/types/deployments';
 import { platformConfig } from '@/app/config/platforms';
 import { getAuthToken } from '@/app/services/authService';
@@ -62,18 +65,16 @@ interface DeploymentsPageProps {
   companyId: string; 
 }
 
-// Tipo para la respuesta del API de listar configuraciones
-type ApiDeploymentListItem = Omit<DeploymentConfig, 'repository'> & {
+type ApiDeploymentListItem = Omit<DeploymentConfig, 'repository' | 'deployment_strategy'> & { 
   id: string;
   repository_id: string;
   repository_full_name: string;
   updated_at: string; 
-  // El backend podría no enviar todos los campos de DeploymentConfig,
-  // así que hacemos opcionales los que podrían faltar en una lista.
   preDeploySteps?: DeploymentStep[];
   postDeploySteps?: DeploymentStep[];
   environmentVariables?: EnvironmentVariable[];
   buildConfig?: DeploymentConfig['buildConfig'];
+  deployment_strategy?: DeploymentStrategy; 
 };
 
 
@@ -87,7 +88,7 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
   const [availableEnvironments, setAvailableEnvironments] = useState<EnvironmentDefinition[]>([]);
   const [expandedDeployment, setExpandedDeployment] = useState<string | null>(null);
   const [selectedPlatformFilter, setSelectedPlatformFilter] = useState<string>('all'); 
-  const [selectedProviderFilter, _setSelectedProviderFilter] = useState<string>('all'); // eslint-disable-line @typescript-eslint/no-unused-vars
+  // const [_selectedProviderFilter, _setSelectedProviderFilter] = useState<string>('all'); // Comentado por no usarse
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false); 
   const [newDeploymentName, setNewDeploymentName] = useState('');
   const [newDeploymentPlatform, setNewDeploymentPlatform] = useState<Deployment['platform'] | undefined>(undefined);
@@ -107,7 +108,7 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
   const [repoSearchTerm, setRepoSearchTerm] = useState('');
   const [currentSelectedRepoForConfig, setCurrentSelectedRepoForConfig] = useState<Repository | null>(null);
 
-  const [isDeploying, setIsDeploying] = useState(false); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const [isDeploying] = useState(false); 
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [deploymentLogs, setDeploymentLogs] = useState<string[]>([]);
   const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'deploying' | 'success' | 'error'>('idle');
@@ -118,7 +119,6 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
       setAvailableEnvironments([]); 
       return;
     }
-    console.log("DeploymentsPage: Iniciando fetchAvailableEnvironments con companyId:", companyId);
     const token = getAuthToken();
     if (!token) {
       message.error("Usuario no autenticado.");
@@ -126,57 +126,57 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
     }
     try {
       const response = await fetch(`/api/v1/companies/${companyId}/environments`, {
-        headers: {
+        headers: { 
           'Authorization': `Bearer ${token}`,
+          'X-InfraUX-Company-ID': companyId
         }
       }); 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Error al obtener ambientes y no se pudo parsear el error.'}));
+        const errorData = await response.json().catch(() => ({ detail: 'Error al obtener ambientes.'}));
         throw new Error(errorData.detail || 'Failed to fetch environments');
       }
       const data: EnvironmentDefinition[] = await response.json();
-      console.log("DeploymentsPage: Ambientes recibidos:", data);
       setAvailableEnvironments(data);
     } catch (error) {
       console.error("Error fetching environments for DeploymentsPage:", error);
-      message.error(`Error al cargar los ambientes disponibles: ${error instanceof Error ? error.message : String(error)}`);
+      message.error(`Error al cargar los ambientes: ${error instanceof Error ? error.message : String(error)}`);
       setAvailableEnvironments([]);
     }
   };
 
   const fetchDeploymentConfigurations = async () => {
     if (!companyId) {
-      console.warn("DeploymentsPage: companyId es undefined, no se pueden cargar configuraciones.");
       setDeployments([]);
       return;
     }
     const token = getAuthToken();
     if (!token) {
-      message.error("Usuario no autenticado. No se pueden cargar configuraciones.");
       setDeployments([]);
       return;
     }
     setLoading(true);
     try {
       const response = await fetch(`/api/v1/companies/${companyId}/deployment-configurations`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'X-InfraUX-Company-ID': companyId
+        }
       });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: 'Error al obtener configuraciones de despliegue.' }));
+        const errorData = await response.json().catch(() => ({ detail: 'Error al obtener configuraciones.' }));
         throw new Error(errorData.detail || 'Failed to fetch deployment configurations');
       }
-      const data: ApiDeploymentListItem[] = await response.json(); 
-      
+      const data: (ApiDeploymentListItem & Partial<DeploymentConfig>)[] = await response.json();       
       const uiDeployments: Deployment[] = data.map(config => {
         const envName = availableEnvironments.find(e => e.id === config.environment_id)?.name.toLowerCase() as Deployment['environment'] || 'unknown';
         const repoForUI: Repository = {
-            id: parseInt(config.repository_id) || Date.now(), // Simular ID si no es numérico
+            id: parseInt(config.repository_id) || Date.now(),
             name: config.repository_full_name.split('/')[1] || config.repository_full_name,
             full_name: config.repository_full_name,
-            private: false, // Placeholder
-            html_url: '', // Placeholder
-            description: config.description || '', // Placeholder
-            default_branch: config.branch,
+            private: false, 
+            html_url: '', 
+            description: config.description || '', 
+            default_branch: config.branch || 'main',
         };
         return {
           id: config.id,
@@ -185,7 +185,7 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
           provider: 'gcp', 
           platform: config.platform,
           status: 'pending', 
-          region: config.region,
+          region: config.region || 'us-central1',
           lastDeployed: config.updated_at || new Date().toISOString(), 
           resources: 0, 
           cost: 0, 
@@ -193,24 +193,22 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
           description: config.description || '',
           repositoryFullName: config.repository_full_name, 
           deploymentDirectory: config.directory,
-          repository: repoForUI, // Almacenar el objeto repo reconstruido
-          // Mantener otros campos de DeploymentConfig si se mapean desde ApiDeploymentListItem
-          branch: config.branch,
+          repository: repoForUI,
+          branch: config.branch, 
           config: config.config, 
-          trigger_type: config.trigger_type,
-          is_active: config.is_active,
-          preDeploySteps: config.preDeploySteps,
-          postDeploySteps: config.postDeploySteps,
-          environmentVariables: config.environmentVariables,
-          buildConfig: config.buildConfig,
+          trigger_type: config.trigger_type, 
+          is_active: config.is_active, 
+          preDeploySteps: config.preDeploySteps, 
+          postDeploySteps: config.postDeploySteps, 
+          environmentVariables: config.environmentVariables, 
+          buildConfig: config.buildConfig, 
+          deployment_strategy: config.deployment_strategy 
         };
       });
       setDeployments(uiDeployments);
-      console.log("DeploymentsPage: Configuraciones de despliegue recibidas y mapeadas:", uiDeployments);
-
     } catch (error) {
       console.error("Error fetching deployment configurations for DeploymentsPage:", error);
-      message.error(`Error al cargar las configuraciones de despliegue: ${error instanceof Error ? error.message : String(error)}`);
+      message.error(`Error al cargar configuraciones: ${error instanceof Error ? error.message : String(error)}`);
       setDeployments([]);
     } finally {
       setLoading(false); 
@@ -230,14 +228,13 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
         if (companyId) {
           await fetchAvailableEnvironments(); 
         } else {
-          console.warn("DeploymentsPage: companyId no disponible en el montaje inicial.");
           setAvailableEnvironments([]); 
           setDeployments([]);
-          setLoading(false); // Detener carga si no hay companyId
+          setLoading(false);
         }
       } catch (error) { 
-        console.error('Error initializing page data (connection/repos/environments):', error); 
-        setLoading(false); // Detener carga en caso de error aquí
+        console.error('Error initializing page data:', error); 
+        setLoading(false);
       } 
     };
     if (companyId) { 
@@ -251,16 +248,11 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
   }, [companyId]); 
 
   useEffect(() => {
-    if (companyId && availableEnvironments.length > 0 && isConnected) { // Solo cargar configs si hay ambientes Y conexión a GH
+    if (companyId && availableEnvironments.length > 0 && isConnected) {
       fetchDeploymentConfigurations();
-    } else if (companyId && !isConnected && availableEnvironments.length > 0) {
-      // Si hay ambientes pero no conexión a GH, podríamos querer cargar configs que no dependan de repo?
-      // Por ahora, asumimos que la mayoría de las configs necesitarán info de repo.
-      // O podríamos llamar a fetchDeploymentConfigurations y que maneje la ausencia de repos.
-      // setLoading(false); // Asegurar que el loader se detenga si no se llama a fetchDeploymentConfigurations
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, availableEnvironments, isConnected]); // Depender también de isConnected
+  }, [companyId, availableEnvironments, isConnected]);
 
 
   const fetchRepositories = async () => {
@@ -270,7 +262,7 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
       setRepositories(repos);
     } catch (error) {
       console.error('Error fetching repositories:', error);
-      message.error('Error al obtener los repositorios');
+      message.error('Error al obtener repositorios');
     } 
   };
   
@@ -299,10 +291,11 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
         is_active: true,
         preDeploySteps: [],
         postDeploySteps: [],
-        environmentVariables: []
+        environmentVariables: [],
+        deployment_strategy: { type: DeploymentStrategyType.BRANCH, value: repo.default_branch || 'main', semanticRules: [] } 
       });
     } else if (availableEnvironments.length === 0) {
-        message.warning("No hay ambientes configurados. Por favor, configure uno primero.");
+        message.warning("No hay ambientes. Configure uno primero.");
     }
     setIsRepoSelectorModalOpen(false);
   };
@@ -310,43 +303,49 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
   const filteredDeployments = useMemo(() => {
     return deployments.filter(deployment => {
       const platformMatch = selectedPlatformFilter === 'all' || deployment.platform === selectedPlatformFilter;
-      const providerMatch = selectedProviderFilter === 'all' || deployment.provider === selectedProviderFilter; 
-      return platformMatch && providerMatch; 
+      // const providerMatch = _selectedProviderFilter === 'all' || deployment.provider === _selectedProviderFilter; // Lógica de provider comentada
+      return platformMatch; 
     });
-  }, [deployments, selectedPlatformFilter, selectedProviderFilter]);
+  }, [deployments, selectedPlatformFilter]); 
 
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('es-ES', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   
   const handleEditDeployment = (deploymentToEdit: Deployment) => {
-    // `deploymentToEdit` ahora debería tener el campo `repository` poblado desde `fetchDeploymentConfigurations`
     const repoToUse = deploymentToEdit.repository || repositories.find(r => r.full_name === deploymentToEdit.repositoryFullName);
     const selectedEnvDef = availableEnvironments.find(e => e.name.toLowerCase() === deploymentToEdit.environment.toLowerCase());
+    let environmentIdToUse = selectedEnvDef?.id;
 
-    if (!repoToUse && deploymentToEdit.repositoryFullName) {
-      message.error(`Repositorio "${deploymentToEdit.repositoryFullName}" no encontrado. No se puede editar completamente.`);
-    }
-    if (!selectedEnvDef) {
-      message.error(`Definición de ambiente "${deploymentToEdit.environment}" no encontrada. No se puede editar completamente.`);
+    const depAsConfig = deploymentToEdit as Partial<DeploymentConfig> & Deployment;
+
+    if (!environmentIdToUse && depAsConfig.environment_id) {
+        environmentIdToUse = depAsConfig.environment_id;
     }
     
+    if (!environmentIdToUse) {
+        message.error(`No se pudo determinar el ID del ambiente para "${deploymentToEdit.environment}".`);
+    }
+    
+    const branch = depAsConfig.branch || repoToUse?.default_branch || 'main';
+
     const reconstructedConfig: Partial<DeploymentConfig> = {
       id: deploymentToEdit.id,
       company_id: companyId,
       name: deploymentToEdit.name,
       platform: deploymentToEdit.platform,
-      repository: repoToUse!, // Asumimos que repoToUse será encontrado o es parte de deploymentToEdit
+      repository: repoToUse!, 
       region: deploymentToEdit.region,
-      environment_id: selectedEnvDef?.id || (deploymentToEdit as any).environment_id,
+      environment_id: environmentIdToUse || '',
       directory: deploymentToEdit.deploymentDirectory || '/',
       description: deploymentToEdit.description,
-      branch: (deploymentToEdit as any).branch || repoToUse?.default_branch || 'main',
-      config: (deploymentToEdit as any).config || {},
-      trigger_type: (deploymentToEdit as any).trigger_type || DeploymentTriggerTypeEnum.MANUAL,
-      is_active: (deploymentToEdit as any).is_active !== undefined ? (deploymentToEdit as any).is_active : true,
-      preDeploySteps: (deploymentToEdit as any).preDeploySteps || [],
-      postDeploySteps: (deploymentToEdit as any).postDeploySteps || [],
-      environmentVariables: (deploymentToEdit as any).environmentVariables || [],
-      buildConfig: (deploymentToEdit as any).buildConfig || undefined,
+      branch: branch,
+      config: depAsConfig.config || {},
+      trigger_type: depAsConfig.trigger_type || DeploymentTriggerTypeEnum.MANUAL,
+      is_active: depAsConfig.is_active !== undefined ? depAsConfig.is_active : true,
+      preDeploySteps: depAsConfig.preDeploySteps || [],
+      postDeploySteps: depAsConfig.postDeploySteps || [],
+      environmentVariables: depAsConfig.environmentVariables || [],
+      buildConfig: depAsConfig.buildConfig || undefined,
+      deployment_strategy: depAsConfig.deployment_strategy || { type: DeploymentStrategyType.BRANCH, value: branch, semanticRules: [] },
     };
 
     setSelectedPlatform(deploymentToEdit.platform);
@@ -375,8 +374,8 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
   const handleSaveYaml = async (yamlContent: string) => {
     if (!selectedDeploymentForYaml) return;
     console.log("Guardando YAML:", yamlContent);
-    try { message.success('YAML guardado exitosamente (simulado)'); setIsYamlModalOpen(false); } 
-    catch { message.error('Error al guardar el YAML'); } 
+    try { message.success('YAML guardado (simulado)'); setIsYamlModalOpen(false); } 
+    catch { message.error('Error al guardar YAML'); } 
   };
   
   const handlePlatformSelect = (platform: Deployment['platform']) => {
@@ -384,7 +383,7 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
     setCurrentSelectedRepoForConfig(null); 
     setDeploymentConfig(null); 
     if (availableEnvironments.length === 0) {
-        message.warning("No hay ambientes configurados para esta compañía. Por favor, cree uno antes de configurar un despliegue.");
+        message.warning("No hay ambientes. Cree uno primero.");
         return; 
     }
     setIsConfigModalOpen(true);
@@ -392,7 +391,7 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
 
   const handleSaveConfigurationOnly = async (currentConfig: Partial<DeploymentConfig> | null) => {
     if (!currentConfig || !currentSelectedRepoForConfig || !companyId || !currentConfig.environment_id) {
-      message.error("Faltan datos para guardar la configuración: Repositorio, ambiente o compañía no especificados.");
+      message.error("Faltan datos para guardar: Repositorio, ambiente o compañía.");
       return;
     }
 
@@ -414,10 +413,11 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
       trigger_type: currentConfig.trigger_type || DeploymentTriggerTypeEnum.MANUAL,
       description: currentConfig.description,
       is_active: currentConfig.is_active !== undefined ? currentConfig.is_active : true,
+      deployment_strategy: currentConfig.deployment_strategy,
     };
     
     const frontendValidationObject: DeploymentConfig = {
-        ...currentConfig,
+        id: currentConfig.id, 
         company_id: companyId,
         repository: currentSelectedRepoForConfig, 
         name: backendPayload.name,
@@ -428,8 +428,15 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
         directory: backendPayload.directory,
         config: backendPayload.platform_specific_config, 
         trigger_type: backendPayload.trigger_type,
-        is_active: backendPayload.is_active
+        is_active: backendPayload.is_active,
+        deployment_strategy: backendPayload.deployment_strategy,
+        buildConfig: currentConfig.buildConfig || undefined,
+        preDeploySteps: currentConfig.preDeploySteps || [],
+        postDeploySteps: currentConfig.postDeploySteps || [],
+        environmentVariables: currentConfig.environmentVariables || [],
+        description: currentConfig.description || undefined,
     };
+
 
     const validationErrors = validateDeploymentConfig(frontendValidationObject); 
     if (validationErrors.length > 0) {
@@ -454,36 +461,36 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
 
       const response = await fetch(endpoint, {
         method: method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${token}`,
+          'X-InfraUX-Company-ID': companyId
+        },
         body: JSON.stringify(backendPayload),
       });
 
       if (!response.ok) {
-        let errorDetail = 'Error desconocido del servidor.';
+        let errorDetail = 'Error desconocido.';
         try {
           const errorData = await response.json();
-          errorDetail = errorData.detail || `Error del servidor: ${response.status}`;
+          errorDetail = errorData.detail || `Error: ${response.status}`;
         } catch { 
-          errorDetail = `Error del servidor: ${response.status} (Respuesta no es JSON válido)`;
+          errorDetail = `Error: ${response.status} (Respuesta no JSON)`;
         }
         throw new Error(errorDetail); 
       }
 
       const savedOrUpdatedConfig: DeploymentConfig = await response.json(); 
       
-      if (isUpdate) {
-        message.success(`Configuración "${savedOrUpdatedConfig.name}" actualizada exitosamente.`);
-      } else {
-        message.success(`Configuración "${savedOrUpdatedConfig.name}" guardada exitosamente.`);
-      }
+      message.success(`Configuración "${savedOrUpdatedConfig.name}" ${isUpdate ? 'actualizada' : 'guardada'} exitosamente.`);
       
       await fetchDeploymentConfigurations(); 
       
-      setDeploymentConfig(prev => ({...prev, id: savedOrUpdatedConfig.id })); 
+      setDeploymentConfig(prev => ({...prev, id: savedOrUpdatedConfig.id, deployment_strategy: savedOrUpdatedConfig.deployment_strategy })); 
 
     } catch (error) {
       console.error('Error saving/updating configuration:', error);
-      const errorMessage = error instanceof Error ? error.message : "Error desconocido al guardar/actualizar.";
+      const errorMessage = error instanceof Error ? error.message : "Error al guardar/actualizar.";
       message.error(errorMessage);
       if (!currentConfig.id || currentConfig.id.startsWith("sim-")) {
          setDeploymentConfig(prev => ({...prev, id: undefined }));
@@ -495,31 +502,31 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
   
   const handleDeploy = async (currentConfig: Partial<DeploymentConfig> | null) => {
     if (!currentConfig || !currentConfig.id) {
-        message.error("Guarda la configuración primero o selecciona una configuración existente para desplegar.");
+        message.error("Guarda la configuración primero.");
         return;
     }
-    message.info(`Simulando despliegue para la configuración ID: ${currentConfig.id}`);
+    message.info(`Simulando despliegue para ID: ${currentConfig.id}`);
   };
 
   const validateDeploymentConfig = (config: DeploymentConfig): string[] => {
     const errors: string[] = [];
-    if (!config.name) errors.push('El nombre del despliegue es requerido');
-    if (!config.region) errors.push('La región es requerida');
-    if (!config.branch) errors.push('La rama es requerida');
-    if (!config.directory) errors.push('El directorio es requerido');
-    if (!config.environment_id) errors.push('El ambiente es requerido');
-    if (!config.platform) errors.push('La plataforma es requerida');
-    if (!config.repository || !config.repository.id) errors.push('El repositorio es requerido');
+    if (!config.name) errors.push('Nombre es requerido');
+    if (!config.region) errors.push('Región es requerida');
+    if (!config.branch) errors.push('Rama es requerida');
+    if (!config.directory) errors.push('Directorio es requerido');
+    if (!config.environment_id) errors.push('Ambiente es requerido');
+    if (!config.platform) errors.push('Plataforma es requerida');
+    if (!config.repository || !config.repository.id) errors.push('Repositorio es requerido');
     return errors;
   };
 
   const generateYamlFromConfig = (config: Partial<DeploymentConfig> | null): string => {
-    if (!config || !config.platform || !config.repository || !config.environment_id) return "Faltan datos para generar YAML.";
+    if (!config || !config.platform || !config.repository || !config.environment_id) return "Faltan datos para YAML.";
   
     const platformDetails = platformConfig[config.platform];
-    if (!platformDetails) return `Error: No se encontró configuración para la plataforma ${config.platform}`;
+    if (!platformDetails) return `Error: No config para plataforma ${config.platform}`;
     
-    let baseYaml = platformDetails.yamlTemplate || `platform: ${config.platform}\nname: ${config.name}\n# No template found`;
+    let baseYaml = platformDetails.yamlTemplate || `platform: ${config.platform}\nname: ${config.name}\n# No template`;
     
     const selectedEnv = availableEnvironments.find(e => e.id === config.environment_id);
 
@@ -595,6 +602,60 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
     return finalYaml;
   };
 
+  const handleEnvFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result as string;
+        if (content) {
+          const lines = content.split('\n');
+          const importedEnvVars: EnvironmentVariable[] = [];
+          lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (trimmedLine && !trimmedLine.startsWith('#')) {
+              const parts = trimmedLine.split('=');
+              const key = parts.shift()?.trim();
+              const value = parts.join('=').trim(); 
+              if (key) {
+                let finalValue = value;
+                if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                  finalValue = value.substring(1, value.length - 1);
+                }
+                importedEnvVars.push({
+                  id: `env-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                  key,
+                  value: finalValue,
+                  isSecret: false, 
+                  enabled: true,
+                });
+              }
+            }
+          });
+
+          setDeploymentConfig(prevConfig => {
+            if (!prevConfig) return null;
+            const existingVars = prevConfig.environmentVariables || [];
+            const newVars = [...existingVars];
+            
+            importedEnvVars.forEach(importedVar => {
+              const existingIndex = newVars.findIndex(ev => ev.key === importedVar.key);
+              if (existingIndex !== -1) {
+                newVars[existingIndex] = { ...newVars[existingIndex], ...importedVar, id: newVars[existingIndex].id };
+              } else {
+                newVars.push(importedVar);
+              }
+            });
+            return { ...prevConfig, environmentVariables: newVars };
+          });
+          message.success(`${importedEnvVars.length} variable(s) importada(s)`);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+  };
+
   const filteredRepositories = useMemo(() => {
     if (!repoSearchTerm) return repositories;
     return repositories.filter(repo => repo.full_name.toLowerCase().includes(repoSearchTerm.toLowerCase()));
@@ -617,11 +678,11 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
   }
 
   if (!companyId) { 
-    return <div className="p-6"><Title level={2}>Despliegues</Title><Card><Alert message="Error" description="No se ha proporcionado un ID de compañía." type="error" showIcon /></Card></div>;
+    return <div className="p-6"><Title level={2}>Despliegues</Title><Card><Alert message="Error" description="ID de compañía no provisto." type="error" showIcon /></Card></div>;
   }
   
   if (!isConnected) {
-    return <div className="p-6"><Title level={2}>Despliegues</Title><Card><Alert message="No conectado a GitHub" description={<Space direction="vertical"><Text>Para gestionar despliegues, primero necesitas conectar tu cuenta de GitHub.</Text><Button type="primary" onClick={() => router.push(`/dashboard?section=credentials`)}>Ir a Credenciales</Button></Space>} type="warning" showIcon /></Card></div>;
+    return <div className="p-6"><Title level={2}>Despliegues</Title><Card><Alert message="No conectado a GitHub" description={<Space direction="vertical"><Text>Conecta tu cuenta de GitHub para gestionar despliegues.</Text><Button type="primary" onClick={() => router.push(`/dashboard?section=credentials`)}>Ir a Credenciales</Button></Space>} type="warning" showIcon /></Card></div>;
   }
 
   return (
@@ -629,13 +690,13 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between">
-            <div><h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><RocketLaunchIcon className="h-8 w-8 text-blue-600" />Despliegues Universales</h1><p className="text-gray-600 mt-2">Gestiona, monitorea y lanza tus aplicaciones a múltiples plataformas cloud y on-premise.</p></div>
+            <div><h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3"><RocketLaunchIcon className="h-8 w-8 text-blue-600" />Despliegues Universales</h1><p className="text-gray-600 mt-2">Gestiona, monitorea y lanza tus aplicaciones.</p></div>
           </div>
         </div>
-        <Alert message="Potencia de Despliegue Universal a tu Alcance" description={<div><Text>InfraUX te permite desplegar tus aplicaciones y servicios a una amplia gama de plataformas.</Text><div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-4">{Object.values(platformConfig).filter(p=>p.name !== 'Desconocido').map(p=>(<div key={p.platformType} className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200"><span className={`text-xl ${p.color}`}>{p.icon}</span><span>{p.name}</span></div>))}</div><Text className="mt-4 block">Cada despliegue incluye su configuración YAML equivalente para máxima flexibilidad y control.</Text></div>} type="info" showIcon className="mb-8"/>
+        <Alert message="Potencia de Despliegue Universal" description={<div><Text>InfraUX te permite desplegar a múltiples plataformas.</Text><div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-4">{Object.values(platformConfig).filter(p=>p.name !== 'Desconocido').map(p=>(<div key={p.platformType} className="flex items-center gap-2 p-3 bg-white rounded-lg border"><span className={`text-xl ${p.color}`}>{p.icon}</span><span>{p.name}</span></div>))}</div><Text className="mt-4 block">Cada despliegue incluye YAML equivalente.</Text></div>} type="info" showIcon className="mb-8"/>
         
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">1. Selecciona una Plataforma de Destino para Configurar un Nuevo Despliegue</h2>
+          <h2 className="text-xl font-semibold mb-4">1. Selecciona Plataforma para Nuevo Despliegue</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {Object.entries(platformConfig).filter(([key]) => key !== 'unknown').map(([key, config]) => (
               <button key={key} onClick={() => handlePlatformSelect(key as Deployment['platform'])} className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center justify-center ${selectedPlatform === key ? 'border-blue-600 bg-blue-50 shadow-lg' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}`}>
@@ -660,12 +721,12 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
           footer={[
             <Button key="cancel" onClick={() => { setIsConfigModalOpen(false); setCurrentSelectedRepoForConfig(null); setDeploymentConfig(null); setSelectedPlatform(null); setDeploymentStatus('idle'); setDeploymentLogs([]); }}>Cancelar</Button>,
             <Button key="saveConfig" onClick={() => handleSaveConfigurationOnly(deploymentConfig)} loading={isSavingConfig} disabled={!currentSelectedRepoForConfig || !deploymentConfig || isDeploying}>Guardar Configuración</Button>,
-            <Button key="deploy" type="primary" loading={isDeploying} onClick={() => handleDeploy(deploymentConfig)} disabled={!currentSelectedRepoForConfig || !deploymentConfig || isSavingConfig || !deploymentConfig?.id}>
+            <Button key="deploy" type="primary" loading={isDeploying} onClick={() => handleDeploy(deploymentConfig)} disabled={!currentSelectedRepoForConfig || !deploymentConfig || isSavingConfig || !deploymentConfig?.id || isDeploying}>
               {isDeploying ? 'Desplegando...' : 'Desplegar'}
             </Button>,
           ]}
         >
-          {selectedPlatform && (
+          {selectedPlatform && ( 
             <div className="grid grid-cols-12 gap-x-6" style={{ minHeight: '75vh' }}>
               <div className="col-span-3 space-y-4 border-r border-gray-200 pr-4 overflow-y-auto" style={{ maxHeight: 'calc(75vh - 40px)' }}>
                 <div className="sticky top-0 bg-white py-2 z-10">
@@ -711,20 +772,198 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
                 </div>
               </div>
 
-              <div className="col-span-5 space-y-6 overflow-y-auto pr-4" style={{ maxHeight: 'calc(75vh - 40px)' }}>
-                {!currentSelectedRepoForConfig && (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <FolderIcon className="h-16 w-16 text-gray-300 mb-4" />
-                    <Text type="secondary" className="text-center">Por favor, selecciona un repositorio para configurar el despliegue.</Text>
-                  </div>
-                )}
-                {deploymentConfig && currentSelectedRepoForConfig && selectedPlatform && (
-                  <>
+              {/* Columnas Central y Derecha - Dependen de deploymentConfig Y currentSelectedRepoForConfig */}
+              {deploymentConfig && currentSelectedRepoForConfig ? (
+                <>
+                  <div className="col-span-5 space-y-6 overflow-y-auto pr-4" style={{ maxHeight: 'calc(75vh - 40px)' }}>
+                    {/* FORMULARIO PRINCIPAL */}
                     <div><h3 className="font-medium mb-2 text-gray-700">Información Básica</h3><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Despliegue</label><Input value={deploymentConfig.name} onChange={e => setDeploymentConfig(prev => ({...prev!, name: e.target.value}))}/></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Ambiente</label><Select value={deploymentConfig.environment_id} onChange={value => setDeploymentConfig(prev => ({...prev!, environment_id: value}))} style={{ width: '100%' }} placeholder="Seleccionar ambiente" disabled={availableEnvironments.length === 0}>{availableEnvironments.map(env => (<Option key={env.id} value={env.id}>{env.name.charAt(0).toUpperCase() + env.name.slice(1)}</Option>))}</Select></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Región</label><Select value={deploymentConfig.region} onChange={value => setDeploymentConfig(prev => ({...prev!, region: value}))} style={{ width: '100%' }}><Option value="us-central1">us-central1</Option><Option value="us-east1">us-east1</Option><Option value="europe-west1">europe-west1</Option></Select></div></div></div>
                     <div><h3 className="font-medium mb-2 text-gray-700">Disparador de Despliegue</h3><Select value={deploymentConfig.trigger_type} onChange={value => setDeploymentConfig(prev => ({...prev!, trigger_type: value}))} style={{ width: '100%' }}>{Object.values(DeploymentTriggerTypeEnum).map(type => (<Option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</Option>))}</Select></div>
-                    <div><h3 className="font-medium mb-2 text-gray-700">Configuración del Repositorio</h3><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Rama</label><Select value={deploymentConfig.branch} onChange={value => setDeploymentConfig(prev => ({...prev!, branch: value}))} style={{ width: '100%' }}><Option value="main">main</Option><Option value="master">master</Option><Option value="develop">develop</Option></Select></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Directorio</label><Input value={deploymentConfig.directory} onChange={e => setDeploymentConfig(prev => ({...prev!, directory: e.target.value}))} placeholder="/"/></div></div></div>
+                    <div><h3 className="font-medium mb-2 text-gray-700">Configuración del Repositorio</h3><div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Rama (Predeterminada/Fallback)</label><Select value={deploymentConfig.branch} onChange={value => setDeploymentConfig(prev => ({...prev!, branch: value}))} style={{ width: '100%' }}><Option value="main">main</Option><Option value="master">master</Option><Option value="develop">develop</Option></Select></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Directorio</label><Input value={deploymentConfig.directory} onChange={e => setDeploymentConfig(prev => ({...prev!, directory: e.target.value}))} placeholder="/"/></div></div></div>
+                    
+                    <div>
+                      <h3 className="font-medium mb-2 text-gray-700">Estrategia de Despliegue</h3>
+                      <Select
+                        value={deploymentConfig.deployment_strategy?.type || DeploymentStrategyType.BRANCH}
+                        onChange={(type: DeploymentStrategyType) => { 
+                          const currentStrategy = deploymentConfig.deployment_strategy;
+                          let newValue = currentStrategy?.value;
+                          let newSemanticRules = currentStrategy?.semanticRules || [];
+
+                          if (type === DeploymentStrategyType.BRANCH) {
+                            newValue = newValue || deploymentConfig.branch || currentSelectedRepoForConfig?.default_branch || 'main';
+                            newSemanticRules = [];
+                          } else if (type === DeploymentStrategyType.TAG) {
+                            newValue = newValue || 'v*.*.*'; 
+                            newSemanticRules = [];
+                          } else if (type === DeploymentStrategyType.SEMANTIC_VERSION) {
+                            newValue = undefined; 
+                            newSemanticRules = currentStrategy?.type === DeploymentStrategyType.SEMANTIC_VERSION ? newSemanticRules : [];
+                          }
+
+                          setDeploymentConfig(prev => {
+                            if (!prev) return null; 
+                            return {
+                              ...prev,
+                              deployment_strategy: {
+                                type,
+                                value: newValue,
+                                semanticRules: newSemanticRules,
+                              } as DeploymentStrategy 
+                            };
+                          });
+                        }}
+                        style={{ width: '100%' }}
+                        className="mb-2"
+                      >
+                        <Option value={DeploymentStrategyType.BRANCH}>Por Branch</Option>
+                        <Option value={DeploymentStrategyType.TAG}>Por Tag</Option>
+                        <Option value={DeploymentStrategyType.SEMANTIC_VERSION}>Por Versión Semántica</Option>
+                      </Select>
+
+                      {(deploymentConfig.deployment_strategy?.type === DeploymentStrategyType.BRANCH || deploymentConfig.deployment_strategy?.type === DeploymentStrategyType.TAG) && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {deploymentConfig.deployment_strategy?.type === DeploymentStrategyType.BRANCH ? 'Nombre del Branch' : 'Patrón del Tag'}
+                          </label>
+                          <Input
+                            value={deploymentConfig.deployment_strategy?.value || ''}
+                            onChange={e => {
+                                const value = e.target.value;
+                                setDeploymentConfig(prev => {
+                                    if (!prev || !prev.deployment_strategy) return prev;
+                                    return {
+                                        ...prev,
+                                        deployment_strategy: { ...prev.deployment_strategy, type: prev.deployment_strategy.type, value: value }
+                                    };
+                                });
+                            }}
+                            placeholder={deploymentConfig.deployment_strategy?.type === DeploymentStrategyType.BRANCH ? 'main, develop, feature/*' : 'v*.*.*, release-*'}
+                          />
+                        </div>
+                      )}
+
+                      {deploymentConfig.deployment_strategy?.type === DeploymentStrategyType.SEMANTIC_VERSION && (
+                        <div className="mt-4 space-y-3 p-3 border rounded-md bg-gray-50">
+                          <div className="flex justify-between items-center mb-2">
+                            <h4 className="text-sm font-medium text-gray-700">Reglas de Versionado Semántico</h4>
+                            <Button
+                              type="dashed"
+                              onClick={() => {
+                                const newRule: SemanticVersionRule = {
+                                  id: `rule-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+                                  versionPattern: '',
+                                  targetEnvironmentId: availableEnvironments[0]?.id || '',
+                                };
+                                setDeploymentConfig(prev => {
+                                  if (!prev || !prev.deployment_strategy) return prev;
+                                  const currentSemanticRules = prev.deployment_strategy.semanticRules || [];
+                                  return {
+                                    ...prev,
+                                    deployment_strategy: {
+                                      ...prev.deployment_strategy,
+                                      type: DeploymentStrategyType.SEMANTIC_VERSION,
+                                      semanticRules: [...currentSemanticRules, newRule],
+                                    }
+                                  };
+                                });
+                              }}
+                              icon={<PlusOutlined />}
+                              size="small"
+                              disabled={availableEnvironments.length === 0}
+                            >
+                              Añadir Regla
+                            </Button>
+                          </div>
+                          {(!deploymentConfig.deployment_strategy.semanticRules || deploymentConfig.deployment_strategy.semanticRules.length === 0) && (
+                            <Text type="secondary" className="block text-center py-2">
+                              No hay reglas. Ej: Patrón '1.0.*' a Ambiente 'Producción', o Patrón '*-beta' a 'QA'.
+                            </Text>
+                          )}
+                          {deploymentConfig.deployment_strategy.semanticRules?.map((rule, index) => (
+                            <div key={rule.id} className="grid grid-cols-12 gap-x-2 gap-y-1 items-center p-2 border rounded bg-white shadow-sm">
+                              <div className="col-span-12 sm:col-span-5">
+                                <label htmlFor={`versionPattern-${rule.id}`} className="text-xs text-gray-600 db-block mb-0.5">Patrón de Versión</label>
+                                <Input
+                                  id={`versionPattern-${rule.id}`}
+                                  placeholder="Ej: 1.0.*, *-beta"
+                                  value={rule.versionPattern}
+                                  onChange={e => {
+                                    const newRules = [...(deploymentConfig.deployment_strategy?.semanticRules || [])];
+                                    newRules[index].versionPattern = e.target.value;
+                                    setDeploymentConfig(prev => ({ ...prev!, deployment_strategy: { ...(prev!.deployment_strategy!), type: DeploymentStrategyType.SEMANTIC_VERSION, semanticRules: newRules } }));
+                                  }}
+                                />
+                              </div>
+                              <div className="col-span-12 sm:col-span-5">
+                                <label htmlFor={`targetEnv-${rule.id}`} className="text-xs text-gray-600 db-block mb-0.5">Ambiente Destino</label>
+                                <Select
+                                  id={`targetEnv-${rule.id}`}
+                                  placeholder="Seleccionar"
+                                  value={rule.targetEnvironmentId}
+                                  onChange={value => {
+                                    const newRules = [...(deploymentConfig.deployment_strategy?.semanticRules || [])];
+                                    newRules[index].targetEnvironmentId = value;
+                                    setDeploymentConfig(prev => ({ ...prev!, deployment_strategy: { ...(prev!.deployment_strategy!), type: DeploymentStrategyType.SEMANTIC_VERSION, semanticRules: newRules } }));
+                                  }}
+                                  style={{ width: '100%'}}
+                                  disabled={availableEnvironments.length === 0}
+                                >
+                                  {availableEnvironments.map(env => (
+                                    <Option key={env.id} value={env.id}>{env.name.charAt(0).toUpperCase() + env.name.slice(1)}</Option>
+                                  ))}
+                                </Select>
+                              </div>
+                              <div className="col-span-12 sm:col-span-2 flex items-end pt-3 sm:pt-0">
+                                <Button
+                                  icon={<DeleteOutlined />}
+                                  onClick={() => {
+                                    const newRules = (deploymentConfig.deployment_strategy?.semanticRules || []).filter(r => r.id !== rule.id);
+                                    setDeploymentConfig(prev => ({ ...prev!, deployment_strategy: { ...(prev!.deployment_strategy!), type: DeploymentStrategyType.SEMANTIC_VERSION, semanticRules: newRules } }));
+                                  }}
+                                  danger
+                                  className="w-full"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                          {availableEnvironments.length === 0 && <Text type="warning" className="text-xs mt-2 block">No hay ambientes disponibles.</Text>}
+                        </div>
+                      )}
+                    </div>
+
                     <div><h3 className="font-medium mb-2 text-gray-700">Configuración de Build</h3><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-700 mb-1">Comando de Build</label><Input value={deploymentConfig.buildConfig?.buildCommand} onChange={e => setDeploymentConfig(prev => ({...prev!, buildConfig: {...prev!.buildConfig, buildCommand: e.target.value}}))} placeholder="npm run build"/></div><div><label className="block text-sm font-medium text-gray-700 mb-1">Directorio de Salida</label><Input value={deploymentConfig.buildConfig?.outputDirectory} onChange={e => setDeploymentConfig(prev => ({...prev!, buildConfig: {...prev!.buildConfig, outputDirectory: e.target.value}}))} placeholder="dist"/></div></div></div>
-                    <div><h3 className="font-medium mb-2 text-gray-700">Variables de Entorno</h3>{deploymentConfig.environmentVariables?.map((envVar, index) => (<div key={envVar.id} className="grid grid-cols-12 gap-2 mb-2 items-center"><Input placeholder="KEY" value={envVar.key} onChange={e => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].key = e.target.value;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} className="col-span-4"/><Input placeholder="VALUE" type={envVar.isSecret ? 'password' : 'text'} value={envVar.value} onChange={e => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].value = e.target.value;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} className="col-span-4"/><Space className="col-span-3"><Text>Secreto:</Text><Switch checked={envVar.isSecret} onChange={checked => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].isSecret = checked;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}}/></Space><Button icon={<DeleteOutlined />} onClick={() => {const newEnvVars = (deploymentConfig.environmentVariables || []).filter(ev => ev.id !== envVar.id);setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} danger className="col-span-1"/></div>))}<Button type="dashed" onClick={() => {const newEnvVar: EnvironmentVariable = {id: `env-${Date.now()}`,key: '',value: '',isSecret: false,enabled: true};setDeploymentConfig(prev => ({...prev!,environmentVariables: [...(prev!.environmentVariables || []), newEnvVar]}));}} icon={<PlusOutlined />} block>Añadir Variable</Button></div>
+                    
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-medium text-gray-700">Variables de Entorno</h3>
+                        <input
+                          type="file"
+                          accept=".env"
+                          style={{ display: 'none' }}
+                          id="env-file-input"
+                          onChange={handleEnvFileImport}
+                        />
+                        <Button
+                          onClick={() => document.getElementById('env-file-input')?.click()}
+                          size="small"
+                        >
+                          Importar desde .env
+                        </Button>
+                      </div>
+                      {deploymentConfig.environmentVariables?.map((envVar, index) => (
+                        <div key={envVar.id} className="grid grid-cols-12 gap-2 mb-2 items-center">
+                          <Input placeholder="KEY" value={envVar.key} onChange={e => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].key = e.target.value;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} className="col-span-4"/>
+                          <Input placeholder="VALUE" type={envVar.isSecret ? 'password' : 'text'} value={envVar.value} onChange={e => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].value = e.target.value;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} className="col-span-4"/>
+                          <Space className="col-span-3">
+                            <Text>Secreto:</Text>
+                            <Switch checked={envVar.isSecret} onChange={checked => {const newEnvVars = [...(deploymentConfig.environmentVariables || [])];newEnvVars[index].isSecret = checked;setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}}/>
+                          </Space>
+                          <Button icon={<DeleteOutlined />} onClick={() => {const newEnvVars = (deploymentConfig.environmentVariables || []).filter(ev => ev.id !== envVar.id);setDeploymentConfig(prev => ({...prev!, environmentVariables: newEnvVars}));}} danger className="col-span-1"/>
+                        </div>
+                      ))}
+                      <Button type="dashed" onClick={() => {const newEnvVar: EnvironmentVariable = {id: `env-${Date.now()}`,key: '',value: '',isSecret: false,enabled: true};setDeploymentConfig(prev => ({...prev!,environmentVariables: [...(prev!.environmentVariables || []), newEnvVar]}));}} icon={<PlusOutlined />} block>Añadir Variable</Button>
+                    </div>
                     <div><h3 className="font-medium mb-2 text-gray-700">Pasos Pre-Despliegue</h3>{deploymentConfig.preDeploySteps?.map((step, index) => (<div key={step.id} className="mb-3 p-3 border rounded-md bg-white"><Input placeholder="Nombre del Paso" value={step.name} onChange={e => {const newSteps = [...(deploymentConfig.preDeploySteps || [])];newSteps[index].name = e.target.value;setDeploymentConfig(prev => ({...prev!, preDeploySteps: newSteps}));}} className="mb-2"/><Input.TextArea placeholder="Script o Comando" value={step.content} onChange={e => {const newSteps = [...(deploymentConfig.preDeploySteps || [])];newSteps[index].content = e.target.value;setDeploymentConfig(prev => ({...prev!, preDeploySteps: newSteps}));}} rows={3} className="mb-2 font-mono text-xs"/><Space><Text>Habilitado:</Text><Switch checked={step.enabled} onChange={checked => {const newSteps = [...(deploymentConfig.preDeploySteps || [])];newSteps[index].enabled = checked;setDeploymentConfig(prev => ({...prev!, preDeploySteps: newSteps}));}}/><Button icon={<DeleteOutlined />} onClick={() => {const newSteps = (deploymentConfig.preDeploySteps || []).filter(s => s.id !== step.id);setDeploymentConfig(prev => ({...prev!, preDeploySteps: newSteps}));}} danger/></Space></div>))}<Button type="dashed" onClick={() => {const newStep: DeploymentStep = {id: `pre-${Date.now()}`,name: '',type: 'command',content: '',enabled: true};setDeploymentConfig(prev => ({...prev!,preDeploySteps: [...(prev!.preDeploySteps || []), newStep]}));}} icon={<PlusOutlined />} block>Añadir Paso</Button></div>
                     <div><h3 className="font-medium mb-2 text-gray-700">Pasos Post-Despliegue</h3>{deploymentConfig.postDeploySteps?.map((step, index) => (<div key={step.id} className="mb-3 p-3 border rounded-md bg-white"><Input placeholder="Nombre del Paso" value={step.name} onChange={e => {const newSteps = [...(deploymentConfig.postDeploySteps || [])];newSteps[index].name = e.target.value;setDeploymentConfig(prev => ({...prev!, postDeploySteps: newSteps}));}} className="mb-2"/><Input.TextArea placeholder="Script o Comando" value={step.content} onChange={e => {const newSteps = [...(deploymentConfig.postDeploySteps || [])];newSteps[index].content = e.target.value;setDeploymentConfig(prev => ({...prev!, postDeploySteps: newSteps}));}} rows={3} className="mb-2 font-mono text-xs"/><Space><Text>Habilitado:</Text><Switch checked={step.enabled} onChange={checked => {const newSteps = [...(deploymentConfig.postDeploySteps || [])];newSteps[index].enabled = checked;setDeploymentConfig(prev => ({...prev!, postDeploySteps: newSteps}));}}/><Button icon={<DeleteOutlined />} onClick={() => {const newSteps = (deploymentConfig.postDeploySteps || []).filter(s => s.id !== step.id);setDeploymentConfig(prev => ({...prev!, postDeploySteps: newSteps}));}} danger/></Space></div>))}<Button type="dashed" onClick={() => {const newStep: DeploymentStep = {id: `post-${Date.now()}`,name: '',type: 'command',content: '',enabled: true};setDeploymentConfig(prev => ({...prev!,postDeploySteps: [...(prev!.postDeploySteps || []), newStep]}));}} icon={<PlusOutlined />} block>Añadir Paso</Button></div>
                     <div><h3 className="font-medium mb-2 text-gray-700">Configuración de {platformConfig[selectedPlatform!]?.name}</h3><div className="grid grid-cols-2 gap-4">{platformConfig[selectedPlatform!]?.formFields.map(field => (<div key={field.name}><label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>{field.type === 'select' ? (<Select value={deploymentConfig.config?.[field.name] || field.defaultValue} onChange={value => setDeploymentConfig(prev => ({...prev!, config: {...prev!.config, [field.name]: value}}))} style={{ width: '100%' }}>{field.options?.map(option => (<Option key={option.value} value={option.value}>{option.label}</Option>))}</Select>) : (<Input type={field.type} value={deploymentConfig.config?.[field.name] !== undefined ? String(deploymentConfig.config[field.name]) : String(field.defaultValue || '')} onChange={e => {let val: string | number | boolean = e.target.value; if (field.type === 'number') {val = parseFloat(e.target.value); if (isNaN(val)) val = '';} setDeploymentConfig(prev => ({...prev!,config: {...prev!.config, [field.name]: val }})); }}/>)}</div>))}</div></div>
@@ -738,27 +977,28 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
                         </div>
                       </div>
                     )}
-                  </>
-                )}
-              </div>
-
-              <div className="col-span-4 space-y-6 overflow-y-auto" style={{ maxHeight: 'calc(75vh - 40px)' }}>
-                <h3 className="text-lg font-semibold text-gray-800 sticky top-0 bg-white py-2 z-10">YAML de Configuración (Vista Previa)</h3>
-                {deploymentConfig && currentSelectedRepoForConfig ? (
-                  <MonacoEditor
-                    height="calc(100% - 40px)" 
-                    language="yaml"
-                    theme="vs-dark"
-                    value={generateYamlFromConfig(deploymentConfig)}
-                    options={{ minimap: { enabled: false }, fontSize: 13, wordWrap: 'on', readOnly: true, scrollBeyondLastLine: false }}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full">
-                      <CodeBracketIcon className="h-16 w-16 text-gray-300 mb-4" />
-                      <Text type="secondary" className="text-center">La vista previa del YAML aparecerá aquí.</Text>
-                    </div>
-                )}
-              </div>
+                  </div>
+                  <div className="col-span-4 space-y-6 overflow-y-auto" style={{ maxHeight: 'calc(75vh - 40px)' }}>
+                    <h3 className="text-lg font-semibold text-gray-800 sticky top-0 bg-white py-2 z-10">YAML de Configuración (Vista Previa)</h3>
+                    <MonacoEditor
+                        height="calc(100% - 40px)" 
+                        language="yaml"
+                        theme="vs-dark"
+                        value={generateYamlFromConfig(deploymentConfig)}
+                        options={{ minimap: { enabled: false }, fontSize: 13, wordWrap: 'on', readOnly: true, scrollBeyondLastLine: false }}
+                      />
+                  </div>
+                </>
+              ) : (
+                <div className="col-span-9 flex flex-col items-center justify-center h-full">
+                  <FolderIcon className="h-16 w-16 text-gray-300 mb-4" />
+                  <Text type="secondary" className="text-center">
+                    {!currentSelectedRepoForConfig
+                      ? 'Por favor, selecciona un repositorio para configurar el despliegue.'
+                      : 'Cargando configuración...'}
+                  </Text>
+                </div>
+              )}
             </div>
           )}
         </Modal>
@@ -826,7 +1066,7 @@ export default function DeploymentsPage({ companyId }: DeploymentsPageProps) {
             </div>
           </div>
           {filteredDeployments.length === 0 && !loading && (
-             <Card><Text type="secondary">No hay despliegues activos que coincidan con los filtros.</Text></Card>
+             <Card><Text type="secondary">No hay despliegues activos.</Text></Card>
           )}
           {filteredDeployments.map((deployment) => {
             const isExpanded = expandedDeployment === deployment.id;

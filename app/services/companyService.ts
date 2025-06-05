@@ -1,7 +1,7 @@
 // Servicio para la gestión de compañías
 
 import { getAuthToken } from './authService';
-import { Settings } from '../config';
+import { Settings, API_BASE_URL } from '../config'; // Importar API_BASE_URL
 import { Environment } from './diagramService';
 
 // Extendemos la interfaz Company para ser compatible con ambos usos
@@ -21,7 +21,7 @@ export interface Company {
   environments?: Environment[]; // Añadido environments de tipo Environment[]
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'; // Usar API_BASE_URL importado
 
 interface CompanyCreationData {
   name: string;
@@ -61,7 +61,7 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
 
   try {
     console.log(`Creando compañía con payload: ${JSON.stringify(payload)}`);
-    const response = await fetch(`${API_URL}/api/v1/companies`, {
+    const response = await fetch(`${API_BASE_URL}/v1/companies`, { // Usar API_BASE_URL
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -72,6 +72,11 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       let errorDetail = 'Error al crear la compañía';
       try {
         const errorData = await response.json();
@@ -118,13 +123,18 @@ export async function getCompanies(): Promise<Company[]> {
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/v1/companies`, { 
+  const response = await fetch(`${API_BASE_URL}/v1/companies`, { // Usar API_BASE_URL
     headers: {
       'Authorization': `Bearer ${token}`
     }
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login?session_expired=true';
+      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    }
     const error = await response.json();
     throw new Error(error.detail || 'Error al obtener las compañías');
   }
@@ -140,7 +150,7 @@ export const getCompany = async (companyId: string): Promise<Company> => {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/companies/${companyId}`, { 
+    const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}`, { // Usar API_BASE_URL
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
@@ -148,6 +158,11 @@ export const getCompany = async (companyId: string): Promise<Company> => {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       const error = await response.json();
       throw new Error(error.detail || 'Error al obtener la compañía');
     }
@@ -167,7 +182,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/v1/companies/${companyId}`, { 
+  const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}`, { // Usar API_BASE_URL
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -177,6 +192,11 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login?session_expired=true';
+      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    }
     const error = await response.json();
     throw new Error(error.detail || 'Error al actualizar la compañía');
   }
@@ -192,7 +212,7 @@ export async function addMember(companyId: string, userEmail: string): Promise<{
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/v1/companies/${companyId}/members/${userEmail}`, { 
+  const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}/members/${userEmail}`, { // Usar API_BASE_URL
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`
@@ -200,6 +220,11 @@ export async function addMember(companyId: string, userEmail: string): Promise<{
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login?session_expired=true';
+      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    }
     const error = await response.json();
     throw new Error(error.detail || 'Error al agregar miembro');
   }

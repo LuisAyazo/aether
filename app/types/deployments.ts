@@ -40,6 +40,25 @@ export enum DeploymentTriggerTypeEnum {
   BOTH = "both"
 }
 
+export enum DeploymentStrategyType {
+  BRANCH = "branch",
+  TAG = "tag",
+  SEMANTIC_VERSION = "semantic_version"
+}
+
+export interface SemanticVersionRule {
+  id: string;
+  versionPattern: string; // e.g., "*.0.0-beta", "1.0.0-rc*", "1.2.*"
+  targetEnvironmentId: string; // ID del EnvironmentDefinition
+  // targetEnvironmentName?: string; // Para UI, opcional
+}
+
+export interface DeploymentStrategy {
+  type: DeploymentStrategyType;
+  value?: string; // Para BRANCH (nombre del branch) o TAG (patrón del tag, ej. "v1.*")
+  semanticRules?: SemanticVersionRule[];
+}
+
 export interface DeploymentConfig {
   id?: string; // ID si la configuración ya existe
   company_id?: string; // Necesario para enviar al backend
@@ -63,6 +82,7 @@ export interface DeploymentConfig {
   trigger_type?: DeploymentTriggerTypeEnum;
   description?: string;
   is_active?: boolean;
+  deployment_strategy?: DeploymentStrategy; // Nuevo campo para estrategias de despliegue
 }
 
 export interface EnvironmentDefinition { // Para la lista de ambientes del backend

@@ -329,6 +329,7 @@ export default function DashboardPage() {
         const token = localStorage.getItem('token');
         if (!token) {
           message.error("Usuario no autenticado. Por favor, inicie sesión.");
+          localStorage.removeItem('token'); // Limpiar token
           router.push('/login');
           setLoading(false);
           return;
@@ -343,10 +344,18 @@ export default function DashboardPage() {
             headers: { 
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
+              'X-InfraUX-Company-ID': companyIdToUse
             },
             body: JSON.stringify(envPayload),
           });
           if (!response.ok) {
+            if (response.status === 401) {
+              message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
+              localStorage.removeItem('token');
+              router.push('/login');
+              setLoading(false);
+              return;
+            }
             const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente Sandbox para espacio personal'}));
             throw new Error(errorData.detail || 'Failed to create default Sandbox environment for personal space.');
           }
@@ -354,9 +363,10 @@ export default function DashboardPage() {
         }
         setNeedsPersonalSpaceSetup(false);
         await loadCompanyOrPersonalSpaceData(personalCompany); 
-      } catch (e: any) {
-        setError(e.message || 'Error al configurar el espacio personal.');
-        message.error(e.message || 'Error al configurar el espacio personal.');
+      } catch (e: unknown) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        setError(errorMessage || 'Error al configurar el espacio personal.');
+        message.error(errorMessage || 'Error al configurar el espacio personal.');
       } finally { setLoading(false); }
     }
 
@@ -371,9 +381,10 @@ export default function DashboardPage() {
         } else {
           setActiveCompany(null); setEnvironments([]); setDiagrams([]); setSelectedEnvironment(null); setSelectedDiagram(null); setCurrentDiagram(null); 
         }
-      } catch (e: any) {
-        setError(e.message || 'Error al cargar datos de compañía.');
-        message.error(e.message || 'Error al cargar datos de compañía.');
+      } catch (e: unknown) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        setError(errorMessage || 'Error al cargar datos de compañía.');
+        message.error(errorMessage || 'Error al cargar datos de compañía.');
       } finally { setLoading(false); }
     }
     
@@ -412,6 +423,7 @@ export default function DashboardPage() {
       const token = localStorage.getItem('token');
       if (!token) {
         message.error("Usuario no autenticado. Por favor, inicie sesión.");
+        localStorage.removeItem('token');
         router.push('/login');
         setLoading(false);
         return;
@@ -427,10 +439,18 @@ export default function DashboardPage() {
           headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
+            'X-InfraUX-Company-ID': companyIdToUse
           },
           body: JSON.stringify(envPayload),
         });
         if (!response.ok) {
+          if (response.status === 401) {
+            message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
+            localStorage.removeItem('token');
+            router.push('/login');
+            setLoading(false);
+            return;
+          }
           const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente Sandbox'}));
           throw new Error(errorData.detail || 'Failed to create default Sandbox environment for personal space.');
         }
@@ -445,8 +465,9 @@ export default function DashboardPage() {
       } else {
         router.push('/login');
       }
-    } catch (e: any) { 
-      message.error("Error al configurar espacio personal: " + e.message); 
+    } catch (e: unknown) { 
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      message.error("Error al configurar espacio personal: " + errorMessage); 
     } finally { setLoading(false); }
   }
 
@@ -465,13 +486,26 @@ export default function DashboardPage() {
             headers: { 
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
+              'X-InfraUX-Company-ID': companyId 
             },
             body: JSON.stringify(envPayload),
           });
-          if (response.ok) {
-            message.info("Ambiente Sandbox creado automáticamente.");
-            const updatedEnvs = await getEnvironments(companyId); 
-            setEnvironments(updatedEnvs);
+          if (!response.ok) {
+            if (response.status === 401) {
+              message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
+              localStorage.removeItem('token');
+              router.push('/login');
+              return; // Detener ejecución adicional
+            }
+            // Manejar otros errores si es necesario
+            console.error("No se pudo crear el ambiente Sandbox automáticamente para el espacio personal (error general).");
+            // Podrías lanzar un error aquí o manejarlo de otra forma
+            throw new Error('Error creando ambiente Sandbox para espacio personal.');
+          }
+          // Si la respuesta es OK, continuar
+          message.info("Ambiente Sandbox creado automáticamente.");
+          const updatedEnvs = await getEnvironments(companyId); 
+          setEnvironments(updatedEnvs);
             if (updatedEnvs.length > 0) {
               const defaultEnvId = updatedEnvs[0].id; 
               setSelectedEnvironment(defaultEnvId);
@@ -486,15 +520,18 @@ export default function DashboardPage() {
               }
             }
             return; 
-          } else {
-            console.error("No se pudo crear el ambiente Sandbox automáticamente para el espacio personal.");
-          }
-        } catch (creationError) {
+          // EL BLOQUE ELSE ANTERIOR SE ELIMINA YA QUE EL IF (!response.ok) MANEJA LOS ERRORES
+          // Y SI response.ok ES TRUE, EL CÓDIGO SIGUE DESPUÉS DEL IF.
+        } catch (creationError) { // Catch del try
           console.error("Error al intentar crear ambiente Sandbox para espacio personal:", creationError);
+          // Considerar mostrar este error en la UI si es relevante
+          // Por ejemplo: setError((creationError as Error).message || 'Error creando Sandbox');
         }
-      }
-    }
+      } // Fin if (token && user)
+    } // Fin if (isPersonalSpace && envs.length === 0)
 
+    // Si no se entró en el bloque anterior (o si falló y fue capturado),
+    // o si no es personalSpace, o si ya tenía ambientes, se continúa aquí.
     if (envs.length > 0) {
       const defaultEnvId = envs[0].id; 
       setSelectedEnvironment(defaultEnvId);
@@ -525,9 +562,12 @@ export default function DashboardPage() {
         const diagramData = await getDiagram(activeCompany._id, environmentId, diags[0].id); // Usar _id
         setCurrentDiagram(diagramData);
       } else {
-        setSelectedDiagram(null); setCurrentDiagram(null); 
+        setCurrentDiagram(null); setSelectedDiagram(null);
       }
-    } catch (e:any) { message.error("Error al cambiar de ambiente: " + e.message); }
+    } catch (e:unknown) { 
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      message.error("Error al cambiar de ambiente: " + errorMessage); 
+    }
     finally { setLoading(false); }
   };
 
@@ -537,7 +577,10 @@ export default function DashboardPage() {
     try {
       const diagramData = await getDiagram(activeCompany._id, selectedEnvironment, diagramId); // Usar _id
       setCurrentDiagram(diagramData);
-    } catch (e:any) { message.error("Error al cambiar de diagrama: " + e.message); }
+    } catch (e:unknown) { 
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      message.error("Error al cambiar de diagrama: " + errorMessage); 
+    }
     finally { setLoading(false); }
   };
   
@@ -559,7 +602,10 @@ export default function DashboardPage() {
         name: currentDiagram.name, description: currentDiagram.description, nodes: customNodes, edges: customEdges, viewport: data.viewport || currentDiagram.viewport
       });
       message.success("Diagrama guardado.");
-    } catch (e:any) { message.error("Error al guardar el diagrama: " + e.message); }
+    } catch (e:unknown) { 
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      message.error("Error al guardar el diagrama: " + errorMessage); 
+    }
   }, [activeCompany, selectedEnvironment, selectedDiagram, currentDiagram]);
 
   const handleCreateNewEnvironment = async () => {
@@ -587,11 +633,19 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          'X-InfraUX-Company-ID': activeCompany._id 
         },
         body: JSON.stringify(envPayload),
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
+          localStorage.removeItem('token');
+          router.push('/login');
+          setLoading(false);
+          return; 
+        }
         const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente'}));
         throw new Error(errorData.detail || 'Failed to create environment via API');
       }
@@ -607,7 +661,10 @@ export default function DashboardPage() {
       if (newEnv) handleEnvironmentChange(newEnv.id);
       else if (!selectedEnvironment && envs.length > 0) handleEnvironmentChange(envs[0].id);
 
-    } catch (e: any) { message.error("Error al crear ambiente: " + e.message); }
+    } catch (e: unknown) { 
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      message.error("Error al crear ambiente: " + errorMessage); 
+    }
     finally { setLoading(false); }
   };
 
@@ -635,8 +692,9 @@ export default function DashboardPage() {
       
       setNewDiagramName(''); setNewDiagramPath(''); setNewDiagramDescription('');
       setNewDiagramModalVisible(false);
-    } catch (e: any) { 
-      message.error(`Error al crear diagrama: ` + e.message); 
+    } catch (e: unknown) { 
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      message.error(`Error al crear diagrama: ` + errorMessage); 
     } finally { setLoading(false); }
   };
 
@@ -668,8 +726,9 @@ export default function DashboardPage() {
         }
       }
       setDiagramToDeleteId(null);
-    } catch (e: any) {
-      message.error("Error al eliminar el diagrama: " + e.message);
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      message.error("Error al eliminar el diagrama: " + errorMessage);
     } finally {
       setLoading(false);
     }
