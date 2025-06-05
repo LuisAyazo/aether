@@ -1,7 +1,7 @@
 // Servicio para la gestión de compañías
 
 import { getAuthToken } from './authService';
-import { Settings } from '../config';
+import { Settings, API_BASE_URL } from '../config'; // Importar API_BASE_URL
 import { Environment } from './diagramService';
 
 // Extendemos la interfaz Company para ser compatible con ambos usos
@@ -21,13 +21,26 @@ export interface Company {
   environments?: Environment[]; // Añadido environments de tipo Environment[]
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'; // Usar API_BASE_URL importado
 
 interface CompanyCreationData {
   name: string;
   description?: string;
   logo_url?: string;
 }
+
+// Helper function to ensure consistent ID structure
+const ensureConsistentId = (company: any): Company => {
+  if (company.id && !company._id) {
+    company._id = company.id;
+  } else if (company._id && !company.id) {
+    company.id = company._id; // También asegurar que 'id' exista si '_id' existe
+  }
+  // Si después de esto _id sigue faltando pero id existe (improbable si la interfaz _id es obligatoria)
+  // o si ambos faltan, podría haber un problema más profundo con los datos del backend.
+  // Por ahora, la interfaz Company hace _id obligatorio.
+  return company as Company;
+};
 
 export async function createCompany(companyData: CompanyCreationData): Promise<Company> {
   const token = getAuthToken();
@@ -36,7 +49,6 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
     throw new Error('No estás autenticado');
   }
 
-  // Asegurarse de que solo se envían los campos definidos en CompanyCreate
   const payload: CompanyCreationData = {
     name: companyData.name,
   };
@@ -49,7 +61,7 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
 
   try {
     console.log(`Creando compañía con payload: ${JSON.stringify(payload)}`);
-    const response = await fetch(`${API_URL}/api/v1/companies`, {
+    const response = await fetch(`${API_BASE_URL}/v1/companies`, { // Usar API_BASE_URL
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -60,6 +72,11 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       let errorDetail = 'Error al crear la compañía';
       try {
         const errorData = await response.json();
@@ -81,26 +98,18 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
       throw new Error(errorDetail);
     }
 
-    // Guardar la compañía en localStorage como fallback
     const company = await response.json();
+    const consistentCompany = ensureConsistentId(company);
     
-    // Asegurar que tenemos un ID consistente (_id y id) para evitar problemas
-    if (company._id && !company.id) {
-      company.id = company._id;
-    } else if (company.id && !company._id) {
-      company._id = company.id;
+    if (!consistentCompany._id) { // _id es obligatorio según la interfaz
+      console.error('La API devolvió una compañía sin _id válido después de la consistencia:', consistentCompany);
+      throw new Error('La API devolvió una respuesta incompleta (falta _id)');
     }
     
-    // Verificar que tengamos un ID válido
-    if (!company._id && !company.id) {
-      console.error('La API devolvió una compañía sin ID válido:', company);
-      throw new Error('La API devolvió una respuesta incompleta');
-    }
+    localStorage.setItem('lastCreatedCompany', JSON.stringify(consistentCompany));
     
-    localStorage.setItem('lastCreatedCompany', JSON.stringify(company));
-    
-    console.log('Compañía creada con éxito:', company);
-    return company;
+    console.log('Compañía creada con éxito:', consistentCompany);
+    return consistentCompany;
   } catch (error) {
     console.error('Error al crear compañía:', error);
     throw error;
@@ -114,18 +123,24 @@ export async function getCompanies(): Promise<Company[]> {
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/v1/companies`, { // Añadido v1
+  const response = await fetch(`${API_BASE_URL}/v1/companies`, { // Usar API_BASE_URL
     headers: {
       'Authorization': `Bearer ${token}`
     }
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login?session_expired=true';
+      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    }
     const error = await response.json();
     throw new Error(error.detail || 'Error al obtener las compañías');
   }
 
-  return response.json();
+  const companiesData = await response.json();
+  return companiesData.map((company: any) => ensureConsistentId(company));
 }
 
 export const getCompany = async (companyId: string): Promise<Company> => {
@@ -135,7 +150,7 @@ export const getCompany = async (companyId: string): Promise<Company> => {
   }
 
   try {
-    const response = await fetch(`${API_URL}/api/v1/companies/${companyId}`, { // Añadido v1
+    const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}`, { // Usar API_BASE_URL
       headers: {
         'Authorization': `Bearer ${token}`,
         'Accept': 'application/json'
@@ -143,11 +158,17 @@ export const getCompany = async (companyId: string): Promise<Company> => {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        window.location.href = '/login?session_expired=true';
+        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
       const error = await response.json();
       throw new Error(error.detail || 'Error al obtener la compañía');
     }
 
-    return await response.json();
+    const companyData = await response.json();
+    return ensureConsistentId(companyData);
   } catch (error) {
     console.error('Error al obtener compañía:', error);
     throw new Error('No se pudo obtener la información de la compañía. Por favor, vuelve a la página principal.');
@@ -161,7 +182,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/v1/companies/${companyId}`, { // Añadido v1
+  const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}`, { // Usar API_BASE_URL
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -171,11 +192,17 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login?session_expired=true';
+      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    }
     const error = await response.json();
     throw new Error(error.detail || 'Error al actualizar la compañía');
   }
-
-  return response.json();
+  
+  const updatedCompanyData = await response.json();
+  return ensureConsistentId(updatedCompanyData);
 }
 
 export async function addMember(companyId: string, userEmail: string): Promise<{ message: string }> {
@@ -185,7 +212,7 @@ export async function addMember(companyId: string, userEmail: string): Promise<{
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_URL}/api/v1/companies/${companyId}/members/${userEmail}`, { // Añadido v1
+  const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}/members/${userEmail}`, { // Usar API_BASE_URL
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`
@@ -193,6 +220,11 @@ export async function addMember(companyId: string, userEmail: string): Promise<{
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login?session_expired=true';
+      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    }
     const error = await response.json();
     throw new Error(error.detail || 'Error al agregar miembro');
   }

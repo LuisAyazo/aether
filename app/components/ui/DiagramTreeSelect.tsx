@@ -37,8 +37,8 @@ export default function DiagramTreeSelect({
   value, 
   onChange,
   placeholder = 'Seleccionar diagrama',
-  selectedDiagram, 
-  onSelect, 
+  // selectedDiagram, 
+  // onSelect, 
   companyId,
   environmentId,
   className = '',
@@ -150,10 +150,10 @@ export default function DiagramTreeSelect({
     return rootTree;
   };
   
-  // Helper to check if we have multiple diagrams
-  const hasMultipleDiagrams = (diagrams: Diagram[]): boolean => {
-    return diagrams.length > 3; // Group if more than 3 diagrams
-  };
+  // // Helper to check if we have multiple diagrams
+  // const hasMultipleDiagrams = (diagrams: Diagram[]): boolean => {
+  //   return diagrams.length > 3; // Group if more than 3 diagrams
+  // };
 
   // Get tree structure
   const treeStructure = buildDiagramTree(diagrams);

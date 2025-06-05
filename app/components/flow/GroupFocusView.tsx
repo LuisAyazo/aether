@@ -23,7 +23,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import nodeTypesFromFile from '../nodes/NodeTypes'; 
 import { LogicalEdgeType, EdgeTypeConfig } from '@/app/config/edgeConfig'; 
-import { ResourceItem, ResourceCategory } from './FlowEditor'; 
+import { ResourceItem, ResourceCategory } from './types/editorTypes'; 
 import { 
   SquaresPlusIcon, 
   XMarkIcon, 
@@ -568,7 +568,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
                   />
                 </div>
                 <div style={{overflowY:'auto',flexGrow:1,paddingBottom:'8px'}}>
-                  {resourceCategories.filter(c => c.items.some(i => i.name.toLowerCase().includes(groupSearchTerm.toLowerCase()) || i.description.toLowerCase().includes(groupSearchTerm.toLowerCase())))
+                  {resourceCategories.filter((c: ResourceCategory) => c.items.some((i: ResourceItem) => i.name.toLowerCase().includes(groupSearchTerm.toLowerCase()) || i.description.toLowerCase().includes(groupSearchTerm.toLowerCase())))
                     .map(cat => (
                     <div key={`group-sb-${cat.name}`} style={{borderBottom:'1px solid #eee'}}>
                       <h5 
@@ -580,8 +580,8 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
                       </h5>
                       {!groupCollapsedCategories[cat.name] && (
                         <ul style={{listStyleType:'none',padding:'0',margin:0,backgroundColor:'#fff'}}>
-                          {cat.items.filter(i=>i.name.toLowerCase().includes(groupSearchTerm.toLowerCase())||i.description.toLowerCase().includes(groupSearchTerm.toLowerCase()))
-                            .map(item => (
+                          {cat.items.filter((i: ResourceItem) => i.name.toLowerCase().includes(groupSearchTerm.toLowerCase()) || i.description.toLowerCase().includes(groupSearchTerm.toLowerCase()))
+                            .map((item: ResourceItem) => (
                             <li 
                               key={`group-sb-item-${item.type}-${item.name}`}
                               draggable 

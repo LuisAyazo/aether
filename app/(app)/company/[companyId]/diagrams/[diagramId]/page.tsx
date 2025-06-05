@@ -60,6 +60,7 @@ import CredentialsPage from '../../../../../components/ui/CredentialsPage';
 import DeploymentsPage from '../../../../../components/ui/DeploymentsPage'; 
 import SettingsPage from '../../../../../components/ui/SettingsPage'; 
 import TeamPage from '../../../../../components/ui/TeamPage'; 
+import EnvironmentsPage from '../../../../../components/ui/EnvironmentsPage'; // Asegurar que está importado
 // EdgeTypeToolbox no se importa aquí
 
 // Servicios
@@ -69,7 +70,7 @@ import { isAuthenticated } from '../../../../../services/authService';
 // Tipos y utilidades
 import nodeTypes from '../../../../../components/nodes/NodeTypes'; 
 import { Node, Edge } from '../../../../../services/diagramService'; 
-import { SelectedEdgeTypeProvider } from '../../../../../contexts/SelectedEdgeTypeContext'; // Importar el Provider
+import { SelectedEdgeTypeProvider } from '../../../../../contexts/SelectedEdgeTypeContext'; 
 
 const { TextArea } = Input;
 
@@ -274,7 +275,7 @@ export default function DiagramPage() {
   
   const [previousDiagram, setPreviousDiagram] = useState<Diagram | null>(null);
   
-  type SectionKeys = 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team';
+  type SectionKeys = 'diagrams' | 'credentials' | 'deployments' | 'settings' | 'team' | 'environments';
   const [activeSection, setActiveSection] = useState<SectionKeys>('diagrams');
   const [company, setCompany] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -320,7 +321,7 @@ export default function DiagramPage() {
       selected: node.selected || false,
       positionAbsolute: node.positionAbsolute,
       dragging: node.dragging || false,
-      parentId: node.parentNode, // Mapear parentNode de la BD a parentId para ReactFlow
+      parentId: node.parentNode, 
       style: { ...node.style, border: '2px solid transparent', borderRadius: '4px' },
       className: undefined, sourcePosition: undefined, targetPosition: undefined,
       hidden: false, draggable: true, selectable: true, connectable: true, deletable: true,
@@ -342,7 +343,7 @@ export default function DiagramPage() {
       id: node.id, type: node.type || 'default', position: node.position, data: node.data,
       width: node.width || undefined, height: node.height || undefined, selected: node.selected || false,
       positionAbsolute: node.positionAbsolute, dragging: node.dragging || false,
-      parentNode: node.parentId, // Mapear parentId de ReactFlow a parentNode para la BD
+      parentNode: node.parentId, 
       style: node.style
     }));
   };
@@ -436,7 +437,7 @@ export default function DiagramPage() {
       const selectedEnv = environments.find(env => env.id === environmentId);
       if (!selectedEnv) throw new Error('Ambiente no encontrado');
       const diagramsCacheKey = `diagrams-${companyId}-${environmentId}`;
-      let diagramsData: Diagram[] = diagramCache.has(diagramsCacheKey) ? (diagramCache.get(diagramsCacheKey) || []) : await getDiagramsByEnvironment(companyId as string, environmentId);
+      const diagramsData: Diagram[] = diagramCache.has(diagramsCacheKey) ? (diagramCache.get(diagramsCacheKey) || []) : await getDiagramsByEnvironment(companyId as string, environmentId);
       if (!diagramCache.has(diagramsCacheKey)) diagramCache.set(diagramsCacheKey, diagramsData);
       startTransition(() => setDiagrams(diagramsData));
       if (diagramsData.length > 0) {
@@ -463,7 +464,7 @@ export default function DiagramPage() {
         const selectedEnv = environments.find(env => env.id === selectedEnvironment);
         if (!selectedEnv) throw new Error('Ambiente no encontrado');
         const singleDiagramCacheKey = `diagram-${companyId}-${selectedEnvironment}-${diagramId}`;
-        let diagramData: Diagram | null = singleDiagramCache.has(singleDiagramCacheKey) ? (singleDiagramCache.get(singleDiagramCacheKey) || null) : await getDiagram(companyId as string, selectedEnvironment, diagramId);
+        const diagramData: Diagram | null = singleDiagramCache.has(singleDiagramCacheKey) ? (singleDiagramCache.get(singleDiagramCacheKey) || null) : await getDiagram(companyId as string, selectedEnvironment, diagramId);
         if (!singleDiagramCache.has(singleDiagramCacheKey) && diagramData !== null) singleDiagramCache.set(singleDiagramCacheKey, diagramData);
         console.log("[DiagramPage] handleDiagramChange - Datos del diagrama recuperados:", JSON.stringify(diagramData, null, 2));
         if (!diagramData || !isMounted.current) { setLoading(false); return; }
@@ -843,6 +844,7 @@ export default function DiagramPage() {
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'credentials': return <div className="p-4 h-full"><CredentialsPage companyId={companyId as string} /></div>;
+      case 'environments': return <div className="p-4 h-full"><EnvironmentsPage companyId={companyId as string} /></div>; // Añadir caso
       case 'deployments': return <div className="p-4 h-full"><DeploymentsPage companyId={companyId as string} /></div>;
       case 'settings': return <div className="p-4 h-full"><SettingsPage companyId={companyId as string} /></div>;
       case 'team': return <div className="p-4 h-full"><TeamPage companyId={companyId as string} /></div>;
