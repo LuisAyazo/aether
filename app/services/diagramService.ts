@@ -296,9 +296,7 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
       }
       if (response.status === 404) {
         console.log('No se encontraron diagramas en el servidor.');
-        // Considerar si esto debe ser un error o un array vacío. Por ahora, mantenemos el error.
-        // throw new Error('El endpoint para obtener diagramas no está disponible en el backend. Contacta al administrador.');
-        return []; // Devolver array vacío si es 404 y no hay diagramas
+        return []; 
       }
       const errorData = await response.json();
       throw new Error(errorData.detail || 'Error obteniendo diagramas');
@@ -318,7 +316,6 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
     throw new Error('Usuario no autenticado');
   }
 
-  // Verificar IDs
   if (!companyId || !environmentId || !diagramId) {
     throw new Error('Parámetros inválidos: Se requieren companyId, environmentId y diagramId');
   }
@@ -365,14 +362,12 @@ export const createDiagram = async (companyId: string, environmentId: string, di
   try {
     console.log(`Intentando crear diagrama para compañía ${companyId}, ambiente ${environmentId}`);
     
-    // Incluir company_id y environment_id en el payload según el esquema DiagramCreate del backend
     const diagramPayload = {
       ...diagramData,
       company_id: companyId,
       environment_id: environmentId
     };
     
-    // Crear el diagrama usando el endpoint del backend
     const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams`, {
       method: 'POST',
       headers: {
@@ -398,9 +393,8 @@ export const createDiagram = async (companyId: string, environmentId: string, di
         const errorData = await response.json();
         console.error('Error al crear diagrama:', errorData);
         if (typeof errorData === 'object' && errorData.detail) {
-          // Si detail es un array de objetos de error (como en validaciones de Pydantic)
           if (Array.isArray(errorData.detail)) {
-            const errorMessages = errorData.detail.map((err: Record<string, any>) => {
+            const errorMessages = errorData.detail.map((err: Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any
               if (typeof err === 'object' && err.msg) {
                 return `${err.loc ? (err.loc as string[]).join('.') + ': ' : ''}${err.msg}`;
               }
@@ -427,13 +421,20 @@ export const createDiagram = async (companyId: string, environmentId: string, di
     return data as Diagram;
   } catch (error: unknown) {
     console.error('Error en createDiagram:', error);
-    // Si el error ya es una instancia de Error con un mensaje personalizado, lo relanzamos
     if (error instanceof Error) {
       throw error;
     }
-    // Si no, creamos un nuevo error con un mensaje más descriptivo
-    const unknownError = error as { message?: string; detail?: string }; // Añadir detail para cubrir más casos
-    throw new Error(unknownError?.message || unknownError?.detail || 'Error desconocido al crear el diagrama');
+    const unknownError = error as { message?: string; detail?: string | Array<Record<string, unknown>> };
+    let errorMessage = 'Error desconocido al crear el diagrama';
+    if (typeof unknownError?.detail === 'string') {
+      errorMessage = unknownError.detail;
+    } else if (Array.isArray(unknownError?.detail) && unknownError.detail.length > 0) {
+      const firstError = unknownError.detail[0] as { msg?: string };
+      errorMessage = firstError?.msg || errorMessage;
+    } else if (unknownError?.message) {
+      errorMessage = unknownError.message;
+    }
+    throw new Error(errorMessage);
   }
 };
 
@@ -450,7 +451,7 @@ export const updateDiagram = async (
 
   try {
     const response = await fetch(
-      `${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, // Usar API_BASE_URL consistentemente
+      `${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, 
       {
         method: 'PUT',
         headers: {
@@ -484,7 +485,14 @@ export const updateDiagram = async (
     if (error instanceof Error) {
       throw error;
     }
-    throw new Error('Error desconocido al actualizar el diagrama');
+    const unknownError = error as { message?: string; detail?: string | Record<string, unknown> | Array<Record<string, unknown>> };
+    let errorMessage = 'Error desconocido al actualizar el diagrama';
+    if (typeof unknownError?.detail === 'string') {
+      errorMessage = unknownError.detail;
+    } else if (unknownError?.message) {
+      errorMessage = unknownError.message;
+    }
+    throw new Error(errorMessage);
   }
 };
 
@@ -551,8 +559,21 @@ export async function updateDiagramPaths(companyId: string, environmentId: strin
     }
 
     return await response.json();
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating diagram paths:', error);
-    throw error;
+    if (error instanceof Error) {
+      throw error;
+    }
+    const unknownError = error as { message?: string; detail?: string | Array<Record<string, unknown>> };
+    let errorMessage = 'Error desconocido al actualizar las rutas del diagrama';
+     if (typeof unknownError?.detail === 'string') {
+      errorMessage = unknownError.detail;
+    } else if (Array.isArray(unknownError?.detail) && unknownError.detail.length > 0) {
+        const firstError = unknownError.detail[0] as { msg?: string };
+        errorMessage = firstError?.msg || errorMessage;
+    } else if (unknownError?.message) {
+      errorMessage = unknownError.message;
+    }
+    throw new Error(errorMessage);
   }
 }

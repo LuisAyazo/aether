@@ -1196,66 +1196,81 @@ export default function DashboardPage() {
             sections={sidebarSections} isPersonalSpace={isPersonalSpace}
         />
         <div className="flex-1 flex flex-col overflow-hidden">
-          { activeSectionInSidebar === 'diagrams' && environments.length > 0 && ( 
-            <div className="bg-white dark:bg-white py-3 px-4 border-b border-slate-200 dark:border-slate-300 shadow-sm flex items-center justify-between flex-shrink-0 h-16"> 
-              <div className="flex items-center gap-x-4">
-                {environments.length > 0 ? ( // Condición simplificada, ya que el header solo se muestra si environments.length > 0
-                  <div className="flex items-center h-[40px]"> 
-                    <span className="text-base font-medium text-slate-600 dark:text-slate-500 mr-2 self-center whitespace-nowrap">Ambiente:</span>
+          { activeSectionInSidebar === 'diagrams' && environments.length > 0 && activeCompany && ( 
+            <div className="bg-white dark:bg-slate-800 px-6 py-4 border-b border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between flex-shrink-0"> 
+              {/* Sección Izquierda: Selectores de Ambiente y Diagrama */}
+              <div className="flex items-center gap-x-6">
+                {environments.length > 0 && (
+                  <div className="flex items-center">
+                    <Text className="text-sm font-medium text-slate-600 dark:text-slate-400 mr-2">Ambiente:</Text>
                     <EnvironmentTreeSelect 
                         environments={environments} value={selectedEnvironment ?? undefined} 
                         onChange={handleEnvironmentChange} placeholder="Seleccionar Ambiente"
                       />
                       {!(isPersonalSpace && environments.length >= 1) && ( 
-                         <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewEnvironmentModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Ambiente" />
+                         <Tooltip title="Crear Nuevo Ambiente">
+                           <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewEnvironmentModalVisible(true)} className="ml-1 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20" />
+                         </Tooltip>
                     )}
                   </div>
-                ) : null } {/* No debería llegar aquí si la condición principal es environments.length > 0 */}
-                {selectedEnvironment && (diagrams.length > 0 || (isPersonalSpace && environments.find(env => env.id === selectedEnvironment))) ? ( // Asegurar que el ambiente seleccionado exista si es personal space
-                  <div className="flex items-center h-[40px]"> 
-                    <span className="text-base font-medium text-slate-600 dark:text-slate-500 mr-2 self-center whitespace-nowrap">Diagrama:</span>
-                      <DiagramTreeSelect 
-                        diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} 
-                        companyId={activeCompany._id} environmentId={selectedEnvironment} 
-                        showDeleteButton={true} 
-                        onDeleteDiagram={(diagramId) => showDeleteDiagramModal(diagramId)} 
-                      />
-                       {!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >= 3) && (
-                          <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewDiagramModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Diagrama" />
+                )}
+                {selectedEnvironment && (
+                  <div className="flex items-center">
+                    <Text className="text-sm font-medium text-slate-600 dark:text-slate-400 mr-2">Diagrama:</Text>
+                    {diagrams.length > 0 || (isPersonalSpace && environments.find(env => env.id === selectedEnvironment)) ? (
+                      <>
+                        <DiagramTreeSelect 
+                          diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} 
+                          companyId={activeCompany._id} environmentId={selectedEnvironment} 
+                          showDeleteButton={true} 
+                          onDeleteDiagram={(diagramId) => showDeleteDiagramModal(diagramId)} 
+                        />
+                        {!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >= 3) && (
+                          <Tooltip title="Crear Nuevo Diagrama">
+                            <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewDiagramModalVisible(true)} className="ml-1 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20" />
+                          </Tooltip>
                         )}
-                    </div>
-                  ) : selectedEnvironment ? ( <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Diagrama</Button> ) : null}
+                      </>
+                    ) : (
+                      <Button type="primary" size="small" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Diagrama</Button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 border-r border-gray-200 dark:border-slate-700 pr-2 mr-1">
-                  <Tooltip title="Historial de cambios">
-                    <Button icon={<HistoryOutlined />} className="hover:bg-gray-100 dark:hover:bg-slate-700" onClick={handleHistory} />
-                  </Tooltip>
-                  <Tooltip title="Revertir cambios">
-                    <Button icon={<RollbackOutlined />} className="hover:bg-gray-100 dark:hover:bg-slate-700" onClick={handleRollback} />
-                  </Tooltip>
-                  <Tooltip title="Gestionar versiones">
-                    <Button icon={<BranchesOutlined />} className="hover:bg-gray-100 dark:hover:bg-slate-700" onClick={handleVersions} />
-                  </Tooltip>
+
+              {/* Sección Derecha: Botones de Acción */}
+              {selectedDiagram && currentDiagram && (
+                <div className="flex items-center gap-x-3">
+                  <div className="flex items-center gap-x-1 border-r border-slate-200 dark:border-slate-700 pr-3">
+                    <Tooltip title="Historial de cambios">
+                      <Button icon={<HistoryOutlined />} onClick={handleHistory} className="text-slate-600 dark:text-slate-300 hover:!bg-slate-100 dark:hover:!bg-slate-700" />
+                    </Tooltip>
+                    <Tooltip title="Revertir cambios">
+                      <Button icon={<RollbackOutlined />} onClick={handleRollback} className="text-slate-600 dark:text-slate-300 hover:!bg-slate-100 dark:hover:!bg-slate-700" />
+                    </Tooltip>
+                    <Tooltip title="Gestionar versiones">
+                      <Button icon={<BranchesOutlined />} onClick={handleVersions} className="text-slate-600 dark:text-slate-300 hover:!bg-slate-100 dark:hover:!bg-slate-700" />
+                    </Tooltip>
+                  </div>
+                  <div className="flex items-center gap-x-1">
+                    <Tooltip title="Vista previa de cambios">
+                      <Button icon={<EyeOutlined />} onClick={handlePreview} className="text-slate-600 dark:text-slate-300 hover:!bg-slate-100 dark:hover:!bg-slate-700" />
+                    </Tooltip>
+                    <Tooltip title="Ejecutar cambios (Desplegar)">
+                      <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleRun} className="bg-emerald-500 hover:bg-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-700" />
+                    </Tooltip>
+                    <Tooltip title="Promover a otro ambiente">
+                      <Button icon={<ArrowUpOutlined />} onClick={handlePromote} className="bg-blue-500 hover:bg-blue-600 text-white dark:bg-blue-600 dark:hover:bg-blue-700" />
+                    </Tooltip>
+                    <Tooltip title="Limpiar todos los recursos del diagrama">
+                      <Button danger icon={<ClearOutlined />} onClick={handleDestroy} />
+                    </Tooltip>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Tooltip title="Vista previa de cambios">
-                    <Button icon={<EyeOutlined />} onClick={handlePreview} className="hover:bg-gray-100 dark:hover:bg-slate-700" />
-                  </Tooltip>
-                  <Tooltip title="Ejecutar cambios (Desplegar)">
-                    <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleRun} className="bg-emerald-green-600 hover:bg-emerald-green-700" />
-                  </Tooltip>
-                  <Tooltip title="Promover a otro ambiente">
-                    <Button icon={<ArrowUpOutlined />} onClick={handlePromote} className="bg-blue-600 hover:bg-blue-700 text-white" />
-                  </Tooltip>
-                  <Tooltip title="Limpiar todos los recursos del diagrama">
-                    <Button danger icon={<ClearOutlined />} onClick={handleDestroy} className="hover:bg-red-50 dark:hover:bg-red-700/20" />
-                  </Tooltip>
-                </div>
-              </div>
+              )}
             </div>
           )}
-          <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' && environments.length > 0 ? 'calc(100% - 4rem)' : '100%' }}> 
+          <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' && environments.length > 0 ? 'calc(100% - 5rem)' : '100%' }}> {/* Ajustar altura si el header es más alto */}
               {loading && activeSectionInSidebar === 'diagrams' && <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>}
               {!loading && activeSectionInSidebar === 'diagrams' && selectedDiagram && currentDiagram && activeCompany && ( 
                 <FlowEditor 
