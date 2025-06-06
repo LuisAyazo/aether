@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Navigation from "../components/Navigation";
-import { getCurrentUser, isAuthenticated, saveAuthData } from '../services/authService'; // getAuthToken eliminado
-import { User } from '../services/authService'; // AuthResponse eliminado
+import Navigation from "../components/Navigation"; // Este será nuestro MainHeader modificado
+import { isAuthenticated, saveAuthData } from '../services/authService'; // getCurrentUser se usará desde el store
+import { User } from '../services/authService';
+// import { useEditorStore } from '../components/flow/hooks/useEditorStore'; // Ya no se usa para estos datos
+import { useNavigationStore } from '../hooks/useNavigationStore'; // Importar el nuevo store
+// import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../services/companyService'; // Se manejará en el store
 
-// Función para obtener datos del usuario desde /me
-async function fetchCurrentUser(token: string): Promise<User | null> {
+// Función para obtener datos del usuario desde /me (puede permanecer aquí o moverse al authService)
+async function fetchCurrentUserFromApi(token: string): Promise<User | null> { // Renombrada para evitar confusión
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   try {
     const response = await fetch(`${API_URL}/api/v1/auth/me`, {
@@ -39,8 +42,19 @@ export default function AppLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [isLoading, setIsLoading] = useState(true);
-  const [authProcessed, setAuthProcessed] = useState(false); // Nuevo estado para controlar el procesamiento del token
+  // Usar estados y acciones del useNavigationStore
+  const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
+  const dataLoading = useNavigationStore(state => state.dataLoading);
+  const user = useNavigationStore(state => state.user); 
+  const activeCompany = useNavigationStore(state => state.activeCompany); 
+  // setActiveCompanyAndLoadData se llamará desde otro useEffect o componente que determine la compañía activa
+
+  const [authProcessed, setAuthProcessed] = useState(false); 
+  const [initialLoadDone, setInitialLoadDone] = useState(false); // Para controlar la carga inicial de datos de compañía/ambientes
+
+  useEffect(() => {
+    fetchInitialUser(); // Cargar usuario desde localStorage o API al montar
+  }, [fetchInitialUser]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -70,18 +84,17 @@ export default function AppLayout({
       
       // Limpiar la URL inmediatamente
       const newPath = pathname.split('?')[0];
-      router.replace(newPath, { scroll: false }); // scroll: false para evitar saltos
+      router.replace(newPath, { scroll: false }); 
 
-      fetchCurrentUser(token).then(userFromApi => {
+      fetchCurrentUserFromApi(token).then(userFromApi => {
         if (userFromApi) {
           saveAuthData({ access_token: token, token_type: tokenType as string, user: userFromApi });
+          fetchInitialUser(); // Recargar el usuario en el store después de guardar nuevos datos de auth
         }
-        // Si userFromApi es null, el token ya fue borrado por fetchCurrentUser
-        setAuthProcessed(true); // Marcar como procesado para el siguiente efecto
+        setAuthProcessed(true); 
       });
 
     } else {
-      // Si no hay token en la URL, proceder con la lógica normal.
       setAuthProcessed(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,40 +102,52 @@ export default function AppLayout({
 
   useEffect(() => {
     if (!authProcessed) {
-      // Aún esperando que el token de la URL (si existe) sea procesado por el primer useEffect
       return; 
     }
 
-    // Si estamos en /create-company, no aplicar lógica de redirección de este layout.
-    if (pathname === '/create-company') {
-      setIsLoading(false);
+    const currentAuthStatus = isAuthenticated();
+    const localUser = user; // user del store
+
+    if (pathname === '/create-company' || pathname === '/onboarding/select-usage') {
+      // Permitir acceso a estas páginas incluso si la carga de datos principal está pendiente
+      // setIsLoading(false); // setDataLoading(false) se manejará en el store
+      // La carga de datos de compañía/ambientes se hará después o en la página específica
+      setInitialLoadDone(true); // Marcar que la lógica de auth/onboarding de este layout ha terminado
       return;
     }
 
-    if (!isAuthenticated()) {
-      // Si después de procesar (o no encontrar token en URL), no está autenticado, redirigir a login
-      if (pathname !== '/login' && pathname !== '/register') { // Evitar bucle si ya está en login/register
+    if (!currentAuthStatus) {
+      if (pathname !== '/login' && pathname !== '/register') {
         router.replace('/login');
       } else {
-        setIsLoading(false); // Ya está en una página pública, no cargar
+        // Ya está en una página pública, no se necesita dataLoading del store aquí
+        // setIsLoading(false); 
       }
     } else {
-      const user = getCurrentUser(); // Ahora debería tener el usuario actualizado si vino de OAuth
-      if (user && user.usage_type === null && 
-          pathname !== '/onboarding/select-usage') { 
+      if (localUser && localUser.usage_type === null) { 
         router.replace('/onboarding/select-usage');
-      } else {
-        setIsLoading(false); 
+      } else if (localUser && !activeCompany && !initialLoadDone) {
+        // Aquí es donde se debería iniciar la carga de compañía/ambientes
+        // Esta lógica se moverá al store o a un componente wrapper
+        // Por ahora, asumimos que el store se encarga o DashboardPage lo hará
+        // setDataLoading(true); // El store debería manejar esto
+        // console.log("AppLayout: Usuario autenticado, iniciando carga de datos de compañía...");
+        // Aquí se llamaría a una acción del store como initializeDashboardData()
+        // que internamente haría getCompanies, setActiveCompanyAndLoadData, etc.
+        // Por ahora, para no romper, dejamos que DashboardPage maneje su propia carga.
+        // Esto se refactorizará cuando movamos los selectores al header.
+        setInitialLoadDone(true); // Marcar como hecho para este layout
+      } else if (activeCompany && !dataLoading && !initialLoadDone) {
+        setInitialLoadDone(true);
       }
     }
-  }, [router, pathname, authProcessed]);
+  }, [router, pathname, authProcessed, user, activeCompany, dataLoading, initialLoadDone]);
 
-  // Mostrar loader mientras se procesa el token o se verifica la autenticación
-  if (isLoading || !authProcessed) { 
+  // El loader principal ahora depende de authProcessed y dataLoading del store (o initialLoadDone)
+  if (!authProcessed || (isAuthenticated() && dataLoading && !initialLoadDone && pathname !== '/create-company' && pathname !== '/onboarding/select-usage') ) { 
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
         <p className="text-slate-600 dark:text-slate-400">Cargando...</p>
-        {/* Aquí podrías poner un spinner más elaborado */}
       </div>
     );
   }
@@ -131,8 +156,9 @@ export default function AppLayout({
 
   return (
     <>
-      {showNavigation && <Navigation />}
-      <main className={showNavigation ? "pt-14" : ""}> {/* Ajustado pt-16 a pt-14 para coincidir con h-14 del Nav */}
+      {/* El Navigation (futuro MainHeader) consumirá datos del store */}
+      {showNavigation && <Navigation />} 
+      <main className={showNavigation ? "pt-14" : ""}> 
         {children}
       </main>
     </>

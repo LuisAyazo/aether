@@ -1,13 +1,14 @@
-import type { JSX } from 'react';
-import type { Node, Edge, Viewport, OnConnect, NodeTypes as ReactFlowNodeTypes, EdgeTypes as ReactFlowEdgeTypes } from 'reactflow';
-import type { CustomEdgeData } from '@/app/config/edgeConfig';
+// import type { JSX } from 'react'; // No se usa
+// import type { CustomEdgeData } from '@/app/config/edgeConfig'; // Ya no se usa directamente
 import type { Diagram } from '@/app/services/diagramService';
 
-// Tipos que ya estaban en FlowEditor.tsx
-export type { Node as FlowNode, Edge as FlowEdge, Viewport as FlowViewport, OnConnect as FlowOnConnect };
-// Estos alias son para exportación. Dentro de este archivo, usaremos los tipos base de reactflow directamente
-// o definiremos alias locales si es necesario para claridad interna, pero para las props y estado,
-// usaremos los tipos base para evitar confusión con la re-exportación.
+// Usaremos 'any' para los tipos de React Flow como workaround debido a problemas de declaración de módulo
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ReactFlowTypeWorkaround = any;
+
+// Tipos que ya estaban en FlowEditor.tsx (re-exportados para uso externo si es necesario)
+// Estos alias son para exportación.
+export type { ReactFlowTypeWorkaround as FlowNode, ReactFlowTypeWorkaround as FlowEdge, ReactFlowTypeWorkaround as FlowViewport, ReactFlowTypeWorkaround as FlowOnConnect };
 
 // Interfaces y tipos extraídos de FlowEditor.tsx
 export interface SingleNodePreview {
@@ -50,8 +51,10 @@ export interface ResourceItem {
   type: string;
   name: string;
   description: string;
-  icon?: JSX.Element; 
+  icon?: React.ReactNode; 
   provider: 'aws' | 'gcp' | 'azure' | 'generic';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data?: Record<string, any>; 
 }
 
 export interface ResourceCategory {
@@ -82,15 +85,15 @@ export interface ContextMenu {
 export type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea' | 'note' | 'text' | 'area';
 
 export interface FlowEditorProps {
-  onConnectProp?: OnConnect; 
-  nodeTypes?: ReactFlowNodeTypes; 
-  edgeTypes?: ReactFlowEdgeTypes;
+  onConnectProp?: ReactFlowTypeWorkaround; // OnConnect; 
+  nodeTypes?: ReactFlowTypeWorkaround; // ReactFlowNodeTypes; 
+  edgeTypes?: ReactFlowTypeWorkaround; // ReactFlowEdgeTypes;
   resourceCategories?: ResourceCategory[];
   
-  initialNodes?: Node[]; 
-  initialEdges?: Edge<CustomEdgeData>[]; 
-  initialViewport?: Viewport; 
-  onSave?: (diagramData: { nodes: Node[]; edges: Edge<CustomEdgeData>[]; viewport?: Viewport }) => void; 
+  initialNodes?: ReactFlowTypeWorkaround[]; // Node[]; 
+  initialEdges?: ReactFlowTypeWorkaround[]; // Edge<CustomEdgeData>[]; 
+  initialViewport?: ReactFlowTypeWorkaround; // Viewport; 
+  onSave?: (diagramData: { nodes: ReactFlowTypeWorkaround[]; edges: ReactFlowTypeWorkaround[]; viewport?: ReactFlowTypeWorkaround }) => void; // Node[], Edge[], Viewport
   
   companyId?: string;
   environmentId?: string;
@@ -102,17 +105,16 @@ export interface ResourceProperties {
   [key: string]: string | number | boolean | null;
 }
 
-// Tipos para el store de Zustand (se definirán mejor en useEditorStore.ts pero se pueden referenciar aquí)
 export interface EditorState {
   sidebarOpen: boolean;
   collapsedCategories: Record<string, boolean>;
   searchTerm: string;
   activeTool: ToolType;
   contextMenu: ContextMenu;
-  selectedEdge: Edge<CustomEdgeData> | null;
+  selectedEdge: ReactFlowTypeWorkaround | null; // Edge<CustomEdgeData> | null; 
   expandedGroupId: string | null;
   toolbarLayout: 'horizontal' | 'vertical';
-  isDragging: boolean; // Para el drag de nodos del canvas, no de la sidebar
+  isDragging: boolean; 
   editingGroup: { id: string; label: string } | null;
 
   // Acciones
@@ -122,7 +124,7 @@ export interface EditorState {
   setActiveTool: (tool: ToolType) => void;
   setContextMenu: (menu: Partial<ContextMenu>) => void;
   hideContextMenu: () => void;
-  setSelectedEdge: (edge: FlowEdge<CustomEdgeData> | null) => void;
+  setSelectedEdge: (edge: ReactFlowTypeWorkaround | null) => void; // Edge<CustomEdgeData> | null
   setExpandedGroupId: (groupId: string | null) => void;
   setToolbarLayout: (layout: 'horizontal' | 'vertical') => void;
   setIsDragging: (dragging: boolean) => void;

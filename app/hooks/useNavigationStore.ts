@@ -1,0 +1,503 @@
+import { create } from 'zustand';
+import { message } from 'antd';
+// import type { Viewport } from 'reactflow'; // Ya no se usa directamente debido al workaround con 'any'
+import type { User } from '@/app/services/authService';
+import type { Company } from '@/app/services/companyService';
+import { 
+  Environment, 
+  Diagram,
+  Node as DiagramNode, // Renombrar para claridad si es necesario, o usar el tipo específico de nodo del servicio
+} from '@/app/services/diagramService'; 
+import { 
+  getCurrentUser,
+} from '@/app/services/authService';
+import { 
+  getEnvironments, 
+  getDiagramsByEnvironment, 
+  getDiagram, 
+  createDiagram as createDiagramServiceAPICall,
+  // createEnvironment as createEnvironmentServiceAPICall // Asumir que existe o se simula
+} from '@/app/services/diagramService';
+import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '@/app/services/companyService'; // Importar servicio de compañía
+
+// Tipos para el historial y previsualización
+interface VersionHistoryItem {
+  id: string;
+  timestamp: string;
+  author: string;
+  description: string;
+  changes: { created: number; updated: number; deleted: number; };
+}
+
+interface PreviewResourceItem {
+  id: string;
+  type: string;
+  name: string;
+  provider: string;
+  changes: Record<string, unknown>;
+}
+
+interface PreviewData {
+  resourcesToCreate: PreviewResourceItem[];
+  resourcesToUpdate: PreviewResourceItem[];
+  resourcesToDelete: PreviewResourceItem[];
+}
+
+export interface NavigationStoreState {
+  // Estados para modales de acciones del header
+  historyModalVisible: boolean;
+  versionHistory: VersionHistoryItem[];
+  rollbackModalVisible: boolean;
+  selectedVersion: string | null;
+  versionsModalVisible: boolean;
+  previewModalVisible: boolean;
+  previewData: PreviewData;
+  runModalVisible: boolean;
+  promoteModalVisible: boolean;
+  selectedTargetEnvironment?: string;
+  destroyModalVisible: boolean;
+  destroyConfirmationText: string;
+  
+  // Estados globales
+  user: User | null;
+  userCompanies: Company[]; 
+  activeCompany: Company | null;
+  isPersonalSpace: boolean;
+  environments: Environment[];
+  diagrams: Diagram[]; 
+  selectedEnvironment: string | null;
+  selectedDiagram: string | null;
+  currentDiagram: Diagram | null; 
+  dataLoading: boolean; 
+  dataError: string | null;
+
+  // Estados para modales de creación
+  newEnvironmentModalVisible: boolean;
+  newEnvironmentName: string;
+  newEnvironmentDescription: string;
+  newEnvironmentPath: string;
+  newDiagramModalVisible: boolean;
+  newDiagramName: string;
+  newDiagramDescription: string;
+  newDiagramPath: string;
+  
+  // Acciones para modales del header
+  setHistoryModalVisible: (visible: boolean) => void;
+  setVersionHistory: (history: VersionHistoryItem[]) => void;
+  handleHistory: () => Promise<void>;
+  setRollbackModalVisible: (visible: boolean) => void;
+  setSelectedVersion: (versionId: string | null) => void;
+  handleRollback: () => Promise<void>;
+  handleRollbackConfirm: () => Promise<void>;
+  setVersionsModalVisible: (visible: boolean) => void;
+  handleVersions: () => Promise<void>;
+  setPreviewModalVisible: (visible: boolean) => void;
+  setPreviewData: (data: PreviewData) => void;
+  handlePreview: () => Promise<void>;
+  setRunModalVisible: (visible: boolean) => void;
+  handleRun: () => void;
+  handleRunConfirm: () => Promise<void>;
+  setPromoteModalVisible: (visible: boolean) => void;
+  setSelectedTargetEnvironment: (envId?: string) => void;
+  handlePromote: () => void;
+  handlePromoteConfirm: () => Promise<void>;
+  setDestroyModalVisible: (visible: boolean) => void;
+  setDestroyConfirmationText: (text: string) => void;
+  handleDestroy: () => void;
+  handleDestroyConfirm: () => Promise<void>;
+
+  // Acciones globales
+  fetchInitialUser: () => void; 
+  initializeAppLogic: () => Promise<void>; 
+  setActiveCompanyAndLoadData: (company: Company, isPersonal: boolean) => Promise<void>;
+  handleEnvironmentChange: (environmentId: string) => Promise<void>;
+  handleDiagramChange: (diagramId: string) => Promise<void>;
+
+  // Acciones para modales de creación
+  setNewEnvironmentModalVisible: (visible: boolean) => void;
+  setNewEnvironmentName: (name: string) => void;
+  setNewEnvironmentDescription: (description: string) => void;
+  setNewEnvironmentPath: (path: string) => void;
+  handleCreateNewEnvironment: () => Promise<void>; 
+  setNewDiagramModalVisible: (visible: boolean) => void;
+  setNewDiagramName: (name: string) => void;
+  setNewDiagramDescription: (description: string) => void;
+  setNewDiagramPath: (path: string) => void;
+  handleCreateNewDiagram: () => Promise<void>;
+}
+
+export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
+  historyModalVisible: false,
+  versionHistory: [],
+  rollbackModalVisible: false,
+  selectedVersion: null,
+  versionsModalVisible: false,
+  previewModalVisible: false,
+  previewData: { resourcesToCreate: [], resourcesToUpdate: [], resourcesToDelete: [] },
+  runModalVisible: false,
+  promoteModalVisible: false,
+  selectedTargetEnvironment: undefined,
+  destroyModalVisible: false,
+  destroyConfirmationText: '',
+
+  user: null,
+  userCompanies: [], 
+  activeCompany: null,
+  isPersonalSpace: false,
+  environments: [],
+  diagrams: [],
+  selectedEnvironment: null,
+  selectedDiagram: null,
+  currentDiagram: null,
+  dataLoading: true, 
+  dataError: null,
+
+  newEnvironmentModalVisible: false,
+  newEnvironmentName: '',
+  newEnvironmentDescription: '',
+  newEnvironmentPath: '',
+  newDiagramModalVisible: false,
+  newDiagramName: '',
+  newDiagramDescription: '',
+  newDiagramPath: '',
+
+  setHistoryModalVisible: (visible) => set({ historyModalVisible: visible }),
+  setVersionHistory: (history) => set({ versionHistory: history }),
+  handleHistory: async () => {
+    const { activeCompany, selectedEnvironment, selectedDiagram } = get();
+    if (!activeCompany?._id || !selectedEnvironment || !selectedDiagram) {
+      message.error("Seleccione compañía, ambiente y diagrama para ver el historial."); return;
+    }
+    set({ dataLoading: true });
+    await new Promise(resolve => setTimeout(resolve, 500)); 
+    const mockHistory: VersionHistoryItem[] = [
+      { id: 'v3', timestamp: new Date(Date.now() - 36e5 * 2).toISOString(), author: 'Usuario A', description: 'Cambios mayores', changes: { created: 2, updated: 3, deleted: 1 } },
+      { id: 'v2', timestamp: new Date(Date.now() - 36e5 * 24).toISOString(), author: 'Usuario B', description: 'Ajuste S3', changes: { created: 0, updated: 1, deleted: 0 } },
+    ];
+    set({ versionHistory: mockHistory, historyModalVisible: true, dataLoading: false });
+  },
+
+  setRollbackModalVisible: (visible) => set({ rollbackModalVisible: visible }),
+  setSelectedVersion: (versionId) => set({ selectedVersion: versionId }),
+  handleRollback: async () => {
+    if (get().versionHistory.length === 0) await get().handleHistory();
+    set({ selectedVersion: null, rollbackModalVisible: true });
+  },
+  handleRollbackConfirm: async () => {
+    const { selectedVersion, currentDiagram, handleDiagramChange } = get();
+    if (!selectedVersion || !currentDiagram) { message.error("Error en datos para revertir."); return; }
+    set({ dataLoading: true });
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
+    message.success(`Diagrama revertido a ${selectedVersion} (simulado).`);
+    set({ rollbackModalVisible: false, selectedVersion: null });
+    if (currentDiagram.id) { 
+      await handleDiagramChange(currentDiagram.id);
+    }
+    set({ dataLoading: false });
+  },
+
+  setVersionsModalVisible: (visible) => set({ versionsModalVisible: visible }),
+  handleVersions: async () => {
+    if (get().versionHistory.length === 0) await get().handleHistory();
+    set({ versionsModalVisible: true });
+  },
+
+  setPreviewModalVisible: (visible) => set({ previewModalVisible: visible }),
+  setPreviewData: (data) => set({ previewData: data }),
+  handlePreview: async () => {
+    const { currentDiagram } = get();
+    if (!currentDiagram) { message.info("No hay diagrama seleccionado para previsualizar."); return; }
+    set({ dataLoading: true });
+    await new Promise(resolve => setTimeout(resolve, 500)); 
+    const mockPreview: PreviewData = { 
+      resourcesToCreate: (currentDiagram.nodes || []).filter((n: DiagramNode) => n.type !== 'group').map((node: DiagramNode) => ({ 
+        id: node.id, 
+        type: node.type || 'unknown', 
+        name: String(node.data?.label || 'Unnamed'), 
+        provider: String(node.data?.provider || 'generic'), 
+        changes: { create: true } 
+      })),
+      resourcesToUpdate: [], 
+      resourcesToDelete: [] 
+    };
+    set({ previewData: mockPreview, previewModalVisible: true, dataLoading: false });
+  },
+
+  setRunModalVisible: (visible) => set({ runModalVisible: visible }),
+  handleRun: () => {
+    if (!get().currentDiagram) { message.info("No hay diagrama seleccionado para ejecutar."); return; }
+    set({ runModalVisible: true });
+  },
+  handleRunConfirm: async () => {
+    set({ dataLoading: true });
+    await new Promise(resolve => setTimeout(resolve, 2000)); 
+    message.success('Diagrama desplegado (simulado).');
+    set({ runModalVisible: false, previewData: { resourcesToCreate: [], resourcesToUpdate: [], resourcesToDelete: [] }, dataLoading: false });
+  },
+  
+  setPromoteModalVisible: (visible) => set({ promoteModalVisible: visible }),
+  setSelectedTargetEnvironment: (envId) => set({ selectedTargetEnvironment: envId }),
+  handlePromote: () => {
+    const { currentDiagram, environments } = get();
+    if (!currentDiagram) { message.warning("No hay diagrama seleccionado para promover."); return; }
+    if (environments.length <= 1) { message.info("No hay otros ambientes disponibles para promover."); return; }
+    set({ selectedTargetEnvironment: undefined, promoteModalVisible: true });
+  },
+  handlePromoteConfirm: async () => {
+    const { selectedTargetEnvironment, currentDiagram, activeCompany, selectedEnvironment, environments } = get();
+    if (!currentDiagram || !activeCompany || !selectedEnvironment || !selectedTargetEnvironment) {
+      message.error("Información incompleta para promover el diagrama."); return;
+    }
+    if (selectedEnvironment === selectedTargetEnvironment) {
+      message.warning("El ambiente de destino no puede ser el mismo que el ambiente actual."); return;
+    }
+    set({ dataLoading: true });
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
+      const targetEnvName = environments.find(e => e.id === selectedTargetEnvironment)?.name || 'desconocido';
+      message.success(`Diagrama "${currentDiagram.name}" promovido exitosamente al ambiente "${targetEnvName}" (simulado).`);
+      set({ promoteModalVisible: false, selectedTargetEnvironment: undefined, dataLoading: false });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      message.error(`Error al promover el diagrama: ${errorMsg}`);
+      set({ dataLoading: false }); 
+    }
+  },
+
+  setDestroyModalVisible: (visible) => set({ destroyModalVisible: visible }),
+  setDestroyConfirmationText: (text) => set({ destroyConfirmationText: text }),
+  handleDestroy: () => {
+    if (!get().currentDiagram) { message.warning("No hay diagrama seleccionado para eliminar."); return; }
+    set({ destroyConfirmationText: '', destroyModalVisible: true });
+  },
+  handleDestroyConfirm: async () => {
+    const { destroyConfirmationText, currentDiagram, activeCompany, selectedEnvironment, handleEnvironmentChange } = get();
+    if (!currentDiagram || !activeCompany?._id || !selectedEnvironment) {
+      message.error("Información incompleta para eliminar."); return;
+    }
+    if (destroyConfirmationText !== currentDiagram.name) {
+      message.error("El nombre de confirmación no coincide."); return;
+    }
+    set({ dataLoading: true });
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000)); 
+      message.success(`Diagrama "${currentDiagram.name}" eliminado (simulado).`);
+      set({ destroyModalVisible: false, destroyConfirmationText: '' });
+      await handleEnvironmentChange(selectedEnvironment); 
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      message.error(`Error al eliminar el diagrama: ${errorMsg}`);
+    } finally {
+      set({ dataLoading: false });
+    }
+  },
+
+  fetchInitialUser: () => {
+    console.log('[NavStore] fetchInitialUser: Obteniendo usuario...');
+    const currentUser = getCurrentUser(); 
+    console.log('[NavStore] fetchInitialUser: Usuario obtenido:', currentUser);
+    set({ user: currentUser }); 
+    if (currentUser) {
+      console.log('[NavStore] fetchInitialUser: Usuario existe, llamando a initializeAppLogic.');
+      get().initializeAppLogic();
+    } else {
+      console.log('[NavStore] fetchInitialUser: No hay usuario, finalizando carga.');
+      set({ dataLoading: false }); 
+    }
+  },
+
+  initializeAppLogic: async () => {
+    const user = get().user;
+    if (!user?._id) {
+      console.error('[NavStore] initializeAppLogic: Usuario no encontrado en el store.');
+      set({ dataLoading: false, dataError: "No se pudo inicializar: Usuario no encontrado." });
+      return;
+    }
+    console.log('[NavStore] initializeAppLogic: Iniciando para usuario:', user._id);
+    set({ dataLoading: true, dataError: null });
+    try {
+      console.log('[NavStore] initializeAppLogic: Obteniendo compañías...');
+      const companies = await getCompanies(); 
+      console.log('[NavStore] initializeAppLogic: Compañías obtenidas:', companies);
+      set({ userCompanies: companies });
+
+      if (companies.length > 0) {
+        const personalSpaceName = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${user.name || user.email}`;
+        let companyToSelect = companies.find(c => c.name === personalSpaceName);
+        let isPersonal = !!companyToSelect;
+
+        if (!companyToSelect) {
+          companyToSelect = companies[0];
+          isPersonal = companyToSelect.name.startsWith(PERSONAL_SPACE_COMPANY_NAME_PREFIX);
+        }
+        console.log('[NavStore] initializeAppLogic: Compañía a seleccionar:', companyToSelect, 'Es personal:', isPersonal);
+        await get().setActiveCompanyAndLoadData(companyToSelect, isPersonal);
+      } else {
+        console.log('[NavStore] initializeAppLogic: No hay compañías para el usuario.');
+        set({ activeCompany: null, dataLoading: false });
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[NavStore] initializeAppLogic: Error obteniendo compañías: ${errorMsg}`);
+      message.error(`Error obteniendo compañías: ${errorMsg}`);
+      set({ dataError: errorMsg, dataLoading: false, userCompanies: [] });
+    }
+  },
+  
+  setActiveCompanyAndLoadData: async (company, isPersonal) => {
+    console.log('[NavStore] setActiveCompanyAndLoadData: Estableciendo compañía activa:', company, 'Es personal:', isPersonal);
+    set({ 
+      activeCompany: company, 
+      isPersonalSpace: isPersonal, 
+      dataLoading: true, 
+      dataError: null, 
+      environments: [], 
+      diagrams: [], 
+      selectedEnvironment: null, 
+      selectedDiagram: null, 
+      currentDiagram: null 
+    });
+    try {
+      console.log('[NavStore] setActiveCompanyAndLoadData: Obteniendo ambientes para compañía ID:', company._id);
+      const envs = await getEnvironments(company._id);
+      console.log('[NavStore] setActiveCompanyAndLoadData: Ambientes obtenidos:', envs);
+      set({ environments: envs });
+      if (envs.length > 0) {
+        const defaultEnvId = envs[0].id;
+        console.log('[NavStore] setActiveCompanyAndLoadData: Estableciendo ambiente por defecto ID:', defaultEnvId);
+        await get().handleEnvironmentChange(defaultEnvId); 
+      } else {
+        console.log('[NavStore] setActiveCompanyAndLoadData: No hay ambientes, finalizando carga.');
+        set({ dataLoading: false }); 
+      }
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.error(`[NavStore] setActiveCompanyAndLoadData: Error cargando datos de compañía: ${errorMsg}`);
+      message.error("Error cargando datos de la compañía: " + errorMsg);
+      set({ dataError: errorMsg, dataLoading: false });
+    }
+  },
+
+  handleEnvironmentChange: async (environmentId) => {
+    const { activeCompany } = get();
+    if (!activeCompany) { 
+      console.warn('[NavStore] handleEnvironmentChange: No hay compañía activa.');
+      set({dataLoading: false}); return; 
+    } 
+    console.log(`[NavStore] handleEnvironmentChange: Cambiando a ambiente ID: ${environmentId} para compañía ID: ${activeCompany._id}`);
+    set({ selectedEnvironment: environmentId, dataLoading: true, diagrams: [], selectedDiagram: null, currentDiagram: null });
+    try {
+      const diags = await getDiagramsByEnvironment(activeCompany._id, environmentId);
+      console.log('[NavStore] handleEnvironmentChange: Diagramas obtenidos:', diags);
+      set({ diagrams: diags });
+      if (diags.length > 0) {
+        const defaultDiagId = diags[0].id;
+        console.log('[NavStore] handleEnvironmentChange: Estableciendo diagrama por defecto ID:', defaultDiagId);
+        await get().handleDiagramChange(defaultDiagId); 
+      } else {
+        console.log('[NavStore] handleEnvironmentChange: No hay diagramas en este ambiente.');
+        set({ dataLoading: false }); 
+      }
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.error(`[NavStore] handleEnvironmentChange: Error al cambiar de ambiente: ${errorMsg}`);
+      message.error("Error al cambiar de ambiente: " + errorMsg);
+      set({ dataError: errorMsg, dataLoading: false });
+    }
+  },
+
+  handleDiagramChange: async (diagramId) => {
+    const { activeCompany, selectedEnvironment } = get();
+    if (!activeCompany || !selectedEnvironment) { 
+      console.warn('[NavStore] handleDiagramChange: No hay compañía activa o ambiente seleccionado.');
+      set({dataLoading: false}); return; 
+    }
+    console.log(`[NavStore] handleDiagramChange: Cambiando a diagrama ID: ${diagramId} en ambiente ID: ${selectedEnvironment}`);
+    set({ selectedDiagram: diagramId, dataLoading: true });
+    try {
+      const diagramData = await getDiagram(activeCompany._id, selectedEnvironment, diagramId);
+      console.log('[NavStore] handleDiagramChange: Datos del diagrama obtenidos:', diagramData);
+      set({ currentDiagram: diagramData, dataLoading: false });
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.error(`[NavStore] handleDiagramChange: Error al cambiar de diagrama: ${errorMsg}`);
+      message.error("Error al cambiar de diagrama: " + errorMsg);
+      set({ dataError: errorMsg, dataLoading: false, currentDiagram: null });
+    }
+  },
+
+  setNewEnvironmentModalVisible: (visible) => set({ newEnvironmentModalVisible: visible }),
+  setNewEnvironmentName: (name) => set({ newEnvironmentName: name }),
+  setNewEnvironmentDescription: (description) => set({ newEnvironmentDescription: description }),
+  setNewEnvironmentPath: (path) => set({ newEnvironmentPath: path }),
+  handleCreateNewEnvironment: async () => {
+    const { activeCompany, newEnvironmentName, newEnvironmentDescription, newEnvironmentPath, isPersonalSpace, environments: currentEnvs } = get();
+    if (!activeCompany || !newEnvironmentName.trim()) {
+      message.error("El nombre del ambiente es obligatorio."); return;
+    }
+    if (isPersonalSpace && currentEnvs.length >= 1) { 
+      message.warning("El plan Starter solo permite 1 ambiente."); 
+      set({ newEnvironmentModalVisible: false }); return;
+    }
+    set({ dataLoading: true });
+    try {
+      const environmentPayload = {
+        name: newEnvironmentName,
+        description: newEnvironmentDescription, 
+        path: newEnvironmentPath,             
+      };
+      // SIMULACIÓN API: Aquí iría la llamada al backend para crear el ambiente
+      // const createdEnv = await createEnvironmentServiceAPICall(activeCompany._id, environmentPayload);
+      await new Promise(resolve => setTimeout(resolve, 1000)); 
+      message.success(`Ambiente "${environmentPayload.name}" creado (simulado).`);
+      
+      const updatedEnvs = await getEnvironments(activeCompany._id); 
+      set({ environments: updatedEnvs, newEnvironmentName: '', newEnvironmentDescription: '', newEnvironmentPath: '', newEnvironmentModalVisible: false, dataLoading: false });
+      if (updatedEnvs.length > 0 && !get().selectedEnvironment) {
+        await get().handleEnvironmentChange(updatedEnvs[0].id);
+      }
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      message.error(`Error al crear ambiente: ${errorMsg}`);
+      set({ dataError: errorMsg, dataLoading: false });
+    }
+  },
+
+  setNewDiagramModalVisible: (visible) => set({ newDiagramModalVisible: visible }),
+  setNewDiagramName: (name) => set({ newDiagramName: name }),
+  setNewDiagramDescription: (description) => set({ newDiagramDescription: description }),
+  setNewDiagramPath: (path) => set({ newDiagramPath: path }),
+  handleCreateNewDiagram: async () => {
+    const { activeCompany, selectedEnvironment, newDiagramName, newDiagramDescription, newDiagramPath, diagrams, isPersonalSpace } = get();
+    if (!activeCompany || !selectedEnvironment || !newDiagramName.trim()) {
+      message.error("Selecciona un ambiente y escribe un nombre para el diagrama."); return;
+    }
+    if (isPersonalSpace && diagrams.filter(d => !d.isFolder).length >= 3) { 
+      message.warning("El plan Starter solo permite 3 diagramas."); 
+      set({ newDiagramModalVisible: false }); 
+      return;
+    }
+    set({ dataLoading: true });
+    try {
+      const newDiag = await createDiagramServiceAPICall(activeCompany._id, selectedEnvironment, { 
+        name: newDiagramName, 
+        description: newDiagramDescription, 
+        path: newDiagramPath.trim() || undefined, 
+        nodes: [], 
+        edges: [], 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        viewport: {x:0, y:0, zoom:1} as any 
+      });
+      message.success("Diagrama creado.");
+      const currentDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); 
+      set({ diagrams: currentDiagrams, dataLoading: false }); 
+      await get().handleDiagramChange(newDiag.id); 
+      
+      set({ newDiagramName: '', newDiagramPath: '', newDiagramDescription: '', newDiagramModalVisible: false });
+    } catch (e: unknown) { 
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      message.error(`Error al crear diagrama: ` + errorMsg); 
+      set({ dataError: errorMsg, dataLoading: false });
+    }
+  },
+}));
