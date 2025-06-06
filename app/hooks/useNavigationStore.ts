@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { message } from 'antd';
+import { message, Modal } from 'antd'; // Modal importado
 // import type { Viewport } from 'reactflow'; // Ya no se usa directamente debido al workaround con 'any'
 import type { User } from '@/app/services/authService';
 import type { Company } from '@/app/services/companyService';
@@ -16,7 +16,9 @@ import {
   getDiagramsByEnvironment, 
   getDiagram, 
   createDiagram as createDiagramServiceAPICall,
-  // createEnvironment as createEnvironmentServiceAPICall // Asumir que existe o se simula
+  createEnvironment as createEnvironmentServiceAPICall,
+  deleteEnvironment as deleteEnvironmentServiceAPICall, // Añadir deleteEnvironment
+  deleteDiagram as deleteDiagramServiceAPICall // Añadir deleteDiagram
 } from '@/app/services/diagramService';
 import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '@/app/services/companyService'; // Importar servicio de compañía
 
@@ -124,6 +126,10 @@ export interface NavigationStoreState {
   setNewDiagramDescription: (description: string) => void;
   setNewDiagramPath: (path: string) => void;
   handleCreateNewDiagram: () => Promise<void>;
+
+  // Acciones para eliminar
+  handleDeleteEnvironment: (environmentId: string) => Promise<void>;
+  handleDeleteDiagram: (diagramId: string) => Promise<void>;
 }
 
 export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
@@ -444,18 +450,31 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       const environmentPayload = {
         name: newEnvironmentName,
         description: newEnvironmentDescription, 
-        path: newEnvironmentPath,             
+        path: newEnvironmentPath.trim() || undefined, // Enviar undefined si está vacío para que el backend lo omita si es opcional        
       };
-      // SIMULACIÓN API: Aquí iría la llamada al backend para crear el ambiente
-      // const createdEnv = await createEnvironmentServiceAPICall(activeCompany._id, environmentPayload);
-      await new Promise(resolve => setTimeout(resolve, 1000)); 
-      message.success(`Ambiente "${environmentPayload.name}" creado (simulado).`);
       
+      const createdEnv = await createEnvironmentServiceAPICall(activeCompany._id, environmentPayload);
+      message.success(`Ambiente "${createdEnv.name}" creado exitosamente.`);
+      
+      // Refrescar la lista de ambientes
       const updatedEnvs = await getEnvironments(activeCompany._id); 
-      set({ environments: updatedEnvs, newEnvironmentName: '', newEnvironmentDescription: '', newEnvironmentPath: '', newEnvironmentModalVisible: false, dataLoading: false });
-      if (updatedEnvs.length > 0 && !get().selectedEnvironment) {
-        await get().handleEnvironmentChange(updatedEnvs[0].id);
+      set({ 
+        environments: updatedEnvs, 
+        newEnvironmentName: '', 
+        newEnvironmentDescription: '', 
+        newEnvironmentPath: '', 
+        newEnvironmentModalVisible: false, 
+        dataLoading: false 
+      });
+      
+      // Si este es el primer ambiente creado, seleccionarlo automáticamente
+      if (updatedEnvs.length === 1 || (createdEnv && !get().selectedEnvironment)) {
+        await get().handleEnvironmentChange(createdEnv.id);
+      } else if (createdEnv) { // Si ya había otros, simplemente refrescar la lista pero no cambiar la selección actual
+         // Opcional: si se quiere seleccionar el nuevo ambiente siempre:
+         // await get().handleEnvironmentChange(createdEnv.id);
       }
+
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       message.error(`Error al crear ambiente: ${errorMsg}`);
@@ -499,5 +518,89 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       message.error(`Error al crear diagrama: ` + errorMsg); 
       set({ dataError: errorMsg, dataLoading: false });
     }
+  },
+
+  handleDeleteEnvironment: async (environmentId: string) => {
+    const { activeCompany, environments, selectedEnvironment, setActiveCompanyAndLoadData, handleEnvironmentChange } = get();
+    if (!activeCompany?._id) {
+      message.error("No hay compañía activa seleccionada.");
+      return;
+    }
+    Modal.confirm({
+      title: '¿Estás seguro de que deseas eliminar este ambiente?',
+      content: 'Esta acción es irreversible y eliminará todos los diagramas asociados.',
+      okText: 'Eliminar',
+      okType: 'danger',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        set({ dataLoading: true });
+        try {
+          await deleteEnvironmentServiceAPICall(activeCompany._id, environmentId);
+          message.success("Ambiente eliminado exitosamente.");
+          // Refrescar la lista de ambientes
+          const updatedEnvs = await getEnvironments(activeCompany._id);
+          set({ environments: updatedEnvs, dataLoading: false });
+
+          if (selectedEnvironment === environmentId) { // Si el ambiente eliminado era el seleccionado
+            set({ selectedEnvironment: null, diagrams: [], selectedDiagram: null, currentDiagram: null });
+            if (updatedEnvs.length > 0) {
+              await handleEnvironmentChange(updatedEnvs[0].id); // Seleccionar el primero de la nueva lista
+            }
+          } else if (updatedEnvs.length > 0 && !get().selectedEnvironment) {
+            // Si no había ninguno seleccionado y ahora hay, seleccionar el primero
+             await handleEnvironmentChange(updatedEnvs[0].id);
+          }
+
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          message.error(`Error al eliminar ambiente: ${errorMsg}`);
+          set({ dataError: errorMsg, dataLoading: false });
+        }
+      },
+    });
+  },
+
+  handleDeleteDiagram: async (diagramId: string) => {
+    const { activeCompany, selectedEnvironment, diagrams, selectedDiagram, handleDiagramChange, handleEnvironmentChange } = get();
+    if (!activeCompany?._id || !selectedEnvironment) {
+      message.error("No hay compañía o ambiente activo seleccionado.");
+      return;
+    }
+    Modal.confirm({
+      title: '¿Estás seguro de que deseas eliminar este diagrama?',
+      content: 'Esta acción es irreversible.',
+      okText: 'Eliminar',
+      okType: 'danger',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        set({ dataLoading: true });
+        try {
+          await deleteDiagramServiceAPICall(activeCompany._id, selectedEnvironment, diagramId);
+          message.success("Diagrama eliminado exitosamente.");
+          
+          // Refrescar la lista de diagramas para el ambiente actual
+          const updatedDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment);
+          set({ diagrams: updatedDiagrams, dataLoading: false });
+
+          if (selectedDiagram === diagramId) { // Si el diagrama eliminado era el seleccionado
+            set({ selectedDiagram: null, currentDiagram: null });
+            if (updatedDiagrams.length > 0) {
+              await handleDiagramChange(updatedDiagrams[0].id); // Seleccionar el primero de la nueva lista
+            } else {
+              // No quedan diagramas, se podría refrescar el ambiente para mostrar el estado vacío
+              await handleEnvironmentChange(selectedEnvironment);
+            }
+          } else if (updatedDiagrams.length > 0 && !get().selectedDiagram) {
+            // Si no había ninguno seleccionado y ahora hay, seleccionar el primero
+            await handleDiagramChange(updatedDiagrams[0].id);
+          }
+          
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          message.error(`Error al eliminar diagrama: ${errorMsg}`);
+          set({ dataError: errorMsg, dataLoading: false });
+        }
+      },
+    });
   },
 }));

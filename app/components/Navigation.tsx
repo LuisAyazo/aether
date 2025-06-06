@@ -3,24 +3,18 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { Dropdown, Avatar, Button, Modal, Select, Tooltip, Timeline, Input, Spin, Empty, Tag, Divider } from 'antd';
+import { Dropdown, Avatar, Button, Modal, Select, Timeline, Input, Spin, Empty, Tag, Form, Tooltip } from 'antd'; // Tooltip añadido
 import { 
   UserOutlined, 
   SettingOutlined, 
   LogoutOutlined, 
   HistoryOutlined, 
-  UndoOutlined, 
-  CloudUploadOutlined,
-  PlayCircleOutlined,
-  EyeOutlined,
-  DeleteOutlined,
-  ApartmentOutlined,
-  BranchesOutlined,
   ExclamationCircleFilled,
-  // EllipsisOutlined // Para futuro botón "Más acciones"
+  FolderAddOutlined, 
+  ProjectOutlined,
+  PlusOutlined // Añadido para botones de crear
 } from '@ant-design/icons';
 import { logoutUser as authLogout } from '../services/authService';
-import { PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../services/companyService';
 import { useNavigationStore } from '@/app/hooks/useNavigationStore'; 
 import type { Environment } from '../services/diagramService';
 import EnvironmentTreeSelect from "./ui/EnvironmentTreeSelect";
@@ -29,7 +23,6 @@ import DiagramTreeSelect from "./ui/DiagramTreeSelect";
 const { Option } = Select;
 const { TextArea } = Input;
 
-// Estos tipos podrían importarse desde useNavigationStore si se exportan desde allí
 interface VersionHistoryItem {
   id: string;
   timestamp: string;
@@ -47,12 +40,12 @@ interface PreviewResourceItem {
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
+  const [formCreateEnv] = Form.useForm(); 
+  const [formCreateDiag] = Form.useForm(); 
 
-  // Seleccionar cada propiedad individualmente de useNavigationStore
   const user = useNavigationStore(state => state.user);
   const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
   const activeCompany = useNavigationStore(state => state.activeCompany);
-  const isPersonalSpace = useNavigationStore(state => state.isPersonalSpace);
   const environments = useNavigationStore(state => state.environments);
   const diagrams = useNavigationStore(state => state.diagrams);
   const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
@@ -82,38 +75,35 @@ export default function Navigation() {
   const setNewDiagramDescription = useNavigationStore(state => state.setNewDiagramDescription);
   const handleCreateNewDiagram = useNavigationStore(state => state.handleCreateNewDiagram);
 
+  // Handlers para eliminar
+  const handleDeleteEnvironment = useNavigationStore(state => state.handleDeleteEnvironment);
+  const handleDeleteDiagram = useNavigationStore(state => state.handleDeleteDiagram);
+
   const historyModalVisible = useNavigationStore(state => state.historyModalVisible);
   const setHistoryModalVisible = useNavigationStore(state => state.setHistoryModalVisible);
   const versionHistory = useNavigationStore(state => state.versionHistory);
-  const handleHistory = useNavigationStore(state => state.handleHistory);
   const rollbackModalVisible = useNavigationStore(state => state.rollbackModalVisible);
   const setRollbackModalVisible = useNavigationStore(state => state.setRollbackModalVisible);
   const selectedVersion = useNavigationStore(state => state.selectedVersion);
   const setSelectedVersion = useNavigationStore(state => state.setSelectedVersion);
-  const handleRollback = useNavigationStore(state => state.handleRollback);
   const handleRollbackConfirm = useNavigationStore(state => state.handleRollbackConfirm);
   const versionsModalVisible = useNavigationStore(state => state.versionsModalVisible);
   const setVersionsModalVisible = useNavigationStore(state => state.setVersionsModalVisible);
-  const handleVersions = useNavigationStore(state => state.handleVersions);
   const previewModalVisible = useNavigationStore(state => state.previewModalVisible);
   const setPreviewModalVisible = useNavigationStore(state => state.setPreviewModalVisible);
   const previewData = useNavigationStore(state => state.previewData);
-  const handlePreview = useNavigationStore(state => state.handlePreview);
   const runModalVisible = useNavigationStore(state => state.runModalVisible);
   const setRunModalVisible = useNavigationStore(state => state.setRunModalVisible);
-  const handleRun = useNavigationStore(state => state.handleRun);
   const handleRunConfirm = useNavigationStore(state => state.handleRunConfirm);
   const promoteModalVisible = useNavigationStore(state => state.promoteModalVisible);
   const setPromoteModalVisible = useNavigationStore(state => state.setPromoteModalVisible);
   const selectedTargetEnvironment = useNavigationStore(state => state.selectedTargetEnvironment);
   const setSelectedTargetEnvironment = useNavigationStore(state => state.setSelectedTargetEnvironment);
-  const handlePromote = useNavigationStore(state => state.handlePromote);
   const handlePromoteConfirm = useNavigationStore(state => state.handlePromoteConfirm);
   const destroyModalVisible = useNavigationStore(state => state.destroyModalVisible);
   const setDestroyModalVisible = useNavigationStore(state => state.setDestroyModalVisible);
   const destroyConfirmationText = useNavigationStore(state => state.destroyConfirmationText);
   const setDestroyConfirmationText = useNavigationStore(state => state.setDestroyConfirmationText);
-  const handleDestroy = useNavigationStore(state => state.handleDestroy);
   const handleDestroyConfirm = useNavigationStore(state => state.handleDestroyConfirm);
 
   useEffect(() => {
@@ -139,11 +129,11 @@ export default function Navigation() {
   if (hideNavigation) return null;
   
   const isOnMarketingPage = pathname === '/';
-
   const diagramName = currentDiagram?.name || "Sin Diagrama";
 
   const onEnvChange = (value: string) => { 
     if (value === 'create-new-env') {
+      formCreateEnv.resetFields(); 
       setNewEnvironmentModalVisible(true);
     } else {
       handleEnvironmentChange(value);
@@ -152,51 +142,113 @@ export default function Navigation() {
 
   const onDiagramChange = (value: string) => { 
     if (value === 'create-new-diag') {
+      formCreateDiag.resetFields();
       setNewDiagramModalVisible(true);
     } else {
       handleDiagramChange(value);
     }
   };
+  
+  const onFinishCreateEnvironment = () => {
+    handleCreateNewEnvironment().then(() => {
+      formCreateEnv.resetFields(); 
+    }).catch(() => { /* El error se maneja en el store */ });
+  };
+
+  const onFinishCreateDiagram = () => {
+    handleCreateNewDiagram().then(() => {
+      formCreateDiag.resetFields();
+    }).catch(() => { /* El error se maneja en el store */ });
+  };
+
+  // Aproximación del ancho del sidebar expandido para el padding
+  // CompanySidebar w-60 = 240px. El padding del header es px-4 (16px).
+  // El contenido principal del header (selectores) debería empezar después de esto.
+  // Si el logo está pegado a la izquierda, el padding-left del contenedor de selectores debería ser ~240px.
+  // Si el logo ocupa espacio, se ajusta.
+  // Por ahora, se usa un ml en el contenedor de selectores.
+  const sidebarPadding = !isOnMarketingPage && activeCompany ? "pl-64" : "pl-0"; // pl-60 = 240px
 
   return (
     <>
       <nav className="fixed w-full bg-white dark:bg-gray-800 z-50 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-full px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16"> {/* Altura aumentada a h-16 */}
-          <div className="flex items-center"> {/* Grupo Izquierdo */}
-            <Link href={isOnMarketingPage ? "/" : "/dashboard"} className="text-xl flex items-center mr-8"> {/* Margen aumentado a mr-8 */}
+        {/* Contenedor principal del header */}
+        <div className={`max-w-full px-4 sm:px-6 lg:px-8 flex justify-between items-center h-20`}> {/* Altura aumentada a h-20 (80px) */}
+          
+          {/* Grupo Izquierdo: Logo */}
+          <div className="flex items-center flex-shrink-0">
+            <Link href={isOnMarketingPage ? "/" : "/dashboard"} className="text-xl flex items-center">
               <span className="font-bold text-slate-800 dark:text-slate-100">Infra</span><span className="font-bold text-emerald-green-600 dark:text-emerald-green-500">UX</span>
             </Link>
-            {!isOnMarketingPage && activeCompany && (
-              <div className="flex items-center gap-x-5"> 
-                <Tag color="blue" icon={<ApartmentOutlined />} className="hidden sm:flex items-center shrink-0">
-                  {activeCompany.name.replace(PERSONAL_SPACE_COMPANY_NAME_PREFIX, '')}
-                  {isPersonalSpace && " (Personal)"}
-                </Tag>
+          </div>
 
-                <div className="flex items-center gap-x-2">
-                  <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">Ambiente:</span>
-                  <EnvironmentTreeSelect
-                    value={selectedEnvironment || undefined}
-                    onChange={onEnvChange}
-                    environments={environments}
-                    className="min-w-[200px]"
-                  />
-                </div>
+          {/* Grupo Central: Selectores y botones de añadir */}
+          {/* Este div se posicionará después del logo. El justify-between del padre lo separará del menú de usuario. */}
+          {/* Para la alineación con el sidebar, se necesitaría un padding global o un cálculo más complejo. */}
+          {/* Por ahora, se añade un margen izquierdo significativo si no es página de marketing. */}
+          <div className={`flex items-center gap-x-3 ${!isOnMarketingPage && activeCompany ? 'ml-8 sm:ml-12 md:ml-16 lg:ml-60' : ''}`}> {/* ml-60 para simular ancho de sidebar */}
+            {!isOnMarketingPage && activeCompany && (
+              <>
+                {/* Selector de Ambiente y Botón Añadir */}
+                {(environments && environments.length >= 0) && ( // Mostrar siempre el botón de añadir ambiente si la sección es relevante
+                  <div className="flex items-center gap-x-1">
+                    {environments.length > 0 && ( // Mostrar selector solo si hay ambientes
+                      <>
+                        <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0 hidden md:inline">Ambiente:</span>
+                        <EnvironmentTreeSelect
+                          value={selectedEnvironment || undefined}
+                          onChange={onEnvChange}
+                          environments={environments}
+                          className="min-w-[180px] md:min-w-[200px]"
+                          onDeleteEnvironment={handleDeleteEnvironment}
+                          showDeleteButton={true}
+                        />
+                      </>
+                    )}
+                    <Tooltip title='Crear Nuevo Ambiente'>
+                      <Button 
+                        icon={<PlusOutlined />} 
+                        size="small" 
+                        onClick={() => onEnvChange('create-new-env')}
+                        aria-label="Crear Nuevo Ambiente"
+                      />
+                    </Tooltip>
+                  </div>
+                )}
                 
-                <div className="flex items-center gap-x-2">
-                  <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">Diagrama:</span>
-                  <DiagramTreeSelect
-                    value={selectedDiagram || undefined}
-                    onChange={onDiagramChange}
-                    diagrams={diagrams}
-                    className="min-w-[200px]"
-                  />
-                </div>
-              </div>
+                {/* Selector de Diagrama y Botón Añadir */}
+                {selectedEnvironment && (diagrams && diagrams.length >= 0) && ( // Mostrar siempre el botón de añadir diagrama si hay ambiente
+                  <div className="flex items-center gap-x-1">
+                    {diagrams.length > 0 && ( // Mostrar selector solo si hay diagramas
+                      <>
+                        <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0 hidden md:inline">Diagrama:</span>
+                        <DiagramTreeSelect
+                          value={selectedDiagram || undefined}
+                          onChange={onDiagramChange}
+                          diagrams={diagrams}
+                          className="min-w-[180px] md:min-w-[200px]"
+                          onDeleteDiagram={handleDeleteDiagram}
+                          showDeleteButton={true}
+                        />
+                      </>
+                    )}
+                    <Tooltip title='Crear Nuevo Diagrama'>
+                      <Button 
+                        icon={<PlusOutlined />} 
+                        size="small" 
+                        onClick={() => onDiagramChange('create-new-diag')}
+                        aria-label="Crear Nuevo Diagrama"
+                        disabled={!selectedEnvironment} 
+                      />
+                    </Tooltip>
+                  </div>
+                )}
+              </>
             )}
           </div>
           
-          <div className="flex-grow flex justify-center px-4"> {/* Grupo Central (Botones de Acción) */}
+          {/* Espacio flexible para empujar el menú de usuario a la derecha */}
+          <div className="flex-grow flex justify-center px-4">
             {isOnMarketingPage && (
               <div className="hidden md:flex items-center gap-6">
                 <a href="#features" className="text-gray-700 dark:text-gray-300 hover:text-electric-purple-600 dark:hover:text-electric-purple-400 transition-colors">Features</a>
@@ -205,22 +257,10 @@ export default function Navigation() {
                 <Link href="/blog" className="text-gray-700 dark:text-gray-300 hover:text-electric-purple-600 dark:hover:text-electric-purple-400 transition-colors">Blog</Link>
               </div>
             )}
-            {!isOnMarketingPage && currentDiagram && (
-              <div className="flex items-center gap-x-2"> 
-                <Tooltip title='Historial de Versiones'><Button icon={<HistoryOutlined />} size="small" onClick={handleHistory} disabled={dataLoading} /></Tooltip>
-                <Tooltip title='Revertir Cambios'><Button icon={<UndoOutlined />} size="small" onClick={handleRollback} disabled={dataLoading} /></Tooltip>
-                <Tooltip title='Versiones'><Button icon={<BranchesOutlined />} size="small" onClick={handleVersions} disabled={dataLoading} /></Tooltip>
-                <Divider type="vertical" />
-                <Tooltip title='Previsualizar Cambios'><Button icon={<EyeOutlined />} size="small" onClick={handlePreview} disabled={dataLoading} /></Tooltip>
-                <Tooltip title='Ejecutar/Desplegar'><Button icon={<PlayCircleOutlined />} type="primary" size="small" onClick={handleRun} disabled={dataLoading} /></Tooltip>
-                <Divider type="vertical" />
-                <Tooltip title='Promover a Ambiente'><Button icon={<CloudUploadOutlined />} size="small" onClick={handlePromote} disabled={dataLoading || (environments && environments.length <= 1)} /></Tooltip>
-                <Tooltip title='Limpiar (Destruir Recursos)'><Button icon={<DeleteOutlined />} danger size="small" onClick={handleDestroy} disabled={dataLoading} /></Tooltip>
-              </div>
-            )}
           </div>
           
-          <div className="flex items-center shrink-0"> {/* Grupo Derecho (Usuario) - shrink-0 para evitar que se encoja */}
+          {/* Grupo Derecho: Menú Usuario */}
+          <div className="flex items-center shrink-0">
             {isOnMarketingPage && (
               <div className="flex gap-3 items-center">
                 <Link href="/login" className="text-gray-700 dark:text-gray-300 hover:text-electric-purple-600 dark:hover:text-electric-purple-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Login</Link>
@@ -243,17 +283,92 @@ export default function Navigation() {
         </div>
       </nav>
 
-      {/* Modales */}
-      <Modal title="Crear Nuevo Ambiente" open={newEnvironmentModalVisible} onOk={handleCreateNewEnvironment} onCancel={() => setNewEnvironmentModalVisible(false)} confirmLoading={dataLoading}>
-        <Input placeholder="Nombre del Ambiente" value={newEnvironmentName} onChange={(e) => setNewEnvironmentName(e.target.value)} style={{ marginBottom: 8 }} />
-        <Input placeholder="Ruta (ej: dev/us-east-1)" value={newEnvironmentPath} onChange={(e) => setNewEnvironmentPath(e.target.value)} style={{ marginBottom: 8 }} />
-        <TextArea placeholder="Descripción (opcional)" value={newEnvironmentDescription} onChange={(e) => setNewEnvironmentDescription(e.target.value)} rows={2} />
+      <Modal 
+        title={
+          <div className="flex items-center">
+            <FolderAddOutlined className="mr-2 text-electric-purple-600" />
+            <span>Crear Nuevo Ambiente</span>
+          </div>
+        }
+        open={newEnvironmentModalVisible} 
+        onOk={formCreateEnv.submit}
+        onCancel={() => {
+          setNewEnvironmentModalVisible(false);
+          formCreateEnv.resetFields();
+        }} 
+        confirmLoading={dataLoading}
+        okButtonProps={{ className: "bg-electric-purple-600 hover:bg-electric-purple-700" }}
+        okText="Crear Ambiente"
+      >
+        <Form form={formCreateEnv} layout="vertical" name="create_environment_form" onFinish={onFinishCreateEnvironment} className="mt-4">
+          <Form.Item 
+            name="environmentName" 
+            label="Nombre del Ambiente"
+            rules={[{ required: true, message: 'Por favor ingresa el nombre del ambiente!' }]}
+            initialValue={newEnvironmentName}
+          >
+            <Input placeholder="Ej: Producción, Desarrollo, Staging" onChange={(e) => setNewEnvironmentName(e.target.value)} />
+          </Form.Item>
+          <Form.Item 
+            name="environmentPath" 
+            label="Ruta (Opcional)"
+            help="Organiza tus ambientes en una estructura de directorios. Ej: 'frontend/prod' o 'us-west-1/staging'"
+            initialValue={newEnvironmentPath}
+          >
+            <Input placeholder="Ej: frontend/prod (opcional)" onChange={(e) => setNewEnvironmentPath(e.target.value)} />
+          </Form.Item>
+          <Form.Item 
+            name="environmentDescription" 
+            label="Descripción (Opcional)"
+            initialValue={newEnvironmentDescription}
+          >
+            <TextArea placeholder="Describe brevemente el propósito de este ambiente" onChange={(e) => setNewEnvironmentDescription(e.target.value)} rows={3} />
+          </Form.Item>
+        </Form>
       </Modal>
 
-      <Modal title="Crear Nuevo Diagrama" open={newDiagramModalVisible} onOk={handleCreateNewDiagram} onCancel={() => setNewDiagramModalVisible(false)} confirmLoading={dataLoading}>
-        <Input placeholder="Nombre del Diagrama" value={newDiagramName} onChange={(e) => setNewDiagramName(e.target.value)} style={{ marginBottom: 8 }} />
-        <Input placeholder="Ruta (ej: frontend/app)" value={newDiagramPath} onChange={(e) => setNewDiagramPath(e.target.value)} style={{ marginBottom: 8 }} />
-        <TextArea placeholder="Descripción (opcional)" value={newDiagramDescription} onChange={(e) => setNewDiagramDescription(e.target.value)} rows={2} />
+      <Modal 
+        title={
+          <div className="flex items-center">
+            <ProjectOutlined className="mr-2 text-emerald-green-600" />
+            <span>Crear Nuevo Diagrama</span>
+          </div>
+        }
+        open={newDiagramModalVisible} 
+        onOk={formCreateDiag.submit} 
+        onCancel={() => {
+          setNewDiagramModalVisible(false);
+          formCreateDiag.resetFields();
+        }} 
+        confirmLoading={dataLoading}
+        okButtonProps={{ className: "bg-emerald-green-600 hover:bg-emerald-green-700" }}
+        okText="Crear Diagrama"
+      >
+        <Form form={formCreateDiag} layout="vertical" name="create_diagram_form" onFinish={onFinishCreateDiagram} className="mt-4">
+          <Form.Item 
+            name="diagramName" 
+            label="Nombre del Diagrama"
+            rules={[{ required: true, message: 'Por favor ingresa el nombre del diagrama!' }]}
+            initialValue={newDiagramName}
+          >
+            <Input placeholder="Ej: Arquitectura Microservicios, Flujo de Autenticación" onChange={(e) => setNewDiagramName(e.target.value)} />
+          </Form.Item>
+          <Form.Item 
+            name="diagramPath" 
+            label="Ruta (Opcional)"
+            help="Organiza tus diagramas en una estructura de directorios dentro del ambiente. Ej: 'backend/apis' o 'data-pipelines'"
+            initialValue={newDiagramPath}
+          >
+            <Input placeholder="Ej: backend/apis (opcional)" onChange={(e) => setNewDiagramPath(e.target.value)} />
+          </Form.Item>
+          <Form.Item 
+            name="diagramDescription" 
+            label="Descripción (Opcional)"
+            initialValue={newDiagramDescription}
+          >
+            <TextArea placeholder="Describe brevemente el propósito o contenido de este diagrama" onChange={(e) => setNewDiagramDescription(e.target.value)} rows={3} />
+          </Form.Item>
+        </Form>
       </Modal>
 
       <Modal title={`Historial de Versiones: ${diagramName}`} open={historyModalVisible} onCancel={() => setHistoryModalVisible(false)} footer={null} width={600}>
@@ -335,7 +450,7 @@ export default function Navigation() {
         <p>Estás a punto de eliminar el diagrama <strong className="text-red-500">{currentDiagram?.name}</strong> y todos sus recursos asociados.</p>
         <p className="text-red-500 font-semibold">¡Esta acción es irreversible!</p>
         <p className="mt-2">Por favor, escribe el nombre del diagrama para confirmar:</p>
-        <Input placeholder={currentDiagram?.name} value={destroyConfirmationText} onChange={(e) => setDestroyConfirmationText(e.target.value)} />
+        <Input placeholder={currentDiagram?.name || "Nombre del diagrama"} value={destroyConfirmationText} onChange={(e) => setDestroyConfirmationText(e.target.value)} />
       </Modal>
     </>
   );

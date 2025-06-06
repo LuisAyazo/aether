@@ -268,6 +268,18 @@ export default function EnvironmentTreeSelect({
     return count;
   };
 
+  // Helper para contar diagramas en un nodo y sus hijos
+  const countTotalDiagramsInNode = (node: TreeNode): number => {
+    let totalDiagrams = 0;
+    node.environments.forEach(env => {
+      totalDiagrams += env.diagrams?.length || 0;
+    });
+    Object.values(node.children).forEach(childNode => {
+      totalDiagrams += countTotalDiagramsInNode(childNode);
+    });
+    return totalDiagrams;
+  };
+
   const EnvironmentTreeRecursive = ({ node, level = 0 }: { node: TreeNode, level?: number }) => {
     if (!node) return null;
     const isExpanded = node.fullPath !== '' ? expandedGroups.has(node.fullPath) : true; 
@@ -294,11 +306,11 @@ export default function EnvironmentTreeSelect({
             <FolderOutlined className={styles.folderIcon} />
             <span className={styles.groupName}>{node.name}</span>
             <span className={styles.environmentCount}>
-              ({countEnvironmentsInNode(node)})
+              ({countEnvironmentsInNode(node)} Amb.) {/* Mostrar solo contador de ambientes para el grupo */}
             </span>
             {mode === 'directory' && onCreateDirectory && (
               <Tooltip title="Crear subdirectorio aquí">
-                <PlusOutlined className={styles.addDirectoryIcon} onClick={(e) => { e.stopPropagation(); setShowNewDirectoryInputForPath(node.fullPath); setNewDirectoryName(''); }} />
+                <PlusOutlined className={styles.addDirectoryIcon} onClick={(e: React.MouseEvent) => { e.stopPropagation(); setShowNewDirectoryInputForPath(node.fullPath); setNewDirectoryName(''); }} />
               </Tooltip>
             )}
           </div>
@@ -314,18 +326,24 @@ export default function EnvironmentTreeSelect({
                 onClick={() => handleSelectEnvironment(env)}
               >
                 <DatabaseOutlined className="text-gray-400 mr-2" />
-                <div className="flex flex-col overflow-hidden">
-                  <span className="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block">{env.name}</span>
-                  {env.description && <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">{env.description}</span>}
+                <div className="flex flex-col overflow-hidden flex-grow"> {/* Añadido flex-grow */}
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block">{env.name}</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 shrink-0">
+                      ({env.diagrams?.length || 0} Diag.)
+                    </span>
+                  </div>
+                  {env.description && <span className="text-xs text-gray-500 dark:text-gray-400 truncate block mt-0.5">{env.description}</span>}
                 </div>
-                <div className="ml-auto pl-2 shrink-0">
+                <div className="ml-auto pl-2 shrink-0 flex items-center"> {/* Asegurar alineación vertical del status y delete */}
                   {getEnvironmentStatusIcon(env)}
                   {showDeleteButton && onDeleteEnvironment && (
-                    <DeleteOutlined 
-                      className="text-gray-400 hover:text-red-500 ml-2 cursor-pointer"
-                      onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDeleteEnvironment(env.id); }}
-                      title="Eliminar ambiente"
-                    />
+                    <Tooltip title="Eliminar ambiente">
+                      <DeleteOutlined 
+                        className="text-gray-400 hover:text-red-500 ml-3 cursor-pointer" // Aumentado margen a ml-3
+                        onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDeleteEnvironment(env.id); }}
+                      />
+                    </Tooltip>
                   )}
                 </div>
               </div>

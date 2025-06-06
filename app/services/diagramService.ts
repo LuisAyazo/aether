@@ -153,7 +153,7 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
   }
 };
 
-export const createEnvironment = async (companyId: string, environmentData: { name: string; description?: string; category?: string }): Promise<Environment> => {
+export const createEnvironment = async (companyId: string, environmentData: { name: string; description?: string; path?: string }): Promise<Environment> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
@@ -175,9 +175,11 @@ export const createEnvironment = async (companyId: string, environmentData: { na
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
-        ...environmentData,
-        is_active: true,
-        diagrams: []
+        name: environmentData.name,
+        description: environmentData.description,
+        path: environmentData.path,
+        company_id: companyId // Añadir company_id al cuerpo
+        // is_active y diagrams no se envían, el backend debe asignarles valores por defecto si es necesario.
       })
     });
 

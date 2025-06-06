@@ -158,7 +158,7 @@ export default function AppLayout({
     <>
       {/* El Navigation (futuro MainHeader) consumirá datos del store */}
       {showNavigation && <Navigation />} 
-      <main className={showNavigation ? "pt-14" : ""}> 
+      <main className={showNavigation ? "pt-20" : ""}> {/* Ajustado a pt-20 (h-20 del Navigation) */}
         {children}
       </main>
     </>

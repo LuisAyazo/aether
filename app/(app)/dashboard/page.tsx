@@ -48,6 +48,7 @@ import CredentialsPage from '../../components/ui/CredentialsPage';
 import DeploymentsPage from '../../components/ui/DeploymentsPage';
 import SettingsPage from '../../components/ui/SettingsPage';
 import EnvironmentsPage from '../../components/ui/EnvironmentsPage';
+import DiagramActionSubheader from '../../components/ui/DiagramActionSubheader'; // Importar el nuevo subheader
 
 import { Node as CustomNode, Edge as CustomEdge } from '../../services/diagramService';
 import { useNavigationStore } from '../../hooks/useNavigationStore';
@@ -56,7 +57,7 @@ import { updateDiagram } from '../../services/diagramService';
 import nodeTypes from '../../components/nodes/NodeTypes';
 // RESOURCE_REGISTRY no se usará directamente para construir categories, se usará la estructura manual
 // import { RESOURCE_REGISTRY, SupportedProvider } from '../../config/schemas'; 
-import type { ResourceCategory, ResourceItem } from '../../components/flow/types/editorTypes';
+import type { ResourceCategory } from '../../components/flow/types/editorTypes'; // ResourceItem eliminado
 
 const { Text } = Typography;
 
@@ -420,6 +421,9 @@ export default function DashboardPage() {
             />
           )}
           <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Subheader de acciones del diagrama */}
+            {currentDiagram && activeSectionInSidebar === 'diagrams' && <DiagramActionSubheader />}
+
             <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto">
                 {dataLoading && activeSectionInSidebar === 'diagrams' && !currentDiagram && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>
@@ -427,6 +431,7 @@ export default function DashboardPage() {
                 
                 {activeSectionInSidebar === 'diagrams' && activeCompany && ( 
                   <>
+                    {/* El FlowEditor ahora estará debajo del DiagramActionSubheader (si currentDiagram existe) */}
                     {selectedEnvironment && selectedDiagram && currentDiagram && (
                       <FlowEditor 
                         key={`${activeCompany._id}-${selectedEnvironment}-${selectedDiagram}`} 
@@ -442,26 +447,40 @@ export default function DashboardPage() {
                       />
                     )}
                     {!selectedEnvironment && environments && environments.length === 0 && !dataLoading && ( 
-                      <div className="flex items-center justify-center h-full p-6 sm:p-10">
-                        <div className="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8 sm:p-12 max-w-md w-full text-center">
-                          <FolderIconOutline className="mx-auto h-16 w-16 sm:h-20 sm:w-20 text-electric-purple-500 dark:text-electric-purple-400 mb-6" /> {/* Usar FolderIconOutline */}
-                          <h3 className="text-2xl font-semibold text-slate-800 dark:text-slate-100 mb-3">Define tu Primer Ambiente</h3>
-                          <p className="text-slate-600 dark:text-slate-300 mb-8 text-sm sm:text-base">
-                            {isPersonalSpace ? "Tu espacio personal está listo. " : "Esta compañía aún no tiene ambientes. "}
-                            Crea un ambiente para empezar a diseñar diagramas.
-                          </p>
-                        </div>
+                      <div className="flex flex-col items-center justify-center h-full p-6 sm:p-10 text-center">
+                        {/* Card eliminada, contenido directamente sobre el fondo de la página */}
+                        <FolderIconOutline className="mx-auto h-24 w-24 sm:h-28 sm:w-28 text-electric-purple-500 dark:text-electric-purple-400 mb-8" />
+                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Define tu Primer Ambiente</h3>
+                        <p className="text-slate-500 dark:text-slate-400 mb-10 text-base sm:text-lg max-w-lg">
+                          {isPersonalSpace ? "Tu espacio personal está listo. " : "Esta compañía aún no tiene ambientes. "}
+                          Crea un ambiente para empezar a diseñar diagramas y dar vida a tus ideas de infraestructura.
+                        </p>
+                        <Button 
+                          type="primary" 
+                          size="large"
+                          onClick={() => useNavigationStore.getState().setNewEnvironmentModalVisible(true)}
+                          className="bg-electric-purple-600 hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600 px-8 py-3 text-base"
+                        >
+                          Crear Ambiente
+                        </Button>
                       </div> 
                     )}
                     {selectedEnvironment && (!diagramsFromStore || diagramsFromStore.length === 0) && !dataLoading && ( 
-                      <div className="flex items-center justify-center h-full p-6 sm:p-10">
-                        <div className="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8 sm:p-12 max-w-md w-full text-center">
-                          <DocumentDuplicateIconOutline className="mx-auto h-16 w-16 sm:h-20 sm:w-20 text-electric-purple-500 dark:text-electric-purple-400 mb-6" />
-                          <h3 className="text-2xl font-semibold text-slate-800 dark:text-slate-100 mb-3">Crea tu Primer Diagrama</h3>
-                          <p className="text-slate-600 dark:text-slate-300 mb-8 text-sm sm:text-base">
-                            Este ambiente está listo. Comienza a visualizar tu infraestructura.
-                          </p>
-                        </div>
+                      <div className="flex flex-col items-center justify-center h-full p-6 sm:p-10 text-center">
+                        {/* Card eliminada */}
+                        <DocumentDuplicateIconOutline className="mx-auto h-24 w-24 sm:h-28 sm:w-28 text-emerald-green-500 dark:text-emerald-green-400 mb-8" />
+                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Crea tu Primer Diagrama</h3>
+                        <p className="text-slate-500 dark:text-slate-400 mb-10 text-base sm:text-lg max-w-lg">
+                          Este ambiente está listo. Comienza a visualizar tu infraestructura arrastrando componentes al lienzo.
+                        </p>
+                        <Button 
+                          type="primary" 
+                          size="large"
+                          onClick={() => useNavigationStore.getState().setNewDiagramModalVisible(true)}
+                          className="bg-emerald-green-600 hover:bg-emerald-green-700 dark:bg-emerald-green-500 dark:hover:bg-emerald-green-600 px-8 py-3 text-base"
+                        >
+                          Crear Diagrama
+                        </Button>
                       </div> 
                     )}
                   </>
