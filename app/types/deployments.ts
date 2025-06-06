@@ -90,6 +90,7 @@ export interface EnvironmentDefinition { // Para la lista de ambientes del backe
   name: string;
   description?: string;
   company_id: string;
+  path?: string; // Añadido para la ruta del directorio
   // color_tag?: string;
   created_at: string; // O Date
   updated_at: string; // O Date

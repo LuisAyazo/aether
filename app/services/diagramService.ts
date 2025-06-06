@@ -10,7 +10,7 @@ export interface Node {
     x: number;
     y: number;
   };
-  data: any;
+  data: Record<string, unknown>;
   width?: number;
   height?: number;
   selected?: boolean;
@@ -20,7 +20,7 @@ export interface Node {
   };
   dragging?: boolean;
   parentNode?: string;
-  style?: any;
+  style?: Record<string, unknown>;
   // Nuevos campos para el manejo mejorado de grupos
   originalPosition?: {
     x: number;
@@ -40,8 +40,8 @@ export interface Edge {
   type?: string;
   animated?: boolean;
   label?: string;
-  data?: any;
-  style?: any;
+  data?: Record<string, unknown>;
+  style?: Record<string, unknown>;
   selected?: boolean;
   sourceHandle?: string;
   targetHandle?: string;
@@ -72,7 +72,7 @@ export interface Diagram {
     label?: string;
     isMinimized?: boolean;
     isCollapsed?: boolean;
-    style?: Record<string, any>;
+    style?: Record<string, unknown>;
   }>;
   nodePositions?: Record<string, Record<string, { 
     relativePosition: { x: number, y: number },
@@ -84,6 +84,7 @@ export interface Environment {
   id: string;
   name: string;
   description?: string;
+  path?: string; // Añadido para la ruta del directorio
   is_active: boolean;
   diagrams: string[];
   created_at: string;
@@ -133,8 +134,9 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
       try {
         const errorData = await response.json();
         errorDetail = errorData.detail || errorData.message || `Error ${response.status} del servidor.`;
-      } catch (e) {
+      } catch (parseError) {
         // Si el cuerpo del error no es JSON o está vacío
+        console.warn('Could not parse error response in getEnvironments:', parseError);
         errorDetail = `Error ${response.status}: ${response.statusText}. No se pudo obtener más detalle del error.`;
       }
       console.error(`Error en la respuesta de getEnvironments: ${errorDetail}`);
@@ -198,13 +200,13 @@ export const createEnvironment = async (companyId: string, environmentData: { na
     const data = await response.json();
     console.log('Ambiente creado exitosamente:', data);
     return data;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error en createEnvironment:', error);
     throw error;
   }
 };
 
-export const updateEnvironment = async (companyId: string, environmentId: string, environmentData: { name: string; description?: string; is_active: boolean }): Promise<Environment> => {
+export const updateEnvironment = async (companyId: string, environmentId: string, environmentData: { name: string; description?: string; path?: string; is_active: boolean }): Promise<Environment> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
@@ -232,7 +234,7 @@ export const updateEnvironment = async (companyId: string, environmentId: string
     throw new Error(errorData.detail || 'Error actualizando ambiente');
   }
 
-  return await response.json();
+  return await response.json() as Environment;
 };
 
 export const deleteEnvironment = async (companyId: string, environmentId: string): Promise<void> => {
@@ -346,8 +348,8 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
       throw new Error(errorData.detail || 'Error obteniendo diagrama');
     }
 
-    return await response.json();
-  } catch (error: any) {
+    return await response.json() as Diagram;
+  } catch (error: unknown) {
     console.error('Error en getDiagram:', error);
     throw new Error('No se pudo obtener el diagrama. Por favor, vuelve a intentarlo.');
   }
@@ -398,11 +400,11 @@ export const createDiagram = async (companyId: string, environmentId: string, di
         if (typeof errorData === 'object' && errorData.detail) {
           // Si detail es un array de objetos de error (como en validaciones de Pydantic)
           if (Array.isArray(errorData.detail)) {
-            const errorMessages = errorData.detail.map((err: any) => {
+            const errorMessages = errorData.detail.map((err: Record<string, any>) => {
               if (typeof err === 'object' && err.msg) {
-                return `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`;
+                return `${err.loc ? (err.loc as string[]).join('.') + ': ' : ''}${err.msg}`;
               }
-              return err.toString();
+              return String(err);
             }).join(', ');
             errorMessage = errorMessages;
           } else {
@@ -422,15 +424,16 @@ export const createDiagram = async (companyId: string, environmentId: string, di
 
     const data = await response.json();
     console.log('Diagrama creado exitosamente:', data);
-    return data;
-  } catch (error: any) {
+    return data as Diagram;
+  } catch (error: unknown) {
     console.error('Error en createDiagram:', error);
     // Si el error ya es una instancia de Error con un mensaje personalizado, lo relanzamos
     if (error instanceof Error) {
       throw error;
     }
     // Si no, creamos un nuevo error con un mensaje más descriptivo
-    throw new Error(error?.message || 'Error desconocido al crear el diagrama');
+    const unknownError = error as { message?: string; detail?: string }; // Añadir detail para cubrir más casos
+    throw new Error(unknownError?.message || unknownError?.detail || 'Error desconocido al crear el diagrama');
   }
 };
 
@@ -467,15 +470,15 @@ export const updateDiagram = async (
       let errorMessage = 'Error actualizando diagrama';
       try {
         const errorData = await response.json();
-        errorMessage = errorData.detail || errorData.message || errorData.error || errorMessage;
-      } catch (e) {
-        console.error('Error parsing error response:', e);
+        errorMessage = errorData.detail || errorData.message || (errorData as Record<string, string>).error || errorMessage;
+      } catch (parseErr) {
+        console.error('Error parsing error response:', parseErr);
       }
       throw new Error(errorMessage);
     }
 
     const data = await response.json();
-    return data;
+    return data as Diagram;
   } catch (error) {
     console.error('Error en updateDiagram:', error);
     if (error instanceof Error) {
@@ -513,7 +516,7 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
     }
     
     console.log('Diagrama eliminado exitosamente del backend');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error en deleteDiagram:', error);
     throw error;
   }

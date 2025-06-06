@@ -2,13 +2,19 @@
 
 import React, { useState, useEffect, useCallback, JSX, useMemo } from 'react'; 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'; 
-import { Button, Modal, Input, Spin, message, Typography } from 'antd';
+import { Button, Modal, Input, Spin, message, Typography, Tooltip, Timeline, Select } from 'antd'; // Tooltip, Timeline y Select añadidos
 import { 
   PlusOutlined as AntPlusOutlined, 
   EyeOutlined, 
   PlayCircleOutlined, 
   FolderOpenOutlined as AntFolderIcon, 
   SettingOutlined,
+  HistoryOutlined, // Añadido
+  RollbackOutlined, // Añadido
+  BranchesOutlined, // Añadido
+  ArrowUpOutlined, // Añadido
+  ClearOutlined, // Añadido
+  CheckCircleOutlined, // Añadido
 } from '@ant-design/icons'; 
 import { 
   FolderIcon, 
@@ -70,6 +76,7 @@ import {
 } from 'reactflow';
 
 const { Text } = Typography;
+const { Option } = Select;
 
 type SidebarSectionKey = 'diagrams' | 'settings' | 'templates' | 'credentials' | 'deployments' | 'team' | 'environments';
 const VALID_SECTIONS: SidebarSectionKey[] = ['diagrams', 'settings', 'templates', 'credentials', 'deployments', 'team', 'environments'];
@@ -278,6 +285,7 @@ export default function DashboardPage() {
   const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState<boolean>(false);
   const [newEnvironmentName, setNewEnvironmentName] = useState<string>('');
   const [newEnvironmentDescription, setNewEnvironmentDescription] = useState<string>('');
+  const [newEnvironmentPath, setNewEnvironmentPath] = useState<string>(''); // Estado para la ruta del nuevo ambiente
 
   const [newDiagramModalVisible, setNewDiagramModalVisible] = useState<boolean>(false);
   const [newDiagramName, setNewDiagramName] = useState<string>('');
@@ -291,6 +299,321 @@ export default function DashboardPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [needsPersonalSpaceSetup, setNeedsPersonalSpaceSetup] = useState(false);
   const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState<boolean>(false);
+
+  // Estados para los nuevos modales y funcionalidades del header
+  const [historyModalVisible, setHistoryModalVisible] = useState(false);
+  const [rollbackModalVisible, setRollbackModalVisible] = useState(false);
+  const [versionsModalVisible, setVersionsModalVisible] = useState(false);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [runModalVisible, setRunModalVisible] = useState(false);
+  const [promoteModalVisible, setPromoteModalVisible] = useState(false);
+  const [destroyModalVisible, setDestroyModalVisible] = useState(false);
+  
+  const [versionHistory, setVersionHistory] = useState<Array<{ id: string; timestamp: string; author: string; description: string; changes: { created: number; updated: number; deleted: number; }; }>>([]);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
+  const [previewData, setPreviewData] = useState<{
+    resourcesToCreate: Array<{ id: string; type: string; name: string; provider: string; changes: Record<string, unknown>; }>;
+    resourcesToUpdate: Array<{ id: string; type: string; name: string; provider: string; changes: Record<string, unknown>; }>;
+    resourcesToDelete: Array<{ id: string; type: string; name: string; provider: string; }>;
+    selectedNode?: { nodeId: string; resourceData: { label: string; provider: string; resourceType: string; }; };
+  }>({ resourcesToCreate: [], resourcesToUpdate: [], resourcesToDelete: [] });
+  const [selectedTargetEnvironment, setSelectedTargetEnvironment] = useState<string | undefined>(undefined);
+  const [destroyConfirmationText, setDestroyConfirmationText] = useState<string>('');
+
+  // --- Funciones para los nuevos botones del header ---
+  // const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'; // Asegúrate que esta URL es correcta
+
+  const handleDestroy = () => { 
+    if (!currentDiagram) {
+      message.warning("No hay un diagrama seleccionado para limpiar."); // Cambiado a message.warning
+      return;
+    }
+    setDestroyConfirmationText(''); 
+    setDestroyModalVisible(true); 
+  };
+
+  const handleDestroyConfirm = async () => {
+    if (!currentDiagram || !activeCompany || !selectedEnvironment) {
+      message.error("No se puede limpiar el diagrama: falta información esencial.");
+      return;
+    }
+    if (destroyConfirmationText.trim() !== currentDiagram.name) {
+      message.error(`Para confirmar la limpieza, debe escribir exactamente "${currentDiagram.name}".`);
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const updatedDiagramData = { ...currentDiagram, nodes: [], edges: [] };
+      
+      await updateDiagram(activeCompany._id, selectedEnvironment, currentDiagram.id, { 
+        nodes: [], 
+        edges: [],
+        // viewport: currentDiagram.viewport // Mantener el viewport o resetearlo? Por ahora lo mantengo.
+      });
+
+      // Actualizar el estado local
+      setCurrentDiagram(updatedDiagramData);
+      
+      // Si tienes un caché para diagramas individuales, actualízalo también
+      // Ejemplo: singleDiagramCache.set(`diagram-${activeCompany._id}-${selectedEnvironment}-${currentDiagram.id}`, updatedDiagramData);
+
+      message.success(`Todos los recursos del diagrama "${currentDiagram.name}" han sido eliminados.`);
+      setDestroyModalVisible(false);
+      setDestroyConfirmationText('');
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Error al limpiar los recursos del diagrama.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleHistory = async () => {
+    if (!activeCompany?._id || !selectedEnvironment || !selectedDiagram) {
+      message.error("Seleccione una compañía, ambiente y diagrama para ver el historial.");
+      return;
+    }
+    try {
+      setLoading(true); // Podrías usar un loader específico para el modal si prefieres
+      const token = localStorage.getItem('token');
+      if (!token) {
+        message.error('No hay sesión activa');
+        setLoading(false);
+        return;
+      }
+      // Ajusta el endpoint según tu API real. El de DiagramPage es:
+      // `${process.env.NEXT_PUBLIC_API_URL}/api/diagrams/${companyId}/environments/${selectedEnvironment}/diagrams/${diagramId}/history`
+      // Asumiendo una estructura similar para el dashboard o que el endpoint es genérico para diagramas.
+      // Este endpoint podría no existir o necesitar ser diferente. Por ahora, simularé la carga.
+      
+      // SIMULACIÓN DE LLAMADA A API
+      await new Promise(resolve => setTimeout(resolve, 500)); 
+      const mockHistory = [
+        { id: 'v3', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), author: 'Usuario A', description: 'Cambios mayores en nodos de red', changes: { created: 2, updated: 3, deleted: 1 } },
+        { id: 'v2', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), author: 'Usuario B', description: 'Ajuste de configuración de S3', changes: { created: 0, updated: 1, deleted: 0 } },
+        { id: 'v1', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), author: 'Usuario A', description: 'Creación inicial del diagrama', changes: { created: 5, updated: 0, deleted: 0 } },
+      ];
+      setVersionHistory(mockHistory);
+      setHistoryModalVisible(true);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Error al cargar el historial');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    if (!activeCompany?._id || !selectedEnvironment || !selectedDiagram) {
+      message.error("Seleccione un diagrama para ver opciones de reversión.");
+      return;
+    }
+    // Simular carga de historial si no está ya cargado (o forzar recarga)
+    // En una implementación real, esto podría compartir la misma data que handleHistory
+    // o hacer una llamada específica si es necesario.
+    if (versionHistory.length === 0) {
+      // Simulando carga de historial para el modal de rollback
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const mockHistory = [
+        { id: 'v3', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), author: 'Usuario A', description: 'Cambios mayores en nodos de red', changes: { created: 2, updated: 3, deleted: 1 } },
+        { id: 'v2', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), author: 'Usuario B', description: 'Ajuste de configuración de S3', changes: { created: 0, updated: 1, deleted: 0 } },
+        { id: 'v1', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), author: 'Usuario A', description: 'Creación inicial del diagrama', changes: { created: 5, updated: 0, deleted: 0 } },
+      ];
+      setVersionHistory(mockHistory);
+    }
+    setSelectedVersion(null); // Resetear selección previa
+    setRollbackModalVisible(true);
+  };
+
+  const handleRollbackConfirm = async () => {
+    if (!selectedVersion) {
+      message.error("Por favor, seleccione una versión para revertir.");
+      return;
+    }
+    if (!currentDiagram || !activeCompany?._id || !selectedEnvironment) {
+      message.error("No se puede revertir: falta información esencial del diagrama o ambiente.");
+      return;
+    }
+    setLoading(true);
+    try {
+      // Lógica de API para revertir a selectedVersion
+      // Ejemplo: await rollbackDiagramToVersion(activeCompany._id, selectedEnvironment, currentDiagram.id, selectedVersion);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simular llamada API
+      
+      // Actualizar el currentDiagram con la data de la versión seleccionada (simulado)
+      // En una implementación real, se obtendría el diagrama de esa versión
+      // const revertedDiagramData = await getDiagramVersion(activeCompany._id, selectedEnvironment, currentDiagram.id, selectedVersion);
+      // setCurrentDiagram(revertedDiagramData);
+
+      message.success(`Diagrama revertido exitosamente a la versión ${selectedVersion}.`);
+      setRollbackModalVisible(false);
+      setSelectedVersion(null);
+      // Opcionalmente, recargar el diagrama actual o actualizar la UI
+      // handleDiagramChange(currentDiagram.id); 
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Error al revertir el diagrama.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVersions = async () => {
+    if (!activeCompany?._id || !selectedEnvironment || !selectedDiagram) {
+      message.error("Seleccione un diagrama para gestionar sus versiones.");
+      return;
+    }
+    // Simular carga de historial/versiones si no está ya cargado
+    if (versionHistory.length === 0) {
+      await new Promise(resolve => setTimeout(resolve, 300)); // Simular carga
+      const mockHistory = [
+        { id: 'v3', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), author: 'Usuario A', description: 'Cambios mayores en nodos de red', changes: { created: 2, updated: 3, deleted: 1 } },
+        { id: 'v2', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), author: 'Usuario B', description: 'Ajuste de configuración de S3', changes: { created: 0, updated: 1, deleted: 0 } },
+        { id: 'v1', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), author: 'Usuario A', description: 'Creación inicial del diagrama', changes: { created: 5, updated: 0, deleted: 0 } },
+      ];
+      setVersionHistory(mockHistory);
+    }
+    setVersionsModalVisible(true);
+  };
+
+  const handlePreview = async () => {
+    if (!currentDiagram) {
+      message.info("No hay un diagrama seleccionado para previsualizar.");
+      return;
+    }
+    setLoading(true);
+    try {
+      // Simulación de la lógica de preview de DiagramPage
+      const mockPreview = {
+        resourcesToCreate: currentDiagram.nodes
+          .filter(node => node.type !== 'group' && !node.data?.isManaged) // Simular nodos nuevos
+          .map(node => ({ 
+            id: node.id, 
+            type: node.type || 'unknown', 
+            name: node.data?.label || 'Unnamed Resource', 
+            provider: node.data?.provider || 'generic', 
+            changes: { action: 'create', properties: node.data || {} } 
+          })),
+        resourcesToUpdate: currentDiagram.nodes
+          .filter(node => node.type !== 'group' && node.data?.isManaged && node.data?.hasChanges) // Simular nodos actualizados
+          .map(node => ({ 
+            id: node.id, 
+            type: node.type || 'unknown', 
+            name: node.data?.label || 'Unnamed Resource', 
+            provider: node.data?.provider || 'generic', 
+            changes: { action: 'update', diff: { old: {...node.data, hasChanges: undefined}, new: node.data } } 
+          })),
+        resourcesToDelete: [], // Simular que no hay nada para borrar por ahora
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setPreviewData(mockPreview as any); // TODO: Definir un tipo más específico para mockPreview o previewData
+      setPreviewModalVisible(true);
+    } catch (err) {
+      message.error(err instanceof Error ? `Error al generar la vista previa: ${err.message}` : 'Error desconocido al generar la vista previa.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRun = () => {
+    // Idealmente, el 'Run' se habilitaría después de un 'Preview' exitoso
+    // o si no hay cambios pendientes pero se quiere forzar una ejecución/sincronización.
+    // Por ahora, simplemente abre el modal de confirmación.
+    // Podríamos usar los mismos datos de previewData si Preview se ejecutó antes.
+    if (!currentDiagram) {
+      message.info("No hay un diagrama seleccionado para ejecutar.");
+      return;
+    }
+    if (previewData.resourcesToCreate.length === 0 && previewData.resourcesToUpdate.length === 0 && previewData.resourcesToDelete.length === 0) {
+      // Si no hay datos de preview (porque no se hizo preview o no hay cambios),
+      // podríamos mostrar un mensaje o intentar generar un preview aquí.
+      // Por ahora, para simulación, permitimos abrir el modal.
+      // En un caso real, se podría requerir un preview primero.
+      message.info("No hay cambios detectados en la vista previa. Si desea forzar una ejecución, asegúrese de que el estado deseado esté configurado.");
+    }
+    setRunModalVisible(true);
+  };
+
+  const handleRunConfirm = async () => {
+    if (!currentDiagram || !activeCompany?._id || !selectedEnvironment) {
+      message.error("No se puede ejecutar: falta información esencial.");
+      return;
+    }
+    setLoading(true);
+    try {
+      // Lógica de API para ejecutar/desplegar los cambios
+      // Ejemplo: await deployDiagramChanges(activeCompany._id, selectedEnvironment, currentDiagram.id, previewData);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simular despliegue
+
+      // Simular actualización del historial
+      const newVersion = { 
+        id: `v${Date.now()}`, 
+        timestamp: new Date().toISOString(), 
+        author: user?.name || 'Sistema', 
+        description: `Despliegue de ${previewData.resourcesToCreate.length + previewData.resourcesToUpdate.length + previewData.resourcesToDelete.length} cambios`, 
+        changes: { 
+          created: previewData.resourcesToCreate.length, 
+          updated: previewData.resourcesToUpdate.length, 
+          deleted: previewData.resourcesToDelete.length 
+        } 
+      };
+      setVersionHistory(prevHistory => [newVersion, ...prevHistory]);
+      
+      message.success('Diagrama desplegado exitosamente.');
+      setRunModalVisible(false);
+      // Resetear previewData después de un run exitoso
+      setPreviewData({ resourcesToCreate: [], resourcesToUpdate: [], resourcesToDelete: [] });
+      // Opcionalmente, recargar el estado del diagrama o de los recursos
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Error al desplegar el diagrama.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePromote = () => {
+    if (!currentDiagram) {
+      message.warning("No hay un diagrama seleccionado para promover.");
+      return;
+    }
+    if (environments.length <= 1) {
+      message.info("No hay otros ambientes disponibles para promover el diagrama.");
+      return;
+    }
+    setSelectedTargetEnvironment(undefined); // Resetear selección
+    setPromoteModalVisible(true);
+  };
+
+  const handlePromoteConfirm = async () => {
+    if (!currentDiagram || !activeCompany || !selectedEnvironment || !selectedTargetEnvironment) {
+      message.error("Información incompleta para promover el diagrama.");
+      return;
+    }
+    if (selectedEnvironment === selectedTargetEnvironment) {
+      message.warning("El ambiente de destino no puede ser el mismo que el ambiente actual.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Lógica de API para promover el diagrama (simulada)
+      // Esto implicaría copiar/crear el diagrama en el ambiente de destino.
+      // Ejemplo: await promoteDiagram(activeCompany._id, selectedEnvironment, currentDiagram.id, selectedTargetEnvironment);
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simular llamada API
+
+      message.success(`Diagrama "${currentDiagram.name}" promovido exitosamente al ambiente "${environments.find(e => e.id === selectedTargetEnvironment)?.name}".`);
+      setPromoteModalVisible(false);
+      setSelectedTargetEnvironment(undefined);
+      // Opcional: Redirigir al nuevo ambiente/diagrama o actualizar la UI de alguna forma.
+      // Por ejemplo, podrías cambiar selectedEnvironment al target y recargar los diagramas.
+      // handleEnvironmentChange(selectedTargetEnvironment);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Error al promover el diagrama.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  // --- Fin de funciones para botones del header ---
 
   useEffect(() => {
     if (user && user._id && !loading && !error && !needsPersonalSpaceSetup) {
@@ -623,6 +946,7 @@ export default function DashboardPage() {
       const envPayload = {
         name: newEnvironmentName,
         description: newEnvironmentDescription,
+        path: newEnvironmentPath.trim() || undefined, // Añadir path al payload
       };
       const response = await fetch(`/api/v1/companies/${activeCompany._id}/environments`, { 
         method: 'POST',
@@ -648,7 +972,7 @@ export default function DashboardPage() {
       const createdEnv = await response.json();
 
       message.success("Ambiente creado.");
-      setNewEnvironmentName(''); setNewEnvironmentDescription(''); 
+      setNewEnvironmentName(''); setNewEnvironmentDescription(''); setNewEnvironmentPath('');
       setNewEnvironmentModalVisible(false);
       
       const envs = await getEnvironments(activeCompany._id); 
@@ -870,26 +1194,26 @@ export default function DashboardPage() {
             onSectionChange={handleSectionChange} 
             isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
             sections={sidebarSections} isPersonalSpace={isPersonalSpace}
-          />
-          <div className="flex-1 flex flex-col overflow-hidden">
-            { activeSectionInSidebar === 'diagrams' && (selectedEnvironment || environments.length > 0 || isPersonalSpace) && ( 
-              <div className="bg-white dark:bg-white py-3 px-4 border-b border-slate-200 dark:border-slate-300 shadow-sm flex items-center justify-between flex-shrink-0 h-16"> 
-                <div className="flex items-center gap-x-4">
-                  {environments.length > 0 || isPersonalSpace ? (
-                    <div className="flex items-center h-[40px]"> 
-                      <span className="text-base font-medium text-slate-600 dark:text-slate-500 mr-2 self-center whitespace-nowrap">Ambiente:</span>
-                      <EnvironmentTreeSelect 
+        />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          { activeSectionInSidebar === 'diagrams' && environments.length > 0 && ( 
+            <div className="bg-white dark:bg-white py-3 px-4 border-b border-slate-200 dark:border-slate-300 shadow-sm flex items-center justify-between flex-shrink-0 h-16"> 
+              <div className="flex items-center gap-x-4">
+                {environments.length > 0 ? ( // Condición simplificada, ya que el header solo se muestra si environments.length > 0
+                  <div className="flex items-center h-[40px]"> 
+                    <span className="text-base font-medium text-slate-600 dark:text-slate-500 mr-2 self-center whitespace-nowrap">Ambiente:</span>
+                    <EnvironmentTreeSelect 
                         environments={environments} value={selectedEnvironment ?? undefined} 
                         onChange={handleEnvironmentChange} placeholder="Seleccionar Ambiente"
                       />
                       {!(isPersonalSpace && environments.length >= 1) && ( 
                          <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewEnvironmentModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Ambiente" />
-                      )}
-                    </div>
-                  ) : ( <Button type="primary" onClick={() => setNewEnvironmentModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Ambiente</Button> )}
-                  {selectedEnvironment && (diagrams.length > 0 || isPersonalSpace) ? (
-                    <div className="flex items-center h-[40px]"> 
-                      <span className="text-base font-medium text-slate-600 dark:text-slate-500 mr-2 self-center whitespace-nowrap">Diagrama:</span>
+                    )}
+                  </div>
+                ) : null } {/* No debería llegar aquí si la condición principal es environments.length > 0 */}
+                {selectedEnvironment && (diagrams.length > 0 || (isPersonalSpace && environments.find(env => env.id === selectedEnvironment))) ? ( // Asegurar que el ambiente seleccionado exista si es personal space
+                  <div className="flex items-center h-[40px]"> 
+                    <span className="text-base font-medium text-slate-600 dark:text-slate-500 mr-2 self-center whitespace-nowrap">Diagrama:</span>
                       <DiagramTreeSelect 
                         diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} 
                         companyId={activeCompany._id} environmentId={selectedEnvironment} 
@@ -901,14 +1225,37 @@ export default function DashboardPage() {
                         )}
                     </div>
                   ) : selectedEnvironment ? ( <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Diagrama</Button> ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 border-r border-gray-200 dark:border-slate-700 pr-2 mr-1">
+                  <Tooltip title="Historial de cambios">
+                    <Button icon={<HistoryOutlined />} className="hover:bg-gray-100 dark:hover:bg-slate-700" onClick={handleHistory} />
+                  </Tooltip>
+                  <Tooltip title="Revertir cambios">
+                    <Button icon={<RollbackOutlined />} className="hover:bg-gray-100 dark:hover:bg-slate-700" onClick={handleRollback} />
+                  </Tooltip>
+                  <Tooltip title="Gestionar versiones">
+                    <Button icon={<BranchesOutlined />} className="hover:bg-gray-100 dark:hover:bg-slate-700" onClick={handleVersions} />
+                  </Tooltip>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button icon={<EyeOutlined />} onClick={() => message.info("Función de Preview próximamente.")}>Preview</Button>
-                  <Button type="primary" icon={<PlayCircleOutlined />} className="bg-emerald-green-600 hover:bg-emerald-green-700" onClick={() => message.info("Función de Run próximamente.")}>Run</Button>
+                <div className="flex items-center gap-1">
+                  <Tooltip title="Vista previa de cambios">
+                    <Button icon={<EyeOutlined />} onClick={handlePreview} className="hover:bg-gray-100 dark:hover:bg-slate-700" />
+                  </Tooltip>
+                  <Tooltip title="Ejecutar cambios (Desplegar)">
+                    <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleRun} className="bg-emerald-green-600 hover:bg-emerald-green-700" />
+                  </Tooltip>
+                  <Tooltip title="Promover a otro ambiente">
+                    <Button icon={<ArrowUpOutlined />} onClick={handlePromote} className="bg-blue-600 hover:bg-blue-700 text-white" />
+                  </Tooltip>
+                  <Tooltip title="Limpiar todos los recursos del diagrama">
+                    <Button danger icon={<ClearOutlined />} onClick={handleDestroy} className="hover:bg-red-50 dark:hover:bg-red-700/20" />
+                  </Tooltip>
                 </div>
               </div>
-            )}
-            <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' ? 'calc(100% - 4rem)' : '100%' }}> 
+            </div>
+          )}
+          <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' && environments.length > 0 ? 'calc(100% - 4rem)' : '100%' }}> 
               {loading && activeSectionInSidebar === 'diagrams' && <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>}
               {!loading && activeSectionInSidebar === 'diagrams' && selectedDiagram && currentDiagram && activeCompany && ( 
                 <FlowEditor 
@@ -979,21 +1326,50 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <Modal 
-            title="Crear Nuevo Ambiente" 
-            open={newEnvironmentModalVisible} 
-            onCancel={() => { setNewEnvironmentModalVisible(false); setNewEnvironmentName(''); setNewEnvironmentDescription(''); }} 
-            onOk={handleCreateNewEnvironment} 
-            confirmLoading={loading} 
+        <Modal 
+          title="Crear Nuevo Ambiente" 
+          open={newEnvironmentModalVisible} 
+          onCancel={() => { 
+            setNewEnvironmentModalVisible(false); 
+            setNewEnvironmentName(''); 
+            setNewEnvironmentDescription('');
+            setNewEnvironmentPath(''); 
+          }} 
+          onOk={handleCreateNewEnvironment} 
+          confirmLoading={loading} 
             okButtonProps={{disabled: newEnvironmentName.trim() === '' || (isPersonalSpace && environments.length >= 1) }}
-          >
-            <Input placeholder="Nombre del Ambiente (ej. Sandbox, Desarrollo)" value={newEnvironmentName} onChange={e => setNewEnvironmentName(e.target.value)} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
-            <Input.TextArea placeholder="Descripción del ambiente (opcional)" value={newEnvironmentDescription} onChange={e => setNewEnvironmentDescription(e.target.value)} rows={3} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
-            {isPersonalSpace && environments.length >= 1 && (
-              <p className="text-sm text-orange-600 mt-2">Los espacios personales solo pueden tener un ambiente (Sandbox).</p>
-            )}
-          </Modal>
-          <Modal 
+        >
+          <Input 
+            placeholder="Nombre del Ambiente (ej. Sandbox, Desarrollo)" 
+            value={newEnvironmentName} 
+            onChange={e => setNewEnvironmentName(e.target.value)} 
+            style={{ marginBottom: 16 }} 
+            disabled={isPersonalSpace && environments.length >= 1}
+          />
+          <Input.TextArea 
+            placeholder="Descripción del ambiente (opcional)" 
+            value={newEnvironmentDescription} 
+            onChange={e => setNewEnvironmentDescription(e.target.value)} 
+            rows={3} 
+            style={{ marginBottom: 16 }} 
+            disabled={isPersonalSpace && environments.length >= 1}
+          />
+          <Input 
+            placeholder="Ruta del directorio (ej. frontend/equipo-a, opcional)" 
+            value={newEnvironmentPath} 
+            onChange={e => setNewEnvironmentPath(e.target.value)} 
+            addonBefore={<FolderIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" />}
+            style={{ marginBottom: 4 }}
+            disabled={isPersonalSpace && environments.length >= 1}
+          />
+          <Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: '0.75rem' }}>
+            Organiza tus ambientes en directorios. Usa "/" para crear subdirectorios.
+          </Text>
+          {isPersonalSpace && environments.length >= 1 && (
+            <p className="text-sm text-orange-600 mt-2">Los espacios personales solo pueden tener un ambiente (Sandbox).</p>
+          )}
+        </Modal>
+        <Modal 
             title="Crear Nuevo Diagrama"
             open={newDiagramModalVisible} 
             onCancel={() => { 
@@ -1044,6 +1420,275 @@ export default function DashboardPage() {
           >
             <p>¿Estás seguro de que quieres eliminar este diagrama? Esta acción no se puede deshacer.</p>
           </Modal>
+
+          {/* Modal de Historial */}
+          <Modal
+            title="Historial de Cambios del Diagrama"
+            open={historyModalVisible}
+            onCancel={() => setHistoryModalVisible(false)}
+            footer={[
+              <Button key="back" onClick={() => setHistoryModalVisible(false)}>
+                Cerrar
+              </Button>,
+            ]}
+            width={700}
+          >
+            {versionHistory.length > 0 ? (
+              <Timeline
+                mode="left"
+                items={versionHistory.map(version => ({
+                  label: <span className="text-xs text-gray-500">{new Date(version.timestamp).toLocaleString()}</span>,
+                  children: (
+                    <div>
+                      <p className="font-semibold">{version.description || `Versión ${version.id}`}</p>
+                      <p className="text-xs text-gray-600">Autor: {version.author}</p>
+                      <p className="text-xs">
+                        Cambios: 
+                        <span className="text-green-600"> {version.changes.created} creados</span>, 
+                        <span className="text-blue-600"> {version.changes.updated} actualizados</span>, 
+                        <span className="text-red-600"> {version.changes.deleted} eliminados</span>.
+                      </p>
+                    </div>
+                  ),
+                }))}
+              />
+            ) : (
+              <p>No hay historial de cambios disponible para este diagrama.</p>
+            )}
+          </Modal>
+
+          {/* Modal de Limpiar Diagrama */}
+          <Modal 
+            title="Limpiar Diagrama" 
+            open={destroyModalVisible} 
+            onCancel={() => { setDestroyModalVisible(false); setDestroyConfirmationText(''); }} 
+            onOk={handleDestroyConfirm} 
+            okText="Limpiar Diagrama" 
+            cancelText="Cancelar" 
+            okButtonProps={{ danger: true, disabled: !currentDiagram || destroyConfirmationText.trim() !== currentDiagram?.name }}
+            confirmLoading={loading}
+          >
+            {currentDiagram && (
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 dark:text-slate-300 mb-4">
+                  Esta acción eliminará todos los nodos y conexiones del diagrama <strong>"{currentDiagram.name}"</strong>.
+                </p>
+                <div className="p-3 bg-red-50 dark:bg-red-800/30 border border-red-200 dark:border-red-700 rounded-md mb-4">
+                  <p className="text-sm text-red-800 dark:text-red-300 font-medium">⚠️ Esta acción no se puede deshacer.</p>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">
+                    Todos los recursos y conexiones del diagrama serán eliminados permanentemente.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                    Para confirmar, escribe el nombre del diagrama: <strong>{currentDiagram.name}</strong>
+                  </label>
+                  <Input 
+                    value={destroyConfirmationText} 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDestroyConfirmationText(e.target.value)} 
+                    placeholder={currentDiagram.name} 
+                    autoFocus 
+                  />
+                </div>
+              </div>
+            )}
+          </Modal>
+
+          {/* Modal de Revertir Cambios */}
+          <Modal
+            title="Revertir Cambios del Diagrama"
+            open={rollbackModalVisible}
+            onCancel={() => setRollbackModalVisible(false)}
+            onOk={handleRollbackConfirm}
+            okText="Revertir a esta versión"
+            cancelText="Cancelar"
+            confirmLoading={loading}
+            okButtonProps={{ disabled: !selectedVersion }}
+            width={700}
+          >
+            <p className="mb-4">Seleccione una versión del historial a la cual desea revertir el diagrama actual. Esta acción reemplazará el contenido actual del diagrama con el de la versión seleccionada.</p>
+            {versionHistory.length > 0 ? (
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <Timeline
+                  mode="left"
+                  items={versionHistory.map(version => ({
+                    label: <span className="text-xs text-gray-500">{new Date(version.timestamp).toLocaleString()}</span>,
+                    children: (
+                      <div 
+                        className={`p-2 border rounded cursor-pointer hover:bg-blue-50 dark:hover:bg-slate-700 ${selectedVersion === version.id ? 'bg-blue-100 dark:bg-blue-900 border-blue-500' : 'border-transparent'}`}
+                        onClick={() => setSelectedVersion(version.id)}
+                      >
+                        <p className={`font-semibold ${selectedVersion === version.id ? 'text-blue-700 dark:text-blue-300' : ''}`}>{version.description || `Versión ${version.id}`}</p>
+                        <p className="text-xs text-gray-600 dark:text-slate-400">Autor: {version.author}</p>
+                        <p className="text-xs">
+                          Cambios: 
+                          <span className="text-green-600"> {version.changes.created} creados</span>, 
+                          <span className="text-blue-600"> {version.changes.updated} actualizados</span>, 
+                          <span className="text-red-600"> {version.changes.deleted} eliminados</span>.
+                        </p>
+                      </div>
+                    ),
+                    dot: selectedVersion === version.id ? <CheckCircleOutlined style={{ fontSize: '16px', color: '#1890ff' }} /> : undefined,
+                  }))}
+                />
+              </div>
+            ) : (
+              <p>No hay historial de versiones disponible para seleccionar.</p>
+            )}
+          </Modal>
+
+          {/* Modal de Gestionar Versiones */}
+          <Modal
+            title="Gestionar Versiones del Diagrama"
+            open={versionsModalVisible}
+            onCancel={() => setVersionsModalVisible(false)}
+            footer={[
+              <Button key="close" onClick={() => setVersionsModalVisible(false)}>
+                Cerrar
+              </Button>,
+            ]}
+            width={700}
+          >
+            <p className="mb-4">Aquí puedes ver las versiones guardadas del diagrama. En el futuro, podrás realizar acciones como comparar, etiquetar o eliminar versiones.</p>
+            {versionHistory.length > 0 ? (
+               <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <Timeline
+                  mode="left"
+                  items={versionHistory.map(version => ({
+                    label: <span className="text-xs text-gray-500">{new Date(version.timestamp).toLocaleString()}</span>,
+                    children: (
+                      <div className="p-2 border rounded mb-2 bg-white dark:bg-slate-800">
+                        <p className="font-semibold">{version.description || `Versión ${version.id}`}</p>
+                        <p className="text-xs text-gray-600 dark:text-slate-400">Autor: {version.author}</p>
+                        <p className="text-xs">
+                          Cambios: 
+                          <span className="text-green-600"> {version.changes.created} creados</span>, 
+                          <span className="text-blue-600"> {version.changes.updated} actualizados</span>, 
+                          <span className="text-red-600"> {version.changes.deleted} eliminados</span>.
+                        </p>
+                        {/* Aquí podrían ir botones de acción por versión en el futuro */}
+                      </div>
+                    ),
+                  }))}
+                />
+              </div>
+            ) : (
+              <p>No hay versiones disponibles para este diagrama.</p>
+            )}
+          </Modal>
+
+          {/* Modal de Vista Previa (Preview) */}
+          <Modal
+            title="Vista Previa de Cambios"
+            open={previewModalVisible}
+            onCancel={() => setPreviewModalVisible(false)}
+            footer={[ <Button key="close" onClick={() => setPreviewModalVisible(false)}>Cerrar</Button> ]}
+            width={800}
+          >
+            {previewData.selectedNode ? (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Detalles del Recurso: {previewData.selectedNode.resourceData.label}</h3>
+                <pre className="bg-slate-100 dark:bg-slate-800 p-2 rounded text-xs overflow-auto">
+                  {JSON.stringify(previewData.selectedNode.resourceData, null, 2)}
+                </pre>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <h4 className="font-semibold text-green-600">Recursos a Crear ({previewData.resourcesToCreate.length}):</h4>
+                  {previewData.resourcesToCreate.length > 0 ? (
+                    <ul className="list-disc list-inside pl-4 text-sm max-h-40 overflow-y-auto">
+                      {previewData.resourcesToCreate.map(r => <li key={r.id}>{r.name} ({r.type})</li>)}
+                    </ul>
+                  ) : <p className="text-sm text-gray-500">Ninguno.</p>}
+                </div>
+                <div className="mb-4">
+                  <h4 className="font-semibold text-blue-600">Recursos a Actualizar ({previewData.resourcesToUpdate.length}):</h4>
+                  {previewData.resourcesToUpdate.length > 0 ? (
+                    <ul className="list-disc list-inside pl-4 text-sm max-h-40 overflow-y-auto">
+                      {previewData.resourcesToUpdate.map(r => <li key={r.id}>{r.name} ({r.type})</li>)}
+                    </ul>
+                  ) : <p className="text-sm text-gray-500">Ninguno.</p>}
+                </div>
+                <div>
+                  <h4 className="font-semibold text-red-600">Recursos a Eliminar ({previewData.resourcesToDelete.length}):</h4>
+                  {previewData.resourcesToDelete.length > 0 ? (
+                    <ul className="list-disc list-inside pl-4 text-sm max-h-40 overflow-y-auto">
+                      {previewData.resourcesToDelete.map(r => <li key={r.id}>{r.name} ({r.type})</li>)}
+                    </ul>
+                  ) : <p className="text-sm text-gray-500">Ninguno.</p>}
+                </div>
+              </>
+            )}
+          </Modal>
+
+          {/* Modal de Ejecutar Cambios (Run) */}
+          <Modal
+            title="Confirmar Ejecución de Cambios"
+            open={runModalVisible}
+            onCancel={() => setRunModalVisible(false)}
+            onOk={handleRunConfirm}
+            okText="Sí, Ejecutar Cambios"
+            cancelText="Cancelar"
+            confirmLoading={loading}
+            okButtonProps={{ className: "bg-emerald-green-600 hover:bg-emerald-green-700" }}
+            width={600}
+          >
+            <p className="mb-4">Estás a punto de aplicar los siguientes cambios al diagrama <strong>"{currentDiagram?.name}"</strong>:</p>
+            { (previewData.resourcesToCreate.length > 0 || previewData.resourcesToUpdate.length > 0 || previewData.resourcesToDelete.length > 0) ?
+              (
+                <div className="text-sm mb-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded max-h-60 overflow-y-auto">
+                  {previewData.resourcesToCreate.length > 0 && <p><strong>Crear:</strong> {previewData.resourcesToCreate.length} recurso(s)</p>}
+                  {previewData.resourcesToUpdate.length > 0 && <p><strong>Actualizar:</strong> {previewData.resourcesToUpdate.length} recurso(s)</p>}
+                  {previewData.resourcesToDelete.length > 0 && <p><strong>Eliminar:</strong> {previewData.resourcesToDelete.length} recurso(s)</p>}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-slate-400 mb-4">No hay cambios específicos detectados en la vista previa. La ejecución podría intentar una sincronización general.</p>
+              )
+            }
+            <p className="font-semibold text-orange-600 dark:text-orange-400">Esta acción podría incurrir en costos y modificar tu infraestructura real.</p>
+          </Modal>
+          
+          {/* Modal de Promover Diagrama */}
+          <Modal
+            title="Promover Diagrama a Otro Ambiente"
+            open={promoteModalVisible}
+            onCancel={() => {
+              setPromoteModalVisible(false);
+              setSelectedTargetEnvironment(undefined);
+            }}
+            onOk={handlePromoteConfirm}
+            okText="Promover"
+            cancelText="Cancelar"
+            confirmLoading={loading}
+            okButtonProps={{ disabled: !selectedTargetEnvironment }}
+            width={500}
+          >
+            <p className="mb-4">
+              Selecciona el ambiente de destino al que deseas promover el diagrama <strong>"{currentDiagram?.name}"</strong>.
+            </p>
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Seleccionar ambiente de destino"
+              value={selectedTargetEnvironment}
+              onChange={(value) => setSelectedTargetEnvironment(value)}
+              loading={loading}
+            >
+              {environments
+                .filter(env => env.id !== selectedEnvironment) // Excluir el ambiente actual
+                .map(env => (
+                  <Option key={env.id} value={env.id}>
+                    {env.name} {env.path ? `(${env.path})` : ''}
+                  </Option>
+                ))}
+            </Select>
+            {selectedTargetEnvironment && selectedEnvironment === selectedTargetEnvironment && (
+              <p className="text-red-500 text-sm mt-2">
+                No puedes promover un diagrama al mismo ambiente en el que se encuentra.
+              </p>
+            )}
+          </Modal>
+
         </div>
       </>
     );
