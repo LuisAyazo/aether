@@ -1,5 +1,7 @@
 // Servicio para la gestión de compañías
 
+export const PERSONAL_SPACE_COMPANY_NAME_PREFIX = "Personal Space for "; // Añadido y exportado
+
 import { getAuthToken } from './authService';
 import { Settings, API_BASE_URL } from '../config'; // Importar API_BASE_URL
 import { Environment } from './diagramService';

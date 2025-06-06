@@ -93,6 +93,12 @@ export default function AppLayout({
       return; 
     }
 
+    // Si estamos en /create-company, no aplicar lógica de redirección de este layout.
+    if (pathname === '/create-company') {
+      setIsLoading(false);
+      return;
+    }
+
     if (!isAuthenticated()) {
       // Si después de procesar (o no encontrar token en URL), no está autenticado, redirigir a login
       if (pathname !== '/login' && pathname !== '/register') { // Evitar bucle si ya está en login/register
@@ -103,8 +109,7 @@ export default function AppLayout({
     } else {
       const user = getCurrentUser(); // Ahora debería tener el usuario actualizado si vino de OAuth
       if (user && user.usage_type === null && 
-          pathname !== '/onboarding/select-usage' && 
-          !pathname.startsWith('/company/create')) { // Permitir /company/create
+          pathname !== '/onboarding/select-usage') { 
         router.replace('/onboarding/select-usage');
       } else {
         setIsLoading(false); 
@@ -122,7 +127,7 @@ export default function AppLayout({
     );
   }
 
-  const showNavigation = pathname !== '/onboarding/select-usage';
+  const showNavigation = pathname !== '/onboarding/select-usage' && pathname !== '/create-company';
 
   return (
     <>

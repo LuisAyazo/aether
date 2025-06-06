@@ -36,7 +36,8 @@ import {
   RectangleStackIcon, 
   ShieldCheckIcon, 
   ArrowsRightLeftIcon, 
-  DocumentTextIcon, 
+  DocumentTextIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 
 import {
@@ -56,7 +57,7 @@ import DeploymentsPage from '../../components/ui/DeploymentsPage';
 import SettingsPage from '../../components/ui/SettingsPage';
 import EnvironmentsPage from '../../components/ui/EnvironmentsPage'; 
 
-import { getCompanies, Company, createCompany } from '../../services/companyService';
+import { getCompanies, Company, createCompany, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../../services/companyService'; // Importar PERSONAL_SPACE_COMPANY_NAME_PREFIX
 import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram as createDiagramService, updateDiagram, deleteDiagram as deleteDiagramService } from '../../services/diagramService';
 import { getCurrentUser, isAuthenticated, User } from '../../services/authService';
 
@@ -70,7 +71,6 @@ import {
 
 const { Text } = Typography;
 
-const PERSONAL_SPACE_COMPANY_NAME_PREFIX = "Personal Space for ";
 type SidebarSectionKey = 'diagrams' | 'settings' | 'templates' | 'credentials' | 'deployments' | 'team' | 'environments';
 const VALID_SECTIONS: SidebarSectionKey[] = ['diagrams', 'settings', 'templates', 'credentials', 'deployments', 'team', 'environments'];
 
@@ -290,6 +290,18 @@ export default function DashboardPage() {
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [needsPersonalSpaceSetup, setNeedsPersonalSpaceSetup] = useState(false);
+  const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (user && user._id && !loading && !error && !needsPersonalSpaceSetup) {
+      const welcomeModalSeenKey = `welcomeModalSeen_${user._id}`;
+      const welcomeModalAlreadySeen = localStorage.getItem(welcomeModalSeenKey);
+
+      if (!welcomeModalAlreadySeen) {
+        setIsWelcomeModalVisible(true);
+      }
+    }
+  }, [user, loading, error, needsPersonalSpaceSetup]);
 
   useEffect(() => {
     const sectionFromQuery = searchParams.get('section') as SidebarSectionKey;
@@ -298,8 +310,7 @@ export default function DashboardPage() {
     }
   }, [searchParams]);
 
-
-  useEffect(() => {
+  useEffect(() => { // Primer useEffect para obtener el usuario
     if (!isAuthenticated()) {
       router.push('/login');
       return;
@@ -308,115 +319,109 @@ export default function DashboardPage() {
     setUser(currentUser);
   }, [router]);
 
-  useEffect(() => {
-    const actualUserId = user?._id; 
-    if (!user || !actualUserId || user.usage_type === null) {
-      if (!user && isAuthenticated()) setLoading(true);
-      else setLoading(false);
+  useEffect(() => { // useEffect principal para cargar datos y manejar redirecciones
+    if (!user) { 
+      if (isAuthenticated()) {
+        // User no está seteado aún, pero está autenticado. setLoading(true) es el estado inicial.
+      } else {
+        router.push('/login'); // No autenticado, redirigir.
+      }
       return; 
     }
-    
-    async function setupPersonalSpaceAndLoadData() {
-      setLoading(true); setError(null);
-      try {
-        const personalCompany = await findPersonalCompany(user!); 
-        if (!personalCompany) {
-          setNeedsPersonalSpaceSetup(true); setLoading(false); return;
-        }
-        setActiveCompany(personalCompany); setIsPersonalSpace(true);
-        
-        const companyIdToUse = personalCompany._id; // Usar _id que está garantizado por companyService
-        const token = localStorage.getItem('token');
-        if (!token) {
-          message.error("Usuario no autenticado. Por favor, inicie sesión.");
-          localStorage.removeItem('token'); // Limpiar token
-          router.push('/login');
-          setLoading(false);
-          return;
-        }
-        const existingEnvs = await getEnvironments(companyIdToUse); 
-        const sandboxEnv = existingEnvs.find(env => env.name.toLowerCase() === "sandbox");
 
-        if (!sandboxEnv) {
-          const envPayload = { name: "Sandbox", description: "Ambiente personal de pruebas y desarrollo" };
-          const response = await fetch(`/api/v1/companies/${companyIdToUse}/environments`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'X-InfraUX-Company-ID': companyIdToUse
-            },
-            body: JSON.stringify(envPayload),
-          });
-          if (!response.ok) {
-            if (response.status === 401) {
-              message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
-              localStorage.removeItem('token');
-              router.push('/login');
-              setLoading(false);
-              return;
+    if (user.usage_type === null) {
+      router.replace('/onboarding/select-usage');
+      return; 
+    }
+
+    if(!loading) setLoading(true); 
+    setError(null);
+
+    async function fetchDataAndDetermineAction(): Promise<boolean> { 
+      if (!user) { // Guarda para TypeScript
+        // message.error("Error interno: Usuario no disponible en fetchData."); // Opcional: log/mensaje
+        return false; 
+      }
+      try {
+        if (user.usage_type === 'personal') {
+          const personalCompany = await findPersonalCompany(user); // user ya no es null aquí
+          if (!personalCompany) {
+            const companies = await getCompanies(); 
+            const existingPersonalCompany = companies.find(c => c.name === `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${user._id}`); // user ya no es null aquí
+            if (!existingPersonalCompany) {
+                message.info("Configura tu espacio personal para continuar.");
+                router.replace('/create-company?setup_personal_space=true'); 
+                return false; 
             }
-            const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente Sandbox para espacio personal'}));
-            throw new Error(errorData.detail || 'Failed to create default Sandbox environment for personal space.');
+            setActiveCompany(existingPersonalCompany);
+            setIsPersonalSpace(true);
+            await loadCompanyOrPersonalSpaceData(existingPersonalCompany);
+            setNeedsPersonalSpaceSetup(false); 
+          } else {
+            setActiveCompany(personalCompany);
+            setIsPersonalSpace(true);
+            await loadCompanyOrPersonalSpaceData(personalCompany);
+            setNeedsPersonalSpaceSetup(false);
           }
-          message.info("Ambiente Sandbox creado automáticamente para el espacio personal.");
+        } else if (user.usage_type === 'company') {
+          const companies = await getCompanies();
+          if (companies.length > 0) {
+            const firstCompany = companies[0]; 
+            setActiveCompany(firstCompany);
+            setIsPersonalSpace(false);
+            await loadCompanyOrPersonalSpaceData(firstCompany);
+          } else {
+            message.info("Debes crear o ser añadido a una compañía para continuar.");
+            router.replace('/create-company');
+            return false; 
+          }
         }
-        setNeedsPersonalSpaceSetup(false);
-        await loadCompanyOrPersonalSpaceData(personalCompany); 
+        return true; 
       } catch (e: unknown) {
         const errorMessage = e instanceof Error ? e.message : String(e);
-        setError(errorMessage || 'Error al configurar el espacio personal.');
-        message.error(errorMessage || 'Error al configurar el espacio personal.');
-      } finally { setLoading(false); }
+        setError(errorMessage);
+        message.error("Error cargando datos del dashboard: " + errorMessage);
+        return false; 
+      }
     }
 
-    async function loadCompanyData() {
-      setLoading(true); setError(null);
-      try {
-        const companies = await getCompanies();
-        if (companies.length > 0) {
-          const firstCompany = companies[0]; 
-          setActiveCompany(firstCompany); setIsPersonalSpace(false);
-          await loadCompanyOrPersonalSpaceData(firstCompany);
-        } else {
-          setActiveCompany(null); setEnvironments([]); setDiagrams([]); setSelectedEnvironment(null); setSelectedDiagram(null); setCurrentDiagram(null); 
-        }
-      } catch (e: unknown) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        setError(errorMessage || 'Error al cargar datos de compañía.');
-        message.error(errorMessage || 'Error al cargar datos de compañía.');
-      } finally { setLoading(false); }
-    }
-    
-    if (user.usage_type === 'personal') setupPersonalSpaceAndLoadData();
-    else if (user.usage_type === 'company') loadCompanyData();
-    else setLoading(false);
+    fetchDataAndDetermineAction().then(shouldShowDashboard => {
+      if (shouldShowDashboard) {
+        setLoading(false);
+      }
+      // Si shouldShowDashboard es false, la redirección ya ocurrió o se mostrará un error.
+      // setLoading permanecerá true para evitar flickering hasta que el componente se desmonte,
+      // o hasta que el error se muestre y el usuario navegue.
+    });
+
   }, [user, router]); 
 
   async function findPersonalCompany(currentUser: User): Promise<Company | null> {
-    const currentUserId = currentUser._id;
-    if (!currentUser || !currentUserId) return null;
+    const currentUserId = currentUser._id; 
+    if (!currentUserId) return null;
     const companies = await getCompanies(); 
     return companies.find(c => c.name === `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${currentUserId}`) || null;
   }
 
   async function handleCreatePersonalSpace() {
-    const userIdToUse = user?._id;
-    if (!user || !userIdToUse) { 
-      message.error("Información del usuario no disponible. No se puede crear el espacio personal."); setLoading(false); return;
+    if (!user) { 
+      message.error("Información del usuario no disponible (null). No se puede crear el espacio personal.");
+      setLoading(false); 
+      return;
     }
+    const userIdToUse = user._id; 
     setLoading(true);
     try {
       const personalCompanyName = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${userIdToUse}`;
-      let companyToUse = await findPersonalCompany(user!);
+      let companyToUse = await findPersonalCompany(user); // user no es null aquí
       let companyIdToUse: string;
 
       if (!companyToUse) {
         const newCompany = await createCompany({ name: personalCompanyName, description: "Espacio personal automático" });
-        companyIdToUse = newCompany._id; // Usar _id garantizado
+        companyIdToUse = newCompany._id; 
         companyToUse = newCompany; 
       } else {
-        companyIdToUse = companyToUse._id; // Usar _id garantizado
+        companyIdToUse = companyToUse._id; 
       }
       setActiveCompany(companyToUse); 
       
@@ -472,7 +477,7 @@ export default function DashboardPage() {
   }
 
   async function loadCompanyOrPersonalSpaceData(company: Company) {
-    const companyId = company._id; // Usar _id garantizado
+    const companyId = company._id; 
     const envs = await getEnvironments(companyId); 
     setEnvironments(envs);
 
@@ -495,14 +500,11 @@ export default function DashboardPage() {
               message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
               localStorage.removeItem('token');
               router.push('/login');
-              return; // Detener ejecución adicional
+              return; 
             }
-            // Manejar otros errores si es necesario
             console.error("No se pudo crear el ambiente Sandbox automáticamente para el espacio personal (error general).");
-            // Podrías lanzar un error aquí o manejarlo de otra forma
             throw new Error('Error creando ambiente Sandbox para espacio personal.');
           }
-          // Si la respuesta es OK, continuar
           message.info("Ambiente Sandbox creado automáticamente.");
           const updatedEnvs = await getEnvironments(companyId); 
           setEnvironments(updatedEnvs);
@@ -520,18 +522,12 @@ export default function DashboardPage() {
               }
             }
             return; 
-          // EL BLOQUE ELSE ANTERIOR SE ELIMINA YA QUE EL IF (!response.ok) MANEJA LOS ERRORES
-          // Y SI response.ok ES TRUE, EL CÓDIGO SIGUE DESPUÉS DEL IF.
-        } catch (creationError) { // Catch del try
+        } catch (creationError) { 
           console.error("Error al intentar crear ambiente Sandbox para espacio personal:", creationError);
-          // Considerar mostrar este error en la UI si es relevante
-          // Por ejemplo: setError((creationError as Error).message || 'Error creando Sandbox');
         }
-      } // Fin if (token && user)
-    } // Fin if (isPersonalSpace && envs.length === 0)
+      } 
+    } 
 
-    // Si no se entró en el bloque anterior (o si falló y fue capturado),
-    // o si no es personalSpace, o si ya tenía ambientes, se continúa aquí.
     if (envs.length > 0) {
       const defaultEnvId = envs[0].id; 
       setSelectedEnvironment(defaultEnvId);
@@ -555,11 +551,11 @@ export default function DashboardPage() {
     if (!activeCompany) return;
     setSelectedEnvironment(environmentId); setLoading(true);
     try {
-      const diags = await getDiagramsByEnvironment(activeCompany._id, environmentId); // Usar _id
+      const diags = await getDiagramsByEnvironment(activeCompany._id, environmentId); 
       setDiagrams(diags);
       if (diags.length > 0) {
         setSelectedDiagram(diags[0].id);
-        const diagramData = await getDiagram(activeCompany._id, environmentId, diags[0].id); // Usar _id
+        const diagramData = await getDiagram(activeCompany._id, environmentId, diags[0].id); 
         setCurrentDiagram(diagramData);
       } else {
         setCurrentDiagram(null); setSelectedDiagram(null);
@@ -575,7 +571,7 @@ export default function DashboardPage() {
     if (!activeCompany || !selectedEnvironment) return;
     setSelectedDiagram(diagramId); setLoading(true);
     try {
-      const diagramData = await getDiagram(activeCompany._id, selectedEnvironment, diagramId); // Usar _id
+      const diagramData = await getDiagram(activeCompany._id, selectedEnvironment, diagramId); 
       setCurrentDiagram(diagramData);
     } catch (e:unknown) { 
       const errorMessage = e instanceof Error ? e.message : String(e);
@@ -598,7 +594,7 @@ export default function DashboardPage() {
     } as CustomNode));
     const customEdges = data.edges.map(e => ({ id: e.id, source: e.source, target: e.target, type: e.type, animated: e.animated, label: e.label as string, data: e.data, style: e.style } as CustomEdge));
     try {
-      await updateDiagram(activeCompany._id, selectedEnvironment, selectedDiagram, { // Usar _id
+      await updateDiagram(activeCompany._id, selectedEnvironment, selectedDiagram, { 
         name: currentDiagram.name, description: currentDiagram.description, nodes: customNodes, edges: customEdges, viewport: data.viewport || currentDiagram.viewport
       });
       message.success("Diagrama guardado.");
@@ -628,7 +624,7 @@ export default function DashboardPage() {
         name: newEnvironmentName,
         description: newEnvironmentDescription,
       };
-      const response = await fetch(`/api/v1/companies/${activeCompany._id}/environments`, { // Usar _id
+      const response = await fetch(`/api/v1/companies/${activeCompany._id}/environments`, { 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -655,7 +651,7 @@ export default function DashboardPage() {
       setNewEnvironmentName(''); setNewEnvironmentDescription(''); 
       setNewEnvironmentModalVisible(false);
       
-      const envs = await getEnvironments(activeCompany._id); // Usar _id
+      const envs = await getEnvironments(activeCompany._id); 
       setEnvironments(envs);
       const newEnv = envs.find(e => e.id === createdEnv.id);
       if (newEnv) handleEnvironmentChange(newEnv.id);
@@ -677,7 +673,7 @@ export default function DashboardPage() {
     }
     setLoading(true);
     try {
-      const newDiag = await createDiagramService(activeCompany._id, selectedEnvironment, { // Usar _id
+      const newDiag = await createDiagramService(activeCompany._id, selectedEnvironment, { 
         name: newDiagramName, 
         description: newDiagramDescription, 
         path: newDiagramPath.trim() || undefined, 
@@ -686,7 +682,7 @@ export default function DashboardPage() {
         viewport: {x:0, y:0, zoom:1}
       });
       message.success("Diagrama creado.");
-      const diags = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); // Usar _id
+      const diags = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); 
       setDiagrams(diags);
       handleDiagramChange(newDiag.id);
       
@@ -710,11 +706,11 @@ export default function DashboardPage() {
     }
     setLoading(true);
     try {
-      await deleteDiagramService(activeCompany._id, selectedEnvironment, diagramToDeleteId); // Usar _id
+      await deleteDiagramService(activeCompany._id, selectedEnvironment, diagramToDeleteId); 
       message.success("Diagrama eliminado.");
       setDeleteDiagramModalVisible(false);
       
-      const diags = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); // Usar _id
+      const diags = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); 
       setDiagrams(diags);
 
       if (selectedDiagram === diagramToDeleteId) { 
@@ -749,14 +745,23 @@ export default function DashboardPage() {
   };
 
 
-  if (loading && !activeCompany && !error) { 
+  if (loading) { 
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 z-[60]"> {/* Cubrir toda la pantalla y estar encima del Nav (z-50) */}
         <Spin size="large" />
         <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando dashboard...</p>
       </div>
     );
   }
+  
+  if (error) { 
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 p-8">
+        <p className="text-red-500 p-4 bg-red-100 border border-red-300 rounded-md">{error}</p>
+      </div>
+    );
+  }
+
   if (user?.usage_type === 'personal' && needsPersonalSpaceSetup) { 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 p-8">
@@ -770,12 +775,12 @@ export default function DashboardPage() {
           <Button type="primary" size="large" onClick={handleCreatePersonalSpace} loading={loading} className="bg-electric-purple-600 hover:bg-electric-purple-700 w-full">
             {loading ? 'Configurando...' : 'Configurar Mi Espacio'}
           </Button>
-          {error && <p className="text-red-500 mt-4">{error}</p>}
         </div>
       </div>
     );
   }
-  if (user?.usage_type === 'company' && !activeCompany && !loading) { 
+  
+  if (user?.usage_type === 'company' && !activeCompany) { 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 p-8">
         <div className="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl text-center max-w-md">
@@ -784,7 +789,6 @@ export default function DashboardPage() {
           <p className="text-slate-600 dark:text-slate-400 mb-8">
             No estás asignado a ninguna compañía. Por favor, contacta a un administrador para que te añada a una o crea una nueva si tienes permisos.
           </p>
-          {error && <p className="text-red-500 mt-4">{error}</p>}
         </div>
       </div>
     );
@@ -811,155 +815,247 @@ export default function DashboardPage() {
         ];
 
     return (
-      <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 3.5rem)' }}>
-        <CompanySidebar 
-          companyName={companyDisplayName} activeSection={activeSectionInSidebar} 
-          onSectionChange={handleSectionChange} 
-          isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
-          sections={sidebarSections} isPersonalSpace={isPersonalSpace}
-        />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          { activeSectionInSidebar === 'diagrams' && (selectedEnvironment || environments.length > 0 || isPersonalSpace) && ( 
-            <div className="bg-white dark:bg-slate-800 py-2 px-4 border-b border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between flex-shrink-0 h-16"> 
-              <div className="flex items-center gap-x-4">
-                {environments.length > 0 || isPersonalSpace ? (
-                  <div className="flex items-center h-[40px]"> 
-                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mr-2 self-center whitespace-nowrap">Ambiente:</span>
-                    <EnvironmentTreeSelect 
-                      environments={environments} value={selectedEnvironment ?? undefined} 
-                      onChange={handleEnvironmentChange} placeholder="Seleccionar Ambiente"
-                    />
-                    {!(isPersonalSpace && environments.length >= 1) && ( 
-                       <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewEnvironmentModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Ambiente" />
-                    )}
-                  </div>
-                ) : ( <Button type="primary" onClick={() => setNewEnvironmentModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Ambiente</Button> )}
-                {selectedEnvironment && (diagrams.length > 0 || isPersonalSpace) ? (
-                  <div className="flex items-center h-[40px]"> 
-                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mr-2 self-center whitespace-nowrap">Diagrama:</span>
-                    <DiagramTreeSelect 
-                      diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} 
-                      companyId={activeCompany._id} environmentId={selectedEnvironment} // Usar _id
-                      showDeleteButton={true} 
-                      onDeleteDiagram={(diagramId) => showDeleteDiagramModal(diagramId)} 
-                    />
-                     {!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >= 3) && (
-                        <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewDiagramModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Diagrama" />
-                      )}
-                  </div>
-                ) : selectedEnvironment ? ( <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Diagrama</Button> ) : null}
+      <>
+        <Modal
+        open={isWelcomeModalVisible}
+        onCancel={() => {
+          setIsWelcomeModalVisible(false);
+          if (user && user._id) {
+            localStorage.setItem(`welcomeModalSeen_${user._id}`, 'true');
+          }
+        }}
+        footer={null}
+          centered
+          width={600}
+          closable={true}
+          className="welcome-modal"
+        >
+          <div className="p-2 text-center">
+            <SparklesIcon className="h-16 w-16 text-electric-purple-500 dark:text-electric-purple-400 mx-auto mb-5" />
+            <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-3">
+              ¡Bienvenido a <span className="font-extrabold">Infra</span><span className="text-emerald-green-600 dark:text-emerald-green-500">UX</span>!
+            </h2>
+            <p className="text-slate-600 dark:text-slate-300 mb-6 text-lg px-4">
+              Estás a punto de transformar la forma en que diseñas, despliegas y gestionas tu infraestructura cloud.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-left">
+              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg">
+                <h3 className="font-semibold text-electric-purple-600 dark:text-electric-purple-400 mb-1">Diseña Visualmente</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Crea arquitecturas complejas arrastrando y soltando componentes.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button icon={<EyeOutlined />} onClick={() => message.info("Función de Preview próximamente.")}>Preview</Button>
-                <Button type="primary" icon={<PlayCircleOutlined />} className="bg-emerald-green-600 hover:bg-emerald-green-700" onClick={() => message.info("Función de Run próximamente.")}>Run</Button>
+              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg">
+                <h3 className="font-semibold text-emerald-green-600 dark:text-emerald-green-500 mb-1">Despliega con Confianza</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Genera código IaC y despliega directamente a tus proveedores cloud.</p>
               </div>
             </div>
-          )}
-          <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' ? 'calc(100% - 4rem)' : '100%' }}> 
-            {loading && activeSectionInSidebar === 'diagrams' && <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>}
-            {!loading && activeSectionInSidebar === 'diagrams' && selectedDiagram && currentDiagram && activeCompany && ( 
-              <FlowEditor 
-                key={`${activeCompany._id}-${selectedEnvironment}-${selectedDiagram}`} 
-                companyId={activeCompany._id} 
-                environmentId={selectedEnvironment!} 
-                diagramId={selectedDiagram!} 
-                initialDiagram={currentDiagram} 
-                initialNodes={initialNodesForFlow} 
-                initialEdges={initialEdgesForFlow} 
-                onSave={handleSaveDiagram} 
-                nodeTypes={nodeTypes}
-                resourceCategories={resourceCategories} 
-              /> 
-            )}
-            {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && !selectedEnvironment && environments.length === 0 && ( <div className="flex items-center justify-center h-full p-10"><div className="text-center"><AntFolderIcon className="mx-auto text-5xl text-slate-400 mb-4" /><h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300">Sin Ambientes</h3><p className="text-slate-500 dark:text-slate-400 mt-2 mb-6">{isPersonalSpace ? "Tu espacio personal no tiene ambientes. " : "Esta compañía no tiene ambientes. "}Crea uno para empezar a organizar tus diagramas.</p>{!(isPersonalSpace && environments.length >=1) && <Button type="primary" onClick={() => setNewEnvironmentModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Ambiente</Button>}</div></div> )}
-            {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && selectedEnvironment && diagrams.length === 0 && ( <div className="flex items-center justify-center h-full p-10"><div className="text-center"><DocumentDuplicateIconOutline className="mx-auto h-16 w-16 text-slate-400 mb-4" /><h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300">Sin Diagramas</h3><p className="text-sm text-slate-500 dark:text-slate-400 mt-2 mb-6">Este ambiente no tiene diagramas. Crea uno para empezar a diseñar.</p>{!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >=3) && <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Diagrama</Button>}</div></div> )}
-            
-            {!loading && activeSectionInSidebar === 'credentials' && activeCompany && ( <CredentialsPage companyId={activeCompany._id} /> )}
-            {!loading && activeSectionInSidebar === 'environments' && activeCompany && activeCompany._id && ( <EnvironmentsPage companyId={activeCompany._id} isPersonalSpace={isPersonalSpace} /> )}
-            {!loading && activeSectionInSidebar === 'deployments' && activeCompany && ( <DeploymentsPage companyId={activeCompany._id} /> )}
-            {!loading && activeSectionInSidebar === 'templates' && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Plantillas</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de plantillas próximamente.</p></div> )}
-            {!loading && activeSectionInSidebar === 'settings' && activeCompany && ( <SettingsPage companyId={activeCompany._id} /> )}
-            {!loading && activeSectionInSidebar === 'team' && !isPersonalSpace && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Equipo</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de miembros del equipo (solo para planes de compañía).</p></div> )}
+            <Button 
+              type="primary" 
+              size="large" 
+            onClick={() => {
+              setIsWelcomeModalVisible(false);
+              if (user && user._id) {
+                localStorage.setItem(`welcomeModalSeen_${user._id}`, 'true');
+              }
+            }}
+            className="bg-electric-purple-600 hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600"
+            >
+              Comenzar a Explorar
+            </Button>
           </div>
-        </div>
+        </Modal>
 
-        <Modal 
-          title="Crear Nuevo Ambiente" 
-          open={newEnvironmentModalVisible} 
-          onCancel={() => { setNewEnvironmentModalVisible(false); setNewEnvironmentName(''); setNewEnvironmentDescription(''); }} 
-          onOk={handleCreateNewEnvironment} 
-          confirmLoading={loading} 
-          okButtonProps={{disabled: newEnvironmentName.trim() === '' || (isPersonalSpace && environments.length >= 1) }}
-        >
-          <Input placeholder="Nombre del Ambiente (ej. Sandbox, Desarrollo)" value={newEnvironmentName} onChange={e => setNewEnvironmentName(e.target.value)} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
-          <Input.TextArea placeholder="Descripción del ambiente (opcional)" value={newEnvironmentDescription} onChange={e => setNewEnvironmentDescription(e.target.value)} rows={3} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
-          {isPersonalSpace && environments.length >= 1 && (
-            <p className="text-sm text-orange-600 mt-2">Los espacios personales solo pueden tener un ambiente ("Sandbox").</p>
-          )}
-        </Modal>
-        <Modal 
-          title="Crear Nuevo Diagrama"
-          open={newDiagramModalVisible} 
-          onCancel={() => { 
-            setNewDiagramModalVisible(false); 
-            setNewDiagramName(''); 
-            setNewDiagramPath(''); 
-            setNewDiagramDescription('');
-          }} 
-          onOk={handleCreateNewDiagram} 
-          confirmLoading={loading} 
-          okButtonProps={{disabled: newDiagramName.trim() === ''}}
-          destroyOnHidden 
-        >
-          <Input 
-            placeholder="Nombre del Diagrama*" 
-            value={newDiagramName} 
-            onChange={e => setNewDiagramName(e.target.value)} 
-            style={{ marginBottom: 16 }}
+        <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 3.5rem)' }}>
+          <CompanySidebar 
+            companyName={companyDisplayName} activeSection={activeSectionInSidebar} 
+            onSectionChange={handleSectionChange} 
+            isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
+            sections={sidebarSections} isPersonalSpace={isPersonalSpace}
           />
-          <Input 
-            placeholder="Directorio/Ruta (opcional, ej. devops/hpa)" 
-            value={newDiagramPath} 
-            onChange={e => setNewDiagramPath(e.target.value)} 
-            addonBefore={newDiagramPath ? <FolderIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" /> : null}
-            style={{ marginBottom: 8 }}
-          />
-          <Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: '0.75rem' }}>
-            Organiza tus diagramas en directorios. Usa "/" para crear subdirectorios. <br/>
-            Ejemplos: devops, infrastructure/aws, networks/security
-          </Text>
-          <Input.TextArea
-            placeholder="Descripción (opcional)"
-            value={newDiagramDescription}
-            onChange={e => setNewDiagramDescription(e.target.value)}
-            rows={3}
-          />
-        </Modal>
-        
-        <Modal
-          title="Confirmar Eliminación"
-          open={deleteDiagramModalVisible}
-          onOk={handleDeleteDiagramConfirm}
-          onCancel={() => { setDeleteDiagramModalVisible(false); setDiagramToDeleteId(null); }}
-          confirmLoading={loading}
-          okText="Eliminar"
-          cancelText="Cancelar"
-          okButtonProps={{ danger: true }}
-        >
-          <p>¿Estás seguro de que quieres eliminar este diagrama? Esta acción no se puede deshacer.</p>
-        </Modal>
-        
-      </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            { activeSectionInSidebar === 'diagrams' && (selectedEnvironment || environments.length > 0 || isPersonalSpace) && ( 
+              <div className="bg-white dark:bg-white py-3 px-4 border-b border-slate-200 dark:border-slate-300 shadow-sm flex items-center justify-between flex-shrink-0 h-16"> 
+                <div className="flex items-center gap-x-4">
+                  {environments.length > 0 || isPersonalSpace ? (
+                    <div className="flex items-center h-[40px]"> 
+                      <span className="text-base font-medium text-slate-600 dark:text-slate-500 mr-2 self-center whitespace-nowrap">Ambiente:</span>
+                      <EnvironmentTreeSelect 
+                        environments={environments} value={selectedEnvironment ?? undefined} 
+                        onChange={handleEnvironmentChange} placeholder="Seleccionar Ambiente"
+                      />
+                      {!(isPersonalSpace && environments.length >= 1) && ( 
+                         <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewEnvironmentModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Ambiente" />
+                      )}
+                    </div>
+                  ) : ( <Button type="primary" onClick={() => setNewEnvironmentModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Ambiente</Button> )}
+                  {selectedEnvironment && (diagrams.length > 0 || isPersonalSpace) ? (
+                    <div className="flex items-center h-[40px]"> 
+                      <span className="text-base font-medium text-slate-600 dark:text-slate-500 mr-2 self-center whitespace-nowrap">Diagrama:</span>
+                      <DiagramTreeSelect 
+                        diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} 
+                        companyId={activeCompany._id} environmentId={selectedEnvironment} 
+                        showDeleteButton={true} 
+                        onDeleteDiagram={(diagramId) => showDeleteDiagramModal(diagramId)} 
+                      />
+                       {!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >= 3) && (
+                          <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewDiagramModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Diagrama" />
+                        )}
+                    </div>
+                  ) : selectedEnvironment ? ( <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Diagrama</Button> ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button icon={<EyeOutlined />} onClick={() => message.info("Función de Preview próximamente.")}>Preview</Button>
+                  <Button type="primary" icon={<PlayCircleOutlined />} className="bg-emerald-green-600 hover:bg-emerald-green-700" onClick={() => message.info("Función de Run próximamente.")}>Run</Button>
+                </div>
+              </div>
+            )}
+            <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' ? 'calc(100% - 4rem)' : '100%' }}> 
+              {loading && activeSectionInSidebar === 'diagrams' && <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>}
+              {!loading && activeSectionInSidebar === 'diagrams' && selectedDiagram && currentDiagram && activeCompany && ( 
+                <FlowEditor 
+                  key={`${activeCompany._id}-${selectedEnvironment}-${selectedDiagram}`} 
+                  companyId={activeCompany._id} 
+                  environmentId={selectedEnvironment!} 
+                  diagramId={selectedDiagram!} 
+                  initialDiagram={currentDiagram} 
+                  initialNodes={initialNodesForFlow} 
+                  initialEdges={initialEdgesForFlow} 
+                  onSave={handleSaveDiagram} 
+                  nodeTypes={nodeTypes}
+                  resourceCategories={resourceCategories} 
+                /> 
+              )}
+              {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && !selectedEnvironment && environments.length === 0 && ( 
+                <div className="flex items-center justify-center h-full p-6 sm:p-10 bg-slate-100 dark:bg-slate-850">
+                  <div className="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8 sm:p-12 max-w-md w-full text-center">
+                    <AntFolderIcon className="mx-auto text-5xl sm:text-6xl text-electric-purple-500 dark:text-electric-purple-400 mb-6" />
+                    <h3 className="text-2xl font-semibold text-slate-800 dark:text-slate-100 mb-3">Define tu Primer Ambiente</h3>
+                    <p className="text-slate-600 dark:text-slate-300 mb-8 text-sm sm:text-base">
+                      {isPersonalSpace ? "Tu espacio personal está listo para organizar tus ideas. " : "Esta compañía aún no tiene ambientes definidos. "}
+                      Un ambiente te ayuda a separar contextos, como Desarrollo, Pruebas o Producción. Crea uno para empezar.
+                    </p>
+                    {!(isPersonalSpace && environments.length >= 1) && (
+                      <Button 
+                        type="primary" 
+                        size="large"
+                        icon={<AntPlusOutlined />}
+                        onClick={() => setNewEnvironmentModalVisible(true)} 
+                        className="w-full bg-electric-purple-600 hover:bg-electric-purple-700 focus:ring-electric-purple-500"
+                      >
+                        Crear Ambiente
+                      </Button>
+                    )}
+                  </div>
+                </div> 
+              )}
+              {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && selectedEnvironment && diagrams.length === 0 && ( 
+                <div className="flex items-center justify-center h-full p-6 sm:p-10 bg-slate-100 dark:bg-slate-850">
+                  <div className="bg-white dark:bg-slate-800 shadow-xl rounded-lg p-8 sm:p-12 max-w-md w-full text-center">
+                    <DocumentDuplicateIconOutline className="mx-auto h-16 w-16 sm:h-20 sm:w-20 text-electric-purple-500 dark:text-electric-purple-400 mb-6" />
+                    <h3 className="text-2xl font-semibold text-slate-800 dark:text-slate-100 mb-3">Diseña tu Primera Arquitectura</h3>
+                    <p className="text-slate-600 dark:text-slate-300 mb-8 text-sm sm:text-base">
+                      Este ambiente está listo para tus diagramas. Comienza a visualizar tu infraestructura, aplicaciones o flujos de trabajo.
+                    </p>
+                    {!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >= 3) && (
+                      <Button 
+                        type="primary" 
+                        size="large"
+                        icon={<AntPlusOutlined />}
+                        onClick={() => setNewDiagramModalVisible(true)} 
+                        className="w-full bg-electric-purple-600 hover:bg-electric-purple-700 focus:ring-electric-purple-500"
+                      >
+                        Crear Diagrama
+                      </Button>
+                    )}
+                  </div>
+                </div> 
+              )}
+              
+              {!loading && activeSectionInSidebar === 'credentials' && activeCompany && ( <CredentialsPage companyId={activeCompany._id} /> )}
+              {!loading && activeSectionInSidebar === 'environments' && activeCompany && activeCompany._id && ( <EnvironmentsPage companyId={activeCompany._id} isPersonalSpace={isPersonalSpace} /> )}
+              {!loading && activeSectionInSidebar === 'deployments' && activeCompany && ( <DeploymentsPage companyId={activeCompany._id} /> )}
+              {!loading && activeSectionInSidebar === 'templates' && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Plantillas</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de plantillas próximamente.</p></div> )}
+              {!loading && activeSectionInSidebar === 'settings' && activeCompany && ( <SettingsPage companyId={activeCompany._id} /> )}
+              {!loading && activeSectionInSidebar === 'team' && !isPersonalSpace && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Equipo</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de miembros del equipo (solo para planes de compañía).</p></div> )}
+            </div>
+          </div>
+
+          <Modal 
+            title="Crear Nuevo Ambiente" 
+            open={newEnvironmentModalVisible} 
+            onCancel={() => { setNewEnvironmentModalVisible(false); setNewEnvironmentName(''); setNewEnvironmentDescription(''); }} 
+            onOk={handleCreateNewEnvironment} 
+            confirmLoading={loading} 
+            okButtonProps={{disabled: newEnvironmentName.trim() === '' || (isPersonalSpace && environments.length >= 1) }}
+          >
+            <Input placeholder="Nombre del Ambiente (ej. Sandbox, Desarrollo)" value={newEnvironmentName} onChange={e => setNewEnvironmentName(e.target.value)} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
+            <Input.TextArea placeholder="Descripción del ambiente (opcional)" value={newEnvironmentDescription} onChange={e => setNewEnvironmentDescription(e.target.value)} rows={3} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
+            {isPersonalSpace && environments.length >= 1 && (
+              <p className="text-sm text-orange-600 mt-2">Los espacios personales solo pueden tener un ambiente (Sandbox).</p>
+            )}
+          </Modal>
+          <Modal 
+            title="Crear Nuevo Diagrama"
+            open={newDiagramModalVisible} 
+            onCancel={() => { 
+              setNewDiagramModalVisible(false); 
+              setNewDiagramName(''); 
+              setNewDiagramPath(''); 
+              setNewDiagramDescription('');
+            }} 
+            onOk={handleCreateNewDiagram} 
+            confirmLoading={loading} 
+            okButtonProps={{disabled: newDiagramName.trim() === ''}}
+            destroyOnHidden 
+          >
+            <Input 
+              placeholder="Nombre del Diagrama*" 
+              value={newDiagramName} 
+              onChange={e => setNewDiagramName(e.target.value)} 
+              style={{ marginBottom: 16 }}
+            />
+            <Input 
+              placeholder="Directorio/Ruta (opcional, ej. devops/hpa)" 
+              value={newDiagramPath} 
+              onChange={e => setNewDiagramPath(e.target.value)} 
+              addonBefore={newDiagramPath ? <FolderIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" /> : null}
+              style={{ marginBottom: 8 }}
+            />
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: '0.75rem' }}>
+              Organiza tus diagramas en directorios. Usa / para crear subdirectorios. <br/>
+              Ejemplos: devops, infrastructure/aws, networks/security
+            </Text>
+            <Input.TextArea
+              placeholder="Descripción (opcional)"
+              value={newDiagramDescription}
+              onChange={e => setNewDiagramDescription(e.target.value)}
+              rows={3}
+            />
+          </Modal>
+          
+          <Modal
+            title="Confirmar Eliminación"
+            open={deleteDiagramModalVisible}
+            onOk={handleDeleteDiagramConfirm}
+            onCancel={() => { setDeleteDiagramModalVisible(false); setDiagramToDeleteId(null); }}
+            confirmLoading={loading}
+            okText="Eliminar"
+            cancelText="Cancelar"
+            okButtonProps={{ danger: true }}
+          >
+            <p>¿Estás seguro de que quieres eliminar este diagrama? Esta acción no se puede deshacer.</p>
+          </Modal>
+        </div>
+      </>
     );
   }
 
+  // Fallback: si ninguna de las condiciones anteriores se cumple (ej. user es null después de la carga inicial)
+  // o si hay un error no manejado por el return de error específico.
+  // Esto también cubre el estado inicial mientras user se está cargando.
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900">
-      {error ? <p className="text-red-500 p-4 bg-red-100 border border-red-300 rounded-md">{error}</p> 
-             : <>
-                 <Spin size="large" />
-                 <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando dashboard...</p>
-               </>}
+      <Spin size="large" />
+      <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando...</p>
     </div>
   );
 }

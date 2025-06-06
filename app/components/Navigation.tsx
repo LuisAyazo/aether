@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation"; // Importar useRouter
 import { useEffect, useState } from "react"; // Importar useEffect y useState
-import { Dropdown, Menu, Avatar, Button, Space } from 'antd'; // Importar componentes de Ant Design
+import { Dropdown, Avatar } from 'antd'; // Importar componentes de Ant Design
 import { UserOutlined, SettingOutlined, LogoutOutlined } from '@ant-design/icons'; // Importar iconos
 import { getCurrentUser, User, logoutUser as authLogout } from '../services/authService'; // Cambiado logout a logoutUser
 
@@ -43,8 +43,6 @@ export default function Navigation() {
     },
   ];
   
-  const userMenu = <Menu items={userMenuItems} />;
-
   // Hide navigation on login and register pages
   const hideNavigation = pathname === '/login' || pathname === '/register';
   
@@ -57,13 +55,10 @@ export default function Navigation() {
   // Por ahora, mantendré py-3 y ajustaré el pt del main después si es necesario.
 
   return (
-    <nav className="fixed w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-md z-50 border-b border-gray-200 dark:border-gray-700">
+    <nav className="fixed w-full bg-white dark:bg-slate-100 z-50 border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-full px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14"> {/* h-14 para altura fija ~56px, px ajustado */}
-        <Link href={isOnMarketingPage ? "/" : "/dashboard"} className="text-xl font-bold text-electric-purple-600 dark:text-electric-purple-400 flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 mr-2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
-          </svg>
-          InfraUX
+        <Link href={isOnMarketingPage ? "/" : "/dashboard"} className="text-xl flex items-center">
+          <span className="font-bold text-slate-800 dark:text-slate-100">Infra</span><span className="font-bold text-emerald-green-600 dark:text-emerald-green-500">UX</span>
         </Link>
         
         {/* Contenido central para links de marketing y botones de login/signup */}
