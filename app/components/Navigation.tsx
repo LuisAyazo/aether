@@ -16,7 +16,8 @@ import {
   DeleteOutlined,
   ApartmentOutlined,
   BranchesOutlined,
-  ExclamationCircleFilled
+  ExclamationCircleFilled,
+  // EllipsisOutlined // Para futuro botón "Más acciones"
 } from '@ant-design/icons';
 import { logoutUser as authLogout } from '../services/authService';
 import { PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../services/companyService';
@@ -117,9 +118,6 @@ export default function Navigation() {
 
   useEffect(() => {
     if (!user) {
-      // fetchInitialUser es una función, así que no necesita ser una dependencia si es estable.
-      // Pero si se redefine en el store (no debería con la forma estándar de Zustand), entonces sí.
-      // Por seguridad y claridad, la incluimos si se llama.
       fetchInitialUser();
     }
   }, [user, fetchInitialUser]);
@@ -144,7 +142,7 @@ export default function Navigation() {
 
   const diagramName = currentDiagram?.name || "Sin Diagrama";
 
-  const onEnvChange = (value: string) => { // 'value' ya está tipado como string, esto es extraño. El error podría ser de una ejecución anterior.
+  const onEnvChange = (value: string) => { 
     if (value === 'create-new-env') {
       setNewEnvironmentModalVisible(true);
     } else {
@@ -152,7 +150,7 @@ export default function Navigation() {
     }
   };
 
-  const onDiagramChange = (value: string) => { // 'value' ya está tipado como string, esto es extraño. El error podría ser de una ejecución anterior.
+  const onDiagramChange = (value: string) => { 
     if (value === 'create-new-diag') {
       setNewDiagramModalVisible(true);
     } else {
@@ -163,34 +161,42 @@ export default function Navigation() {
   return (
     <>
       <nav className="fixed w-full bg-white dark:bg-gray-800 z-50 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-full px-4 sm:px-6 lg:px-8 flex justify-between items-center h-14">
-          <div className="flex items-center">
-            <Link href={isOnMarketingPage ? "/" : "/dashboard"} className="text-xl flex items-center mr-4">
+        <div className="max-w-full px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16"> {/* Altura aumentada a h-16 */}
+          <div className="flex items-center"> {/* Grupo Izquierdo */}
+            <Link href={isOnMarketingPage ? "/" : "/dashboard"} className="text-xl flex items-center mr-8"> {/* Margen aumentado a mr-8 */}
               <span className="font-bold text-slate-800 dark:text-slate-100">Infra</span><span className="font-bold text-emerald-green-600 dark:text-emerald-green-500">UX</span>
             </Link>
             {!isOnMarketingPage && activeCompany && (
-              <div className="flex items-center space-x-4"> {/* Aumentado space-x */}
-                <Tag color="blue" icon={<ApartmentOutlined />} className="hidden sm:flex items-center">
+              <div className="flex items-center gap-x-5"> 
+                <Tag color="blue" icon={<ApartmentOutlined />} className="hidden sm:flex items-center shrink-0">
                   {activeCompany.name.replace(PERSONAL_SPACE_COMPANY_NAME_PREFIX, '')}
                   {isPersonalSpace && " (Personal)"}
                 </Tag>
 
-                <EnvironmentTreeSelect
-                  value={selectedEnvironment || undefined}
-                  onChange={onEnvChange}
-                  environments={environments}
-                />
+                <div className="flex items-center gap-x-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">Ambiente:</span>
+                  <EnvironmentTreeSelect
+                    value={selectedEnvironment || undefined}
+                    onChange={onEnvChange}
+                    environments={environments}
+                    className="min-w-[200px]"
+                  />
+                </div>
                 
-                <DiagramTreeSelect
-                  value={selectedDiagram || undefined}
-                  onChange={onDiagramChange}
-                  diagrams={diagrams}
-                />
+                <div className="flex items-center gap-x-2">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0">Diagrama:</span>
+                  <DiagramTreeSelect
+                    value={selectedDiagram || undefined}
+                    onChange={onDiagramChange}
+                    diagrams={diagrams}
+                    className="min-w-[200px]"
+                  />
+                </div>
               </div>
             )}
           </div>
           
-          <div className="flex-1 flex justify-center">
+          <div className="flex-grow flex justify-center px-4"> {/* Grupo Central (Botones de Acción) */}
             {isOnMarketingPage && (
               <div className="hidden md:flex items-center gap-6">
                 <a href="#features" className="text-gray-700 dark:text-gray-300 hover:text-electric-purple-600 dark:hover:text-electric-purple-400 transition-colors">Features</a>
@@ -200,21 +206,21 @@ export default function Navigation() {
               </div>
             )}
             {!isOnMarketingPage && currentDiagram && (
-              <div className="flex items-center space-x-2"> {/* Aumentado space-x */}
-                <Tooltip title="Historial de Versiones"><Button icon={<HistoryOutlined />} size="small" onClick={handleHistory} disabled={dataLoading} /></Tooltip>
-                <Tooltip title="Revertir Cambios"><Button icon={<UndoOutlined />} size="small" onClick={handleRollback} disabled={dataLoading} /></Tooltip>
-                <Tooltip title="Versiones"><Button icon={<BranchesOutlined />} size="small" onClick={handleVersions} disabled={dataLoading} /></Tooltip>
+              <div className="flex items-center gap-x-2"> 
+                <Tooltip title='Historial de Versiones'><Button icon={<HistoryOutlined />} size="small" onClick={handleHistory} disabled={dataLoading} /></Tooltip>
+                <Tooltip title='Revertir Cambios'><Button icon={<UndoOutlined />} size="small" onClick={handleRollback} disabled={dataLoading} /></Tooltip>
+                <Tooltip title='Versiones'><Button icon={<BranchesOutlined />} size="small" onClick={handleVersions} disabled={dataLoading} /></Tooltip>
                 <Divider type="vertical" />
-                <Tooltip title="Previsualizar Cambios"><Button icon={<EyeOutlined />} size="small" onClick={handlePreview} disabled={dataLoading} /></Tooltip>
-                <Tooltip title="Ejecutar/Desplegar"><Button icon={<PlayCircleOutlined />} type="primary" size="small" onClick={handleRun} disabled={dataLoading} /></Tooltip>
+                <Tooltip title='Previsualizar Cambios'><Button icon={<EyeOutlined />} size="small" onClick={handlePreview} disabled={dataLoading} /></Tooltip>
+                <Tooltip title='Ejecutar/Desplegar'><Button icon={<PlayCircleOutlined />} type="primary" size="small" onClick={handleRun} disabled={dataLoading} /></Tooltip>
                 <Divider type="vertical" />
-                <Tooltip title="Promover a Ambiente"><Button icon={<CloudUploadOutlined />} size="small" onClick={handlePromote} disabled={dataLoading || (environments && environments.length <= 1)} /></Tooltip>
-                <Tooltip title="Limpiar (Destruir Recursos)"><Button icon={<DeleteOutlined />} danger size="small" onClick={handleDestroy} disabled={dataLoading} /></Tooltip>
+                <Tooltip title='Promover a Ambiente'><Button icon={<CloudUploadOutlined />} size="small" onClick={handlePromote} disabled={dataLoading || (environments && environments.length <= 1)} /></Tooltip>
+                <Tooltip title='Limpiar (Destruir Recursos)'><Button icon={<DeleteOutlined />} danger size="small" onClick={handleDestroy} disabled={dataLoading} /></Tooltip>
               </div>
             )}
           </div>
           
-          <div className="flex items-center">
+          <div className="flex items-center shrink-0"> {/* Grupo Derecho (Usuario) - shrink-0 para evitar que se encoja */}
             {isOnMarketingPage && (
               <div className="flex gap-3 items-center">
                 <Link href="/login" className="text-gray-700 dark:text-gray-300 hover:text-electric-purple-600 dark:hover:text-electric-purple-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Login</Link>
@@ -268,7 +274,6 @@ export default function Navigation() {
       </Modal>
 
       <Modal title="Revertir Diagrama" open={rollbackModalVisible} onOk={handleRollbackConfirm} onCancel={() => setRollbackModalVisible(false)} confirmLoading={dataLoading} okText="Revertir" cancelText="Cancelar">
-        {/* eslint-disable-next-line react/no-unescaped-entities */}
         <p>Selecciona la versión a la que deseas revertir "{diagramName}":</p>
         <Select style={{ width: '100%' }} placeholder="Seleccionar versión" onChange={(value) => setSelectedVersion(value)} value={selectedVersion}>
           {versionHistory && versionHistory.map((v: VersionHistoryItem) => <Option key={v.id} value={v.id}>{v.description || `Versión ${v.id}`} ({new Date(v.timestamp).toLocaleDateString()})</Option>)}
@@ -305,14 +310,12 @@ export default function Navigation() {
       </Modal>
 
       <Modal title={`Ejecutar/Desplegar: ${diagramName}`} open={runModalVisible} onOk={handleRunConfirm} onCancel={() => setRunModalVisible(false)} confirmLoading={dataLoading} okText="Desplegar" cancelText="Cancelar">
-        {/* eslint-disable-next-line react/no-unescaped-entities */}
         <p>Estás a punto de aplicar los cambios definidos en el diagrama "{diagramName}".</p>
         <p>Esto podría crear, modificar o eliminar recursos en tu infraestructura.</p>
         <p className="font-semibold mt-2">¿Estás seguro de que deseas continuar?</p>
       </Modal>
 
       <Modal title={`Promover Diagrama: ${diagramName}`} open={promoteModalVisible} onOk={handlePromoteConfirm} onCancel={() => setPromoteModalVisible(false)} confirmLoading={dataLoading} okText="Promover" cancelText="Cancelar">
-        {/* eslint-disable-next-line react/no-unescaped-entities */}
         <p>Selecciona el ambiente de destino para promover el diagrama "{diagramName}":</p>
         <Select
           style={{ width: '100%' }}

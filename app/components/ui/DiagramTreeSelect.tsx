@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import React, { useState, useRef, useEffect, KeyboardEvent } from 'react'; // MouseEvent eliminado si no se usa directamente
 import { FolderOutlined, ProjectOutlined, CaretDownOutlined, CaretRightOutlined, DeleteOutlined } from '@ant-design/icons';
 import styles from './DiagramTreeSelect.module.css';
 import { updateDiagramPaths } from '@/app/services/diagramService';
@@ -23,8 +23,8 @@ interface DiagramTreeSelectProps {
   value?: string;
   onChange: (diagramId: string) => void;
   placeholder?: string;
-  selectedDiagram?: Diagram;
-  onSelect?: (diagram: Diagram) => void;
+  selectedDiagram?: Diagram; // No se usa directamente, selectedItem se deriva de 'value'
+  onSelect?: (diagram: Diagram) => void; // No se usa directamente
   companyId?: string;
   environmentId?: string;
   className?: string;
@@ -37,8 +37,6 @@ export default function DiagramTreeSelect({
   value, 
   onChange,
   placeholder = 'Seleccionar diagrama',
-  // selectedDiagram, 
-  // onSelect, 
   companyId,
   environmentId,
   className = '',
@@ -51,187 +49,121 @@ export default function DiagramTreeSelect({
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedItem, setSelectedItem] = useState<Diagram | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [tree, setTree] = useState<TreeNode[]>([]);
-  
-  // Build diagram tree structure based on paths
+  // const [tree, setTree] = useState<TreeNode[]>([]); // tree no se usa, treeStructure sí
+
   const buildDiagramTree = (diagramItems: Diagram[]): TreeNode => {
     const sortedDiagrams = [...diagramItems].sort((a, b) => {
-      // First sort by path
-      if (a.path && b.path) {
-        return a.path.localeCompare(b.path);
-      }
-      if (a.path) return -1;
-      if (b.path) return 1;
-      // Then sort by name
+      const pathA = a.path || '';
+      const pathB = b.path || '';
+      if (pathA !== pathB) return pathA.localeCompare(pathB);
       return a.name.localeCompare(b.name);
     });
     
-    const rootTree: TreeNode = {
-      type: 'root',
-      children: {},
-      diagrams: []
-    };
-    
-    // Group diagrams by path
-    const groups: { [key: string]: Diagram[] } = {
-      'Sin categoría': []
-    };
+    const rootTree: TreeNode = { type: 'root', children: {}, diagrams: [] };
+    const groups: { [key: string]: Diagram[] } = { 'Sin categoría': [] };
     
     sortedDiagrams.forEach(diagram => {
-      if (diagram.path) {
-        const pathParts = diagram.path.split('/');
-        const groupName = pathParts[0];
-        
-        if (!groups[groupName]) {
-          groups[groupName] = [];
-        }
-        groups[groupName].push(diagram);
-      } else {
+      const path = diagram.path?.trim() || '';
+      if (!path) {
         groups['Sin categoría'].push(diagram);
+      } else {
+        const groupName = path.split('/')[0];
+        if (!groups[groupName]) groups[groupName] = [];
+        groups[groupName].push(diagram);
       }
     });
     
-    // Create tree structure
-    Object.entries(groups).forEach(([groupName, diagrams]) => {
-      if (diagrams.length > 0) {
-        if (groupName === 'Sin categoría') {
-          // Add uncategorized diagrams directly to root
-          rootTree.diagrams.push(...diagrams);
-        } else {
-          // Create group node with subdirectories
-          const groupNode: TreeNode = {
-            type: 'group',
-            name: groupName,
-            fullPath: groupName,
-            children: {},
-            diagrams: []
-          };
-          
-          // Organize diagrams by subdirectories
-          diagrams.forEach(diagram => {
-            if (diagram.path) {
-              const pathParts = diagram.path.split('/');
-              
-              if (pathParts.length > 1) {
-                // Has subdirectories - create nested structure
-                let currentNode = groupNode;
-                
-                // Navigate/create nested structure for all path parts except the first (group name)
-                for (let i = 1; i < pathParts.length; i++) {
-                  const pathSegment = pathParts[i];
-                  const subPath = pathParts.slice(1, i + 1).join('/');
-                  
-                  if (!currentNode.children[pathSegment]) {
-                    currentNode.children[pathSegment] = {
-                      type: 'group',
-                      name: pathSegment,
-                      fullPath: `${groupName}/${subPath}`,
-                      children: {},
-                      diagrams: []
-                    };
-                  }
-                  currentNode = currentNode.children[pathSegment];
-                }
-                
-                // Add diagram to the deepest level only
-                currentNode.diagrams.push(diagram);
-              } else {
-                // No subdirectories, add to group directly
-                groupNode.diagrams.push(diagram);
+    Object.entries(groups).forEach(([groupName, groupDiagrams]) => {
+      if (groupDiagrams.length === 0) return;
+
+      if (groupName === 'Sin categoría') {
+        rootTree.diagrams.push(...groupDiagrams);
+      } else {
+        const groupNode: TreeNode = { type: 'group', name: groupName, fullPath: groupName, children: {}, diagrams: [] };
+        groupDiagrams.forEach(diagram => {
+          const pathParts = (diagram.path || '').split('/');
+          if (pathParts.length > 1) {
+            let currentNode = groupNode;
+            for (let i = 1; i < pathParts.length; i++) {
+              const segmentName = pathParts[i];
+              const subPath = pathParts.slice(0, i + 1).join('/'); // Corrected subPath for full path
+              if (!currentNode.children[segmentName]) {
+                currentNode.children[segmentName] = { type: 'group', name: segmentName, fullPath: subPath, children: {}, diagrams: [] };
               }
+              currentNode = currentNode.children[segmentName];
             }
-          });
-          
-          rootTree.children[groupName] = groupNode;
-        }
+            currentNode.diagrams.push(diagram);
+          } else {
+            groupNode.diagrams.push(diagram);
+          }
+        });
+        rootTree.children[groupName] = groupNode;
       }
     });
-    
     return rootTree;
   };
   
-  // // Helper to check if we have multiple diagrams
-  // const hasMultipleDiagrams = (diagrams: Diagram[]): boolean => {
-  //   return diagrams.length > 3; // Group if more than 3 diagrams
-  // };
-
-  // Get tree structure
   const treeStructure = buildDiagramTree(diagrams);
 
-  // Set selected item based on value
   useEffect(() => {
     if (value) {
-      const selectedDiagram = diagrams.find(d => d.id === value);
-      setSelectedItem(selectedDiagram || null);
+      const findDiag = (items: Diagram[]): Diagram | null => items.find(d => d.id === value) || null;
+      const searchInNode = (node: TreeNode): Diagram | null => {
+        let found = findDiag(node.diagrams);
+        if (found) return found;
+        for (const key in node.children) {
+          found = searchInNode(node.children[key]);
+          if (found) return found;
+        }
+        return null;
+      };
+      setSelectedItem(searchInNode(treeStructure));
     } else {
       setSelectedItem(null);
     }
-  }, [diagrams, value]);
+  }, [diagrams, value, treeStructure]);
   
-  // Filter tree based on search text
   const filterTreeNode = (node: TreeNode, searchQuery: string): TreeNode | null => {
     if (!searchQuery) return node;
-    
     const lowerSearchQuery = searchQuery.toLowerCase();
     
-    // Create filtered node
-    const filteredNode: TreeNode = {
-      type: node.type,
-      name: node.name,
-      fullPath: node.fullPath,
-      children: {},
-      diagrams: []
-    };
-    
-    // Filter diagrams at this level
     const matchingDiagrams = node.diagrams.filter(diagram => 
       diagram.name.toLowerCase().includes(lowerSearchQuery) ||
       (diagram.description && diagram.description.toLowerCase().includes(lowerSearchQuery))
     );
     
-    filteredNode.diagrams = matchingDiagrams;
-    
-    // Filter children recursively
+    const children: { [key: string]: TreeNode } = {};
     let hasMatchingChildren = false;
-    Object.keys(node.children).forEach(key => {
-      const filteredChild = filterTreeNode(node.children[key], searchQuery);
+    Object.entries(node.children).forEach(([key, childNode]) => {
+      const filteredChild = filterTreeNode(childNode, searchQuery);
       if (filteredChild && (filteredChild.diagrams.length > 0 || Object.keys(filteredChild.children).length > 0)) {
-        filteredNode.children[key] = filteredChild;
+        children[key] = filteredChild;
         hasMatchingChildren = true;
       }
     });
     
-    // Return node if it has matching content
-    if (filteredNode.diagrams.length > 0 || hasMatchingChildren) {
-      return filteredNode;
+    if (matchingDiagrams.length > 0 || hasMatchingChildren) {
+      return { ...node, diagrams: matchingDiagrams, children };
     }
-    
     return null;
   };
 
-  // Get filtered tree
   const filteredTree = filterTreeNode(treeStructure, searchText);
 
-  // Auto-expand groups containing search matches
   useEffect(() => {
     if (searchText && filteredTree) {
-      const expandAllWithMatches = (node: TreeNode) => {
-        if (node.type === 'group' && node.fullPath) {
-          if (node.diagrams.length > 0 || Object.keys(node.children).length > 0) {
-            setExpandedGroups(prev => new Set(prev).add(node.fullPath!));
-          }
+      const newExpanded = new Set<string>();
+      const expandMatching = (node: TreeNode) => {
+        if (node.type === 'group' && node.fullPath && (node.diagrams.length > 0 || Object.keys(node.children).length > 0)) {
+          newExpanded.add(node.fullPath);
         }
-        
-        Object.values(node.children).forEach(child => {
-          expandAllWithMatches(child);
-        });
+        Object.values(node.children).forEach(expandMatching);
       };
-      
-      expandAllWithMatches(filteredTree);
+      expandMatching(filteredTree);
+      setExpandedGroups(newExpanded);
     }
   }, [searchText, filteredTree]);
   
-  // Select a diagram
   const handleSelect = (diagram: Diagram) => {
     setSelectedItem(diagram);
     onChange(diagram.id);
@@ -239,70 +171,45 @@ export default function DiagramTreeSelect({
     setSearchText('');
   };
 
-  // Toggle group expansion
   const toggleGroup = (path: string) => {
     setExpandedGroups(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(path)) {
-        newSet.delete(path);
-      } else {
-        newSet.add(path);
-      }
+      if (newSet.has(path)) newSet.delete(path);
+      else newSet.add(path);
       return newSet;
     });
   };
   
-  // Handle click outside to close dropdown
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: globalThis.MouseEvent) => { // Use globalThis.MouseEvent
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
-    
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Focus input when dropdown opens
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
+    if (isOpen && inputRef.current) inputRef.current.focus();
   }, [isOpen]);
 
-  // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      setIsOpen(false);
-    }
+    if (e.key === 'Escape') setIsOpen(false);
   };
 
-  // Recursive component for diagram tree rendering
-  const DiagramTree = ({ node, level = 0 }: { node: TreeNode, level?: number }) => {
+  const DiagramTreeRecursive = ({ node, level = 0 }: { node: TreeNode, level?: number }) => {
     if (!node) return null;
-    
-    const isExpanded = node.fullPath ? expandedGroups.has(node.fullPath) : true;
+    const isExpanded = node.fullPath ? expandedGroups.has(node.fullPath) : true; // Root is conceptually expanded
     const hasChildren = Object.keys(node.children).length > 0;
     const hasDiagrams = node.diagrams.length > 0;
     const indentSize = level * 16;
     
-    // Calculate total diagrams in this node and its children
-    const getTotalDiagrams = (node: TreeNode): number => {
-      let total = node.diagrams.length;
-      Object.values(node.children).forEach(child => {
-        total += getTotalDiagrams(child);
-      });
-      return total;
-    };
-    
-    const totalDiagrams = getTotalDiagrams(node);
+    const getTotalDiagrams = (n: TreeNode): number => n.diagrams.length + Object.values(n.children).reduce((sum, child) => sum + getTotalDiagrams(child), 0);
+    const totalDiagramsInGroup = node.type === 'group' ? getTotalDiagrams(node) : 0;
     
     return (
       <div>
-        {/* Group header for non-root groups */}
         {node.type === 'group' && node.name && (
           <div 
             className={styles.groupHeader}
@@ -310,83 +217,58 @@ export default function DiagramTreeSelect({
             style={{ paddingLeft: `${indentSize}px` }}
           >
             <span className={styles.caretIcon}>
-              {(hasChildren || hasDiagrams) ? (
-                isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />
-              ) : null}
+              {(hasChildren || hasDiagrams) ? (isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />) : <span style={{display:'inline-block', width:'14px'}}/>}
             </span>
             <FolderOutlined className={styles.folderIcon} />
             <span className={styles.groupName}>{node.name}</span>
-            <span className={styles.diagramCount}>
-              {totalDiagrams} diagrama{totalDiagrams !== 1 ? 's' : ''}
-            </span>
+            {totalDiagramsInGroup > 0 && <span className={styles.diagramCount}>{totalDiagramsInGroup}</span>}
           </div>
         )}
         
-        {/* Group content - only show when expanded */}
         {(node.type === 'root' || isExpanded) && (
           <div>
-            {/* Render diagrams in this group */}
             {hasDiagrams && node.diagrams.map((diagram: Diagram) => (
               <div 
                 key={diagram.id}
                 className={`${styles.diagramItem} ${selectedItem?.id === diagram.id ? styles.selected : ''}`}
                 onClick={() => handleSelect(diagram)}
-                style={{ 
-                  paddingLeft: `${indentSize + (node.type === 'group' ? 24 : 0)}px` 
-                }}
+                style={{ paddingLeft: `${indentSize + (node.type === 'group' ? 24 : 0)}px` }}
               >
-                <ProjectOutlined className={styles.fileIcon} />
-                <div className={styles.diagramInfo}>
-                  <span className={styles.diagramName}>{diagram.name}</span>
-                  {diagram.description && (
-                    <span className={styles.diagramDescription}>
-                      {diagram.description}
-                    </span>
-                  )}
+                <ProjectOutlined className="text-gray-400 mr-2" />
+                <div className="flex flex-col overflow-hidden">
+                  <span className="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block">{diagram.name}</span>
+                  {diagram.description && <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">{diagram.description}</span>}
                 </div>
                 {showDeleteButton && onDeleteDiagram && (
                   <DeleteOutlined 
-                    className={styles.deleteButton}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteDiagram(diagram.id);
-                    }}
+                    className="text-gray-400 hover:text-red-500 ml-auto pl-2 cursor-pointer"
+                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDeleteDiagram(diagram.id); }}
                     title="Eliminar diagrama"
                   />
                 )}
               </div>
             ))}
             
-            {/* Render child groups */}
-            {hasChildren && Object.keys(node.children)
-              .sort()
-              .map(key => (
-                <DiagramTree 
-                  key={key} 
-                  node={node.children[key]} 
-                  level={level + (node.type === 'group' ? 1 : 0)} 
-                />
-              ))
-            }
+            {hasChildren && Object.keys(node.children).sort().map(key => (
+                <DiagramTreeRecursive key={key} node={node.children[key]} level={level + (node.type === 'group' ? 1 : 0)} />
+            ))}
           </div>
         )}
       </div>
     );
   };
   
-  // Get display value for selected diagram
   const getDisplayValue = () => {
-    if (!selectedItem) return placeholder;
-    
+    if (!selectedItem) return <span className="text-gray-400">{placeholder}</span>;
     return (
-      <div className={styles.selectedDisplay}>
-        <ProjectOutlined className={styles.selectedFileIcon} />
-        <div className={styles.selectedInfo}>
-          <span className={styles.selectedName}>
+      <div className="flex items-center w-full text-left">
+        <ProjectOutlined className="text-gray-500 dark:text-gray-400 mr-2 shrink-0" />
+        <div className="flex flex-col overflow-hidden flex-grow">
+          <span className="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate block">
             {selectedItem.name}
           </span>
           {selectedItem.description && (
-            <span className={styles.selectedDescription}>
+            <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">
               {selectedItem.description}
             </span>
           )}
@@ -396,27 +278,22 @@ export default function DiagramTreeSelect({
   };
   
   useEffect(() => {
-    const hasDiagramsWithoutPath = diagrams.some(diagram => !diagram.path);
-    if (hasDiagramsWithoutPath && companyId && environmentId) {
+    const needsPathUpdate = diagrams.some(diagram => !diagram.path);
+    if (needsPathUpdate && companyId && environmentId) {
       updateDiagramPaths(companyId, environmentId)
-        .then(updatedDiagrams => {
-          // Actualizar los diagramas con los paths actualizados
-          const updatedTree = buildDiagramTree(updatedDiagrams);
-          setTree([updatedTree]);
+        .then(_updatedDiagrams => { // Prefijar con _ si no se usa
+          // This might cause an infinite loop if diagrams prop isn't stable or if updateDiagramPaths itself triggers a re-render that changes diagrams
+          // Consider if this logic is truly needed or if paths should be set on creation
         })
-        .catch(error => {
-          console.error('Error updating diagram paths:', error);
-        });
-    } else {
-      const newTree = buildDiagramTree(diagrams);
-      setTree([newTree]);
+        .catch(error => console.error('Error updating diagram paths:', error));
     }
-  }, [diagrams, companyId, environmentId]);
+    // treeStructure is already built from diagrams, no need to setTree
+  }, [diagrams, companyId, environmentId]); // Removed setTree from dependencies
   
   return (
     <div className={`${styles.container} ${className}`} ref={dropdownRef}>
       <div 
-        className={`${styles.selector} ${isOpen ? styles.active : ''}`} 
+        className={`${styles.selector} ${isOpen ? styles.active : ''} flex items-center`}
         onClick={() => setIsOpen(!isOpen)}
       >
         {getDisplayValue()}
@@ -438,10 +315,10 @@ export default function DiagramTreeSelect({
           </div>
           
           <div className={styles.treeContainer}>
-            {filteredTree ? (
-              <DiagramTree node={filteredTree} />
+            {filteredTree && (Object.keys(filteredTree.children).length > 0 || filteredTree.diagrams.length > 0) ? (
+              <DiagramTreeRecursive node={filteredTree} />
             ) : (
-              <div className={styles.noResults}>No se encontraron diagramas</div>
+              <div className="p-4 text-center text-sm text-gray-500">No se encontraron diagramas</div>
             )}
           </div>
         </div>

@@ -1,29 +1,27 @@
- import React, { useState, useRef, useEffect, KeyboardEvent, MouseEvent } from 'react'; // MouseEvent ya estaba, correcto.
-import { Input, Button, Tooltip } from 'antd'; // Modal eliminado
+import React, { useState, useRef, useEffect, KeyboardEvent, MouseEvent } from 'react';
+import { Input, Button, Tooltip } from 'antd';
 import { FolderOutlined, DatabaseOutlined, CaretDownOutlined, CaretRightOutlined, CheckCircleOutlined, PauseCircleOutlined, PlusOutlined, FolderAddOutlined, DeleteOutlined } from '@ant-design/icons';
 import styles from './EnvironmentTreeSelect.module.css'; 
 import { Environment } from '../../services/diagramService'; 
 
 interface TreeNode {
-  type: 'group' | 'root'; // 'group' para directorios
-  name?: string; // Nombre del directorio
-  fullPath: string; // Ruta completa del directorio, '' para la raíz
-  children: { [key: string]: TreeNode }; // Subdirectorios
-  environments: Environment[]; // Ambientes en este nodo/directorio
+  type: 'group' | 'root'; 
+  name?: string; 
+  fullPath: string; 
+  children: { [key: string]: TreeNode }; 
+  environments: Environment[]; 
 }
 
 interface EnvironmentTreeSelectProps {
   environments: Environment[];
-  value?: string; // ID del ambiente seleccionado
+  value?: string; 
   onChange: (environmentId: string) => void;
   placeholder?: string;
-  // Props para el modo de selección de directorio (si se mantiene)
-  showDirectorySelector?: boolean; // Podría volverse obsoleto si el modo maneja esto
-  selectedDirectory?: string; // Ruta del directorio seleccionado
+  selectedDirectory?: string; 
   onDirectoryChange?: (directoryPath: string) => void;
-  onCreateDirectory?: (fullDirectoryPath: string) => void; // Para crear nuevos directorios
+  onCreateDirectory?: (fullDirectoryPath: string) => void; 
   onDeleteEnvironment?: (environmentId: string) => void;
-  mode?: 'select' | 'directory'; // 'select' para seleccionar ambientes, 'directory' para seleccionar directorios
+  mode?: 'select' | 'directory'; 
   showDeleteButton?: boolean;
   className?: string;
 }
@@ -33,7 +31,6 @@ export default function EnvironmentTreeSelect({
   value, 
   onChange,
   placeholder = 'Selecciona un ambiente',
-  // showDirectorySelector = false, // Considerar si se necesita con el nuevo modo
   selectedDirectory,
   onDirectoryChange,
   onCreateDirectory,
@@ -47,9 +44,8 @@ export default function EnvironmentTreeSelect({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedItem, setSelectedItem] = useState<Environment | null>(null);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set([''])); // Expandir raíz por defecto
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set([''])); 
   
-  // Estado para la creación de nuevos directorios
   const [showNewDirectoryInputForPath, setShowNewDirectoryInputForPath] = useState<string | null>(null);
   const [newDirectoryName, setNewDirectoryName] = useState('');
 
@@ -65,7 +61,6 @@ export default function EnvironmentTreeSelect({
 
     const rootTree: TreeNode = { type: 'root', fullPath: '', children: {}, environments: [] };
     
-    // Paso 1: Agrupar ambientes por el primer segmento de su path, o en una categoría raíz.
     const groups: { [key: string]: Environment[] } = {};
     const rootEnvironments: Environment[] = [];
 
@@ -83,30 +78,26 @@ export default function EnvironmentTreeSelect({
       }
     });
 
-    // Añadir ambientes sin ruta directamente a la raíz
     rootTree.environments.push(...rootEnvironments);
 
-    // Paso 2: Crear la estructura de árbol para los grupos
     Object.entries(groups).forEach(([groupName, envsInGroup]) => {
       if (envsInGroup.length > 0) {
         const groupNode: TreeNode = {
           type: 'group',
           name: groupName,
-          fullPath: groupName, // Ruta del grupo principal
+          fullPath: groupName, 
           children: {},
           environments: []
         };
 
         envsInGroup.forEach(env => {
-          const path = env.path?.trim() || ''; // Sabemos que path existe aquí
+          const path = env.path?.trim() || ''; 
           const pathParts = path.split('/');
 
-          if (pathParts.length > 1) { // Si hay subdirectorios dentro de este grupo principal
+          if (pathParts.length > 1) { 
             let currentNode = groupNode;
-            // Iterar desde el segundo segmento para construir sub-jerarquía
             for (let i = 1; i < pathParts.length; i++) {
               const segmentName = pathParts[i];
-              // Construir la ruta completa del subdirectorio
               const subPath = pathParts.slice(0, i + 1).join('/');
               
               if (!currentNode.children[segmentName]) {
@@ -120,9 +111,8 @@ export default function EnvironmentTreeSelect({
               }
               currentNode = currentNode.children[segmentName];
             }
-            currentNode.environments.push(env); // Añadir ambiente al nodo hoja del subdirectorio
+            currentNode.environments.push(env); 
           } else {
-            // No hay subdirectorios, añadir directamente al grupo principal
             groupNode.environments.push(env);
           }
         });
@@ -182,13 +172,13 @@ export default function EnvironmentTreeSelect({
 
   useEffect(() => {
     if (searchText && filteredTree) {
-      const newExpandedPaths = new Set<string>(['']); // Siempre expandir la raíz
-      const expandMatching = (node: TreeNode, currentPath: string) => {
+      const newExpandedPaths = new Set<string>(['']); 
+      const expandMatching = (node: TreeNode, _currentPath: string) => { // currentPath no se usa, prefijar con _
         if (node.environments.length > 0 && node.fullPath !== '') {
            newExpandedPaths.add(node.fullPath);
         }
         Object.values(node.children).forEach(child => {
-          if (child.fullPath) { // Solo si es un nodo de grupo (directorio)
+          if (child.fullPath) { 
             const childContainsMatches = (n: TreeNode): boolean => {
                 if (n.environments.length > 0) return true;
                 return Object.values(n.children).some(c => childContainsMatches(c));
@@ -203,7 +193,6 @@ export default function EnvironmentTreeSelect({
       expandMatching(filteredTree, '');
       setExpandedGroups(newExpandedPaths);
     } else if (!searchText) {
-      // Opcional: colapsar todo excepto la raíz cuando se borra la búsqueda
       // setExpandedGroups(new Set([''])); 
     }
   }, [searchText, filteredTree]);
@@ -231,7 +220,6 @@ export default function EnvironmentTreeSelect({
       onCreateDirectory(fullPath);
       setNewDirectoryName('');
       setShowNewDirectoryInputForPath(null);
-      // No cerrar el dropdown principal aquí, permitir más acciones
     }
   };
 
@@ -245,7 +233,7 @@ export default function EnvironmentTreeSelect({
   };
 
   useEffect(() => {
-    const handleClickOutside = (event: globalThis.MouseEvent) => { // Usar globalThis.MouseEvent
+    const handleClickOutside = (event: globalThis.MouseEvent) => { 
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         setShowNewDirectoryInputForPath(null);
@@ -266,13 +254,12 @@ export default function EnvironmentTreeSelect({
   
   const getEnvironmentStatusIcon = (environment: Environment) => {
     return environment.is_active ? (
-      <CheckCircleOutlined className={styles.activeIcon} />
+      <CheckCircleOutlined className="text-green-500" />
     ) : (
-      <PauseCircleOutlined className={styles.inactiveIcon} />
+      <PauseCircleOutlined className="text-gray-400" />
     );
   };
 
-  // Helper para contar ambientes en un nodo y sus hijos
   const countEnvironmentsInNode = (node: TreeNode): number => {
     let count = node.environments.length;
     Object.values(node.children).forEach(child => {
@@ -283,8 +270,8 @@ export default function EnvironmentTreeSelect({
 
   const EnvironmentTreeRecursive = ({ node, level = 0 }: { node: TreeNode, level?: number }) => {
     if (!node) return null;
-    const isExpanded = node.fullPath !== '' ? expandedGroups.has(node.fullPath) : true; // Raíz siempre expandida conceptualmente
-    const indentSize = level * 16; // Ajustado para coincidir con DiagramTreeSelect
+    const isExpanded = node.fullPath !== '' ? expandedGroups.has(node.fullPath) : true; 
+    const indentSize = level * 16; 
 
     return (
       <>
@@ -326,17 +313,17 @@ export default function EnvironmentTreeSelect({
                 style={{ paddingLeft: `${indentSize + (node.type === 'group' ? 24 : 0)}px` }}
                 onClick={() => handleSelectEnvironment(env)}
               >
-                <DatabaseOutlined className={styles.databaseIcon} />
-                <div className={styles.environmentInfo}>
-                  <span className={styles.environmentName}>{env.name}</span>
-                  {env.description && <span className={styles.environmentDescription}>{env.description}</span>}
+                <DatabaseOutlined className="text-gray-400 mr-2" />
+                <div className="flex flex-col overflow-hidden">
+                  <span className="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block">{env.name}</span>
+                  {env.description && <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">{env.description}</span>}
                 </div>
-                <div className={styles.environmentMeta}>
+                <div className="ml-auto pl-2 shrink-0">
                   {getEnvironmentStatusIcon(env)}
                   {showDeleteButton && onDeleteEnvironment && (
                     <DeleteOutlined 
-                      className={styles.deleteButton}
-                      onClick={(e) => { e.stopPropagation(); onDeleteEnvironment(env.id); }}
+                      className="text-gray-400 hover:text-red-500 ml-2 cursor-pointer"
+                      onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDeleteEnvironment(env.id); }}
                       title="Eliminar ambiente"
                     />
                   )}
@@ -347,7 +334,7 @@ export default function EnvironmentTreeSelect({
               <EnvironmentTreeRecursive key={childNode.fullPath} node={childNode} level={level + 1} />
             ))}
             {showNewDirectoryInputForPath === node.fullPath && onCreateDirectory && (
-              <div style={{ paddingLeft: `${indentSize + (node.type === 'group' ? 24 : 0)}px` }} className={styles.newDirectoryFormInline}>
+              <div style={{ paddingLeft: `${indentSize + (node.type === 'group' ? 24 : 0)}px` }} className="flex items-center gap-2 p-1">
                 <Input
                   size="small"
                   placeholder="Nombre de subdirectorio"
@@ -356,6 +343,7 @@ export default function EnvironmentTreeSelect({
                   onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleCreateNewDirectorySubmit(node.fullPath); if (e.key === 'Escape') setShowNewDirectoryInputForPath(null);}}
                   onClick={(e: MouseEvent<HTMLInputElement>) => e.stopPropagation()}
                   autoFocus
+                  className="flex-grow"
                 />
                 <Button size="small" type="primary" onClick={() => handleCreateNewDirectorySubmit(node.fullPath)} disabled={!newDirectoryName.trim()}>Crear</Button>
                 <Button size="small" onClick={() => setShowNewDirectoryInputForPath(null)}>Cancelar</Button>
@@ -370,18 +358,23 @@ export default function EnvironmentTreeSelect({
   const getDisplayValue = () => {
     if (mode === 'directory') {
       return selectedDirectory ? 
-        <><FolderOutlined style={{marginRight: '8px'}} />{selectedDirectory}</> : 
-        placeholder;
+        <div className="flex items-center"><FolderOutlined className="mr-2 text-gray-500" />{selectedDirectory}</div> : 
+        <span className="text-gray-400">{placeholder}</span>;
     }
-    if (!selectedItem) return placeholder;
+    if (!selectedItem) return <span className="text-gray-400">{placeholder}</span>;
     return (
-      <div className={styles.selectedDisplay}>
-        <DatabaseOutlined className={styles.selectedDatabaseIcon} />
-        <div className={styles.selectedInfo}>
-          <span className={styles.selectedName}>{selectedItem.name}</span>
-          {selectedItem.path && <span className={styles.selectedPath}>{selectedItem.path}</span>}
+      <div className="flex items-center w-full text-left">
+        <DatabaseOutlined className="text-gray-500 dark:text-gray-400 mr-2 shrink-0" />
+        <div className="flex flex-col overflow-hidden flex-grow">
+          <span className="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate block">{selectedItem.name}</span>
+          {selectedItem.description && (
+            <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">{selectedItem.description}</span>
+          )}
+          {!selectedItem.description && selectedItem.path && (
+            <span className="text-xs text-gray-500 dark:text-gray-400 truncate block">Ruta: {selectedItem.path}</span>
+          )}
         </div>
-        {getEnvironmentStatusIcon(selectedItem)}
+        <div className="ml-auto pl-2 shrink-0">{getEnvironmentStatusIcon(selectedItem)}</div>
       </div>
     );
   };
@@ -389,7 +382,7 @@ export default function EnvironmentTreeSelect({
   return (
     <div className={`${styles.container} ${className}`} ref={dropdownRef}>
       <div 
-        className={`${styles.selector} ${isOpen ? styles.active : ''}`} 
+        className={`${styles.selector} ${isOpen ? styles.active : ''} flex items-center`} // Asegurar items-center
         onClick={() => setIsOpen(!isOpen)}
       >
         {getDisplayValue()}
@@ -409,12 +402,12 @@ export default function EnvironmentTreeSelect({
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-          {mode === 'directory' && onCreateDirectory && !searchText && ( // Solo mostrar si no hay búsqueda activa
+          {mode === 'directory' && onCreateDirectory && !searchText && ( 
              <div 
-                className={styles.createDirectoryButton}
-                onClick={(e) => { e.stopPropagation(); setShowNewDirectoryInputForPath(''); setNewDirectoryName(''); }}
+                className="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm text-gray-600 dark:text-gray-300"
+                onClick={(e: React.MouseEvent) => { e.stopPropagation(); setShowNewDirectoryInputForPath(''); setNewDirectoryName(''); }}
               >
-                <FolderAddOutlined className={styles.addIcon} />
+                <FolderAddOutlined className="mr-2" />
                 <span>Crear Directorio Raíz</span>
             </div>
           )}
@@ -422,7 +415,7 @@ export default function EnvironmentTreeSelect({
             {filteredTree && (Object.keys(filteredTree.children).length > 0 || filteredTree.environments.length > 0) ? (
               <EnvironmentTreeRecursive node={filteredTree} />
             ) : (
-              <div className={styles.noResults}>
+              <div className="p-4 text-center text-sm text-gray-500">
                 {searchText ? (mode === 'directory' ? 'No se encontraron directorios' : 'No se encontraron ambientes') : (mode === 'directory' ? 'No hay directorios. Crea uno.' : 'No hay ambientes. Crea uno.')}
               </div>
             )}
