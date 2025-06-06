@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect } from 'react';
-import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
+import type { Node, NodeProps } from 'reactflow'; // Volver a la importación de tipos directa
+import { Handle, Position, useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
 import { 
@@ -39,7 +40,7 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(styleElement);
 }
 
-interface BaseResourceNodeProps extends NodeProps<NodeData> {
+interface BaseResourceNodeProps extends NodeProps<NodeData> { // Usar NodeProps<NodeData> directamente
   data: NodeData & {
     icon?: React.ReactNode;
     isCollapsed?: boolean;
@@ -55,6 +56,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
   const [isListView, setIsListView] = useState(false);
   const [isResizable, setIsResizable] = useState(data.resizable !== false && data.userResized === true);
   const [isLocked, setIsLocked] = useState(false);
+  const [isHovered, setIsHovered] = useState(false); // Estado para el hover
   const reactFlowInstance = useReactFlow();
   
   // Color mapping based on cloud provider
@@ -79,15 +81,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
   // Efecto para verificar si el nodo está dentro de los límites del grupo padre
   useEffect(() => {
     if (data.parentNode) {
-      const parentNode = reactFlowInstance.getNode(data.parentNode);
-      const currentNode = reactFlowInstance.getNode(id);
+      const parentNode = reactFlowInstance.getNode(data.parentNode) as Node<NodeData> | undefined; 
+      const currentNode = reactFlowInstance.getNode(id) as Node<NodeData> | undefined; 
       
-      if (parentNode && currentNode) {
-        const parentWidth = (parentNode.style?.width as number) || 200;
-        const parentHeight = (parentNode.style?.height as number) || 150;
+      if (parentNode && currentNode && currentNode.position) { // Asegurar que position exista
+        const parentWidth = (parentNode.style?.width as number) || (parentNode.width ?? 200);
+        const parentHeight = (parentNode.style?.height as number) || (parentNode.height ?? 150);
         
-        const nodeWidth = (currentNode.style?.width as number) || 100;
-        const nodeHeight = (currentNode.style?.height as number) || 50;
+        const nodeWidth = (currentNode.style?.width as number) || (currentNode.width ?? 100);
+        const nodeHeight = (currentNode.style?.height as number) || (currentNode.height ?? 50);
         
         let needsAdjustment = false;
         const newPos = { ...currentNode.position };
@@ -111,22 +113,22 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         
         if (needsAdjustment) {
           reactFlowInstance.setNodes(nds => 
-            nds.map(n => 
+            nds.map((n: Node<NodeData>) => 
               n.id === id ? { ...n, position: newPos } : n
             )
           );
         }
 
         // También verificar si el padre está en modo colapsado
-        const parentData = parentNode.data;
-        if (parentData?.isCollapsed === true || parentData?.isMinimized === true) {
+        const parentData = parentNode.data; 
+        if (parentData?.isCollapsed === true) { 
           setIsListView(true);
         } else {
           setIsListView(false);
         }
       }
     }
-  }, [id, data.parentNode, reactFlowInstance]);
+  }, [id, data.parentNode, reactFlowInstance, data.isCollapsed]); // Añadido data.isCollapsed a las dependencias
   
   const toggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation(); // Evitar que el click llegue al nodo y lo seleccione
@@ -134,7 +136,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     
     // También actualizar el estado en el nodo
     reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
+      nds.map((n: Node<NodeData>) => { 
         if (n.id === id) {
           return {
             ...n,
@@ -157,7 +159,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     
     // Update the node data and trigger an event for the parent group
     reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
+      nds.map((n: Node<NodeData>) => { 
         if (n.id === id) {
           return {
             ...n,
@@ -221,15 +223,16 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     
     // Actualizar el estilo del nodo
     reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
+      nds.map((n: Node<NodeData>) => {
         if (n.id === id) {
+          const currentStyle = n.style || {};
           return {
             ...n,
             className: !isListView ? 'list-node-item' : '',
             style: {
-              ...n.style,
-              height: !isListView ? 35 : n.style?.height || 50, 
-              width: !isListView ? 150 : n.style?.width || 100
+              ...currentStyle,
+              height: !isListView ? 35 : (currentStyle.height || 50), 
+              width: !isListView ? 150 : (currentStyle.width || 100)
             }
           };
         }
@@ -429,7 +432,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     
     // Update node data to reflect locked state
     reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
+      nds.map((n: Node<NodeData>) => { 
         if (n.id === id) {
           return {
             ...n,
@@ -532,7 +535,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
             break;
           case 'deleteNode':
             reactFlowInstance.setNodes(nodes => 
-              nodes.filter(node => node.id !== id)
+              nodes.filter((node: Node<NodeData>) => node.id !== id) 
             );
             break;
         }
@@ -690,6 +693,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       }}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div className="flex items-center gap-1 overflow-hidden">
         {data.icon && (
@@ -713,13 +718,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         position={Position.Top}
         id="top"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
+          width: '12px', // Aumentado
+          height: '12px', // Aumentado
+          background: '#555', // Color más suave
           border: '2px solid white',
           borderRadius: '50%',
-          top: -5,
-          zIndex: 2
+          top: -6, // Ajustado para el nuevo tamaño
+          zIndex: 2,
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       />
       <Handle
@@ -727,13 +734,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         position={Position.Bottom}
         id="bottom"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
+          width: '12px', // Aumentado
+          height: '12px', // Aumentado
+          background: '#555',
           border: '2px solid white',
           borderRadius: '50%',
-          bottom: -5,
-          zIndex: 2
+          bottom: -6, // Ajustado
+          zIndex: 2,
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       />
       <Handle
@@ -741,13 +750,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         position={Position.Left}
         id="left"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
+          width: '12px', // Aumentado
+          height: '12px', // Aumentado
+          background: '#555',
           border: '2px solid white',
           borderRadius: '50%',
-          left: -5,
-          zIndex: 2
+          left: -6, // Ajustado
+          zIndex: 2,
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       />
       <Handle
@@ -755,13 +766,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         position={Position.Right}
         id="right"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
+          width: '12px', // Aumentado
+          height: '12px', // Aumentado
+          background: '#555',
           border: '2px solid white',
           borderRadius: '50%',
-          right: -5,
-          zIndex: 2
+          right: -6, // Ajustado
+          zIndex: 2,
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       />
     </div>

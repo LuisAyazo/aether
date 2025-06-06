@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, KeyboardEvent, MouseEvent } from 'react';
+import React, { useState, useRef, useEffect, KeyboardEvent, MouseEvent, useMemo } from 'react'; // useMemo importado
 import { Input, Button, Tooltip } from 'antd';
 import { FolderOutlined, DatabaseOutlined, CaretDownOutlined, CaretRightOutlined, CheckCircleOutlined, PauseCircleOutlined, PlusOutlined, FolderAddOutlined, DeleteOutlined } from '@ant-design/icons';
 import styles from './EnvironmentTreeSelect.module.css'; 
@@ -122,7 +122,7 @@ export default function EnvironmentTreeSelect({
     return rootTree;
   };
   
-  const treeStructure = buildEnvironmentTree(environments);
+  const treeStructure = useMemo(() => buildEnvironmentTree(environments), [environments]); // Memoizado
 
   useEffect(() => {
     if (value && mode === 'select') {
@@ -141,7 +141,7 @@ export default function EnvironmentTreeSelect({
     } else {
       setSelectedItem(null);
     }
-  }, [environments, value, mode, treeStructure]);
+  }, [value, mode, treeStructure]); // treeStructure en dependencias
 
   const filterTreeNode = (node: TreeNode, searchQuery: string): TreeNode | null => {
     if (!searchQuery) return node;
@@ -156,7 +156,7 @@ export default function EnvironmentTreeSelect({
     let hasMatchingChildren = false;
     Object.entries(node.children).forEach(([key, childNode]) => {
       const filteredChild = filterTreeNode(childNode, searchQuery);
-      if (filteredChild) {
+      if (filteredChild) { // Si el hijo (o sus descendientes) tiene coincidencias
         children[key] = filteredChild;
         hasMatchingChildren = true;
       }
@@ -168,12 +168,12 @@ export default function EnvironmentTreeSelect({
     return null;
   };
 
-  const filteredTree = filterTreeNode(treeStructure, searchText);
+  const filteredTree = useMemo(() => filterTreeNode(treeStructure, searchText), [treeStructure, searchText]); // Memoizado
 
   useEffect(() => {
     if (searchText && filteredTree) {
       const newExpandedPaths = new Set<string>(['']); 
-      const expandMatching = (node: TreeNode, _currentPath: string) => { // currentPath no se usa, prefijar con _
+      const expandMatching = (node: TreeNode, _currentPath: string) => {
         if (node.environments.length > 0 && node.fullPath !== '') {
            newExpandedPaths.add(node.fullPath);
         }
@@ -190,10 +190,8 @@ export default function EnvironmentTreeSelect({
           }
         });
       };
-      expandMatching(filteredTree, '');
-      setExpandedGroups(newExpandedPaths);
-    } else if (!searchText) {
-      // setExpandedGroups(new Set([''])); 
+      if (filteredTree) expandMatching(filteredTree, ''); // Asegurar que filteredTree no sea null
+      setExpandedGroups(newExpandedPaths); // Corregido a setExpandedGroups
     }
   }, [searchText, filteredTree]);
 
@@ -268,18 +266,6 @@ export default function EnvironmentTreeSelect({
     return count;
   };
 
-  // Helper para contar diagramas en un nodo y sus hijos
-  const countTotalDiagramsInNode = (node: TreeNode): number => {
-    let totalDiagrams = 0;
-    node.environments.forEach(env => {
-      totalDiagrams += env.diagrams?.length || 0;
-    });
-    Object.values(node.children).forEach(childNode => {
-      totalDiagrams += countTotalDiagramsInNode(childNode);
-    });
-    return totalDiagrams;
-  };
-
   const EnvironmentTreeRecursive = ({ node, level = 0 }: { node: TreeNode, level?: number }) => {
     if (!node) return null;
     const isExpanded = node.fullPath !== '' ? expandedGroups.has(node.fullPath) : true; 
@@ -289,7 +275,7 @@ export default function EnvironmentTreeSelect({
       <>
         {node.type === 'group' && node.name && (
           <div 
-            className={`${styles.groupHeader} ${mode === 'directory' && selectedDirectory === node.fullPath ? styles.selectedDirectory : ''}`}
+            className={`${styles.groupHeader} ${mode === 'directory' && selectedDirectory === node.fullPath ? styles.selectedDirectory : ''} bg-yellow-50 dark:bg-yellow-700/30 hover:bg-yellow-100 dark:hover:bg-yellow-600/40`}
             style={{ paddingLeft: `${indentSize}px` }}
             onClick={(e) => {
               e.stopPropagation();
@@ -303,10 +289,10 @@ export default function EnvironmentTreeSelect({
             <span className={styles.caretIcon} onClick={(e) => { e.stopPropagation(); toggleGroup(node.fullPath); }}>
               {Object.keys(node.children).length > 0 || node.environments.length > 0 ? (isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />) : <span style={{display: 'inline-block', width: '14px'}} />}
             </span>
-            <FolderOutlined className={styles.folderIcon} />
+            <FolderOutlined className={`${styles.folderIcon} text-yellow-600 dark:text-yellow-500`} />
             <span className={styles.groupName}>{node.name}</span>
             <span className={styles.environmentCount}>
-              ({countEnvironmentsInNode(node)} Amb.) {/* Mostrar solo contador de ambientes para el grupo */}
+              ({countEnvironmentsInNode(node)} Amb.)
             </span>
             {mode === 'directory' && onCreateDirectory && (
               <Tooltip title="Crear subdirectorio aquí">
@@ -326,7 +312,7 @@ export default function EnvironmentTreeSelect({
                 onClick={() => handleSelectEnvironment(env)}
               >
                 <DatabaseOutlined className="text-gray-400 mr-2" />
-                <div className="flex flex-col overflow-hidden flex-grow"> {/* Añadido flex-grow */}
+                <div className="flex flex-col overflow-hidden flex-grow">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block">{env.name}</span>
                     <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 shrink-0">
@@ -335,12 +321,12 @@ export default function EnvironmentTreeSelect({
                   </div>
                   {env.description && <span className="text-xs text-gray-500 dark:text-gray-400 truncate block mt-0.5">{env.description}</span>}
                 </div>
-                <div className="ml-auto pl-2 shrink-0 flex items-center"> {/* Asegurar alineación vertical del status y delete */}
+                <div className="ml-auto pl-2 shrink-0 flex items-center">
                   {getEnvironmentStatusIcon(env)}
                   {showDeleteButton && onDeleteEnvironment && (
                     <Tooltip title="Eliminar ambiente">
                       <DeleteOutlined 
-                        className="text-gray-400 hover:text-red-500 ml-3 cursor-pointer" // Aumentado margen a ml-3
+                        className="text-gray-400 hover:text-red-500 ml-3 cursor-pointer"
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDeleteEnvironment(env.id); }}
                       />
                     </Tooltip>
@@ -400,7 +386,7 @@ export default function EnvironmentTreeSelect({
   return (
     <div className={`${styles.container} ${className}`} ref={dropdownRef}>
       <div 
-        className={`${styles.selector} ${isOpen ? styles.active : ''} flex items-center`} // Asegurar items-center
+        className={`${styles.selector} ${isOpen ? styles.active : ''} flex items-center`}
         onClick={() => setIsOpen(!isOpen)}
       >
         {getDisplayValue()}

@@ -61,6 +61,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
   const [isMinimized, setIsMinimized] = useState(data.isMinimized || false);
   const [currentWidthState, setCurrentWidthState] = useState(width || DEFAULT_WIDTH);
   const [currentHeightState, setCurrentHeightState] = useState(height || DEFAULT_HEIGHT); // Added for height
+  const [isHovered, setIsHovered] = useState(false); // Estado para el hover
 
   useEffect(() => {
     if (width && !isMinimized) {
@@ -239,6 +240,8 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
           width: `${currentWidthState}px`, // Usar el ancho guardado en el estado local
           height: `${MINIMIZED_HEIGHT}px`,
         }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         <div className="flex items-center gap-1 overflow-hidden flex-grow">
           <span className="text-xs flex-shrink-0">{getProviderIconForNode(data)}</span>
@@ -284,10 +287,38 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
         </div>
         
         {/* Handles para el modo minimizado */}
-        <Handle type="target" position={Position.Top} style={{ width: 8, height: 8, background: '#9ca3af' }} />
-        <Handle type="source" position={Position.Bottom} style={{ width: 8, height: 8, background: '#9ca3af' }} />
-        <Handle type="target" position={Position.Left} style={{ width: 8, height: 8, background: '#9ca3af' }} />
-        <Handle type="source" position={Position.Right} style={{ width: 8, height: 8, background: '#9ca3af' }} />
+        <Handle 
+          type="target" 
+          position={Position.Top} 
+          style={{ 
+            width: '10px', height: '10px', background: '#555', border: '2px solid white', borderRadius: '50%', top: -5,
+            opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+          }} 
+        />
+        <Handle 
+          type="source" 
+          position={Position.Bottom} 
+          style={{ 
+            width: '10px', height: '10px', background: '#555', border: '2px solid white', borderRadius: '50%', bottom: -5,
+            opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+          }} 
+        />
+        <Handle 
+          type="target" 
+          position={Position.Left} 
+          style={{ 
+            width: '10px', height: '10px', background: '#555', border: '2px solid white', borderRadius: '50%', left: -5,
+            opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+          }} 
+        />
+        <Handle 
+          type="source" 
+          position={Position.Right} 
+          style={{ 
+            width: '10px', height: '10px', background: '#555', border: '2px solid white', borderRadius: '50%', right: -5,
+            opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+          }} 
+        />
       </div>
     );
   }
@@ -300,6 +331,8 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
         width: width || DEFAULT_WIDTH, // Controlado por NodeResizer o default
         height: height || DEFAULT_HEIGHT, // Controlado por NodeResizer o default
       }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Header */}
       <div 
@@ -404,10 +437,38 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
         />
       )}
       
-      <Handle type="target" position={Position.Top} style={{ width: 10, height: 10, background: '#cbd5e1' }} />
-      <Handle type="source" position={Position.Bottom} style={{ width: 10, height: 10, background: '#cbd5e1' }} />
-      <Handle type="target" position={Position.Left} style={{ width: 10, height: 10, background: '#cbd5e1' }} />
-      <Handle type="source" position={Position.Right} style={{ width: 10, height: 10, background: '#cbd5e1' }} />
+      <Handle 
+        type="target" 
+        position={Position.Top} 
+        style={{ 
+          width: '12px', height: '12px', background: '#555', border: '2px solid white', borderRadius: '50%', top: -6,
+          opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+        }} 
+      />
+      <Handle 
+        type="source" 
+        position={Position.Bottom} 
+        style={{ 
+          width: '12px', height: '12px', background: '#555', border: '2px solid white', borderRadius: '50%', bottom: -6,
+          opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+        }} 
+      />
+      <Handle 
+        type="target" 
+        position={Position.Left} 
+        style={{ 
+          width: '12px', height: '12px', background: '#555', border: '2px solid white', borderRadius: '50%', left: -6,
+          opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+        }} 
+      />
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        style={{ 
+          width: '12px', height: '12px', background: '#555', border: '2px solid white', borderRadius: '50%', right: -6,
+          opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+        }} 
+      />
     </div>
   );
 };

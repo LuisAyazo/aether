@@ -12,7 +12,8 @@ import {
   ExclamationCircleFilled,
   FolderAddOutlined, 
   ProjectOutlined,
-  PlusOutlined // Añadido para botones de crear
+  PlusOutlined, // Añadido para botones de crear
+  MailOutlined // Añadido para el correo del usuario
 } from '@ant-design/icons';
 import { logoutUser as authLogout } from '../services/authService';
 import { useNavigationStore } from '@/app/hooks/useNavigationStore'; 
@@ -78,6 +79,8 @@ export default function Navigation() {
   // Handlers para eliminar
   const handleDeleteEnvironment = useNavigationStore(state => state.handleDeleteEnvironment);
   const handleDeleteDiagram = useNavigationStore(state => state.handleDeleteDiagram);
+  // Handler para actualizar path de diagrama (D&D)
+  const handleUpdateDiagramPath = useNavigationStore(state => state.handleUpdateDiagramPath);
 
   const historyModalVisible = useNavigationStore(state => state.historyModalVisible);
   const setHistoryModalVisible = useNavigationStore(state => state.setHistoryModalVisible);
@@ -229,6 +232,10 @@ export default function Navigation() {
                           className="min-w-[180px] md:min-w-[200px]"
                           onDeleteDiagram={handleDeleteDiagram}
                           showDeleteButton={true}
+                          onDiagramPathChange={handleUpdateDiagramPath} 
+                          companyId={activeCompany?._id} 
+                          environmentId={selectedEnvironment}
+                          isLoading={dataLoading} // Pasar el estado de carga
                         />
                       </>
                     )}
@@ -270,11 +277,21 @@ export default function Navigation() {
             {!isOnMarketingPage && user && (
               <div className="flex items-center gap-4">
                 <Dropdown menu={{ items: userMenuItems }} trigger={['click']}>
-                  <a onClick={e => e.preventDefault()} className="flex items-center gap-2 cursor-pointer">
-                    <Avatar icon={<UserOutlined />} src={user.avatar_url || undefined} size="small" />
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 hidden sm:inline">
-                      {user.name || user.email}
-                    </span>
+                  <a onClick={e => e.preventDefault()} className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <Avatar icon={<UserOutlined />} src={user.avatar_url || undefined} size="default" />
+                    <div className="hidden sm:flex sm:flex-col sm:items-start">
+                      {user.name && (
+                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-tight">
+                          {user.name}
+                        </span>
+                      )}
+                      {user.email && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 leading-tight mt-0.5">
+                          <MailOutlined />
+                          {user.email}
+                        </span>
+                      )}
+                    </div>
                   </a>
                 </Dropdown>
               </div>

@@ -17,8 +17,9 @@ import {
   getDiagram, 
   createDiagram as createDiagramServiceAPICall,
   createEnvironment as createEnvironmentServiceAPICall,
-  deleteEnvironment as deleteEnvironmentServiceAPICall, // Añadir deleteEnvironment
-  deleteDiagram as deleteDiagramServiceAPICall // Añadir deleteDiagram
+  deleteEnvironment as deleteEnvironmentServiceAPICall,
+  deleteDiagram as deleteDiagramServiceAPICall,
+  updateDiagram as updateDiagramServiceAPICall // Añadir updateDiagram
 } from '@/app/services/diagramService';
 import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '@/app/services/companyService'; // Importar servicio de compañía
 
@@ -130,6 +131,9 @@ export interface NavigationStoreState {
   // Acciones para eliminar
   handleDeleteEnvironment: (environmentId: string) => Promise<void>;
   handleDeleteDiagram: (diagramId: string) => Promise<void>;
+
+  // Acción para actualizar path de diagrama (Drag and Drop)
+  handleUpdateDiagramPath: (diagramId: string, newPath: string | null) => Promise<void>;
 }
 
 export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
@@ -602,5 +606,45 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
         }
       },
     });
+  },
+
+  handleUpdateDiagramPath: async (diagramId: string, newPath: string | null) => {
+    const { activeCompany, selectedEnvironment, currentDiagram } = get();
+    if (!activeCompany?._id || !selectedEnvironment) {
+      message.error("No hay compañía o ambiente activo seleccionado para actualizar el diagrama.");
+      throw new Error("No hay compañía o ambiente activo seleccionado.");
+    }
+    set({ dataLoading: true });
+    try {
+      // El backend espera `null` si el path se elimina (raíz), o una string.
+      // El modelo DiagramUpdate tiene path: Optional[str].
+      // Si newPath es null, se enviará { path: null }.
+      // Si newPath es una string vacía "", se enviará { path: "" }.
+      // Para "sin path" o raíz, es mejor usar null o una string vacía consistente.
+      // Asumiremos que el backend interpreta `null` como "sin path" (raíz).
+      // Si se quiere una string vacía para la raíz, newPath debería ser `''` en lugar de `null`.
+      // Por ahora, si newPath es null (desde __ROOT_DROP_AREA__), se enviará path: null.
+      const pathPayload = newPath === null ? null : (newPath.trim() === '' ? null : newPath.trim());
+
+      await updateDiagramServiceAPICall(activeCompany._id, selectedEnvironment, diagramId, { path: pathPayload });
+      message.success("Diagrama movido exitosamente.");
+
+      // Refrescar la lista de diagramas para el ambiente actual
+      const updatedDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment);
+      set(state => ({
+        diagrams: updatedDiagrams,
+        dataLoading: false,
+        // Actualizar el currentDiagram si es el que se movió
+        currentDiagram: state.currentDiagram?.id === diagramId 
+          ? { ...state.currentDiagram, path: typeof pathPayload === 'string' ? pathPayload : undefined } 
+          : state.currentDiagram
+      }));
+      
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      message.error(`Error al mover el diagrama: ${errorMsg}`);
+      set({ dataError: errorMsg, dataLoading: false });
+      throw error; // Re-lanzar para que el componente que llama pueda manejarlo si es necesario
+    }
   },
 }));
