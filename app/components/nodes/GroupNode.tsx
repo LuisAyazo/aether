@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
-import { Handle, Position, NodeProps, useReactFlow, useNodes } from 'reactflow';
+import { Handle, Position, useReactFlow, useNodes } from 'reactflow';
+import type { Node, NodeProps } from 'reactflow'; // Importar Node y NodeProps como tipos
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
 import { 
@@ -80,8 +81,9 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
   const labelInputRef = useRef<HTMLInputElement>(null);
 
   const childNodes = useMemo(() => {
-    return allNodes.filter(n => n.parentId === id)
-                   .sort((a, b) => (((a.data as any)?.label || a.id).localeCompare(((b.data as any)?.label || b.id))));
+    // Node<any> porque los hijos pueden ser de cualquier tipo con datos variados.
+    return allNodes.filter((n: Node<any>) => n.parentId === id)
+                   .sort((a: Node<any>, b: Node<any>) => (((a.data as any)?.label || a.id).localeCompare(((b.data as any)?.label || b.id))));
   }, [allNodes, id]);
 
   // Efecto para actualizar el contador de hijos en data y ocultar/mostrar hijos (para React Flow)
@@ -95,12 +97,12 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     // Solo actualizar el data del propio nodo de grupo si es necesario
     // para reflejar el childCount o el estado local isMinimized.
     if (currentGroupData?.childCount !== newChildCount || currentGroupData?.isMinimized !== isMinimized) {
-      setNodes(nds => nds.map(n => {
+      setNodes((nds: Node[]) => nds.map((n: Node) => { // Usar Node[] y Node para nds y n
         if (n.id === id) {
           return { 
             ...n, 
             data: { 
-              ...(n.data as object), 
+              ...(n.data as GroupNodeData), // Castear a GroupNodeData aquí
               childCount: newChildCount, 
               isMinimized: isMinimized // Sincronizar data.isMinimized con el estado local
             } 
@@ -123,9 +125,9 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
   const handleLabelSubmit = useCallback(() => {
     setIsEditingLabel(false);
     if (editedLabel !== data.label) {
-      setNodes(nodes =>
-        nodes.map(node =>
-          node.id === id ? { ...node, data: { ...node.data, label: editedLabel } } : node
+      setNodes((nodes: Node[]) => // Usar Node[]
+        nodes.map((node: Node) => // Usar Node
+          node.id === id ? { ...node, data: { ...(node.data as GroupNodeData), label: editedLabel } } : node // Castear data
         )
       );
     }
@@ -163,8 +165,8 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     const newMinimizedState = !isMinimized;
     setIsMinimized(newMinimizedState);
 
-    setNodes(nds => 
-      nds.map(n => {
+    setNodes((nds: Node[]) => // Usar Node[]
+      nds.map((n: Node) => { // Usar Node
         if (n.id === id) { // Es el nodo de grupo actual
           let newWidth, newHeight;
           
@@ -239,6 +241,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
         style={{ 
           width: `${currentWidthState}px`, // Usar el ancho guardado en el estado local
           height: `${MINIMIZED_HEIGHT}px`,
+          zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -330,6 +333,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
       style={{ 
         width: width || DEFAULT_WIDTH, // Controlado por NodeResizer o default
         height: height || DEFAULT_HEIGHT, // Controlado por NodeResizer o default
+        zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -405,7 +409,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
       >
         {/* Si la vista está expandida, FlowEditor renderizará los nodos. GroupNode solo muestra el área. */}
         {/* Si no está expandida (y no minimizada), muestra la lista de hijos. */}
-        {!data.isExpandedView && childNodes.map(node => (
+        {!data.isExpandedView && childNodes.map((node: Node<any>) => ( // Tipar node aquí
           <div key={node.id} className="flex items-center p-1 bg-gray-50 rounded border border-gray-200 text-xs">
             {getChildNodeIcon(node.type)}
             <span className="ml-2 truncate" title={(node.data as any)?.label || node.id}>

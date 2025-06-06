@@ -2,13 +2,18 @@ import { useCallback } from 'react';
 import {
   useReactFlow,
   addEdge,
-  Node,
-  Connection,
-  Edge,
-  XYPosition,
-  // ReactFlowInstance, // No se usa directamente
+  // Node, // Se usará any o un alias
+  // Connection, // Se usará any o un alias
+  // Edge, // Se usará any o un alias
+  // XYPosition, // Se usará any o un alias
   applyNodeChanges,
 } from 'reactflow';
+
+// Tipos workaround como en FlowEditor.tsx
+type Node = any;
+type Connection = any;
+type Edge = any;
+type XYPosition = any;
 import { useEditorStore } from './useEditorStore';
 // import { shallow } from 'zustand/shallow'; // No se usará shallow aquí
 import { useSelectedEdgeType } from '@/app/contexts/SelectedEdgeTypeContext';
@@ -70,7 +75,7 @@ export function useFlowInteractions({
       }
       const logicalTypeToUse = selectedLogicalType || LogicalEdgeType.CONNECTS_TO;
       const config = getEdgeConfig(logicalTypeToUse);
-      const newEdge: Edge<CustomEdgeData> = {
+      const newEdge: Edge = { // Cambiado Edge<CustomEdgeData> a Edge (que es any)
         source: source!,
         target: target!,
         sourceHandle: sourceHandle,
@@ -109,9 +114,12 @@ export function useFlowInteractions({
           data, 
           selected: true, 
           draggable: true, 
-          selectable: true 
+          selectable: true,
+          style: { zIndex: 1 } // Asegurar que esté por encima de las áreas
         };
         setNodes(nds => applyNodeChanges([{ type: 'add', item: newNode }], nds));
+        // Cambiar a la herramienta de selección después de añadir el nodo
+        setActiveTool('select'); 
         return;
       }
       document.body.style.cursor = 'default';
@@ -162,6 +170,17 @@ export function useFlowInteractions({
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, draggedNode: Node) => {
       setIsCanvasDragging(false);
+
+      // Deseleccionar el AreaNode después de arrastrarlo
+      if (draggedNode.type === 'areaNode') {
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === draggedNode.id
+              ? { ...n, selected: false }
+              : n
+          )
+        );
+      }
       
       const targetGroup = nodes.find(
         (g) =>
@@ -178,7 +197,7 @@ export function useFlowInteractions({
       );
 
       if (targetGroup && targetGroup.id) {
-        const nodesToUpdate = reactFlowInstance.getNodes().map(n => {
+        const nodesToUpdate = reactFlowInstance.getNodes().map((n: Node) => { // Añadido tipo explícito a n
           if (n.id === draggedNode.id) {
             const newPosition = { 
               x: (draggedNode.positionAbsolute?.x ?? 0) - (targetGroup.positionAbsolute?.x ?? 0),
@@ -231,10 +250,11 @@ export function useFlowInteractions({
         
         const dropPosition = reactFlowInstance.screenToFlowPosition({ x: evt.clientX - offset.x, y: evt.clientY - offset.y });
         let newNodeToAdd: Node;
+        const defaultNodeStyle = { zIndex: 1 }; // Estilo por defecto para zIndex
 
-        if (itemData.type === 'note') newNodeToAdd = { id: `note-${Date.now()}`, type: 'noteNode', position: dropPosition, data: { text: 'Click to edit', backgroundColor: '#FEF08A', textColor: '#1F2937', fontSize: 14 }, draggable: true, selectable: true };
-        else if (itemData.type === 'text') newNodeToAdd = { id: `text-${Date.now()}`, type: 'textNode', position: dropPosition, data: { text: 'Click to edit', fontSize: 16, fontWeight: 'normal', textAlign: 'left', textColor: '#000000', backgroundColor: 'transparent', borderStyle: 'none' }, draggable: true, selectable: true };
-        else newNodeToAdd = { id: `${itemData.type}-${Date.now()}`, type: itemData.type, position: dropPosition, data: { label: itemData.name, description: itemData.description, provider: itemData.provider }, draggable: true, selectable: true, connectable: true, style: { width: nodeW, height: nodeH } };
+        if (itemData.type === 'note') newNodeToAdd = { id: `note-${Date.now()}`, type: 'noteNode', position: dropPosition, data: { text: 'Click to edit', backgroundColor: '#FEF08A', textColor: '#1F2937', fontSize: 14 }, draggable: true, selectable: true, style: defaultNodeStyle };
+        else if (itemData.type === 'text') newNodeToAdd = { id: `text-${Date.now()}`, type: 'textNode', position: dropPosition, data: { text: 'Click to edit', fontSize: 16, fontWeight: 'normal', textAlign: 'left', textColor: '#000000', backgroundColor: 'transparent', borderStyle: 'none' }, draggable: true, selectable: true, style: defaultNodeStyle };
+        else newNodeToAdd = { id: `${itemData.type}-${Date.now()}`, type: itemData.type, position: dropPosition, data: { label: itemData.name, description: itemData.description, provider: itemData.provider }, draggable: true, selectable: true, connectable: true, style: { width: nodeW, height: nodeH, ...defaultNodeStyle } };
         
         const targetGroupNode = findGroupAtPosition(dropPosition);
         if (targetGroupNode) {

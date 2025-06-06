@@ -57,10 +57,18 @@ const {
   // SelectionMode, // Movido a FlowCanvas
 } = ReactFlowLibrary;
 
-type Edge = ReactFlowLibrary.Edge<CustomEdgeData>;
-type Node = ReactFlowLibrary.Node; 
-type Viewport = ReactFlowLibrary.Viewport;
-type ReactFlowNodeTypes = ReactFlowLibrary.NodeTypes;
+// Tipos temporales mientras resolvemos el problema con los tipos de reactflow
+type FlowNode = any;
+type FlowEdge = any;
+type FlowViewport = any;
+type FlowNodeTypes = any;
+type FlowNodeChange = any;
+type FlowEdgeChange = any;
+type FlowConnection = any;
+type FlowXYPosition = any;
+
+// Definir los tipos personalizados
+type CustomEdge = FlowEdge & { data: CustomEdgeData };
 
 const FlowEditorContent = ({ 
   initialNodes = [], 
@@ -96,18 +104,18 @@ const FlowEditorContent = ({
     edges,
     setEdges,
     onEdgesChange: onEdgesChangeInternal,
-  } = useFlowState({ initialNodes, initialEdges: initialEdges as Edge[] });
+  } = useFlowState({ initialNodes, initialEdges: initialEdges as CustomEdge[] });
 
   // Memoizar las funciones de manejo de estado para evitar recreaciones
-  const handleNodeChange = useCallback((changes: any) => {
+  const handleNodeChange = useCallback((changes: FlowNodeChange[]) => {
     onNodesChangeInternal(changes);
   }, [onNodesChangeInternal]);
 
-  const handleEdgeChange = useCallback((changes: any) => {
+  const handleEdgeChange = useCallback((changes: FlowEdgeChange[]) => {
     onEdgesChangeInternal(changes);
   }, [onEdgesChangeInternal]);
 
-  const handleConnect = useCallback((params: any) => {
+  const handleConnect = useCallback((params: FlowConnection) => {
     onConnectProp?.(params);
   }, [onConnectProp]);
 
@@ -115,6 +123,7 @@ const FlowEditorContent = ({
   const sidebarOpen = useEditorStore(useCallback(state => state.sidebarOpen, []));
   const setSidebarOpen = useEditorStore(useCallback(state => state.setSidebarOpen, []));
   const activeTool = useEditorStore(useCallback(state => state.activeTool, []));
+  const setActiveTool = useEditorStore(useCallback(state => state.setActiveTool, [])); // Obtener setActiveTool
   const contextMenu = useEditorStore(useCallback(state => state.contextMenu, []));
   const selectedEdge = useEditorStore(useCallback(state => state.selectedEdge, []));
   const setSelectedEdge = useEditorStore(useCallback(state => state.setSelectedEdge, []));
@@ -125,11 +134,11 @@ const FlowEditorContent = ({
   
   const [activeDrag, setActiveDrag] = useState<{ item: EditorResourceItem, offset: { x: number, y: number }, elementSize?: { width: number, height: number } } | null>(null);
   const [, setFocusedNodeId] = useState<string | null>(null); 
-  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]); 
+  const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([]); 
   
-  const findGroupAtPosition = useCallback((pos:{x:number,y:number})=>reactFlowInstance.getNodes().find(n=>n.type==='group'&&!n.data?.isMinimized&&pos.x>=n.position.x&&pos.x<=n.position.x+(n.width||300)&&pos.y>=n.position.y&&pos.y<=n.position.y+(n.height||200)),[reactFlowInstance]);
+  const findGroupAtPosition = useCallback((pos:{x:number,y:number})=>reactFlowInstance.getNodes().find((n: FlowNode)=>n.type==='group'&&!n.data?.isMinimized&&pos.x>=n.position.x&&pos.x<=n.position.x+(n.width||300)&&pos.y>=n.position.y&&pos.y<=n.position.y+(n.height||200)),[reactFlowInstance]);
   
-  const lastViewportRef = useRef<Viewport | null>(null);
+  const lastViewportRef = useRef<FlowViewport | null>(null);
   
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false); 
@@ -143,7 +152,7 @@ const FlowEditorContent = ({
     handleToolClick: toolbarActions.handleToolClick, 
     createEmptyGroup: groupManagementActions.createEmptyGroup 
   });
-  const areaDrawingActions = useAreaDrawing({ setNodes, activeTool });
+  const areaDrawingActions = useAreaDrawing({ setNodes, activeTool, setActiveTool }); // Pasar setActiveTool
 
 
   const {
@@ -177,17 +186,20 @@ const FlowEditorContent = ({
     handleExpandGroupView: groupManagementActions.handleExpandGroupView, 
   });
   
-  const onEdgeDelete = useCallback((edgeToDelete: Edge) => { onEdgesChangeInternal([{ id: edgeToDelete.id, type: 'remove' }]); setSelectedEdge(null); }, [onEdgesChangeInternal, setSelectedEdge]);
+  const onEdgeDelete = useCallback((edgeToDelete: CustomEdge) => { onEdgesChangeInternal([{ id: edgeToDelete.id, type: 'remove' }]); setSelectedEdge(null); }, [onEdgesChangeInternal, setSelectedEdge]);
 
   useEffect(() => {
-    const areaUpdate = (e: Event) => { const {nodeId,data} = (e as CustomEvent).detail; reactFlowInstance.setNodes(ns => ns.map(n => n.id === nodeId ? {...n, data:{...n.data, ...data}} : n)); };
+    const areaUpdate = (e: Event) => { 
+      const {nodeId,data} = (e as CustomEvent).detail; 
+      reactFlowInstance.setNodes((ns: FlowNode[]) => ns.map((n: FlowNode) => n.id === nodeId ? {...n, data:{...n.data, ...data}} : n)); 
+    };
     window.addEventListener('updateAreaNode', areaUpdate as EventListener);
     return () => { 
       window.removeEventListener('updateAreaNode', areaUpdate as EventListener); 
     };
   }, [reactFlowInstance]);
   
-  useOnSelectionChange({onChange:({nodes:sel})=>setSelectedNodes(sel)});
+  useOnSelectionChange({onChange:({nodes:sel}: {nodes: FlowNode[]})=>setSelectedNodes(sel)});
   useEffect(()=>{ const focus=(e:Event)=>{const{nodeId,isFocused}=(e as CustomEvent).detail;setFocusedNodeId(isFocused?nodeId:null);}; window.addEventListener('nodeGroupFocus',focus as EventListener); return()=>window.removeEventListener('nodeGroupFocus',focus as EventListener); },[]);
   
   useEffect(() => {
@@ -258,7 +270,7 @@ const FlowEditorContent = ({
         onSaveChanges={handleGroupSave}
         mainNodeTypes={memoizedNodeTypes}
         mainEdgeTypes={memoizedEdgeTypes} 
-        initialViewport={nodes.find(n => n.id === expandedGroupId)?.data?.viewport}
+        initialViewport={nodes.find((n: FlowNode) => n.id === expandedGroupId)?.data?.viewport}
         edgeTypeConfigs={edgeTypeConfigs} 
         edgeToolbarIcons={edgeToolbarIcons} 
         resourceCategories={resourceCategories as EditorResourceCategory[]} 
@@ -313,7 +325,7 @@ const FlowEditorContent = ({
         selectedNodes={selectedNodes}
       />
       <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '480px' }}>
-        <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} /* previewData={previewData} TS Error, and previewData state is commented */ />
+        <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} />
       </div>
     </div>
   );

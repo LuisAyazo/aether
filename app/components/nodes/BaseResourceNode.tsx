@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from 'react';
-import type { Node, NodeProps } from 'reactflow'; // Volver a la importación de tipos directa
+import type { Node, NodeProps } from 'reactflow'; // Revertir a importación de tipos directa
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
@@ -17,7 +17,7 @@ import {
   DocumentDuplicateIcon,
   PlayCircleIcon
 } from '@heroicons/react/24/outline';
-import { NodeData } from '../../utils/customTypes';
+import { NodeData } from '../../utils/customTypes'; // NodeData es una interfaz, no necesita 'type' aquí si se usa como valor en el futuro, pero como tipo está bien.
 import { message } from 'antd';
 
 // Add some CSS styles for double-click animation
@@ -40,7 +40,11 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(styleElement);
 }
 
-interface BaseResourceNodeProps extends NodeProps<NodeData> { // Usar NodeProps<NodeData> directamente
+interface BaseResourceNodeProps extends NodeProps<NodeData> { // Revertir a NodeProps
+  // data ya está incluido en NodeProps<NodeData>, pero lo especificamos más aquí
+  // para añadir propiedades personalizadas. TypeScript debería unir esto.
+  // Si hay problemas, podríamos necesitar definir un tipo CustomNodeData que extienda NodeData
+  // y usar NodeProps<CustomNodeData>
   data: NodeData & {
     icon?: React.ReactNode;
     isCollapsed?: boolean;
@@ -50,7 +54,7 @@ interface BaseResourceNodeProps extends NodeProps<NodeData> { // Usar NodeProps<
   };
 }
 
-const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected }) => {
+const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected }) => { // Desestructurar directamente
   const [isCollapsed, setIsCollapsed] = useState(data.isCollapsed !== false);
   const [isFocused, setIsFocused] = useState(false);
   const [isListView, setIsListView] = useState(false);
@@ -81,8 +85,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
   // Efecto para verificar si el nodo está dentro de los límites del grupo padre
   useEffect(() => {
     if (data.parentNode) {
-      const parentNode = reactFlowInstance.getNode(data.parentNode) as Node<NodeData> | undefined; 
-      const currentNode = reactFlowInstance.getNode(id) as Node<NodeData> | undefined; 
+      const parentNode = reactFlowInstance.getNode(data.parentNode) as Node<NodeData> | undefined;  // Revertir a Node
+      const currentNode = reactFlowInstance.getNode(id) as Node<NodeData> | undefined; // Revertir a Node
       
       if (parentNode && currentNode && currentNode.position) { // Asegurar que position exista
         const parentWidth = (parentNode.style?.width as number) || (parentNode.width ?? 200);
@@ -112,8 +116,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         }
         
         if (needsAdjustment) {
-          reactFlowInstance.setNodes(nds => 
-            nds.map((n: Node<NodeData>) => 
+          reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+            nds.map((n: Node<NodeData>) => // Revertir a Node
               n.id === id ? { ...n, position: newPos } : n
             )
           );
@@ -135,8 +139,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     setIsCollapsed(!isCollapsed);
     
     // También actualizar el estado en el nodo
-    reactFlowInstance.setNodes(nds => 
-      nds.map((n: Node<NodeData>) => { 
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+      nds.map((n: Node<NodeData>) => { // Revertir a Node
         if (n.id === id) {
           return {
             ...n,
@@ -158,8 +162,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     setIsResizable(newResizableState);
     
     // Update the node data and trigger an event for the parent group
-    reactFlowInstance.setNodes(nds => 
-      nds.map((n: Node<NodeData>) => { 
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+      nds.map((n: Node<NodeData>) => { // Revertir a Node
         if (n.id === id) {
           return {
             ...n,
@@ -222,8 +226,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     setIsListView(!isListView);
     
     // Actualizar el estilo del nodo
-    reactFlowInstance.setNodes(nds => 
-      nds.map((n: Node<NodeData>) => {
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+      nds.map((n: Node<NodeData>) => { // Revertir a Node
         if (n.id === id) {
           const currentStyle = n.style || {};
           return {
@@ -431,8 +435,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     console.log(`${newLockedState ? 'Locking' : 'Unlocking'} node:`, id);
     
     // Update node data to reflect locked state
-    reactFlowInstance.setNodes(nds => 
-      nds.map((n: Node<NodeData>) => { 
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+      nds.map((n: Node<NodeData>) => { // Revertir a Node
         if (n.id === id) {
           return {
             ...n,
@@ -484,7 +488,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     };
     
     // Add the duplicated node
-    reactFlowInstance.setNodes(nds => [...nds, duplicatedNode]);
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => [...nds, duplicatedNode as Node<NodeData>]); // Revertir a Node
     
     // Dispatch event for duplicate action
     const event = new CustomEvent('nodeDuplicated', {
@@ -534,8 +538,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
             handleDoubleClick({ stopPropagation: () => {}, preventDefault: () => {} } as React.MouseEvent);
             break;
           case 'deleteNode':
-            reactFlowInstance.setNodes(nodes => 
-              nodes.filter((node: Node<NodeData>) => node.id !== id) 
+            reactFlowInstance.setNodes((nodes: Node<NodeData>[]) => // Revertir a Node
+              nodes.filter((node: Node<NodeData>) => node.id !== id) // Revertir a Node
             );
             break;
         }
@@ -645,7 +649,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         data-resource-type={data.resourceType}
         style={{ 
           position: 'relative',
-          zIndex: 1000,
+          zIndex: 1000, // Ya estaba en 1000 para la vista de lista, se mantiene.
           pointerEvents: 'auto'
         }}
         onDoubleClick={handleDoubleClick}
@@ -688,7 +692,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       style={{
         boxShadow: selected ? 'none' : '0 2px 4px rgba(0,0,0,0.1)',
         position: 'relative',
-        zIndex: 1,
+        zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
         pointerEvents: 'auto'
       }}
       onDoubleClick={handleDoubleClick}

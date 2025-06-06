@@ -34,16 +34,24 @@ import {
 } from '@heroicons/react/24/outline'; 
 import { debounce } from 'lodash';
 
+// Tipos temporales mientras resolvemos el problema con los tipos de reactflow
+type FlowNode = any;
+type FlowEdge = any;
+type FlowViewport = any;
+type FlowNodeTypes = any;
+type FlowEdgeTypes = any;
+type FlowConnection = any;
+type FlowXYPosition = any;
 
 interface GroupFocusViewProps {
   focusedGroupId: string;
-  allNodes: Node[];
-  allEdges: Edge[];
+  allNodes: FlowNode[];
+  allEdges: FlowEdge[];
   onClose: () => void;
-  onSaveChanges: (updatedNodesInGroup: Node[], newEdgesInGroup: Edge[], viewport?: Viewport) => void;
-  mainNodeTypes: NodeTypes;
-  mainEdgeTypes?: EdgeTypes;
-  initialViewport?: Viewport;
+  onSaveChanges: (updatedNodesInGroup: FlowNode[], newEdgesInGroup: FlowEdge[], viewport?: FlowViewport) => void;
+  mainNodeTypes: FlowNodeTypes;
+  mainEdgeTypes?: FlowEdgeTypes;
+  initialViewport?: FlowViewport;
   edgeTypeConfigs: Record<string, EdgeTypeConfig>; 
   edgeToolbarIcons: Record<string, React.ElementType>;
   resourceCategories?: ResourceCategory[]; 
@@ -62,36 +70,30 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   edgeToolbarIcons,
   resourceCategories = [], 
 }) => {
-  const parentNode = useMemo(() => allNodes.find(n => n.id === focusedGroupId), [allNodes, focusedGroupId]);
+  const parentNode = useMemo(() => allNodes.find((n: FlowNode) => n.id === focusedGroupId), [allNodes, focusedGroupId]);
   const [localSelectedEdgeType, setLocalSelectedEdgeType] = React.useState<LogicalEdgeType | null>(null);
   const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
   const [groupSearchTerm, setGroupSearchTerm] = React.useState('');
   const [groupCollapsedCategories, setGroupCollapsedCategories] = React.useState<Record<string, boolean>>({});
   const [activeToolInGroup, setActiveToolInGroup] = React.useState<'select' | 'note' | 'text' | 'area'>('select');
   const [isDrawingAreaInGroup, setIsDrawingAreaInGroup] = React.useState(false);
-  const [areaStartPosInGroup, setAreaStartPosInGroup] = React.useState<{ x: number; y: number } | null>(null);
+  const [areaStartPosInGroup, setAreaStartPosInGroup] = React.useState<FlowXYPosition | null>(null);
   const [currentAreaInGroup, setCurrentAreaInGroup] = React.useState<{ x: number; y: number; width: number; height: number; } | null>(null);
   
   const groupFlowInstance = useReactFlow(); 
   const groupFlowWrapper = React.useRef<HTMLDivElement>(null);
   const onSaveRef = useRef(onSaveChanges); 
-  const [isDragging, setIsDragging] = useState(false); // Not currently used for auto-save, but kept for potential future use
+  const [isDragging, setIsDragging] = useState(false);
 
-  // Memoize nodeTypes and edgeTypes passed to the internal ReactFlow instance
   const memoizedInternalNodeTypes = useMemo(() => mainNodeTypes, [mainNodeTypes]);
   const memoizedInternalEdgeTypes = useMemo(() => mainEdgeTypes, [mainEdgeTypes]);
-  
-  // const previousNodesRef = useRef<string | null>(null); // For auto-save, currently commented out
-  // const previousEdgesRef = useRef<string | null>(null); // For auto-save, currently commented out
-  // const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null); // For auto-save, currently commented out
-
 
   const initialGroupNodes = useMemo(() => {
     if (!parentNode) return [];
     const childrenOfFocusedGroup = allNodes
-      .filter(n => n.parentId === focusedGroupId)
-      .map(n => {
-        const focusedViewNode: Node = {
+      .filter((n: FlowNode) => n.parentId === focusedGroupId)
+      .map((n: FlowNode) => {
+        const focusedViewNode: FlowNode = {
           id: n.id,
           type: n.type,
           position: n.position, 
@@ -106,15 +108,12 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
         };
         return focusedViewNode;
       });
-    console.log('[GroupFocusView] focusedGroupId:', focusedGroupId);
-    console.log('[GroupFocusView] parentNode (the group itself):', JSON.stringify(parentNode ? {id: parentNode.id, data: parentNode.data, type: parentNode.type} : null));
-    console.log('[GroupFocusView] Children found for group:', JSON.stringify(childrenOfFocusedGroup.map(n => ({id: n.id, type: n.type, data: n.data, parentId: n.parentId /* should be undefined here */}))));
     return childrenOfFocusedGroup;
   }, [allNodes, focusedGroupId, parentNode]);
 
   const initialGroupEdges = useMemo(() => {
-    const childNodeIds = new Set(initialGroupNodes.map(n => n.id));
-    return allEdges.filter(edge => childNodeIds.has(edge.source) && childNodeIds.has(edge.target));
+    const childNodeIds = new Set(initialGroupNodes.map((n: FlowNode) => n.id));
+    return allEdges.filter((edge: FlowEdge) => childNodeIds.has(edge.source) && childNodeIds.has(edge.target));
   }, [allEdges, initialGroupNodes]);
 
   const [nodes, setNodes, onNodesChangeInternal] = useNodesState(initialGroupNodes);
@@ -172,13 +171,13 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
         : { text: 'Click to edit', fontSize: 16, fontWeight: 'normal', textAlign: 'left', textColor: '#000000', backgroundColor: 'transparent', borderStyle: 'none' };
       
       const newNodeId = `${activeToolInGroup}-${Date.now()}`;
-      const newNodeToAdd: Node = { 
+      const newNodeToAdd: FlowNode = { 
         id: newNodeId, 
         type, 
         position, 
         data, 
       };
-      setNodes((nds) => nds.concat(newNodeToAdd));
+      setNodes((nds: FlowNode[]) => nds.concat(newNodeToAdd));
       setActiveToolInGroup('select'); 
       if (groupFlowWrapper.current) {
         groupFlowWrapper.current.style.cursor = 'default';
@@ -214,14 +213,14 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
     if (itemData.type === 'noteNode' || itemData.type === 'note') { nodeW = 200; nodeH = 120; }
     else if (itemData.type === 'textNode' || itemData.type === 'text') { nodeW = 150; nodeH = 80; }
 
-    const newNode: Node = {
+    const newNode: FlowNode = {
       id: `${itemData.type}-${Date.now()}`,
       type: itemData.type, 
       position,
       data: { label: itemData.name, description: itemData.description, provider: itemData.provider },
       style: { width: nodeW, height: nodeH },
     };
-    setNodes((nds) => nds.concat(newNode));
+    setNodes((nds: FlowNode[]) => nds.concat(newNode));
   }, [groupFlowInstance, setNodes]);
 
 
@@ -230,7 +229,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   };
 
   const onConnect = useCallback(
-    (params: Connection) => {
+    (params: FlowConnection) => {
       if (!params.source || !params.target) {
         console.warn('onConnect en GroupFocusView: source o target es null', params);
         return;
@@ -238,7 +237,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
       const typeToUse = localSelectedEdgeType || LogicalEdgeType.CONNECTS_TO; 
       const config = edgeTypeConfigs[typeToUse] || edgeTypeConfigs[LogicalEdgeType.CONNECTS_TO];
       
-      const newEdge: Edge = {
+      const newEdge: FlowEdge = {
         ...params,
         source: params.source, 
         target: params.target, 
@@ -248,13 +247,13 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
         markerEnd: config.markerEnd,
         data: { label: config.label, edgeKind: config.logicalType },
       };
-      setEdges((eds) => addEdge(newEdge, eds));
+      setEdges((eds: FlowEdge[]) => addEdge(newEdge, eds));
     },
     [setEdges, localSelectedEdgeType, edgeTypeConfigs]
   );
 
   const handleSaveChanges = () => {
-    const nodesToSave = nodes.map(n => ({
+    const nodesToSave = nodes.map((n: FlowNode) => ({
       ...n,
       parentId: focusedGroupId, 
       extent: 'parent' as const, 
@@ -265,8 +264,8 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   };
 
   const handleDeleteSelected = useCallback(() => {
-    setNodes((nds) => nds.filter(n => !n.selected));
-    setEdges((eds) => eds.filter(e => !e.selected));
+    setNodes((nds: FlowNode[]) => nds.filter((n: FlowNode) => !n.selected));
+    setEdges((eds: FlowEdge[]) => eds.filter((e: FlowEdge) => !e.selected));
   }, [setNodes, setEdges]);
   
   if (!parentNode) {
@@ -441,12 +440,12 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
               nodes={nodes}
               edges={edges}
               onDrop={onDropInGroup} 
-              onDragOver={(event) => event.preventDefault()} 
+              onDragOver={(event: React.DragEvent) => event.preventDefault()} 
               onPaneClick={onPaneClickInGroup}
               onNodesChange={onNodesChangeInternal}
               onEdgesChange={onEdgesChangeInternal}
               onConnect={onConnect}
-              onMouseDown={(e) => {
+              onMouseDown={(e: React.MouseEvent) => {
                 if (activeToolInGroup === 'area' && groupFlowInstance) {
                   const target = e.target as HTMLElement;
                   if (!target.closest('.react-flow__node') && !target.closest('.react-flow__edge') && !target.closest('.react-flow__handle') && target.closest('.react-flow__pane')) {
@@ -459,7 +458,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
                   }
                 }
               }}
-              onMouseMove={(e) => {
+              onMouseMove={(e: React.MouseEvent) => {
                 if (isDrawingAreaInGroup && areaStartPosInGroup && groupFlowInstance) {
                   const currentPosition = groupFlowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
                   setCurrentAreaInGroup({
@@ -473,7 +472,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
               onMouseUp={() => {
                 if (isDrawingAreaInGroup && currentAreaInGroup && groupFlowInstance) {
                   if (currentAreaInGroup.width > 20 && currentAreaInGroup.height > 20) {
-                    const newAreaNode: Node = {
+                    const newAreaNode: FlowNode = {
                       id: `area-group-${Date.now()}`,
                       type: 'areaNode', 
                       position: { x: currentAreaInGroup.x, y: currentAreaInGroup.y },
@@ -484,7 +483,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
                       selectable: true,
                       draggable: true,
                     };
-                    setNodes((nds) => applyNodeChangesRf([{ type: 'add', item: newAreaNode }], nds));
+                    setNodes((nds: FlowNode[]) => applyNodeChangesRf([{ type: 'add', item: newAreaNode }], nds));
                   }
                   setIsDrawingAreaInGroup(false);
                   setAreaStartPosInGroup(null);

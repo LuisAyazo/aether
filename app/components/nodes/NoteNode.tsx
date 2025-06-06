@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useReactFlow, NodeProps } from 'reactflow';
+import { useReactFlow } from 'reactflow';
+import type { Node, NodeProps } from 'reactflow'; // Importar Node y NodeProps como tipos
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
 
@@ -43,13 +44,13 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
     setIsEditing(false);
     
     // Update node data
-    reactFlow.setNodes((nodes) =>
-      nodes.map((node) =>
+    reactFlow.setNodes((nodes: Node[]) => // Tipar nodes como Node[]
+      nodes.map((node: Node) => // Tipar node como Node
         node.id === id
           ? {
               ...node,
               data: {
-                ...node.data,
+                ...(node.data as NoteNodeData), // Castear node.data a NoteNodeData
                 text,
                 backgroundColor,
                 textColor,
@@ -106,6 +107,7 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
         minWidth: '200px',
         minHeight: '100px',
         position: 'relative',
+        zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         cursor: isEditing ? 'text' : 'default',
         pointerEvents: 'auto',
