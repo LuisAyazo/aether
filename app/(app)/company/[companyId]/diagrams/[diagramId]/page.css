@@ -130,13 +130,12 @@
 
 /* Group node styles - override React Flow defaults */
 .react-flow__node-group {
-  background-color: transparent !important;
   box-shadow: none !important;
   border: none !important;
   padding: 0 !important;
 }
 
-.react-flow__node-group.selectable:hover {
+.react-flow__node-group.selectable {
   box-shadow: none !important;
 }
 

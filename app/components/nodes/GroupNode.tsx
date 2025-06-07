@@ -1,8 +1,12 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
 import { Handle, Position, useReactFlow, useNodes } from 'reactflow';
-import type { Node, NodeProps } from 'reactflow'; // Importar Node y NodeProps como tipos
+// import type { Node, NodeProps } from 'reactflow'; // Se definirán localmente
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
+
+// Tipos workaround
+type Node = any;
+type NodeProps<T = any> = any; // Hacer NodeProps genérico opcionalmente si se usa así
 import { 
   EyeSlashIcon,
   Squares2X2Icon,
@@ -17,52 +21,40 @@ const MINIMIZED_WIDTH = 150; // Ancho cuando está minimizado
 const MINIMIZED_HEIGHT = HEADER_HEIGHT; // Alto cuando está minimizado (solo header)
 const DEFAULT_WIDTH = 300;
 const DEFAULT_HEIGHT = 200;
-// const CHILD_ITEM_HEIGHT = 28; // Altura de cada item en la lista visual
+// const CHILD_ITEM_HEIGHT = 28; 
 // const CHILD_ITEM_SPACING = 4;
-// Constantes que daban error, movidas dentro del componente
-// const CONTENT_PADDING_TOP = 8;
-// const CONTENT_PADDING_BOTTOM = 8;
-// const CONTENT_PADDING_HORIZONTAL = 8;
-// const MIN_CONTENT_HEIGHT_FOR_MESSAGE = 50;
+const CONTENT_PADDING_TOP = 8;
+const CONTENT_PADDING_BOTTOM = 8;
+const CONTENT_PADDING_HORIZONTAL = 8;
+const MIN_CONTENT_HEIGHT_FOR_MESSAGE = 50;
 
 interface GroupNodeData {
   label: string;
   provider?: 'aws' | 'gcp' | 'azure' | 'generic';
-  isCollapsed?: boolean; // Considerar unificar con isMinimized
+  isCollapsed?: boolean; 
   isMinimized?: boolean;
   childCount?: number; 
-  isExpandedView?: boolean; // Nueva propiedad para controlar la vista expandida
+  isExpandedView?: boolean; 
 }
 
 interface GroupNodeProps extends NodeProps<GroupNodeData> {
   width?: number;
   height?: number;
-  isOver?: boolean; // Añadir explícitamente para asegurar que TypeScript lo reconozca
+  isOver?: boolean; 
 }
 
-// Helper para obtener un ícono basado en el tipo de nodo hijo (simplificado)
-// En una implementación real, esto podría ser más sofisticado o usar props del nodo hijo.
 const getChildNodeIcon = (nodeType?: string) => {
-  // Ejemplo: mapear tipos de nodo a iconos o usar un genérico
-  // if (nodeType === 'aws_ec2_instance') return <ServerIcon className="w-4 h-4 text-orange-500" />;
   return <ServerIcon className="w-4 h-4 text-gray-500" />;
 };
 
-
-const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height, dragging, isOver }) => { // Usar isOver directamente
-  // Mover constantes aquí para intentar resolver error de "Cannot find name"
-  const CONTENT_PADDING_TOP = 8;
-  const CONTENT_PADDING_BOTTOM = 8;
-  const CONTENT_PADDING_HORIZONTAL = 8;
-  const MIN_CONTENT_HEIGHT_FOR_MESSAGE = 50;
-
+const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height, dragging, isOver }) => {
   const { setNodes, getNode } = useReactFlow();
   const allNodes = useNodes();
 
   const [isMinimized, setIsMinimized] = useState(data.isMinimized || false);
   const [currentWidthState, setCurrentWidthState] = useState(width || DEFAULT_WIDTH);
-  const [currentHeightState, setCurrentHeightState] = useState(height || DEFAULT_HEIGHT); // Added for height
-  const [isHovered, setIsHovered] = useState(false); // Estado para el hover
+  const [currentHeightState, setCurrentHeightState] = useState(height || DEFAULT_HEIGHT);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     if (width && !isMinimized) {
@@ -70,7 +62,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     }
   }, [width, isMinimized]);
 
-  useEffect(() => { // Added for height
+  useEffect(() => {
     if (height && !isMinimized) {
       setCurrentHeightState(height);
     }
@@ -81,53 +73,37 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
   const labelInputRef = useRef<HTMLInputElement>(null);
 
   const childNodes = useMemo(() => {
-    // Node<any> porque los hijos pueden ser de cualquier tipo con datos variados.
-    return allNodes.filter((n: Node<any>) => n.parentId === id)
-                   .sort((a: Node<any>, b: Node<any>) => (((a.data as any)?.label || a.id).localeCompare(((b.data as any)?.label || b.id))));
+    return allNodes.filter((n: Node) => n.parentId === id)
+                   .sort((a: Node, b: Node) => (((a.data as any)?.label || a.id).localeCompare(((b.data as any)?.label || b.id))));
   }, [allNodes, id]);
 
-  // Efecto para actualizar el contador de hijos en data y ocultar/mostrar hijos (para React Flow)
   useEffect(() => {
     const groupNode = getNode(id);
     if (!groupNode) return;
-
     const newChildCount = childNodes.length;
     const currentGroupData = groupNode.data as GroupNodeData;
-
-    // Solo actualizar el data del propio nodo de grupo si es necesario
-    // para reflejar el childCount o el estado local isMinimized.
     if (currentGroupData?.childCount !== newChildCount || currentGroupData?.isMinimized !== isMinimized) {
-      setNodes((nds: Node[]) => nds.map((n: Node) => { // Usar Node[] y Node para nds y n
+      setNodes((nds: Node[]) => nds.map((n: Node) => {
         if (n.id === id) {
-          return { 
-            ...n, 
-            data: { 
-              ...(n.data as GroupNodeData), // Castear a GroupNodeData aquí
-              childCount: newChildCount, 
-              isMinimized: isMinimized // Sincronizar data.isMinimized con el estado local
-            } 
-          };
+          return { ...n, data: { ...(n.data as GroupNodeData), childCount: newChildCount, isMinimized: isMinimized } };
         }
         return n;
       }));
     }
-    // El manejo de 'hidden' de los hijos se hará en toggleMinimize y en FlowEditorContent al cargar.
   }, [id, childNodes.length, isMinimized, getNode, setNodes]);
 
-  // Sincronizar el estado local isMinimized con data.isMinimized de las props (al montar o si data.isMinimized cambia desde el exterior)
   useEffect(() => {
     if (typeof data.isMinimized === 'boolean' && data.isMinimized !== isMinimized) {
       setIsMinimized(data.isMinimized);
     }
-  }, [data.isMinimized]); // Solo depende de data.isMinimized para evitar bucles con el estado local
-
+  }, [data.isMinimized]);
 
   const handleLabelSubmit = useCallback(() => {
     setIsEditingLabel(false);
     if (editedLabel !== data.label) {
-      setNodes((nodes: Node[]) => // Usar Node[]
-        nodes.map((node: Node) => // Usar Node
-          node.id === id ? { ...node, data: { ...(node.data as GroupNodeData), label: editedLabel } } : node // Castear data
+      setNodes((nodes: Node[]) =>
+        nodes.map((node: Node) =>
+          node.id === id ? { ...node, data: { ...(node.data as GroupNodeData), label: editedLabel } } : node
         )
       );
     }
@@ -148,16 +124,28 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     }
   }, [isEditingLabel]);
 
-  const getProviderColor = useCallback(() => {
-    const baseColor = (() => {
-        switch (data.provider) {
-            case 'aws': return 'border-orange-400 bg-orange-50';
-            case 'gcp': return 'border-blue-400 bg-blue-50';
-            case 'azure': return 'border-sky-400 bg-sky-50';
-            default: return 'border-gray-400 bg-gray-50';
-        }
-    })();
-    return selected ? `border-blue-600 ring-2 ring-blue-500/50 ${baseColor.split(' ')[1]}` : baseColor;
+  const getProviderSpecificClasses = useCallback(() => { 
+    let borderColorClass = 'border-gray-400';
+    let bgColorClass = 'bg-gray-50'; 
+
+    switch (data.provider) {
+        case 'aws':
+            borderColorClass = 'border-orange-400';
+            bgColorClass = 'bg-orange-50';
+            break;
+        case 'gcp':
+            borderColorClass = 'border-blue-400';
+            bgColorClass = 'bg-blue-50';
+            break;
+        case 'azure':
+            borderColorClass = 'border-sky-400';
+            bgColorClass = 'bg-sky-50';
+            break;
+    }
+    if (selected) {
+        borderColorClass = 'border-blue-600'; 
+    }
+    return `${borderColorClass} ${bgColorClass}`;
   }, [data.provider, selected]);
 
   const toggleMinimize = useCallback((e: React.MouseEvent) => {
@@ -165,54 +153,40 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     const newMinimizedState = !isMinimized;
     setIsMinimized(newMinimizedState);
 
-    setNodes((nds: Node[]) => // Usar Node[]
-      nds.map((n: Node) => { // Usar Node
-        if (n.id === id) { // Es el nodo de grupo actual
+    setNodes((nds: Node[]) =>
+      nds.map((n: Node) => {
+        if (n.id === id) {
           let newWidth, newHeight;
-          
-          if (newMinimizedState) { // Se está minimizando
-            // Guardar las dimensiones actuales (que podrían haber sido establecidas por NodeResizer)
-            // n.width y n.height son las props actuales del nodo antes de esta actualización.
-            setCurrentWidthState(n.width || currentWidthState || DEFAULT_WIDTH);
-            setCurrentHeightState(n.height || currentHeightState || DEFAULT_HEIGHT);
-            newWidth = MINIMIZED_WIDTH;
-            newHeight = MINIMIZED_HEIGHT;
-          } else { // Se está expandiendo
-            // Restaurar las dimensiones guardadas
+          if (newMinimizedState) { 
+            setCurrentWidthState(n.width || currentWidthState || DEFAULT_WIDTH); 
+            setCurrentHeightState(n.height || currentHeightState || DEFAULT_HEIGHT); 
+            newWidth = n.width || currentWidthState || DEFAULT_WIDTH; 
+            newHeight = MINIMIZED_HEIGHT; 
+          } else { 
             newWidth = currentWidthState;
             newHeight = currentHeightState;
           }
-
           return {
             ...n,
             data: { ...n.data, isMinimized: newMinimizedState, isExpandedView: false },
-            style: { 
-              ...n.style, 
-              width: newWidth, 
-              height: newHeight 
-            },
+            style: { ...n.style, width: newWidth, height: newHeight },
             width: newWidth,
             height: newHeight,
           };
         }
-        // Si el grupo se está expandiendo (newMinimizedState es false), hacer visibles a sus hijos directos
-        // Si el grupo se está minimizando (newMinimizedState es true), ocultar a sus hijos directos
         if (n.parentId === id) {
           return { ...n, hidden: newMinimizedState };
         }
         return n;
       })
     );
-  }, [id, isMinimized, setNodes, currentWidthState]); 
+  }, [id, isMinimized, setNodes, currentWidthState, currentHeightState]);
 
   const handleExpandViewClick = useCallback(() => {
     console.log(`Solicitando expandir vista para el grupo ${id}`);
     const event = new CustomEvent('expandGroupView', { detail: { groupId: id } });
     window.dispatchEvent(event);
-    // Si está minimizado, desminimizarlo para que FlowEditor pueda trabajar con él.
-    // FlowEditor será responsable de ajustar el tamaño si es necesario.
     if (isMinimized) {
-      // Se simula un evento de mouse porque toggleMinimize espera uno, aunque no lo use directamente.
       toggleMinimize(new MouseEvent('click') as unknown as React.MouseEvent); 
     }
   }, [id, isMinimized, toggleMinimize]);
@@ -221,7 +195,6 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
     console.log(`Solicitando colapsar vista para el grupo ${id}`);
     const event = new CustomEvent('collapseGroupView', { detail: { groupId: id } });
     window.dispatchEvent(event);
-    // FlowEditor se encargará de actualizar data.isExpandedView y el tamaño del grupo.
   }, [id]);
   
   const getProviderIconForNode = (nodeData: any) => {
@@ -229,22 +202,28 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
       case 'aws': return '☁️';
       case 'gcp': return '🔵';
       case 'azure': return '🔷';
-      default: return '📦'; // Icono genérico para nodos dentro de la lista
+      default: return '📦';
     }
   };
-
 
   if (isMinimized) {
     return (
       <div
-        className={`relative px-2 py-1 border rounded-lg bg-white shadow-sm ${getProviderColor()} flex items-center justify-between`}
+        className={`relative px-2 py-1 border rounded-lg bg-white ${getProviderSpecificClasses()} flex items-center justify-between`}
         style={{ 
-          width: `${currentWidthState}px`, // Usar el ancho guardado en el estado local
+          width: `${currentWidthState}px`,
           height: `${MINIMIZED_HEIGHT}px`,
-          zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
+          boxSizing: 'border-box',
+          position: 'relative',
+          zIndex: 1000,
+          transform: 'none !important',
+          pointerEvents: 'auto',
+          opacity: 1, // Asegurar que el modo minimizado sea visible
         }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        data-minimized="true"
+        data-handleid="group-header"
+        data-draggable="false" // Intentar deshabilitar drag para el div interno
+        data-selectable="false" // Intentar deshabilitar select para el div interno
       >
         <div className="flex items-center gap-1 overflow-hidden flex-grow">
           <span className="text-xs flex-shrink-0">{getProviderIconForNode(data)}</span>
@@ -253,13 +232,12 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
               ref={labelInputRef}
               value={editedLabel}
               onChange={(e) => setEditedLabel(e.target.value)}
-              onBlur={handleLabelSubmit}
               onKeyDown={handleLabelKeyDown}
-              className="bg-transparent border-none outline-none text-xs text-gray-800 p-0 w-full"
+              className="bg-transparent border-none outline-none text-sm font-semibold text-gray-800 p-0 w-full"
             />
           ) : (
             <span 
-              className="font-medium text-gray-700 text-xs cursor-pointer truncate"
+              className="font-semibold text-gray-800 text-sm cursor-pointer truncate"
               onClick={() => setIsEditingLabel(true)}
               title={data.label}
             >
@@ -289,7 +267,6 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
           </button>
         </div>
         
-        {/* Handles para el modo minimizado */}
         <Handle 
           type="target" 
           position={Position.Top} 
@@ -329,18 +306,19 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
   // Renderizado normal (no minimizado)
   return (
     <div
-      className={`border rounded-lg bg-white/90 shadow-lg ${getProviderColor()} flex flex-col overflow-hidden`}
+      className={`border rounded-lg bg-white/90 ${getProviderSpecificClasses()} flex flex-col`}
       style={{ 
-        width: width || DEFAULT_WIDTH, // Controlado por NodeResizer o default
-        height: height || DEFAULT_HEIGHT, // Controlado por NodeResizer o default
-        zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
+        width: width || DEFAULT_WIDTH,
+        height: height || DEFAULT_HEIGHT,
+        zIndex: 1000,
+        boxSizing: 'border-box',
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Header */}
       <div 
-        className="flex items-center justify-between p-2 border-b border-gray-300 cursor-move group-header"
+        className="flex items-center justify-between p-2 cursor-move group-header"
         style={{ height: `${HEADER_HEIGHT}px`, flexShrink: 0 }}
       >
         <div className="flex items-center gap-2 overflow-hidden flex-grow">
@@ -369,7 +347,7 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
             </span>
           )}
         </div>
-        <div className="flex items-center gap-0.5 flex-shrink-0 ml-2">
+        <div className="flex items-center flex-shrink-0 ml-2">
            {data.isExpandedView ? (
             <button
               onClick={handleCollapseViewClick}
@@ -397,19 +375,17 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
         </div>
       </div>
       
-      {/* Área de Contenido: Lista de nodos hijos y mensaje "Arrastra aquí" */}
+      {/* Área de Contenido */}
       <div 
-        className="flex-grow p-2 space-y-1 overflow-y-auto relative" // Permitir scroll si la lista es larga
+        className="flex-grow p-2 space-y-1 overflow-y-auto relative"
         style={{ 
-          paddingTop: `${CONTENT_PADDING_TOP}px`,
+          paddingTop: `${CONTENT_PADDING_TOP}px`, 
           paddingBottom: `${CONTENT_PADDING_BOTTOM}px`,
           paddingLeft: `${CONTENT_PADDING_HORIZONTAL}px`,
           paddingRight: `${CONTENT_PADDING_HORIZONTAL}px`,
         }}
       >
-        {/* Si la vista está expandida, FlowEditor renderizará los nodos. GroupNode solo muestra el área. */}
-        {/* Si no está expandida (y no minimizada), muestra la lista de hijos. */}
-        {!data.isExpandedView && childNodes.map((node: Node<any>) => ( // Tipar node aquí
+        {!data.isExpandedView && childNodes.map((node: Node) => ( 
           <div key={node.id} className="flex items-center p-1 bg-gray-50 rounded border border-gray-200 text-xs">
             {getChildNodeIcon(node.type)}
             <span className="ml-2 truncate" title={(node.data as any)?.label || node.id}>
@@ -417,7 +393,6 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
             </span>
           </div>
         ))}
-        {/* Siempre mostrar el área de drop, pero podría tener un texto diferente si está expandido */}
         <div
           className={`
             mt-2 text-center text-xs py-2 border-2 rounded-md transition-colors duration-200 ease-in-out
@@ -425,52 +400,57 @@ const GroupNode: React.FC<GroupNodeProps> = ({ id, data, selected, width, height
             ${data.isExpandedView && childNodes.length > 0 ? 'min-h-[50px]' : ''}
             ${!data.isExpandedView ? 'sticky bottom-2 left-2 right-2 bg-white/90 z-10' : ''}
           `}
-          style={{ flexGrow: data.isExpandedView ? 1 : 0 }} // Ocupar espacio si está expandido
+          style={{ flexGrow: data.isExpandedView ? 1 : 0 }}
         >
           {data.isExpandedView ? (childNodes.length === 0 ? 'Área de grupo expandida (vacía)' : 'Nodos hijos renderizados por el flujo') : 'Arrastra nodos aquí'}
         </div>
       </div>
 
-      {!isMinimized && (
+      {/* NodeResizer eliminado según solicitud del usuario */}
+      {/* {!isMinimized && (
         <NodeResizer 
-          isVisible={selected && !dragging} // Solo visible si seleccionado y no arrastrando
+          isVisible={selected && !dragging} 
           minWidth={200}
-          minHeight={HEADER_HEIGHT + MIN_CONTENT_HEIGHT_FOR_MESSAGE + CONTENT_PADDING_TOP + CONTENT_PADDING_BOTTOM + 20} // +20 para algo de espacio extra
+          minHeight={HEADER_HEIGHT + MIN_CONTENT_HEIGHT_FOR_MESSAGE + CONTENT_PADDING_TOP + CONTENT_PADDING_BOTTOM + 20} 
           lineClassName="border-blue-600 opacity-75"
           handleClassName="bg-blue-600 border-2 border-white rounded-full w-3.5 h-3.5 hover:bg-blue-700"
         />
-      )}
+      )} */}
       
       <Handle 
         type="target" 
         position={Position.Top} 
         style={{ 
-          width: '12px', height: '12px', background: '#555', border: '2px solid white', borderRadius: '50%', top: -6,
-          opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+          width: '10px', height: '10px', background: '#555', border: '2px solid white', borderRadius: '50%', top: -5,
+          opacity: 1, 
+          transition: 'opacity 0.2s ease-in-out'
         }} 
       />
       <Handle 
         type="source" 
         position={Position.Bottom} 
         style={{ 
-          width: '12px', height: '12px', background: '#555', border: '2px solid white', borderRadius: '50%', bottom: -6,
-          opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+          width: '10px', height: '10px', background: '#555', border: '2px solid white', borderRadius: '50%', bottom: -5,
+          opacity: 1, 
+          transition: 'opacity 0.2s ease-in-out'
         }} 
       />
       <Handle 
         type="target" 
         position={Position.Left} 
         style={{ 
-          width: '12px', height: '12px', background: '#555', border: '2px solid white', borderRadius: '50%', left: -6,
-          opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+          width: '10px', height: '10px', background: '#555', border: '2px solid white', borderRadius: '50%', left: -5,
+          opacity: 1, 
+          transition: 'opacity 0.2s ease-in-out'
         }} 
       />
       <Handle 
         type="source" 
         position={Position.Right} 
         style={{ 
-          width: '12px', height: '12px', background: '#555', border: '2px solid white', borderRadius: '50%', right: -6,
-          opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s ease-in-out'
+          width: '10px', height: '10px', background: '#555', border: '2px solid white', borderRadius: '50%', right: -5,
+          opacity: 1, 
+          transition: 'opacity 0.2s ease-in-out'
         }} 
       />
     </div>

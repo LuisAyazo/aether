@@ -66,3 +66,140 @@ body {
 /* .lasso-selection-mode .react-flow__node {
   pointer-events: all !important; 
 } */
+
+/* Anular el borde por defecto de React Flow para los nodos de grupo para eliminar el "borde negro molesto" */
+.react-flow__node-group {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Estilos específicos para nodos de grupo minimizados */
+.react-flow__node-group[data-minimized="true"] {
+  transform: none !important;
+  width: fit-content !important;
+  height: fit-content !important;
+  pointer-events: none !important;
+  position: relative !important;
+  z-index: 1000 !important;
+  cursor: default !important;
+  opacity: 1 !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+/* Forzar el tamaño del contenedor principal cuando está minimizado */
+.react-flow__node-group[data-minimized="true"] > div:first-child {
+  width: fit-content !important;
+  height: fit-content !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  position: relative !important;
+  z-index: 1001 !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+
+/* Ocultar todos los handles cuando el nodo está minimizado */
+.react-flow__node-group[data-minimized="true"] .react-flow__handle {
+  display: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Eliminar cualquier espacio extra o capa invisible solo cuando está minimizado */
+.react-flow__node-group[data-minimized="true"] * {
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/* Permitir eventos solo en el header cuando está minimizado */
+.react-flow__node-group[data-minimized="true"] > div[data-handleid="group-header"] {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+
+.react-flow__node-group[data-minimized="true"] > div[data-handleid="group-header"] * {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+}
+
+/* Permitir arrastre en grupos normales */
+.react-flow__node-group:not([data-minimized="true"]) {
+  pointer-events: all !important;
+  cursor: move !important;
+  opacity: 1 !important;
+}
+
+.react-flow__node-group:not([data-minimized="true"]) > div {
+  pointer-events: all !important;
+  opacity: 1 !important;
+}
+
+/* Asegurar que la capa transparente esté completamente deshabilitada */
+.react-flow__node-group[data-minimized="true"]::before,
+.react-flow__node-group[data-minimized="true"]::after {
+  display: none !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+}
+
+/* Deshabilitar completamente el arrastre cuando está minimizado */
+.react-flow__node-group[data-minimized="true"][data-draggable="false"] {
+  cursor: default !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+.react-flow__node-group[data-minimized="true"][data-draggable="false"] * {
+  pointer-events: none !important;
+}
+
+.react-flow__node-group[data-minimized="true"][data-draggable="false"] > div[data-handleid="group-header"] {
+  pointer-events: auto !important;
+}
+
+.react-flow__node-group[data-minimized="true"][data-draggable="false"] > div[data-handleid="group-header"] * {
+  pointer-events: auto !important;
+}
+
+/* Estilos para los handles */
+.react-flow__handle {
+  width: 12px !important;
+  height: 12px !important;
+  background: #555 !important;
+  border-radius: 50% !important;
+  border: 2px solid white !important;
+}
+
+.react-flow__handle-top {
+  top: -6px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.react-flow__handle-bottom {
+  bottom: -6px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+.react-flow__handle-left {
+  left: -6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.react-flow__handle-right {
+  right: -6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}

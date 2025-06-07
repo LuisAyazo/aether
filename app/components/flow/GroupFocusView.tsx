@@ -434,7 +434,10 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
         </div>
         <ReactFlowProvider> 
           <div ref={groupFlowWrapper} className="w-full h-full" style={{ cursor: activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default' }}>
-           <style>{`.react-flow__pane { cursor: ${activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default'} !important; }`}</style>
+           <style>{`
+             .react-flow__pane { cursor: ${activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default'} !important; }
+             .react-flow__node-group { border: none !important; } /* Asegurar que no haya borde de React Flow aquí también */
+           `}</style>
             <ReactFlow
               key={focusedGroupId} 
               nodes={nodes}
