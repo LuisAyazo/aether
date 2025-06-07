@@ -69,68 +69,13 @@ body {
 
 /* Anular el borde por defecto de React Flow para los nodos de grupo para eliminar el "borde negro molesto" */
 .react-flow__node-group {
+  background-color: transparent !important;
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
 }
 
-/* Estilos específicos para nodos de grupo minimizados */
-.react-flow__node-group[data-minimized="true"] {
-  /* Forzar al contenedor a no tener tamaño propio y ser transparente */
-  width: auto !important;
-  height: auto !important;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  
-  /* Deshabilitar interacciones en el contenedor fantasma */
-  pointer-events: none !important;
-  
-  /* Asegurar que no afecte al layout de forma extraña */
-  position: relative !important;
-  transform: none !important;
-  z-index: 1000 !important;
-  cursor: default !important;
-}
-
-/* Forzar el tamaño del contenedor principal cuando está minimizado */
-.react-flow__node-group[data-minimized="true"] > div:first-child {
-  width: fit-content !important;
-  height: fit-content !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  position: relative !important;
-  z-index: 1001 !important;
-  pointer-events: auto !important;
-  opacity: 1 !important;
-}
-
-/* Ocultar todos los handles cuando el nodo está minimizado */
-.react-flow__node-group[data-minimized="true"] .react-flow__handle {
-  display: none !important;
-  pointer-events: none !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-}
-
-/* Eliminar cualquier espacio extra o capa invisible solo cuando está minimizado */
-.react-flow__node-group[data-minimized="true"] * {
-  pointer-events: none !important;
-  opacity: 0 !important;
-}
-
-/* Permitir eventos solo en el header cuando está minimizado */
-.react-flow__node-group[data-minimized="true"] > div[data-handleid="group-header"] {
-  pointer-events: auto !important;
-  opacity: 1 !important;
-}
-
-.react-flow__node-group[data-minimized="true"] > div[data-handleid="group-header"] * {
-  pointer-events: auto !important;
-  opacity: 1 !important;
-}
+/* Estilos para el NodeResizer eliminados de globals.css para usar props del componente */
 
 /* Permitir arrastre en grupos normales */
 .react-flow__node-group:not([data-minimized="true"]) {
@@ -181,6 +126,12 @@ body {
   background: #555 !important;
   border-radius: 50% !important;
   border: 2px solid white !important;
+  opacity: 0 !important;
+  transition: opacity 0.2s ease-in-out !important;
+}
+
+.react-flow__node:hover .react-flow__handle {
+  opacity: 1 !important;
 }
 
 .react-flow__handle-top {
@@ -207,7 +158,51 @@ body {
   transform: translateY(-50%) !important;
 }
 
-/* Estilos para el NodeResizer eliminados de globals.css para usar props del componente */
+/* Ajustes para el modo minimizado */
+.react-flow__node-group[data-minimized="true"] {
+  pointer-events: auto !important;
+}
+
+.react-flow__node-group[data-minimized="true"] .react-flow__handle {
+  opacity: 0 !important;
+}
+
+.react-flow__node-group[data-minimized="true"]:hover .react-flow__handle {
+  opacity: 1 !important;
+}
+
+/* Asegurar que las conexiones estén centradas */
+.react-flow__edge {
+  z-index: 1 !important;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2 !important;
+}
+
+.react-flow__edge-text {
+  font-size: 12px !important;
+}
+
+/* Ajustes para el NodeResizer */
+.react-flow__resize-control {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 1000 !important;
+}
+
+.react-flow__resize-handle {
+  position: absolute !important;
+  width: 12px !important;
+  height: 12px !important;
+  background-color: #3b82f6 !important;
+  border: 2px solid white !important;
+  border-radius: 2px !important;
+  z-index: 1001 !important;
+}
 
 /* Estilos para personalizar la barra de scroll */
 ::-webkit-scrollbar {

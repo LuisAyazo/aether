@@ -177,12 +177,27 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
             newWidth = n.data.width || DEFAULT_WIDTH;
             newHeight = n.data.height || DEFAULT_HEIGHT;
           }
+          // Crear una copia del estilo y eliminar el width/height existentes para evitar conflictos
+          const style = { ...n.style };
+          delete style.width;
+          delete style.height;
+
           return {
             ...n,
             data: { ...n.data, isMinimized: newMinimizedState, isExpandedView: false },
-            style: { ...n.style, width: newWidth, height: newHeight },
+            style: { 
+              ...style, 
+              width: newWidth, 
+              height: newHeight, 
+              // Forzar estilos en línea para el contenedor cuando está minimizado
+              pointerEvents: newMinimizedState ? 'none' : 'all',
+              background: newMinimizedState ? 'transparent' : style.background,
+              border: newMinimizedState ? 'none' : style.border,
+              boxShadow: newMinimizedState ? 'none' : style.boxShadow,
+            },
             width: newWidth,
             height: newHeight,
+            selected: false, // Deseleccionar el nodo al minimizar
           };
         }
         if (n.parentId === id) {
@@ -224,9 +239,6 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
     border: '2px solid white',
     borderRadius: '50%',
     opacity: 0,
-    position: 'absolute' as const,
-    zIndex: 1000,
-    pointerEvents: 'auto' as const,
     transition: 'opacity 0.2s ease-in-out'
   };
 
@@ -241,7 +253,8 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
           height: `${MINIMIZED_HEIGHT}px`,
           boxSizing: 'border-box',
           borderRadius: '12px',
-          overflow: 'visible'
+          overflow: 'visible',
+          pointerEvents: 'auto'
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -313,8 +326,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
         <Handle 
           type="target" 
           position={Position.Top} 
+          id="top-target"
           style={{ 
-            ...handleStyle, 
+            ...handleStyle,
             top: -6,
             left: '50%',
             transform: 'translateX(-50%)',
@@ -324,8 +338,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
         <Handle 
           type="source" 
           position={Position.Bottom} 
+          id="bottom-source"
           style={{ 
-            ...handleStyle, 
+            ...handleStyle,
             bottom: -6,
             left: '50%',
             transform: 'translateX(-50%)',
@@ -335,8 +350,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
         <Handle 
           type="target" 
           position={Position.Left} 
+          id="left-target"
           style={{ 
-            ...handleStyle, 
+            ...handleStyle,
             left: -6,
             top: '50%',
             transform: 'translateY(-50%)',
@@ -346,8 +362,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
         <Handle 
           type="source" 
           position={Position.Right} 
+          id="right-source"
           style={{ 
-            ...handleStyle, 
+            ...handleStyle,
             right: -6,
             top: '50%',
             transform: 'translateY(-50%)',
@@ -362,14 +379,17 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
   const { borderColorClass, bgColorClass, headerBgClass } = getDynamicClasses();
   return (
     <div
-      className={`border ${borderColorClass} ${bgColorClass} flex flex-col shadow-sm hover:shadow-md transition-all duration-200`}
+      className={`border ${borderColorClass} ${bgColorClass} flex flex-col transition-all duration-200`}
       style={{ 
         width: '100%',
         height: '100%',
+        boxShadow: isHovered 
+          ? '0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2)' 
+          : '0 1px 2px 0 rgba(0, 0, 0, 0.1)',
         boxSizing: 'border-box',
         borderRadius: '12px',
         overflow: 'visible',
-        position: 'relative' as const
+        position: 'relative'
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -497,12 +517,64 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
         </div>
       </div>
 
+      {/* Handles para el modo normal */}
+      <Handle 
+        type="target" 
+        position={Position.Top} 
+        id="top-target"
+        style={{ 
+          ...handleStyle,
+          top: -6,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          opacity: isHovered ? 1 : 0
+        }} 
+      />
+      <Handle 
+        type="source" 
+        position={Position.Bottom} 
+        id="bottom-source"
+        style={{ 
+          ...handleStyle,
+          bottom: -6,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          opacity: isHovered ? 1 : 0
+        }} 
+      />
+      <Handle 
+        type="target" 
+        position={Position.Left} 
+        id="left-target"
+        style={{ 
+          ...handleStyle,
+          left: -6,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          opacity: isHovered ? 1 : 0
+        }} 
+      />
+      <Handle 
+        type="source" 
+        position={Position.Right} 
+        id="right-source"
+        style={{ 
+          ...handleStyle,
+          right: -6,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          opacity: isHovered ? 1 : 0
+        }} 
+      />
+
       {/* NodeResizer */}
       {!isMinimized && (
         <NodeResizer 
           isVisible={selected}
           minWidth={DEFAULT_WIDTH}
           minHeight={DEFAULT_HEIGHT}
+          maxWidth={DEFAULT_WIDTH * 2}
+          maxHeight={DEFAULT_HEIGHT * 2}
           lineStyle={{
             borderColor: '#3b82f6',
           }}
@@ -511,59 +583,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
             width: '12px',
             height: '12px',
             border: '2px solid white',
-            borderRadius: '50%',
+            borderRadius: '2px',
           }}
         />
-      )}
-      
-      {/* Handles */}
-      {!isMinimized && (
-        <>
-          <Handle 
-            type="target" 
-            position={Position.Top} 
-            style={{ 
-              ...handleStyle, 
-              top: -6,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              opacity: isHovered ? 1 : 0
-            }} 
-          />
-          <Handle 
-            type="source" 
-            position={Position.Bottom} 
-            style={{ 
-              ...handleStyle, 
-              bottom: -6,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              opacity: isHovered ? 1 : 0
-            }} 
-          />
-          <Handle 
-            type="target" 
-            position={Position.Left} 
-            style={{ 
-              ...handleStyle, 
-              left: -6,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              opacity: isHovered ? 1 : 0
-            }} 
-          />
-          <Handle 
-            type="source" 
-            position={Position.Right} 
-            style={{ 
-              ...handleStyle, 
-              right: -6,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              opacity: isHovered ? 1 : 0
-            }} 
-          />
-        </>
       )}
     </div>
   );
