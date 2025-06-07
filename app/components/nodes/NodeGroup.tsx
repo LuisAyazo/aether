@@ -239,7 +239,10 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
     border: '2px solid white',
     borderRadius: '50%',
     opacity: 0,
-    transition: 'opacity 0.2s ease-in-out'
+    transition: 'opacity 0.2s ease-in-out',
+    position: 'absolute' as const,
+    zIndex: 1000,
+    pointerEvents: 'all' as const
   };
 
   // Renderizado del nodo minimizado
@@ -254,7 +257,8 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
           boxSizing: 'border-box',
           borderRadius: '12px',
           overflow: 'visible',
-          pointerEvents: 'auto'
+          pointerEvents: 'auto',
+          position: 'relative'
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -333,7 +337,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
             left: '50%',
             transform: 'translateX(-50%)',
             opacity: isHovered ? 1 : 0
-          }} 
+          }}
+          isConnectable={true}
+          onConnect={(params) => console.log('handle onConnect', params)}
         />
         <Handle 
           type="source" 
@@ -345,7 +351,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
             left: '50%',
             transform: 'translateX(-50%)',
             opacity: isHovered ? 1 : 0
-          }} 
+          }}
+          isConnectable={true}
+          onConnect={(params) => console.log('handle onConnect', params)}
         />
         <Handle 
           type="target" 
@@ -357,7 +365,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
             top: '50%',
             transform: 'translateY(-50%)',
             opacity: isHovered ? 1 : 0
-          }} 
+          }}
+          isConnectable={true}
+          onConnect={(params) => console.log('handle onConnect', params)}
         />
         <Handle 
           type="source" 
@@ -369,7 +379,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
             top: '50%',
             transform: 'translateY(-50%)',
             opacity: isHovered ? 1 : 0
-          }} 
+          }}
+          isConnectable={true}
+          onConnect={(params) => console.log('handle onConnect', params)}
         />
       </div>
     );
@@ -528,7 +540,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
           left: '50%',
           transform: 'translateX(-50%)',
           opacity: isHovered ? 1 : 0
-        }} 
+        }}
+        isConnectable={true}
+        onConnect={(params) => console.log('handle onConnect', params)}
       />
       <Handle 
         type="source" 
@@ -540,7 +554,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
           left: '50%',
           transform: 'translateX(-50%)',
           opacity: isHovered ? 1 : 0
-        }} 
+        }}
+        isConnectable={true}
+        onConnect={(params) => console.log('handle onConnect', params)}
       />
       <Handle 
         type="target" 
@@ -552,7 +568,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
           top: '50%',
           transform: 'translateY(-50%)',
           opacity: isHovered ? 1 : 0
-        }} 
+        }}
+        isConnectable={true}
+        onConnect={(params) => console.log('handle onConnect', params)}
       />
       <Handle 
         type="source" 
@@ -564,7 +582,9 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
           top: '50%',
           transform: 'translateY(-50%)',
           opacity: isHovered ? 1 : 0
-        }} 
+        }}
+        isConnectable={true}
+        onConnect={(params) => console.log('handle onConnect', params)}
       />
 
       {/* NodeResizer */}
