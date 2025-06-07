@@ -1,7 +1,11 @@
 import { useCallback, useState, useEffect } from 'react';
-import type { Node, NodeProps } from 'reactflow'; // Revertir a importación de tipos directa
+// import type { Node, NodeProps } from 'reactflow'; // Se definirán localmente
 import { Handle, Position, useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
+
+// Tipos workaround
+type Node<T = any> = any; // Hacer Node genérico opcionalmente si se usa así
+type NodeProps<T = any> = any; // Hacer NodeProps genérico opcionalmente si se usa así
 import '@reactflow/node-resizer/dist/style.css';
 import { 
   ArrowsPointingOutIcon, 
@@ -649,7 +653,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         data-resource-type={data.resourceType}
         style={{ 
           position: 'relative',
-          zIndex: 1000, // Ya estaba en 1000 para la vista de lista, se mantiene.
+          // zIndex: 2, // Se manejará a nivel de objeto nodo
           pointerEvents: 'auto'
         }}
         onDoubleClick={handleDoubleClick}
@@ -692,7 +696,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       style={{
         boxShadow: selected ? 'none' : '0 2px 4px rgba(0,0,0,0.1)',
         position: 'relative',
-        zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
+        // zIndex: 2, // Se manejará a nivel de objeto nodo
         pointerEvents: 'auto'
       }}
       onDoubleClick={handleDoubleClick}

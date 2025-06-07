@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated, getCurrentUser } from './services/authService'; // Asumiendo que authService está en ./services
+import { Node } from 'reactflow';
+import { NodeGroupData } from './components/nodes/NodeGroup';
 
 export default function HomePage() {
   const router = useRouter();
@@ -27,6 +29,10 @@ export default function HomePage() {
       router.replace('/login');
     }
   }, [router]);
+
+  const filterGroupNodes = (nodes: Node[]): Node<NodeGroupData>[] => {
+    // ... existing code ...
+  };
 
   // Renderizar algo mínimo o null mientras la redirección ocurre,
   // o un loader si la verificación tomara tiempo (aquí es síncrona).

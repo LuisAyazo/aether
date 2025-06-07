@@ -47,7 +47,7 @@ import {
   // ShieldCheckIcon as AzureFirewallIcon // Reutilizando para Firewall
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
-import GroupNode from './GroupNode';
+import NodeGroup from './NodeGroup';
 import NoteNode from './NoteNode';
 import TextNode from './TextNode';
 import AreaNode from './AreaNode';
@@ -792,7 +792,7 @@ const nodeTypes = {
   function: AzureFunctionNode, 
   
   // Group node
-  group: GroupNode,
+  group: NodeGroup,
   
   // Note and Text nodes
   noteNode: NoteNode,

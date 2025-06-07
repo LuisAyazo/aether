@@ -40,7 +40,8 @@ export function useGroupManagement({ lastViewportRef }: UseGroupManagementProps)
       type: 'group',
       position,
       data: { label: 'New Group', provider, isCollapsed: false, isMinimized: false },
-      style: { width: 300, height: 200, zIndex: 1 }, // Añadir zIndex para asegurar que esté por encima
+      style: { width: 300, height: 200 }, // zIndex eliminado del style
+      zIndex: 1, // zIndex a nivel de objeto nodo
     };
     setNodes((nds: Node[]) => applyNodeChanges([{ type: 'add', item: newGroupNode }], nds)); // Añadir tipo a nds
     setTimeout(() => document.dispatchEvent(new CustomEvent('nodesChanged', { detail: { action: 'nodeAdded', nodeIds: [newGroupId] } })), 100);

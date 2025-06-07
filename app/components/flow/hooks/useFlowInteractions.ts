@@ -115,7 +115,8 @@ export function useFlowInteractions({
           selected: true, 
           draggable: true, 
           selectable: true,
-          style: { zIndex: 1 } // Asegurar que esté por encima de las áreas
+          // style: { zIndex: 1 } // zIndex se manejará a nivel de objeto nodo
+          zIndex: 2 // Nodos de nota/texto encima de grupos
         };
         setNodes(nds => applyNodeChanges([{ type: 'add', item: newNode }], nds));
         // Cambiar a la herramienta de selección después de añadir el nodo
@@ -250,11 +251,11 @@ export function useFlowInteractions({
         
         const dropPosition = reactFlowInstance.screenToFlowPosition({ x: evt.clientX - offset.x, y: evt.clientY - offset.y });
         let newNodeToAdd: Node;
-        const defaultNodeStyle = { zIndex: 1 }; // Estilo por defecto para zIndex
+        // const defaultNodeStyle = { zIndex: 1 }; // Ya no se usa zIndex en style
 
-        if (itemData.type === 'note') newNodeToAdd = { id: `note-${Date.now()}`, type: 'noteNode', position: dropPosition, data: { text: 'Click to edit', backgroundColor: '#FEF08A', textColor: '#1F2937', fontSize: 14 }, draggable: true, selectable: true, style: defaultNodeStyle };
-        else if (itemData.type === 'text') newNodeToAdd = { id: `text-${Date.now()}`, type: 'textNode', position: dropPosition, data: { text: 'Click to edit', fontSize: 16, fontWeight: 'normal', textAlign: 'left', textColor: '#000000', backgroundColor: 'transparent', borderStyle: 'none' }, draggable: true, selectable: true, style: defaultNodeStyle };
-        else newNodeToAdd = { id: `${itemData.type}-${Date.now()}`, type: itemData.type, position: dropPosition, data: { label: itemData.name, description: itemData.description, provider: itemData.provider }, draggable: true, selectable: true, connectable: true, style: { width: nodeW, height: nodeH, ...defaultNodeStyle } };
+        if (itemData.type === 'note') newNodeToAdd = { id: `note-${Date.now()}`, type: 'noteNode', position: dropPosition, data: { text: 'Click to edit', backgroundColor: '#FEF08A', textColor: '#1F2937', fontSize: 14 }, draggable: true, selectable: true, zIndex: 2 };
+        else if (itemData.type === 'text') newNodeToAdd = { id: `text-${Date.now()}`, type: 'textNode', position: dropPosition, data: { text: 'Click to edit', fontSize: 16, fontWeight: 'normal', textAlign: 'left', textColor: '#000000', backgroundColor: 'transparent', borderStyle: 'none' }, draggable: true, selectable: true, zIndex: 2 };
+        else newNodeToAdd = { id: `${itemData.type}-${Date.now()}`, type: itemData.type, position: dropPosition, data: { label: itemData.name, description: itemData.description, provider: itemData.provider }, draggable: true, selectable: true, connectable: true, style: { width: nodeW, height: nodeH }, zIndex: 2 };
         
         const targetGroupNode = findGroupAtPosition(dropPosition);
         if (targetGroupNode) {
