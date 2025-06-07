@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo, memo } from 'react';
 import { Handle, Position, useReactFlow, useNodes } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
-import '@reactflow/node-resizer/dist/style.css';
+// import '@reactflow/node-resizer/dist/style.css'; // Mantener comentado para control total
 import { 
   EyeSlashIcon,
   Squares2X2Icon,
@@ -25,6 +25,7 @@ type NodeProps<T = any> = any;
 // Constantes
 const HEADER_HEIGHT = 48;
 const MINIMIZED_HEIGHT = HEADER_HEIGHT;
+const MINIMIZED_WIDTH = 240;
 const DEFAULT_WIDTH = 320;
 const DEFAULT_HEIGHT = 240;
 const CONTENT_PADDING = 16;
@@ -51,22 +52,11 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
   const { setNodes, getNode } = useReactFlow();
   const allNodes = useNodes();
   const [isMinimized, setIsMinimized] = useState(data.isMinimized || false);
-  const [currentWidth, setCurrentWidth] = useState(width || DEFAULT_WIDTH);
-  const [currentHeight, setCurrentHeight] = useState(height || DEFAULT_HEIGHT);
   const [isHovered, setIsHovered] = useState(false);
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editedLabel, setEditedLabel] = useState(data.label || 'Group');
   const labelInputRef = useRef<HTMLInputElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // Efectos para sincronizar estado
-  useEffect(() => {
-    if (width && !isMinimized) setCurrentWidth(width);
-  }, [width, isMinimized]);
-
-  useEffect(() => {
-    if (height && !isMinimized) setCurrentHeight(height);
-  }, [height, isMinimized]);
+  // El estado local isResizing ya no es necesario, el componente se simplifica.
 
   useEffect(() => {
     if (typeof data.isMinimized === 'boolean' && data.isMinimized !== isMinimized) {
@@ -179,13 +169,13 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
         if (n.id === id) {
           let newWidth, newHeight;
           if (newMinimizedState) {
-            setCurrentWidth(n.width || currentWidth || DEFAULT_WIDTH);
-            setCurrentHeight(n.height || currentHeight || DEFAULT_HEIGHT);
-            newWidth = n.width || currentWidth || DEFAULT_WIDTH;
+            // Al minimizar, usamos el tamaño fijo.
+            newWidth = MINIMIZED_WIDTH;
             newHeight = MINIMIZED_HEIGHT;
           } else {
-            newWidth = currentWidth;
-            newHeight = currentHeight;
+            // Al expandir, usamos el tamaño guardado en data o el por defecto.
+            newWidth = n.data.width || DEFAULT_WIDTH;
+            newHeight = n.data.height || DEFAULT_HEIGHT;
           }
           return {
             ...n,
@@ -201,7 +191,7 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
         return n;
       })
     );
-  }, [id, isMinimized, setNodes, currentWidth, currentHeight]);
+  }, [id, isMinimized, setNodes]);
 
   // Manejo de vista expandida
   const handleExpandViewClick = useCallback(() => {
@@ -247,7 +237,7 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
       <div
         className={`relative px-4 py-2.5 border ${borderColorClass} ${bgColorClass} flex items-center justify-between shadow-sm hover:shadow-md transition-all duration-200`}
         style={{ 
-          width: `${currentWidth}px`,
+          width: `${MINIMIZED_WIDTH}px`,
           height: `${MINIMIZED_HEIGHT}px`,
           boxSizing: 'border-box',
           borderRadius: '12px',
@@ -374,8 +364,8 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
     <div
       className={`border ${borderColorClass} ${bgColorClass} flex flex-col shadow-sm hover:shadow-md transition-all duration-200`}
       style={{ 
-        width: width || DEFAULT_WIDTH,
-        height: height || DEFAULT_HEIGHT,
+        width: '100%',
+        height: '100%',
         boxSizing: 'border-box',
         borderRadius: '12px',
         overflow: 'visible',
@@ -513,23 +503,15 @@ const NodeGroup: React.FC<NodeGroupProps> = ({ id, data, selected, width, height
           isVisible={selected}
           minWidth={DEFAULT_WIDTH}
           minHeight={DEFAULT_HEIGHT}
-          maxWidth={DEFAULT_WIDTH * 2}
-          maxHeight={DEFAULT_HEIGHT * 2}
-          lineClassName="!border-blue-500 !opacity-50"
-          handleClassName="!bg-blue-500 !border-2 !border-white !rounded-full !w-3.5 !h-3.5 hover:!bg-blue-600 !transition-all !duration-200"
-          onResize={(_, params) => {
-            setCurrentWidth(params.width);
-            setCurrentHeight(params.height);
+          lineStyle={{
+            borderColor: '#3b82f6',
           }}
-          onResizeStart={() => {
-            setIsDragging(true);
-          }}
-          onResizeEnd={() => {
-            setIsDragging(false);
-          }}
-          keepAspectRatio={false}
-          shouldResize={(_, __, direction) => {
-            return true;
+          handleStyle={{
+            backgroundColor: '#3b82f6',
+            width: '12px',
+            height: '12px',
+            border: '2px solid white',
+            borderRadius: '50%',
           }}
         />
       )}
