@@ -82,7 +82,7 @@ export interface ContextMenu {
   }>;
 }
 
-export type ToolType = 'select' | 'createGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea' | 'note' | 'text' | 'area';
+export type ToolType = 'select' | 'createResizableGroup' | 'group' | 'ungroup' | 'lasso' | 'connectNodes' | 'drawArea' | 'note' | 'text' | 'area' | 'resizableNode';
 
 export interface FlowEditorProps {
   onConnectProp?: ReactFlowTypeWorkaround; // OnConnect; 

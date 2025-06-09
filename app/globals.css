@@ -67,57 +67,35 @@ body {
   pointer-events: all !important; 
 } */
 
-/* Anular el borde por defecto de React Flow para los nodos de grupo para eliminar el "borde negro molesto" */
 .react-flow__node-group {
-  background-color: transparent !important;
   border: none !important;
+  background-color: transparent !important;
+}
+
+/* Eliminar el box-shadow de los nodos seleccionados para evitar el borde negro */
+.react-flow__node-default.selectable.selected,
+.react-flow__node-default.selectable:focus,
+.react-flow__node-default.selectable:focus-visible,
+.react-flow__node-input.selectable.selected,
+.react-flow__node-input.selectable:focus,
+.react-flow__node-input.selectable:focus-visible,
+.react-flow__node-output.selectable.selected,
+.react-flow__node-output.selectable:focus,
+.react-flow__node-output.selectable:focus-visible,
+.react-flow__node-group.selectable.selected,
+.react-flow__node-group.selectable:focus,
+.react-flow__node-group.selectable:focus-visible {
   box-shadow: none !important;
-  outline: none !important;
 }
 
-/* Estilos para el NodeResizer eliminados de globals.css para usar props del componente */
-
-/* Permitir arrastre en grupos normales */
-.react-flow__node-group:not([data-minimized="true"]) {
-  pointer-events: all !important;
-  cursor: move !important;
-  opacity: 1 !important;
+/* Eliminar el box-shadow de los nodos en estado hover para evitar estilos no deseados */
+.react-flow__node-default.selectable:hover,
+.react-flow__node-input.selectable:hover,
+.react-flow__node-output.selectable:hover,
+.react-flow__node-group.selectable:hover {
+  box-shadow: none !important;
 }
 
-.react-flow__node-group:not([data-minimized="true"]) > div {
-  pointer-events: all !important;
-  opacity: 1 !important;
-}
-
-/* Asegurar que la capa transparente esté completamente deshabilitada */
-.react-flow__node-group[data-minimized="true"]::before,
-.react-flow__node-group[data-minimized="true"]::after {
-  display: none !important;
-  pointer-events: none !important;
-  opacity: 0 !important;
-}
-
-/* Deshabilitar completamente el arrastre cuando está minimizado */
-.react-flow__node-group[data-minimized="true"][data-draggable="false"] {
-  cursor: default !important;
-  pointer-events: none !important;
-  user-select: none !important;
-  -webkit-user-select: none !important;
-  -moz-user-select: none !important;
-  -ms-user-select: none !important;
-}
-
-.react-flow__node-group[data-minimized="true"][data-draggable="false"] * {
-  pointer-events: none !important;
-}
-
-.react-flow__node-group[data-minimized="true"][data-draggable="false"] > div[data-handleid="group-header"] {
-  pointer-events: auto !important;
-}
-
-.react-flow__node-group[data-minimized="true"][data-draggable="false"] > div[data-handleid="group-header"] * {
-  pointer-events: auto !important;
-}
 
 /* Estilos para los handles */
 .react-flow__handle {
@@ -161,20 +139,6 @@ body {
   transform: translateY(-50%) !important;
 }
 
-/* Ajustes para el modo minimizado */
-.react-flow__node-group[data-minimized="true"] {
-  pointer-events: auto !important;
-  position: relative !important;
-}
-
-.react-flow__node-group[data-minimized="true"] .react-flow__handle {
-  opacity: 0 !important;
-  pointer-events: all !important;
-}
-
-.react-flow__node-group[data-minimized="true"]:hover .react-flow__handle {
-  opacity: 1 !important;
-}
 
 /* Asegurar que las conexiones estén centradas */
 .react-flow__edge {
@@ -191,25 +155,7 @@ body {
   font-size: 12px !important;
 }
 
-/* Ajustes para el NodeResizer */
-.react-flow__resize-control {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  z-index: 1000 !important;
-}
 
-.react-flow__resize-handle {
-  position: absolute !important;
-  width: 12px !important;
-  height: 12px !important;
-  background-color: #3b82f6 !important;
-  border: 2px solid white !important;
-  border-radius: 2px !important;
-  z-index: 1001 !important;
-}
 
 /* Asegurar que los handles sean interactivos */
 .react-flow__handle:hover {
@@ -234,6 +180,8 @@ body {
 .react-flow__connection {
   pointer-events: all !important;
 }
+
+
 
 /* Estilos para personalizar la barra de scroll */
 ::-webkit-scrollbar {
@@ -263,10 +211,4 @@ body {
 * {
   scrollbar-width: thin; /* "auto" o "thin" */
   scrollbar-color: #c1c1c1 transparent; /* thumb track */
-}
-
-/* Ajustes específicos para el scroll en nodos de grupo */
-.react-flow__node-group .overflow-y-auto {
-  scrollbar-gutter: stable;
-  padding-right: 4px;
 }

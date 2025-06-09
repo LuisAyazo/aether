@@ -42,6 +42,7 @@ import { Toolbar } from './components/Toolbar';
 import { EditGroupModal } from './components/EditGroupModal';
 // import EdgeDeleteButton from './components/EdgeDeleteButton'; // Movido a FlowCanvas
 import FlowCanvas from './components/FlowCanvas';
+import { Modal, Tag, Divider } from 'antd';
 
 
 const { 
@@ -142,12 +143,39 @@ const FlowEditorContent = ({
   
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false); 
+  const [singleNodePreviewVisible, setSingleNodePreviewVisible] = useState(false);
+  const [singleNodePreviewData, setSingleNodePreviewData] = useState<any>(null);
+  const viewportChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const contextMenuActions = useContextMenuManager({ selectedNodes, setSelectedNodes });
   const groupManagementActions = useGroupManagement({ lastViewportRef });
   const toolbarActions = useToolbarHandler();
   const executionActions = useExecutionHandler({ setExecutionLogs });
   const saveActions = useSaveHandler({ nodes, edges, onSave, expandedGroupId });
+  
+  // Manejar cambios en el viewport
+  const handleViewportChange = useCallback(() => {
+    if (!expandedGroupId && reactFlowInstance) {
+      // Cancelar el timeout anterior si existe
+      if (viewportChangeTimeoutRef.current) {
+        clearTimeout(viewportChangeTimeoutRef.current);
+      }
+      
+      // Establecer un nuevo timeout para guardar después de 1 segundo
+      viewportChangeTimeoutRef.current = setTimeout(() => {
+        saveActions.saveCurrentDiagramState();
+      }, 1000);
+    }
+  }, [expandedGroupId, reactFlowInstance, saveActions]);
+  
+  // Limpiar el timeout cuando el componente se desmonte
+  useEffect(() => {
+    return () => {
+      if (viewportChangeTimeoutRef.current) {
+        clearTimeout(viewportChangeTimeoutRef.current);
+      }
+    };
+  }, []);
   useKeyboardShortcuts({ 
     handleToolClick: toolbarActions.handleToolClick, 
     createEmptyGroup: groupManagementActions.createEmptyGroup 
@@ -245,8 +273,18 @@ const FlowEditorContent = ({
     };
   }, [groupManagementActions.handleExpandGroupView, handleCollapseGroup]);
   
-  useEffect(()=>{const h=()=>{ 
-  };window.addEventListener('showSingleNodePreview',h);return()=>window.removeEventListener('showSingleNodePreview',h);},[]); 
+  useEffect(() => {
+    const handleShowSingleNodePreview = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const previewData = customEvent.detail;
+      
+      setSingleNodePreviewData(previewData);
+      setSingleNodePreviewVisible(true);
+    };
+    
+    window.addEventListener('showSingleNodePreview', handleShowSingleNodePreview);
+    return () => window.removeEventListener('showSingleNodePreview', handleShowSingleNodePreview);
+  }, []);
 
   const edgeToolbarIcons: Record<LogicalEdgeType, React.ElementType> = {
     [LogicalEdgeType.DEPENDS_ON]: ShareIcon,
@@ -323,10 +361,125 @@ const FlowEditorContent = ({
         executionActions={executionActions}
         hideContextMenu={hideContextMenuFromStore}
         selectedNodes={selectedNodes}
+        onViewportChange={handleViewportChange}
       />
       <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '480px' }}>
         <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} />
       </div>
+      
+      {/* Modal de Preview para Nodo Individual */}
+      <Modal
+        title={`Vista Previa de Cambios: ${singleNodePreviewData?.resource?.name || 'Recurso'}`}
+        open={singleNodePreviewVisible}
+        onCancel={() => setSingleNodePreviewVisible(false)}
+        footer={[
+          <button
+            key="cancel"
+            onClick={() => setSingleNodePreviewVisible(false)}
+            className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Cancelar
+          </button>,
+          <button
+            key="apply"
+            onClick={() => {
+              setSingleNodePreviewVisible(false);
+              // Simular ejecución con logs
+              const mockLogs = [
+                'Iniciando proceso de aplicación de cambios...',
+                'Validando configuración...',
+                'Creando recursos...',
+                'Configurando dependencias...',
+                'Aplicando cambios de red...',
+                'Actualizando permisos...',
+                'Verificando estado...',
+                'Finalizando proceso...',
+                'Cambios aplicados exitosamente',
+                'Proceso completado'
+              ];
+              setExecutionLogs(mockLogs);
+              setShowLogs(true);
+            }}
+            className="px-4 py-2 ml-2 text-white bg-blue-600 rounded-md hover:bg-blue-700"
+          >
+            Aplicar
+          </button>
+        ]}
+        width={800}
+        styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
+      >
+        {singleNodePreviewData && (
+          <div className="space-y-4">
+            {/* Información del Recurso Principal */}
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Recurso Principal</h3>
+              <div className="bg-gray-50 p-4 rounded">
+                <p><strong>Nombre:</strong> {singleNodePreviewData.resource.name}</p>
+                <p><strong>Tipo:</strong> {singleNodePreviewData.resource.type}</p>
+                <p><strong>Proveedor:</strong> {singleNodePreviewData.resource.provider}</p>
+                <p><strong>Acción:</strong> <Tag color={singleNodePreviewData.action === 'create' ? 'green' : singleNodePreviewData.action === 'update' ? 'blue' : 'red'}>{singleNodePreviewData.action.toUpperCase()}</Tag></p>
+              </div>
+            </div>
+
+            {/* Cambios en Propiedades */}
+            {singleNodePreviewData.resource.changes?.properties && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Cambios en Propiedades</h3>
+                <div className="space-y-2">
+                  {Object.entries(singleNodePreviewData.resource.changes.properties).map(([key, change]: [string, any]) => (
+                    <div key={key} className="bg-gray-50 p-3 rounded">
+                      <p className="font-medium">{key}:</p>
+                      <div className="ml-4 text-sm">
+                        {change.action === 'create' && (
+                          <p className="text-green-600">+ {change.after}</p>
+                        )}
+                        {change.action === 'update' && (
+                          <>
+                            <p className="text-red-600 line-through">- {change.before}</p>
+                            <p className="text-green-600">+ {change.after}</p>
+                          </>
+                        )}
+                        {change.action === 'delete' && (
+                          <p className="text-red-600 line-through">- {change.before}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Divider />
+
+            {/* Dependencias */}
+            {singleNodePreviewData.dependencies && singleNodePreviewData.dependencies.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Recursos Dependientes ({singleNodePreviewData.dependencies.length})</h3>
+                <div className="space-y-2">
+                  {singleNodePreviewData.dependencies.map((dep: any, index: number) => (
+                    <div key={index} className="bg-gray-50 p-3 rounded">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{dep.name}</p>
+                          <p className="text-sm text-gray-600">Tipo: {dep.type}</p>
+                        </div>
+                        <Tag color={dep.action === 'create' ? 'green' : dep.action === 'update' ? 'blue' : 'red'}>
+                          {dep.action.toUpperCase()}
+                        </Tag>
+                      </div>
+                      {dep.properties && Object.keys(dep.properties).length > 0 && (
+                        <div className="mt-2 text-sm">
+                          <p className="text-gray-500">Propiedades modificadas: {Object.keys(dep.properties).join(', ')}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

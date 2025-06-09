@@ -14,6 +14,7 @@ import {
   LinkIcon as HeroLinkIcon,
   PhoneArrowUpRightIcon as HeroPhoneArrowUpRightIcon,
 } from '@heroicons/react/24/outline';
+import { useReactFlow } from 'reactflow';
 import { useEditorStore } from '../hooks/useEditorStore';
 import { useSelectedEdgeType } from '@/app/contexts/SelectedEdgeTypeContext';
 import { LogicalEdgeType, edgeTypeConfigs, EdgeTypeConfig } from '@/app/config/edgeConfig'; // Corregido EdgeConfig a EdgeTypeConfig
@@ -39,6 +40,7 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick }: Tool
   const toolbarLayout = useEditorStore(state => state.toolbarLayout);
   const setToolbarLayout = useEditorStore(state => state.setToolbarLayout);
 
+  const { setNodes } = useReactFlow();
   const { selectedLogicalType, setSelectedLogicalType } = useSelectedEdgeType();
 
   const handleEdgeTypeSelect = (type: LogicalEdgeType) => {
@@ -51,7 +53,16 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick }: Tool
     { name: 'note', title: 'Add Note (N)', icon: DocumentTextIcon },
     { name: 'text', title: 'Add Text (T)', icon: PencilIcon },
     { name: 'area', title: 'Draw Area (A)', icon: RectangleGroupIcon },
-    { name: 'createGroup', title: 'Create Group (G)', icon: Square3Stack3DIcon, action: onCreateEmptyGroup },
+    { name: 'createResizableGroup', title: 'Create Resizable Group (G)', icon: Square3Stack3DIcon, action: onCreateEmptyGroup },
+    { name: 'resizableNode', title: 'Create Resizable Node', icon: Square3Stack3DIcon, action: () => {
+      const newNode = {
+        id: `resizable-node-${+new Date()}`,
+        type: 'resizableNode',
+        position: { x: 100, y: 100 },
+        data: { label: 'Resizable Node' },
+      };
+      setNodes((nds: any[]) => nds.concat(newNode));
+    }},
   ];
 
   return (
@@ -83,7 +94,12 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick }: Tool
       {tools.map(tool => (
         <button 
           key={tool.name}
-          onClick={() => tool.action ? tool.action() : onToolClick(tool.name)} 
+          onClick={() => {
+            onToolClick(tool.name);
+            if (tool.action) {
+              tool.action();
+            }
+          }} 
           title={tool.title} 
           className={`p-1.5 hover:bg-gray-200 rounded ${activeTool === tool.name ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-500' : 'text-gray-600'}`}
         >

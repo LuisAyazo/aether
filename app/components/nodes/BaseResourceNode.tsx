@@ -525,22 +525,6 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
           case 'toggleResizable':
             toggleResizable({ stopPropagation: () => {} } as React.MouseEvent);
             break;
-          case 'preview':
-            handlePreview({ stopPropagation: () => {} } as React.MouseEvent);
-            break;
-          case 'run':
-            handleRun({ stopPropagation: () => {} } as React.MouseEvent);
-            break;
-          case 'toggleLock':
-            handleLockToggle({ stopPropagation: () => {} } as React.MouseEvent);
-            break;
-          case 'duplicate':
-            handleDuplicate({ stopPropagation: () => {} } as React.MouseEvent);
-            break;
-          case 'openIaCPanel':
-            console.log('Opening IaC panel from action');
-            handleDoubleClick({ stopPropagation: () => {}, preventDefault: () => {} } as React.MouseEvent);
-            break;
           case 'deleteNode':
             reactFlowInstance.setNodes((nodes: Node<NodeData>[]) => // Revertir a Node
               nodes.filter((node: Node<NodeData>) => node.id !== id) // Revertir a Node
@@ -555,7 +539,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     return () => {
       document.removeEventListener('nodeAction', handleNodeAction as EventListener);
     };
-  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance, handleDoubleClick, handlePreview, handleRun, handleLockToggle, handleDuplicate]);
+  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -565,7 +549,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       {
         label: 'Preview',
         icon: <EyeIcon className="w-4 h-4" />,
-        onClick: (e: React.MouseEvent) => handlePreview(e)
+        onClick: () => handlePreview()
       },
       {
         label: 'Run',
@@ -637,10 +621,11 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       detail: {
         x: e.clientX,
         y: e.clientY,
-        items: menuItems
+        items: menuItems,
+        nodeId: id,
       }
     });
-    document.dispatchEvent(event);
+    window.dispatchEvent(event);
   }, [id, data, isListView, isFocused, isCollapsed, isResizable, isLocked, toggleListView, toggleFocus, toggleCollapse, toggleResizable, handlePreview, handleRun, handleLockToggle, handleDuplicate]);
 
   // Si estamos en vista de lista (modo compacto)

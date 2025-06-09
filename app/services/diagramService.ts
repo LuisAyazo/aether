@@ -451,6 +451,17 @@ export const updateDiagram = async (
     throw new Error('No estás autenticado');
   }
 
+  console.log('🔍 [DIAGRAM SERVICE] Sending diagram update request:', {
+    companyId,
+    environmentId,
+    diagramId,
+    nodesCount: diagramData.nodes?.length || 0,
+    edgesCount: diagramData.edges?.length || 0,
+    hasNodeGroups: !!diagramData.nodeGroups,
+    nodeGroupsKeys: diagramData.nodeGroups ? Object.keys(diagramData.nodeGroups) : [],
+    requestData: diagramData
+  });
+
   try {
     const response = await fetch(
       `${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, 
@@ -464,6 +475,8 @@ export const updateDiagram = async (
       }
     );
 
+    console.log('🔍 [DIAGRAM SERVICE] Response status:', response.status);
+
     if (!response.ok) {
       if (response.status === 401) {
         localStorage.removeItem('token');
@@ -473,6 +486,7 @@ export const updateDiagram = async (
       let errorMessage = 'Error actualizando diagrama';
       try {
         const errorData = await response.json();
+        console.log('🔍 [DIAGRAM SERVICE] Error response data:', errorData);
         errorMessage = errorData.detail || errorData.message || (errorData as Record<string, string>).error || errorMessage;
       } catch (parseErr) {
         console.error('Error parsing error response:', parseErr);
@@ -481,9 +495,10 @@ export const updateDiagram = async (
     }
 
     const data = await response.json();
+    console.log('🔍 [DIAGRAM SERVICE] Success response data:', data);
     return data as Diagram;
   } catch (error) {
-    console.error('Error en updateDiagram:', error);
+    console.error('🔍 [DIAGRAM SERVICE] Error en updateDiagram:', error);
     if (error instanceof Error) {
       throw error;
     }

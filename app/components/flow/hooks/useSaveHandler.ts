@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useReactFlow, Node, Edge, Viewport } from 'reactflow';
+import { useReactFlow } from 'reactflow';
 import { useEditorStore } from './useEditorStore';
 import { debounce } from 'lodash';
 
+// Type aliases to work around ReactFlow TypeScript issues
+type FlowNode = any;
+type FlowEdge = any;
+type FlowViewport = any;
+
 interface UseSaveHandlerProps {
-  nodes: Node[];
-  edges: Edge[];
-  onSave?: (diagramData: { nodes: Node[]; edges: Edge[]; viewport?: Viewport }) => void;
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  onSave?: (diagramData: { nodes: FlowNode[]; edges: FlowEdge[]; viewport?: FlowViewport }) => void;
   expandedGroupId: string | null;
 }
 
@@ -64,21 +69,7 @@ export function useSaveHandler({
     };
   }, [nodes, edges, reactFlowInstance, saveCurrentDiagramState, isCanvasDragging]);
 
-  useEffect(() => {
-    if (reactFlowInstance && onSaveRef.current) {
-      const handleViewportChange = () => {
-        if (!expandedGroupId) {
-          saveCurrentDiagramState();
-        }
-      };
-      const debouncedHandleViewportChange = debounce(handleViewportChange, 500);
-      
-      document.addEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
-      return () => {
-        document.removeEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
-      };
-    }
-  }, [reactFlowInstance, saveCurrentDiagramState, expandedGroupId, onSaveRef]);
+  // Este efecto se maneja ahora directamente en FlowCanvas con onMove
 
   return {
     saveCurrentDiagramState, // Exportar para uso manual si es necesario (ej. Toolbar)

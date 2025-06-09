@@ -88,13 +88,28 @@ export default function DashboardPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const convertToReactFlowNodes = (customNodes: CustomNode[]): any[] => { 
     return customNodes.map(node => {
-      const reactFlowNode = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reactFlowNode: any = {
         ...node,
         parentId: node.parentNode, 
         data: { ...node.data }
       };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return reactFlowNode as any; 
+
+      // Check if this node is a child of a minimized group and apply hidden state immediately
+      if (node.parentNode) {
+        const parentNode = customNodes.find(n => n.id === node.parentNode);
+        if (parentNode?.data?.isMinimized) {
+          reactFlowNode.hidden = true;
+          reactFlowNode.style = {
+            ...reactFlowNode.style,
+            visibility: 'hidden',
+            pointerEvents: 'none',
+            opacity: 0
+          };
+        }
+      }
+
+      return reactFlowNode; 
     }); 
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -163,15 +178,29 @@ export default function DashboardPage() {
       animated: e.animated, label: e.label as string, data: e.data, style: e.style 
     } as CustomEdge));
     
+    // Debug logging to trace save data
+    console.log('🔍 [SAVE DEBUG] Preparing to save diagram data:', {
+      diagramId: selectedDiagram,
+      nodeCount: customNodes.length,
+      edgeCount: customEdges.length,
+      groupNodes: customNodes.filter(n => n.type === 'groupNode'),
+      groupEdges: customEdges.filter(e => e.source?.includes('group') || e.target?.includes('group')),
+      allNodesTypes: customNodes.map(n => ({ id: n.id, type: n.type }))
+    });
+    
+    const diagramUpdateData = { 
+      name: currentDiagram.name, 
+      description: currentDiagram.description, 
+      path: currentDiagram.path,
+      nodes: customNodes, 
+      edges: customEdges, 
+      viewport: data.viewport || currentDiagram.viewport
+    };
+    
+    console.log('🔍 [SAVE DEBUG] Full diagram update data:', diagramUpdateData);
+    
     try {
-      await updateDiagram(activeCompany._id, selectedEnvironment, selectedDiagram, { 
-        name: currentDiagram.name, 
-        description: currentDiagram.description, 
-        path: currentDiagram.path,
-        nodes: customNodes, 
-        edges: customEdges, 
-        viewport: data.viewport || currentDiagram.viewport
-      });
+      await updateDiagram(activeCompany._id, selectedEnvironment, selectedDiagram, diagramUpdateData);
       message.success("Diagrama guardado.");
     } catch (e:unknown) { 
       const errorMessage = e instanceof Error ? e.message : String(e);
@@ -441,6 +470,7 @@ export default function DashboardPage() {
                         initialDiagram={currentDiagram} 
                         initialNodes={initialNodesForFlow} 
                         initialEdges={initialEdgesForFlow} 
+                        initialViewport={currentDiagram.viewport}
                         onSave={handleSaveDiagramLocal}
                         nodeTypes={nodeTypes}
                         resourceCategories={memoizedResourceCategories} 

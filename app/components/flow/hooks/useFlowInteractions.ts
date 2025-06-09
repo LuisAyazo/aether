@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   useReactFlow,
   addEdge,
@@ -26,6 +26,7 @@ import {
   MIN_EXPANDED_GROUP_WIDTH,
   MIN_EXPANDED_GROUP_HEIGHT
 } from '../utils/constants';
+// import { useDropDebugging } from './useDropDebugging';
 
 interface UseFlowInteractionsProps {
   nodes: Node[]; 
@@ -52,6 +53,7 @@ export function useFlowInteractions({
 }: UseFlowInteractionsProps) {
   const reactFlowInstance = useReactFlow();
   const { selectedLogicalType } = useSelectedEdgeType();
+  // const { debugDropPosition } = useDropDebugging();
 
   // Seleccionar cada pieza del estado individualmente
   const activeTool = useEditorStore(state => state.activeTool);
@@ -65,6 +67,26 @@ export function useFlowInteractions({
   const setContextMenu = useCallback((menuUpdate: Partial<ContextMenu>) => { // Usar ContextMenu
     setContextMenuState(menuUpdate);
   }, [setContextMenuState]); // setContextMenuState del store es estable
+
+  useEffect(() => {
+    const handleShowContextMenu = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { x, y, items, nodeId } = customEvent.detail;
+      setContextMenu({
+        visible: true,
+        x,
+        y,
+        nodeId,
+        customItems: items,
+        isPane: false,
+      });
+    };
+
+    window.addEventListener('showContextMenu', handleShowContextMenu);
+    return () => {
+      window.removeEventListener('showContextMenu', handleShowContextMenu);
+    };
+  }, [setContextMenu]);
 
   const onConnectInternal = useCallback(
     (params: Connection) => {
@@ -140,20 +162,9 @@ export function useFlowInteractions({
     (evt: React.MouseEvent, node: Node) => {
       evt.preventDefault();
       evt.stopPropagation();
-      if (!node.selected) {
-        // Considerar seleccionar el nodo aquí si es necesario
-      }
-      setContextMenu({ 
-        visible: true, 
-        x: evt.clientX, 
-        y: evt.clientY, 
-        nodeId: node.id, 
-        nodeType: node.type || null, 
-        isPane: false, 
-        parentInfo: null 
-      });
+      // No hacer nada para los nodos de recursos, ya que su menú es manejado por el evento 'showContextMenu'
     },
-    [setContextMenu, reactFlowInstance]
+    []
   );
 
   const handlePaneContextMenu = useCallback(
@@ -239,9 +250,15 @@ export function useFlowInteractions({
         return;
       }
       const bounds = reactFlowWrapperRef.current?.getBoundingClientRect();
-      if (!bounds || !reactFlowInstance || !activeDrag) return;
+      if (!bounds || !reactFlowInstance || !activeDrag) {
+        console.log('🔍 [DROP DEBUG] Missing required elements:', { bounds: !!bounds, reactFlowInstance: !!reactFlowInstance, activeDrag: !!activeDrag });
+        return;
+      }
 
       try {
+        // Debug the drop position calculation
+        // const debugInfo = debugDropPosition(evt, reactFlowInstance, reactFlowWrapperRef, activeDrag);
+        
         const itemData = activeDrag.item;
         const offset = activeDrag.offset;
         let nodeW = 200, nodeH = 100;
@@ -249,15 +266,62 @@ export function useFlowInteractions({
         else if (itemData.type === 'text') { nodeW = 150; nodeH = 80; }
         else if (itemData.type === 'group') { nodeW = 300; nodeH = 200; }
         
-        const dropPosition = reactFlowInstance.screenToFlowPosition({ x: evt.clientX - offset.x, y: evt.clientY - offset.y });
+        // Try multiple position calculation methods
+        const dropPosition1 = reactFlowInstance.screenToFlowPosition({ 
+          x: evt.clientX - offset.x, 
+          y: evt.clientY - offset.y 
+        });
+        
+        const dropPosition2 = reactFlowInstance.screenToFlowPosition({ 
+          x: evt.clientX, 
+          y: evt.clientY 
+        });
+        
+        // Use the position that seems more reasonable
+        let dropPosition = dropPosition1;
+        
+        // Check if position1 results in negative coordinates or very large coordinates that might be outside viewport
+        const viewport = reactFlowInstance.getViewport();
+        const canvasWidth = bounds.width;
+        const canvasHeight = bounds.height;
+        
+        // Calculate flow canvas bounds
+        const flowBounds = {
+          left: -viewport.x / viewport.zoom,
+          top: -viewport.y / viewport.zoom,
+          right: (-viewport.x + canvasWidth) / viewport.zoom,
+          bottom: (-viewport.y + canvasHeight) / viewport.zoom
+        };
+        
+        console.log('🔍 [DROP DEBUG] Position comparison:', {
+          dropPosition1,
+          dropPosition2,
+          flowBounds,
+          isPosition1InBounds: dropPosition1.x >= flowBounds.left && dropPosition1.x <= flowBounds.right && 
+                              dropPosition1.y >= flowBounds.top && dropPosition1.y <= flowBounds.bottom,
+          isPosition2InBounds: dropPosition2.x >= flowBounds.left && dropPosition2.x <= flowBounds.right && 
+                              dropPosition2.y >= flowBounds.top && dropPosition2.y <= flowBounds.bottom
+        });
+        
+        // If position1 is way outside bounds, use position2 instead
+        if (dropPosition1.x < flowBounds.left - 1000 || dropPosition1.x > flowBounds.right + 1000 ||
+            dropPosition1.y < flowBounds.top - 1000 || dropPosition1.y > flowBounds.bottom + 1000) {
+          console.log('🔍 [DROP DEBUG] Using alternative position calculation');
+          dropPosition = dropPosition2;
+        }
+        
+        console.log('🔍 [DROP DEBUG] Final drop position:', dropPosition);
         let newNodeToAdd: Node;
-        // const defaultNodeStyle = { zIndex: 1 }; // Ya no se usa zIndex en style
-
+        
         if (itemData.type === 'note') newNodeToAdd = { id: `note-${Date.now()}`, type: 'noteNode', position: dropPosition, data: { text: 'Click to edit', backgroundColor: '#FEF08A', textColor: '#1F2937', fontSize: 14 }, draggable: true, selectable: true, zIndex: 2 };
         else if (itemData.type === 'text') newNodeToAdd = { id: `text-${Date.now()}`, type: 'textNode', position: dropPosition, data: { text: 'Click to edit', fontSize: 16, fontWeight: 'normal', textAlign: 'left', textColor: '#000000', backgroundColor: 'transparent', borderStyle: 'none' }, draggable: true, selectable: true, zIndex: 2 };
         else newNodeToAdd = { id: `${itemData.type}-${Date.now()}`, type: itemData.type, position: dropPosition, data: { label: itemData.name, description: itemData.description, provider: itemData.provider }, draggable: true, selectable: true, connectable: true, style: { width: nodeW, height: nodeH }, zIndex: 2 };
         
+        console.log('🔍 [DROP DEBUG] Created node:', newNodeToAdd);
+        
         const targetGroupNode = findGroupAtPosition(dropPosition);
+        console.log('🔍 [DROP DEBUG] Target group node:', targetGroupNode);
+        
         if (targetGroupNode) {
           const parentNode = reactFlowInstance.getNode(targetGroupNode.id);
           if (parentNode) {
@@ -277,7 +341,13 @@ export function useFlowInteractions({
             }
           }
         }
-        setNodes(nds => applyNodeChanges([{ type: 'add', item: newNodeToAdd }], nds));
+        
+        console.log('🔍 [DROP DEBUG] Final node to add:', newNodeToAdd);
+        setNodes(nds => {
+          const newNodes = applyNodeChanges([{ type: 'add', item: newNodeToAdd }], nds);
+          console.log('🔍 [DROP DEBUG] Updated nodes count:', newNodes.length);
+          return newNodes;
+        });
         if (newNodeToAdd.parentId) {
           const parentNodeDetails = reactFlowInstance.getNode(newNodeToAdd.parentId);
           if (parentNodeDetails?.data.isExpandedView) {
