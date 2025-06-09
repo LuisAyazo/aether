@@ -30,8 +30,14 @@ import {
   ServerIcon as HeroServerIcon,
   DocumentTextIcon, 
   PencilIcon,       
-  RectangleGroupIcon 
-} from '@heroicons/react/24/outline'; 
+  RectangleGroupIcon,
+  MagnifyingGlassMinusIcon,
+  MagnifyingGlassPlusIcon,
+  ArrowsPointingInIcon,
+  ArrowsPointingOutIcon,
+  LockClosedIcon,
+  LockOpenIcon
+} from '@heroicons/react/24/outline';
 import { debounce } from 'lodash';
 
 // Tipos temporales mientras resolvemos el problema con los tipos de reactflow
@@ -57,7 +63,7 @@ interface GroupFocusViewProps {
   resourceCategories?: ResourceCategory[]; 
 }
 
-const GroupFocusView: React.FC<GroupFocusViewProps> = ({
+const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode }> = ({
   focusedGroupId,
   allNodes,
   allEdges,
@@ -68,9 +74,9 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   initialViewport,
   edgeTypeConfigs,
   edgeToolbarIcons,
-  resourceCategories = [], 
+  resourceCategories = [],
+  parentNode
 }) => {
-  const parentNode = useMemo(() => allNodes.find((n: FlowNode) => n.id === focusedGroupId), [allNodes, focusedGroupId]);
   const [localSelectedEdgeType, setLocalSelectedEdgeType] = React.useState<LogicalEdgeType | null>(null);
   const [isGroupSidebarOpen, setIsGroupSidebarOpen] = React.useState(false);
   const [groupSearchTerm, setGroupSearchTerm] = React.useState('');
@@ -84,6 +90,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   const groupFlowWrapper = React.useRef<HTMLDivElement>(null);
   const onSaveRef = useRef(onSaveChanges); 
   const [isDragging, setIsDragging] = useState(false);
+  const [isInteractive, setIsInteractive] = useState(true);
 
   const memoizedInternalNodeTypes = useMemo(() => mainNodeTypes, [mainNodeTypes]);
   const memoizedInternalEdgeTypes = useMemo(() => mainEdgeTypes, [mainEdgeTypes]);
@@ -318,6 +325,7 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
       position: n.position,
       parentId: n.parentId
     })));
+    console.log('🔍 [GROUP SAVE] Saving viewport:', currentGroupViewport);
     onSaveRef.current?.(nodesToSave, edges, currentGroupViewport);
     onClose();
   };
@@ -326,17 +334,25 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
     setNodes((nds: FlowNode[]) => nds.filter((n: FlowNode) => !n.selected));
     setEdges((eds: FlowEdge[]) => eds.filter((e: FlowEdge) => !e.selected));
   }, [setNodes, setEdges]);
-  
-  if (!parentNode) {
-    return (
-      <div className="absolute inset-0 bg-gray-100 z-50 flex flex-col items-center justify-center p-4">
-        <p className="text-red-500">Error: Grupo no encontrado.</p>
-        <button onClick={onClose} className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
-          Cerrar
-        </button>
-      </div>
-    );
-  }
+
+  // Funciones de control del canvas
+  const handleZoomIn = useCallback(() => {
+    if (groupFlowInstance) {
+      groupFlowInstance.zoomIn();
+    }
+  }, [groupFlowInstance]);
+
+  const handleZoomOut = useCallback(() => {
+    if (groupFlowInstance) {
+      groupFlowInstance.zoomOut();
+    }
+  }, [groupFlowInstance]);
+
+  const handleFitView = useCallback(() => {
+    if (groupFlowInstance) {
+      groupFlowInstance.fitView({ padding: 0.2 });
+    }
+  }, [groupFlowInstance]);
 
   useEffect(() => {
     onSaveRef.current = onSaveChanges;
@@ -417,22 +433,38 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   */
 
   return (
-    <div className="absolute inset-0 bg-white z-[100] flex flex-col">
-      <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Editando Grupo: {parentNode.data.label || parentNode.id}</h2>
-        <div>
-          <button 
-            onClick={handleSaveChanges}
-            className="mr-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Guardar y Cerrar
-          </button>
-          <button 
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
-          >
-            Cancelar
-          </button>
+    <div className="absolute inset-0 bg-white z-[40] flex flex-col">
+      <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 shadow-sm">
+        <div className="px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-600 rounded-lg">
+              <RectangleGroupIcon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800">
+                {parentNode.data.label || 'Grupo sin nombre'}
+              </h2>
+              <p className="text-sm text-gray-600">Editando contenido del grupo</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleSaveChanges}
+              className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Guardar Cambios
+            </button>
+            <button 
+              onClick={onClose}
+              className="px-5 py-2.5 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium border border-gray-300"
+            >
+              <XMarkIcon className="w-4 h-4" />
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
       <div className="flex-grow relative">
@@ -475,6 +507,35 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
             <RectangleGroupIcon className="w-5 h-5" />
           </button>
           <div className="h-5 w-px bg-gray-300 mx-1"></div>
+          <button
+            onClick={handleZoomIn}
+            title="Acercar"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <MagnifyingGlassPlusIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleZoomOut}
+            title="Alejar"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <MagnifyingGlassMinusIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleFitView}
+            title="Ajustar vista"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <ArrowsPointingInIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setIsInteractive(!isInteractive)}
+            title={isInteractive ? "Bloquear interacción" : "Desbloquear interacción"}
+            className={`p-1.5 hover:bg-gray-100 rounded ${isInteractive ? 'text-gray-700' : 'text-orange-600 bg-orange-100'}`}
+          >
+            {isInteractive ? <LockOpenIcon className="w-5 h-5" /> : <LockClosedIcon className="w-5 h-5" />}
+          </button>
+          <div className="h-5 w-px bg-gray-300 mx-1"></div>
           {Object.values(edgeTypeConfigs).map(cfg => {
             const IconComponent = edgeToolbarIcons[cfg.logicalType];
             const isSelected = localSelectedEdgeType === cfg.logicalType;
@@ -491,7 +552,6 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
             );
           })}
         </div>
-        <ReactFlowProvider> 
           <div ref={groupFlowWrapper} className="w-full h-full" style={{ cursor: activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default' }}>
            <style>{`
              .react-flow__pane { cursor: ${activeToolInGroup === 'note' || activeToolInGroup === 'text' || activeToolInGroup === 'area' ? 'crosshair' : 'default'} !important; }
@@ -560,10 +620,16 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
             edgeTypes={memoizedInternalEdgeTypes}
             defaultViewport={initialViewport || { x: 50, y: 50, zoom: 0.85 }} 
             className="bg-gray-100"
+            nodesDraggable={isInteractive}
+            nodesConnectable={isInteractive}
+            elementsSelectable={isInteractive}
+            panOnDrag={isInteractive}
+            zoomOnScroll={isInteractive}
+            zoomOnPinch={isInteractive}
+            zoomOnDoubleClick={isInteractive}
           >
             <Background />
-            <Controls />
-            <MiniMap />
+            <MiniMap position="bottom-right" style={{ bottom: 10, right: 10 }} />
             {isDrawingAreaInGroup && currentAreaInGroup && groupFlowInstance && (
               <div
                 className="area-drawing-overlay"
@@ -668,9 +734,29 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
             )}
           </ReactFlow>
         </div>
-        </ReactFlowProvider>
       </div>
     </div>
+  );
+};
+
+const GroupFocusView: React.FC<GroupFocusViewProps> = (props) => {
+  const parentNode = useMemo(() => props.allNodes.find((n: FlowNode) => n.id === props.focusedGroupId), [props.allNodes, props.focusedGroupId]);
+  
+  if (!parentNode) {
+    return (
+      <div className="absolute inset-0 bg-gray-100 z-50 flex flex-col items-center justify-center p-4">
+        <p className="text-red-500">Error: Grupo no encontrado.</p>
+        <button onClick={props.onClose} className="mt-4 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+          Cerrar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <ReactFlowProvider>
+      <GroupFocusViewInner {...props} parentNode={parentNode} />
+    </ReactFlowProvider>
   );
 };
 

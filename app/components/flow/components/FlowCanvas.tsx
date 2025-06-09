@@ -96,6 +96,9 @@ interface FlowCanvasProps {
   
   // Prop para manejar cambios en el viewport
   onViewportChange?: () => void;
+  
+  // Prop para controlar la interactividad
+  isInteractive: boolean;
 }
 
 const FlowCanvas: React.FC<FlowCanvasProps> = ({
@@ -132,6 +135,7 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
   hideContextMenu,
   selectedNodes,
   onViewportChange,
+  isInteractive,
 }) => {
   // El JSX de ReactFlow y sus hijos irá aquí
   return (
@@ -167,15 +171,15 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
         onDragOver={onDragOver}
         onDragEnd={onDragEndSidebar}
         onMove={onViewportChange}
-        elementsSelectable={true}
-        nodesDraggable={activeTool !== 'area'}
-        nodesConnectable={true}
-        panOnDrag={activeTool !== 'lasso' && activeTool !== 'area'}
-        panOnScroll={true}
-        zoomOnScroll={true}
-        zoomOnPinch={true}
-        zoomOnDoubleClick={false}
-        selectionOnDrag={activeTool === 'lasso'}
+        elementsSelectable={isInteractive}
+        nodesDraggable={isInteractive && activeTool !== 'area'}
+        nodesConnectable={isInteractive}
+        panOnDrag={isInteractive && activeTool !== 'lasso' && activeTool !== 'area'}
+        panOnScroll={isInteractive}
+        zoomOnScroll={isInteractive}
+        zoomOnPinch={isInteractive}
+        zoomOnDoubleClick={isInteractive}
+        selectionOnDrag={isInteractive && activeTool === 'lasso'}
         selectionMode={SelectionMode.Partial}
         multiSelectionKeyCode={['Shift']}
         snapToGrid={false}
@@ -183,8 +187,7 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
       >
         <Background id="1" gap={10} color="#000000" variant={BackgroundVariant.Dots} size={1.2} style={{opacity:0.25,backgroundColor:'#E8F5E9'}}/>
         <Background id="2" gap={100} color="#000000" variant={BackgroundVariant.Dots} size={1.2} style={{opacity:0.25}}/>
-        <MiniMap />
-        <Controls position="bottom-left" style={{bottom:20,left:20}}/>
+        <MiniMap position="bottom-right" style={{bottom:20,right:20}}/>
         
         {areaDrawingActions.isDrawingArea && areaDrawingActions.currentAreaRect && reactFlowInstance && (
           <div
@@ -282,17 +285,29 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
                     <button onClick={()=>{if(contextMenu.nodeId)contextMenuActions.ungroupNodes(contextMenu.nodeId); hideContextMenu();}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><MinusCircleIcon className="w-4 h-4 inline-block mr-2"/>Ungroup</button>
                     <button onClick={()=>{if(contextMenu.nodeId)contextMenuActions.handleDeleteNodeFromContextMenu(contextMenu.nodeId); hideContextMenu();}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Group</button>
                   </>
-                ) : !contextMenu.customItems ? (
+                ) : contextMenu.customItems ? null : (
                   <>
                     <button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){executionActions.simulateNodeExecution(n as NodeWithExecutionStatus,'creating').then(()=>executionActions.simulateNodeExecution(n as NodeWithExecutionStatus,'success'));} hideContextMenu();}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>▶️ Run Node</button>
                     <button onClick={()=>{hideContextMenu();}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>👁️ Preview</button>
                     <button onClick={()=>{const n=reactFlowInstance.getNode(contextMenu.nodeId||'');if(n){const ev=new CustomEvent('openIaCPanel',{detail:{nodeId:n.id,resourceData:{label:n.data.label,provider:n.data.provider,resourceType:n.data.resourceType}}});window.dispatchEvent(ev);document.dispatchEvent(ev);} hideContextMenu();}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:'1px solid #eee',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}>⚙️ Configuración</button>
                   </>
-                ) : null}
-                {/* Esta lógica de selectedNodes debe ser revisada, ya que selectedNodes no está disponible directamente aquí, se pasará como prop */}
-                {!(selectedNodes.length > 1 && selectedNodes.some((n: any) => n.id === contextMenu.nodeId)) && !contextMenu.customItems && (
-                  <button onClick={()=>{if(contextMenu.nodeId)contextMenuActions.handleDeleteNodeFromContextMenu(contextMenu.nodeId); hideContextMenu();}} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',background:'white',fontSize:'13px',color:'#ff3333',transition:'background-color 0.2s'}} onMouseOver={e=>(e.currentTarget.style.backgroundColor='#fff0f0')} onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}><TrashIcon className="w-4 h-4 inline-block mr-2"/>Delete Node</button>
                 )}
+              </>
+            )}
+            {/* Mostrar customItems cuando están disponibles */}
+            {contextMenu.customItems && !contextMenu.isPane && (
+              <>
+                {contextMenu.customItems.map((item, idx) => (
+                  <button 
+                    key={idx}
+                    onClick={()=>{item.onClick(); hideContextMenu();}}
+                    style={{display:'flex',alignItems:'center',gap:'8px',width:'100%',textAlign:'left',padding:'10px 12px',cursor:'pointer',border:'none',borderBottom:idx<(contextMenu.customItems?.length||0)-1?'1px solid #eee':'none',background:'white',fontSize:'13px',color:'#333',transition:'background-color 0.2s'}}
+                    onMouseOver={e=>(e.currentTarget.style.backgroundColor='#f5f5f5')}
+                    onMouseOut={e=>(e.currentTarget.style.backgroundColor='white')}
+                  >
+                    {item.icon}{item.label}
+                  </button>
+                ))}
               </>
             )}
             {contextMenu.isPane && (

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Tooltip } from 'antd';
 import {
   CursorArrowRaysIcon,
@@ -13,6 +13,11 @@ import {
   PencilSquareIcon as HeroPencilSquareIcon,
   LinkIcon as HeroLinkIcon,
   PhoneArrowUpRightIcon as HeroPhoneArrowUpRightIcon,
+  MagnifyingGlassMinusIcon,
+  MagnifyingGlassPlusIcon,
+  ArrowsPointingInIcon,
+  LockClosedIcon,
+  LockOpenIcon,
 } from '@heroicons/react/24/outline';
 import { useReactFlow } from 'reactflow';
 import { useEditorStore } from '../hooks/useEditorStore';
@@ -24,6 +29,8 @@ interface ToolbarProps {
   onSaveDiagram: () => void;
   onCreateEmptyGroup: () => void;
   onToolClick: (tool: EditorToolType) => void;
+  isInteractive: boolean;
+  setIsInteractive: (value: boolean) => void;
 }
 
 const edgeToolbarIcons: Record<LogicalEdgeType, React.ElementType> = {
@@ -34,14 +41,33 @@ const edgeToolbarIcons: Record<LogicalEdgeType, React.ElementType> = {
   [LogicalEdgeType.CONNECTS_TO]: HeroLinkIcon,
 };
 
-export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick }: ToolbarProps) {
+export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInteractive, setIsInteractive }: ToolbarProps) {
   // Seleccionar cada pieza del estado individualmente
   const activeTool = useEditorStore(state => state.activeTool);
   const toolbarLayout = useEditorStore(state => state.toolbarLayout);
   const setToolbarLayout = useEditorStore(state => state.setToolbarLayout);
 
-  const { setNodes } = useReactFlow();
+  const reactFlowInstance = useReactFlow();
+  const { setNodes } = reactFlowInstance;
   const { selectedLogicalType, setSelectedLogicalType } = useSelectedEdgeType();
+
+  // Funciones de control del canvas
+  const handleZoomIn = useCallback(() => {
+    reactFlowInstance.zoomIn();
+  }, [reactFlowInstance]);
+
+  const handleZoomOut = useCallback(() => {
+    reactFlowInstance.zoomOut();
+  }, [reactFlowInstance]);
+
+  const handleFitView = useCallback(() => {
+    reactFlowInstance.fitView({ padding: 0.2 });
+  }, [reactFlowInstance]);
+
+  const toggleInteractivity = useCallback(() => {
+    const newState = !isInteractive;
+    setIsInteractive(newState);
+  }, [isInteractive, setIsInteractive]);
 
   const handleEdgeTypeSelect = (type: LogicalEdgeType) => {
     setSelectedLogicalType(prev => (prev === type ? null : type));
@@ -124,6 +150,44 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick }: Tool
           </Tooltip>
         );
       })}
+
+      <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-6 mx-1' : 'h-px w-full my-1'}`}></div>
+
+      <Tooltip title="Acercar" placement="bottom">
+        <button
+          onClick={handleZoomIn}
+          className="p-1.5 hover:bg-gray-200 rounded text-gray-700"
+        >
+          <MagnifyingGlassPlusIcon className="w-5 h-5" />
+        </button>
+      </Tooltip>
+
+      <Tooltip title="Alejar" placement="bottom">
+        <button
+          onClick={handleZoomOut}
+          className="p-1.5 hover:bg-gray-200 rounded text-gray-700"
+        >
+          <MagnifyingGlassMinusIcon className="w-5 h-5" />
+        </button>
+      </Tooltip>
+
+      <Tooltip title="Ajustar vista" placement="bottom">
+        <button
+          onClick={handleFitView}
+          className="p-1.5 hover:bg-gray-200 rounded text-gray-700"
+        >
+          <ArrowsPointingInIcon className="w-5 h-5" />
+        </button>
+      </Tooltip>
+
+      <Tooltip title={isInteractive ? "Bloquear interacción" : "Desbloquear interacción"} placement="bottom">
+        <button
+          onClick={toggleInteractivity}
+          className={`p-1.5 hover:bg-gray-200 rounded ${isInteractive ? 'text-gray-700' : 'text-orange-600 bg-orange-100'}`}
+        >
+          {isInteractive ? <LockOpenIcon className="w-5 h-5" /> : <LockClosedIcon className="w-5 h-5" />}
+        </button>
+      </Tooltip>
     </div>
   );
 }

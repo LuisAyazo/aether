@@ -1,10 +1,14 @@
 import { useCallback } from 'react';
-import type { Node, Edge, Viewport } from 'reactflow';
 import { useEditorStore } from './useEditorStore';
 
+// Tipos temporales mientras resolvemos el problema con los tipos de reactflow
+type FlowNode = any;
+type FlowEdge = any;
+type Viewport = any;
+
 interface UseGroupViewControlsProps {
-  setNodes: (updater: Node[] | ((nodes: Node[]) => Node[])) => void;
-  setEdges: (updater: Edge[] | ((edges: Edge[]) => Edge[])) => void;
+  setNodes: (updater: FlowNode[] | ((nodes: FlowNode[]) => FlowNode[])) => void;
+  setEdges: (updater: FlowEdge[] | ((edges: FlowEdge[]) => FlowEdge[])) => void;
 }
 
 export function useGroupViewControls({ setNodes, setEdges }: UseGroupViewControlsProps) {
@@ -13,7 +17,7 @@ export function useGroupViewControls({ setNodes, setEdges }: UseGroupViewControl
   const setExpandedGroupId = useEditorStore(state => state.setExpandedGroupId);
 
   const handleGroupSave = useCallback(
-    (updatedNodesInGroup: Node[], newEdgesInGroup: Edge[], groupViewport?: Viewport) => {
+    (updatedNodesInGroup: FlowNode[], newEdgesInGroup: FlowEdge[], groupViewport?: Viewport) => {
       if (!expandedGroupId) return;
 
       setNodes((currentNodes) => {
@@ -24,6 +28,7 @@ export function useGroupViewControls({ setNodes, setEdges }: UseGroupViewControl
         groupNodeData.isMinimized = groupNodeFromState?.data?.isMinimized || false; 
         
         if (groupViewport) {
+          console.log('💾 [GROUP SAVE] Storing viewport in group node:', groupViewport);
           groupNodeData.viewport = groupViewport;
         }
         
@@ -44,7 +49,7 @@ export function useGroupViewControls({ setNodes, setEdges }: UseGroupViewControl
         
         const updatedNodesMap = new Map(finalUpdatedNodesFromGroupView.map(n => [n.id, n]));
 
-        const newNodesList: Node[] = [];
+        const newNodesList: FlowNode[] = [];
         for (const node of currentNodes) {
           if (node.id === expandedGroupId) continue; 
           if (node.parentId === expandedGroupId && !updatedNodesMap.has(node.id)) {

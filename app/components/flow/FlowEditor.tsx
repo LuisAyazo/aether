@@ -148,6 +148,7 @@ const FlowEditorContent = ({
   const [singleNodePreviewVisible, setSingleNodePreviewVisible] = useState(false);
   const [singleNodePreviewData, setSingleNodePreviewData] = useState<any>(null);
   const viewportChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isInteractive, setIsInteractive] = useState(true);
 
   const contextMenuActions = useContextMenuManager({ selectedNodes, setSelectedNodes });
   const groupManagementActions = useGroupManagement({ lastViewportRef });
@@ -342,6 +343,8 @@ const FlowEditorContent = ({
         onSaveDiagram={saveActions.saveCurrentDiagramState}
         onCreateEmptyGroup={() => groupManagementActions.createEmptyGroup()} 
         onToolClick={toolbarActions.handleToolClick}
+        isInteractive={isInteractive}
+        setIsInteractive={setIsInteractive}
       />
       <FlowCanvas
         initialViewport={initialViewport}
@@ -377,6 +380,7 @@ const FlowEditorContent = ({
         hideContextMenu={hideContextMenuFromStore}
         selectedNodes={selectedNodes}
         onViewportChange={handleViewportChange}
+        isInteractive={isInteractive}
       />
       <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '480px' }}>
         <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} />

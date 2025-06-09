@@ -42,9 +42,11 @@ export default function EnvironmentTreeSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const selectorRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedItem, setSelectedItem] = useState<Environment | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set([''])); 
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   
   const [showNewDirectoryInputForPath, setShowNewDirectoryInputForPath] = useState<string | null>(null);
   const [newDirectoryName, setNewDirectoryName] = useState('');
@@ -232,7 +234,8 @@ export default function EnvironmentTreeSelect({
 
   useEffect(() => {
     const handleClickOutside = (event: globalThis.MouseEvent) => { 
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
+          selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         setShowNewDirectoryInputForPath(null);
         setNewDirectoryName('');
@@ -241,6 +244,17 @@ export default function EnvironmentTreeSelect({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isOpen && selectorRef.current) {
+      const rect = selectorRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width
+      });
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) inputRef.current.focus();
@@ -384,8 +398,9 @@ export default function EnvironmentTreeSelect({
   };
 
   return (
-    <div className={`${styles.container} ${className}`} ref={dropdownRef}>
+    <div className={`${styles.container} ${className}`}>
       <div 
+        ref={selectorRef}
         className={`${styles.selector} ${isOpen ? styles.active : ''} flex items-center`}
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -393,7 +408,17 @@ export default function EnvironmentTreeSelect({
       </div>
       
       {isOpen && (
-        <div className={styles.dropdown}>
+        <div 
+          ref={dropdownRef}
+          className={styles.dropdown} 
+          style={{ 
+            position: 'fixed', 
+            zIndex: 999999,
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`
+          }}
+        >
           <div className={styles.searchContainer}>
             <input
               ref={inputRef}

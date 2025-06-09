@@ -30,15 +30,10 @@
 }
 
 .dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
   background-color: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  z-index: 100; /* Increased from 50 to 100 to be above the navigation */
   max-height: 400px;
   min-width: 320px; /* Increased to match selector minimum width */
   display: flex;
@@ -272,7 +267,7 @@
   }
   
   .dropdown {
-    max-height: 300px;
+    z-index: 1000;
   }
   
   .groupHeader,
