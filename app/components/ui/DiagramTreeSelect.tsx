@@ -321,7 +321,7 @@ export default function DiagramTreeSelect({
                   className={`${styles.diagramItem} ${selectedItem?.id === diagram.id ? styles.selected : ''}`}
                   onClick={() => handleSelect(diagram)}
                 >
-                  <ProjectOutlined key={`${diagram.id}-proj-icon`} className="text-gray-400 mr-2" />
+                  <ProjectOutlined className="text-gray-400 mr-2" />
                   <div className="flex flex-col overflow-hidden flex-grow">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-sm text-gray-700 dark:text-gray-200 truncate block">{diagram.name}</span>

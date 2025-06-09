@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Spin, message, Typography, Modal, Button } from 'antd';
 import { 
@@ -168,74 +168,87 @@ export default function DashboardPage() {
   // Estado para el grupo expandido inicial
   const [initialExpandedGroup, setInitialExpandedGroup] = useState<string | null>(null);
 
-  // Sincronizar parámetros de URL con el estado
+  // Estado para rastrear si ya se cargaron los parámetros iniciales de URL
+  const [urlParamsLoaded, setUrlParamsLoaded] = useState(false);
+
+  // Sincronizar parámetros de URL con el estado solo en la carga inicial
   useEffect(() => {
-    if (!dataLoading && activeCompany && environments.length > 0) {
+    if (!dataLoading && activeCompany && environments.length > 0 && !urlParamsLoaded) {
       const envParam = searchParams.get('env');
       const diagramParam = searchParams.get('diagram');
       const groupParam = searchParams.get('group');
       
-      // Si hay parámetros en la URL, intentar aplicarlos
-      if (envParam || diagramParam || groupParam) {
-        const applyUrlParams = async () => {
-          // Buscar ambiente por nombre
-          if (envParam) {
-            const targetEnv = environments.find(e => e.name.toLowerCase().replace(/\s+/g, '-') === envParam.toLowerCase());
-            if (targetEnv && targetEnv.id !== selectedEnvironment) {
-              await useNavigationStore.getState().handleEnvironmentChange(targetEnv.id);
-            }
+      const applyUrlParams = async () => {
+        // Buscar ambiente por nombre
+        if (envParam) {
+          const targetEnv = environments.find(e => e.name.toLowerCase().replace(/\s+/g, '-') === envParam.toLowerCase());
+          if (targetEnv && targetEnv.id !== selectedEnvironment) {
+            await useNavigationStore.getState().handleEnvironmentChange(targetEnv.id);
           }
-          
-          // Buscar diagrama por nombre (después de cambiar ambiente si es necesario)
-          if (diagramParam && diagramsFromStore.length > 0) {
-            const targetDiagram = diagramsFromStore.find(d => d.name.toLowerCase().replace(/\s+/g, '-') === diagramParam.toLowerCase());
-            if (targetDiagram && targetDiagram.id !== selectedDiagram) {
-              await useNavigationStore.getState().handleDiagramChange(targetDiagram.id);
-            }
-          }
-          
-          // Establecer el grupo expandido inicial si está en la URL
-          if (groupParam && currentDiagram) {
-            // Buscar el grupo por su label
-            const groupNode = currentDiagram.nodes?.find(n => 
-              n.type === 'group' && 
-              n.data?.label && 
-              typeof n.data.label === 'string' &&
-              n.data.label.toLowerCase().replace(/\s+/g, '-') === groupParam.toLowerCase()
-            );
-            if (groupNode) {
-              setInitialExpandedGroup(groupNode.id);
-            }
-          }
-        };
+        }
         
-        applyUrlParams();
-      }
+        // Buscar diagrama por nombre (después de cambiar ambiente si es necesario)
+        if (diagramParam && diagramsFromStore.length > 0) {
+          const targetDiagram = diagramsFromStore.find(d => d.name.toLowerCase().replace(/\s+/g, '-') === diagramParam.toLowerCase());
+          if (targetDiagram && targetDiagram.id !== selectedDiagram) {
+            await useNavigationStore.getState().handleDiagramChange(targetDiagram.id);
+          }
+        }
+        
+        // Establecer el grupo expandido inicial si está en la URL
+        if (groupParam && currentDiagram) {
+          // Buscar el grupo por su label
+          const groupNode = currentDiagram.nodes?.find(n => 
+            n.type === 'group' && 
+            n.data?.label && 
+            typeof n.data.label === 'string' &&
+            n.data.label.toLowerCase().replace(/\s+/g, '-') === groupParam.toLowerCase()
+          );
+          if (groupNode) {
+            setInitialExpandedGroup(groupNode.id);
+          }
+        }
+        
+        // Marcar que ya se cargaron los parámetros de URL
+        setUrlParamsLoaded(true);
+      };
+      
+      applyUrlParams();
     }
-  }, [dataLoading, activeCompany, environments, searchParams, currentDiagram]);
+  }, [dataLoading, activeCompany, environments, searchParams, currentDiagram, selectedEnvironment, selectedDiagram, diagramsFromStore, urlParamsLoaded]);
 
-  // Actualizar URL cuando cambian ambiente o diagrama
+  // Actualizar URL cuando cambian ambiente o diagrama (pero solo después de que se cargaron los parámetros iniciales)
   useEffect(() => {
-    if (!dataLoading && selectedEnvironment && selectedDiagram) {
-      const currentParams = new URLSearchParams(searchParams);
+    if (!urlParamsLoaded || !selectedEnvironment || !selectedDiagram) return;
+    
+    const selectedEnv = environments.find(e => e.id === selectedEnvironment);
+    const selectedDiag = diagramsFromStore.find(d => d.id === selectedDiagram);
+    
+    if (selectedEnv && selectedDiag) {
+      // Usar un timeout para evitar múltiples actualizaciones rápidas
+      const timeoutId = setTimeout(() => {
+        const currentParams = new URLSearchParams(window.location.search);
+        const envParam = selectedEnv.name.toLowerCase().replace(/\s+/g, '-');
+        const diagramParam = selectedDiag.name.toLowerCase().replace(/\s+/g, '-');
+        
+        // Solo actualizar si realmente cambió
+        if (currentParams.get('env') !== envParam || currentParams.get('diagram') !== diagramParam) {
+          currentParams.set('env', envParam);
+          currentParams.set('diagram', diagramParam);
+          
+          // Eliminar el parámetro group cuando cambia el diagrama
+          if (currentParams.has('group')) {
+            currentParams.delete('group');
+          }
+          
+          const newUrl = `${pathname}?${currentParams.toString()}`;
+          router.replace(newUrl, { scroll: false });
+        }
+      }, 100); // Pequeño delay para evitar múltiples actualizaciones
       
-      // Encontrar nombres para la URL
-      const selectedEnv = environments.find(e => e.id === selectedEnvironment);
-      const selectedDiag = diagramsFromStore.find(d => d.id === selectedDiagram);
-      
-      if (selectedEnv) {
-        currentParams.set('env', selectedEnv.name.toLowerCase().replace(/\s+/g, '-'));
-      }
-      if (selectedDiag) {
-        currentParams.set('diagram', selectedDiag.name.toLowerCase().replace(/\s+/g, '-'));
-      }
-      
-      const newUrl = `${pathname}?${currentParams.toString()}`;
-      if (window.location.href !== window.location.origin + newUrl) {
-        router.replace(newUrl);
-      }
+      return () => clearTimeout(timeoutId);
     }
-  }, [selectedEnvironment, selectedDiagram, environments, diagramsFromStore, dataLoading, pathname, searchParams, router]);
+  }, [selectedEnvironment, selectedDiagram, environments, diagramsFromStore, pathname, router, urlParamsLoaded]);
 
   const handleInternalSectionChange = (sectionString: string) => {
     const section = sectionString as SidebarSectionKey;
@@ -343,7 +356,7 @@ export default function DashboardPage() {
       {
         name: 'AWS - Cómputo', provider: 'aws',
         items: [
-          { type: 'aws_instance', name: 'EC2 Instance', description: 'Máquina Virtual', provider: 'aws', icon: <ServerIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'instance', category: 'compute', label: 'EC2 Instance' } },
+          { type: 'aws_ec2_instance', name: 'EC2 Instance', description: 'Máquina Virtual', provider: 'aws', icon: <ServerIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'ec2_instance', category: 'compute', label: 'EC2 Instance' } },
           { type: 'aws_autoscaling_group', name: 'Auto Scaling Group', description: 'Grupo de Autoescalado', provider: 'aws', icon: <ServerStackIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'autoscaling_group', category: 'compute', label: 'Auto Scaling Group' } },
           { type: 'aws_ecs_service', name: 'ECS Service', description: 'Servicio de Contenedores', provider: 'aws', icon: <CubeIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'ecs_service', category: 'compute', label: 'ECS Service' } },
           { type: 'aws_eks_cluster', name: 'EKS Cluster', description: 'Cluster de Kubernetes', provider: 'aws', icon: <CpuChipIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'eks_cluster', category: 'compute', label: 'EKS Cluster' } },
@@ -353,7 +366,7 @@ export default function DashboardPage() {
       {
         name: 'AWS - Redes', provider: 'aws',
         items: [
-          { type: 'aws_lb', name: 'Load Balancer', description: 'Balanceador (ALB/NLB)', provider: 'aws', icon: <ArrowsRightLeftIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'lb', category: 'networking', label: 'Load Balancer' } },
+          { type: 'aws_elbv2_load_balancer', name: 'Load Balancer', description: 'Balanceador (ALB/NLB)', provider: 'aws', icon: <ArrowsRightLeftIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'elbv2_load_balancer', category: 'networking', label: 'Load Balancer' } },
         ]
       },
       {

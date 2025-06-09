@@ -18,6 +18,7 @@ import {
   ArrowsRightLeftIcon as LoadBalancerIcon, // Reutilizando para AWS ALB y Azure LB
   GlobeAltIcon as ApiGatewayIcon, // Usando GlobeAltIcon para API Gateway y Azure App Gateway
   RectangleStackIcon as SqsQueueIcon, // Usando RectangleStackIcon para SQS
+  ChatBubbleOvalLeftEllipsisIcon,
   ChatBubbleOvalLeftEllipsisIcon as SnsTopicIcon, // Usando para SNS
   CalendarDaysIcon as EventBridgeRuleIcon, // Usando para EventBridge
   AdjustmentsHorizontalIcon as SfnStateMachineIcon, // Usando para Step Functions
@@ -43,6 +44,15 @@ import {
   BoltIcon as AzureEventHubNamespaceIcon, // Reutilizando BoltIcon para Event Hubs
   GlobeAltIcon as AzureVirtualNetworkIcon, // Reutilizando para VNet
   ShieldCheckIcon as AzureNetworkSecurityGroupIcon, // Reutilizando para NSG
+  CubeIcon,
+  CalendarDaysIcon,
+  AdjustmentsHorizontalIcon,
+  ListBulletIcon,
+  RectangleGroupIcon,
+  RssIcon,
+  ComputerDesktopIcon,
+  ServerStackIcon,
+  ChartBarIcon,
   // GlobeAltIcon as AzureApplicationGatewayIcon, // Reutilizando para App Gateway
   // ShieldCheckIcon as AzureFirewallIcon // Reutilizando para Firewall
 } from '@heroicons/react/24/outline';
@@ -436,6 +446,26 @@ export function FilestoreInstanceNode(props: any) {
 FilestoreInstanceNode.displayName = 'FilestoreInstanceNode';
 
 // --- Generic Node ---
+export function GcpApiGatewayNode(props: any) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <GlobeAltIcon className="w-6 h-6 text-blue-600" />, label: props.data.label || 'API Gateway', resourceType: 'gcp_api_gateway' }}
+    />
+  );
+}
+GcpApiGatewayNode.displayName = 'GcpApiGatewayNode';
+
+export function GcpPubSubTopicNode(props: any) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <ChatBubbleOvalLeftEllipsisIcon className="w-6 h-6 text-purple-600" />, label: props.data.label || 'Pub/Sub Topic', resourceType: 'gcp_pubsub_topic' }}
+    />
+  );
+}
+GcpPubSubTopicNode.displayName = 'GcpPubSubTopicNode';
+
 export function GenericNode(props: any) {
   return (
     <BaseResourceNode
@@ -752,8 +782,8 @@ const nodeTypes = {
   gcp_compute_load_balancer: ComputeLoadBalancerNode,
   gcp_compute_instance_template: ComputeInstanceTemplateNode,
 
-  gcp_api_gateway: BaseResourceNode, 
-  gcp_pubsub_topic: BaseResourceNode,
+  gcp_api_gateway: GcpApiGatewayNode,
+  gcp_pubsub_topic: GcpPubSubTopicNode,
   
   // Fallbacks genéricos
   compute: ComputeEngineNode, 

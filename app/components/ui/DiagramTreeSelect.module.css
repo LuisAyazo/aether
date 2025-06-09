@@ -38,7 +38,7 @@
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  z-index: 50;
+  z-index: 100; /* Increased from 50 to 100 to be above the navigation */
   max-height: 400px;
   min-width: 320px; /* Increased to match selector minimum width */
   display: flex;
@@ -288,4 +288,4 @@
     min-width: 28px; /* Slightly larger touch target on mobile */
     padding: 6px;
   }
-} 
+}

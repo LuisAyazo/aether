@@ -148,6 +148,7 @@ export default function Navigation() {
       formCreateDiag.resetFields();
       setNewDiagramModalVisible(true);
     } else {
+      // Solo cambiar el diagrama, la URL se actualizará desde el dashboard
       handleDiagramChange(value);
     }
   };
