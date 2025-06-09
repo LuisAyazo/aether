@@ -85,6 +85,7 @@ const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode
   const [isDrawingAreaInGroup, setIsDrawingAreaInGroup] = React.useState(false);
   const [areaStartPosInGroup, setAreaStartPosInGroup] = React.useState<FlowXYPosition | null>(null);
   const [currentAreaInGroup, setCurrentAreaInGroup] = React.useState<{ x: number; y: number; width: number; height: number; } | null>(null);
+  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number; nodeId: string } | null>(null);
   
   const groupFlowInstance = useReactFlow(); 
   const groupFlowWrapper = React.useRef<HTMLDivElement>(null);
@@ -98,6 +99,7 @@ const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode
   const initialGroupNodes = useMemo(() => {
     if (!parentNode) return [];
     console.log('🔍 [GROUP VIEW] Loading nodes for group:', focusedGroupId);
+    console.log('🔍 [GROUP VIEW] Group viewport:', parentNode.data?.viewport);
     console.log('🔍 [GROUP VIEW] All nodes:', allNodes.map(n => ({
       id: n.id,
       parentId: n.parentId,
@@ -123,13 +125,16 @@ const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode
           width: n.width,
           height: n.height,
           selected: n.selected || false, 
-          // Eliminar cualquier estilo de ocultación para que los nodos sean visibles
+          // Preservar el estilo pero hacerlo visible
           style: n.style ? { 
             ...n.style,
             visibility: 'visible',
             opacity: 1,
-            pointerEvents: 'auto'
-          } : undefined, 
+            pointerEvents: 'auto',
+            // Preservar dimensiones para nodos de área
+            width: n.style.width || n.width,
+            height: n.style.height || n.height
+          } : (n.width && n.height ? { width: n.width, height: n.height } : undefined), 
           draggable: typeof n.draggable === 'boolean' ? n.draggable : true,
           selectable: typeof n.selectable === 'boolean' ? n.selectable : true,
           connectable: typeof n.connectable === 'boolean' ? n.connectable : true,
@@ -309,31 +314,103 @@ const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode
   );
 
   const handleSaveChanges = () => {
-    const nodesToSave = nodes.map((n: FlowNode) => ({
-      ...n,
-      parentId: focusedGroupId, 
-      extent: 'parent' as const,
-      // Asegurar que la posición se mantenga
-      position: {
-        x: n.position.x,
-        y: n.position.y
-      }
-    }));
+    // TODOS los nodos se guardan DENTRO del grupo
+    const nodesToSave = nodes.map((n: FlowNode) => {
+      return {
+        ...n,
+        parentId: focusedGroupId, 
+        extent: 'parent' as const,
+        position: n.position, // Mantener la posición original
+        // Mantener width y height para nodos de área
+        width: n.width,
+        height: n.height,
+        hidden: true, // TODOS los nodos hijos deben estar ocultos en el canvas principal
+        style: { 
+          ...n.style, 
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          opacity: 0,
+          // Preservar dimensiones en el style también
+          width: n.style?.width || n.width,
+          height: n.style?.height || n.height
+        }
+      };
+    });
     const currentGroupViewport = groupFlowInstance.getViewport();
     console.log('🔍 [GROUP SAVE] Saving nodes with positions:', nodesToSave.map((n: FlowNode) => ({
       id: n.id,
+      type: n.type,
       position: n.position,
-      parentId: n.parentId
+      parentId: n.parentId,
+      width: n.width,
+      height: n.height,
+      style: n.style
     })));
+    console.log('🔍 [GROUP SAVE] Area nodes:', nodesToSave.filter((n: FlowNode) => n.type === 'areaNode'));
     console.log('🔍 [GROUP SAVE] Saving viewport:', currentGroupViewport);
     onSaveRef.current?.(nodesToSave, edges, currentGroupViewport);
     onClose();
   };
 
   const handleDeleteSelected = useCallback(() => {
-    setNodes((nds: FlowNode[]) => nds.filter((n: FlowNode) => !n.selected));
+    console.log('🗑️ [GROUP VIEW] Deleting selected nodes');
+    setNodes((nds: FlowNode[]) => {
+      const nodesToDelete = nds.filter((n: FlowNode) => n.selected);
+      console.log('🗑️ [GROUP VIEW] Nodes to delete:', nodesToDelete.map(n => ({ id: n.id, type: n.type })));
+      return nds.filter((n: FlowNode) => !n.selected);
+    });
     setEdges((eds: FlowEdge[]) => eds.filter((e: FlowEdge) => !e.selected));
   }, [setNodes, setEdges]);
+
+  // Manejador del menú contextual
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: FlowNode) => {
+    event.preventDefault();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      nodeId: node.id
+    });
+  }, []);
+
+  // Eliminar nodo específico
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    console.log('🗑️ [GROUP VIEW] Deleting node:', nodeId);
+    setNodes((nds: FlowNode[]) => nds.filter((n: FlowNode) => n.id !== nodeId));
+    // Eliminar edges conectados
+    setEdges((eds: FlowEdge[]) => 
+      eds.filter((e: FlowEdge) => e.source !== nodeId && e.target !== nodeId)
+    );
+    setContextMenu(null);
+  }, [setNodes, setEdges]);
+
+  // Duplicar nodo
+  const handleDuplicateNode = useCallback((nodeId: string) => {
+    const nodeToDuplicate = nodes.find((n: FlowNode) => n.id === nodeId);
+    if (!nodeToDuplicate) return;
+
+    const newNode: FlowNode = {
+      ...nodeToDuplicate,
+      id: `${nodeToDuplicate.type}-duplicate-${Date.now()}`,
+      position: {
+        x: nodeToDuplicate.position.x + 50,
+        y: nodeToDuplicate.position.y + 50
+      },
+      selected: false
+    };
+
+    console.log('📋 [GROUP VIEW] Duplicating node:', nodeId, 'as', newNode.id);
+    setNodes((nds: FlowNode[]) => [...nds, newNode]);
+    setContextMenu(null);
+  }, [nodes, setNodes]);
+
+  // Cerrar menú al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu]);
 
   // Funciones de control del canvas
   const handleZoomIn = useCallback(() => {
@@ -360,9 +437,11 @@ const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode
 
   useEffect(() => {
     if (groupFlowInstance && initialViewport) {
+      console.log('🔍 [GROUP VIEW] Applying saved viewport:', initialViewport);
       const timeoutId = setTimeout(() => {
         if (groupFlowInstance) {
           groupFlowInstance.setViewport(initialViewport);
+          console.log('🔍 [GROUP VIEW] Viewport applied');
         }
       }, 50);
       return () => clearTimeout(timeoutId);
@@ -567,6 +646,7 @@ const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode
               onNodesChange={onNodesChangeInternal}
               onEdgesChange={onEdgesChangeInternal}
               onConnect={onConnect}
+              onNodeContextMenu={handleNodeContextMenu}
               onMouseDown={(e: React.MouseEvent) => {
                 if (activeToolInGroup === 'area' && groupFlowInstance) {
                   const target = e.target as HTMLElement;
@@ -618,12 +698,12 @@ const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode
               }}
             nodeTypes={memoizedInternalNodeTypes} 
             edgeTypes={memoizedInternalEdgeTypes}
-            defaultViewport={initialViewport || { x: 50, y: 50, zoom: 0.85 }} 
+            defaultViewport={initialViewport || { x: 0, y: 0, zoom: 1 }} 
             className="bg-gray-100"
-            nodesDraggable={isInteractive}
+            nodesDraggable={isInteractive && activeToolInGroup !== 'area'}
             nodesConnectable={isInteractive}
             elementsSelectable={isInteractive}
-            panOnDrag={isInteractive}
+            panOnDrag={isInteractive && activeToolInGroup !== 'area'}
             zoomOnScroll={isInteractive}
             zoomOnPinch={isInteractive}
             zoomOnDoubleClick={isInteractive}
@@ -734,6 +814,37 @@ const GroupFocusViewInner: React.FC<GroupFocusViewProps & { parentNode: FlowNode
             )}
           </ReactFlow>
         </div>
+        
+        {/* Menú contextual */}
+        {contextMenu && (
+          <div
+            className="fixed bg-white shadow-lg rounded-lg border border-gray-200 py-1 z-[100]"
+            style={{
+              top: contextMenu.y,
+              left: contextMenu.x,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+              onClick={() => handleDeleteNode(contextMenu.nodeId)}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Eliminar
+            </button>
+            <button
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+              onClick={() => handleDuplicateNode(contextMenu.nodeId)}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              Duplicar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

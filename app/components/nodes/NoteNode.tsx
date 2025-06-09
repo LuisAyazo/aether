@@ -1,8 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useReactFlow } from 'reactflow';
-import type { Node, NodeProps } from 'reactflow'; // Importar Node y NodeProps como tipos
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
+
+// Type aliases to work around ReactFlow TypeScript namespace issues
+type Node = any;
+type NodeProps = any;
 
 interface NoteNodeData {
   text: string;
@@ -22,7 +25,7 @@ const colorOptions = [
   { name: 'Blanco', value: '#FFFFFF', textColor: '#1F2937' },
 ];
 
-const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => {
+const NoteNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(data.text);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -117,6 +120,10 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
         boxSizing: 'border-box'
       }}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={(e) => {
+        // No detener la propagación del click derecho
+        // Permitir que el evento llegue a ReactFlow
+      }}
     >
       <NodeResizer
         isVisible={selected}

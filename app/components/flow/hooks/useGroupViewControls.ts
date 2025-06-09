@@ -40,11 +40,16 @@ export function useGroupViewControls({ setNodes, setEdges }: UseGroupViewControl
           data: groupNodeData,
         } : undefined;
         
+        // TODOS los nodos que vienen del grupo deben estar ocultos
         const finalUpdatedNodesFromGroupView = updatedNodesInGroup.map(un => ({
           ...un,
-          hidden: true, 
-          parentId: expandedGroupId, 
-          extent: 'parent' as const, 
+          hidden: true, // TODOS los nodos del grupo deben estar ocultos
+          style: {
+            ...un.style,
+            visibility: 'hidden',
+            pointerEvents: 'none',
+            opacity: 0
+          }
         }));
         
         const updatedNodesMap = new Map(finalUpdatedNodesFromGroupView.map(n => [n.id, n]));

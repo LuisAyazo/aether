@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { NodeResizer, useReactFlow, NodeProps } from 'reactflow'; // Agrupar importaciones de reactflow
-import type { Node } from 'reactflow'; // Importar Node como tipo
+import { NodeResizer, useReactFlow } from 'reactflow';
+
+// Type aliases to work around ReactFlow TypeScript namespace issues (consistent with other files in codebase)
+type Node = any;
+type NodeProps = any;
 
 interface AreaNodeData {
   label?: string;
@@ -23,7 +26,7 @@ const colorOptions = [
   { name: 'Transparent', value: 'rgba(255, 255, 255, 0.1)' },
 ];
 
-export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>) {
+export default function AreaNode({ id, data, selected }: NodeProps) {
   const reactFlow = useReactFlow();
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editedLabel, setEditedLabel] = useState(data.label || 'Area');
@@ -139,15 +142,25 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
         pointerEvents: 'auto', // Permitir que el área reciba eventos para el arrastre de hijos
       }}
       onMouseDown={(e) => {
-        e.stopPropagation();
-        isDraggingRef.current = true;
+        // Solo detener propagación para click izquierdo
+        if (e.button === 0) {
+          e.stopPropagation();
+          isDraggingRef.current = true;
+        }
       }}
       onMouseUp={(e) => {
-        e.stopPropagation();
-        if (isDraggingRef.current) {
-          isDraggingRef.current = false;
-          deselectArea();
+        // Solo detener propagación para click izquierdo
+        if (e.button === 0) {
+          e.stopPropagation();
+          if (isDraggingRef.current) {
+            isDraggingRef.current = false;
+            deselectArea();
+          }
         }
+      }}
+      onContextMenu={(e) => {
+        // No detener la propagación del click derecho
+        // Permitir que el evento llegue a ReactFlow
       }}
     >
       <NodeResizer
@@ -161,15 +174,15 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
           opacity: 0.5
         }}
         handleStyle={{
-          backgroundColor: data.borderColor || '#3b82f6',
-          width: '12px', // Aumentado
-          height: '12px', // Aumentado
-          border: '2px solid white', // Borde más grueso
-          borderRadius: '50%',
+          backgroundColor: 'white',
+          width: '16px',
+          height: '16px',
+          border: '2px solid #3b82f6',
+          borderRadius: '0', // Cuadrado, sin redondeo
           transform: 'translate(-50%, -50%)',
-          opacity: 0.9, // Ligeramente más opaco
+          opacity: 0.9,
           zIndex: 10,
-          pointerEvents: 'auto', // Permitir interacción con los handles
+          pointerEvents: 'auto',
         }}
       />
 

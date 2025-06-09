@@ -77,6 +77,13 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
   const childNodes = useMemo(() => {
     return allNodes
       .filter((n: Node) => n.parentId === id)
+      // Filtrar solo nodos de recursos (excluir notas, textos, áreas y grupos)
+      .filter((n: Node) => 
+        n.type !== 'noteNode' && 
+        n.type !== 'textNode' && 
+        n.type !== 'areaNode' && 
+        n.type !== 'group'
+      )
       .sort((a: Node, b: Node) => 
         (a.data?.label || a.id).localeCompare(b.data?.label || b.id)
       );
@@ -517,7 +524,7 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
               {childNodes.map((node: Node) => ( 
                 <div 
                   key={node.id} 
-                  className="group flex items-center p-2.5 bg-white rounded-lg border border-gray-200 text-xs hover:bg-gray-50 transition-colors duration-200"
+                  className="group flex items-center p-2.5 bg-gray-100 rounded-lg border border-gray-200 text-xs hover:bg-gray-200 transition-colors duration-200"
                 >
                   <ServerIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                   <span className="ml-2 truncate flex-1" title={node.data?.label || node.id}>
@@ -558,7 +565,7 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
           <span className="font-medium text-xs">
             {data.isExpandedView 
               ? (childNodes.length === 0 ? 'Área de grupo expandida (vacía)' : 'Nodos hijos renderizados por el flujo') 
-              : 'Arrastra nodos aquí'}
+              : 'Arrastra recursos aquí (AWS, GCP, etc.)'}
           </span>
         </div>
       </div>

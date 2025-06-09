@@ -162,9 +162,24 @@ export function useFlowInteractions({
     (evt: React.MouseEvent, node: Node) => {
       evt.preventDefault();
       evt.stopPropagation();
-      // No hacer nada para los nodos de recursos, ya que su menú es manejado por el evento 'showContextMenu'
+      
+      // Para nodos de recursos, el menú es manejado por el evento 'showContextMenu'
+      // Para otros tipos de nodos (area, note, text), mostrar el menú básico aquí
+      const utilityNodeTypes = ['areaNode', 'noteNode', 'textNode'];
+      
+      if (utilityNodeTypes.includes(node.type) || node.type === 'group') {
+        setContextMenu({
+          visible: true,
+          x: evt.clientX,
+          y: evt.clientY,
+          nodeId: node.id,
+          nodeType: node.type,
+          isPane: false,
+          customItems: undefined, // No usar customItems para estos nodos
+        });
+      }
     },
-    []
+    [setContextMenu]
   );
 
   const handlePaneContextMenu = useCallback(
@@ -230,6 +245,17 @@ export function useFlowInteractions({
             return; // Salir de la función para evitar añadir el nodo a otro grupo
           }
         }
+      }
+      
+      // Verificar si el nodo es un recurso (no es nota, texto, área o grupo)
+      const isResourceNode = draggedNode.type !== 'noteNode' && 
+                           draggedNode.type !== 'textNode' && 
+                           draggedNode.type !== 'areaNode' && 
+                           draggedNode.type !== 'group';
+      
+      // Solo permitir que nodos de recursos entren a grupos
+      if (!isResourceNode) {
+        return;
       }
       
       // Luego verificar si el nodo está entrando a un nuevo grupo
@@ -358,10 +384,18 @@ export function useFlowInteractions({
         
         console.log('🔍 [DROP DEBUG] Created node:', newNodeToAdd);
         
+        // Verificar si el nodo es un recurso antes de permitir que entre a un grupo
+        const isResourceNode = itemData.type !== 'note' && 
+                             itemData.type !== 'text' && 
+                             itemData.type !== 'group' &&
+                             newNodeToAdd.type !== 'noteNode' &&
+                             newNodeToAdd.type !== 'textNode' &&
+                             newNodeToAdd.type !== 'areaNode';
+        
         const targetGroupNode = findGroupAtPosition(dropPosition);
         console.log('🔍 [DROP DEBUG] Target group node:', targetGroupNode);
         
-        if (targetGroupNode) {
+        if (targetGroupNode && isResourceNode) {
           const parentNode = reactFlowInstance.getNode(targetGroupNode.id);
           if (parentNode) {
             newNodeToAdd.parentId = targetGroupNode.id;

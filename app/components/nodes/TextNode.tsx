@@ -1,7 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useReactFlow, NodeResizer } from 'reactflow';
-import type { Node, NodeProps } from 'reactflow'; // Importar Node y NodeProps como tipos
 import '@reactflow/node-resizer/dist/style.css';
+
+// Type aliases to work around ReactFlow TypeScript namespace issues
+type Node = any;
+type NodeProps = any;
 
 interface TextNodeData {
   text: string;
@@ -23,7 +26,7 @@ const colorOptions = [
   { name: 'Blanco', value: '#FFFFFF' },
 ];
 
-const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => {
+const TextNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(data.text);
   const [fontWeight, setFontWeight] = useState(data.fontWeight || 'normal');
@@ -120,6 +123,10 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
       onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setShowToolbar(true)}
       onMouseLeave={() => setShowToolbar(false)}
+      onContextMenu={(e) => {
+        // No detener la propagación del click derecho
+        // Permitir que el evento llegue a ReactFlow
+      }}
     >
       <NodeResizer
         isVisible={selected}
