@@ -102,26 +102,27 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
     }
   }, [id, childNodes.length, getNode, setNodes]);
 
-  // Efecto para sincronizar la visibilidad de nodos hijos cuando cambia el estado minimizado
+  // Efecto para sincronizar la visibilidad de nodos hijos
+  // Los nodos hijos SIEMPRE deben estar ocultos cuando pertenecen a un grupo
   useEffect(() => {
     setNodes((nds: Node[]) =>
       nds.map((n: Node) => {
         if (n.parentId === id) {
           return { 
             ...n, 
-            hidden: isMinimized, // Sincronizar con el estado actual
+            hidden: true, // Los nodos hijos siempre están ocultos
             style: { 
               ...n.style, 
-              visibility: isMinimized ? 'hidden' : 'visible',
-              pointerEvents: isMinimized ? 'none' : 'auto',
-              opacity: isMinimized ? 0 : 1
+              visibility: 'hidden',
+              pointerEvents: 'none',
+              opacity: 0
             }
           };
         }
         return n;
       })
     );
-  }, [isMinimized, id, setNodes]); // Se ejecuta cuando cambia isMinimized
+  }, [id, setNodes]); // Solo depende del id del grupo
 
   const handleLabelSubmit = useCallback(() => {
     setIsEditingLabel(false);
@@ -233,15 +234,16 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
           };
         }
 
+        // Los nodos hijos siempre permanecen ocultos
         if (n.parentId === id) {
           return { 
             ...n, 
-            hidden: newMinimizedState, // Usar hidden true/false para ReactFlow
+            hidden: true,
             style: { 
               ...n.style, 
-              visibility: newMinimizedState ? 'hidden' : 'visible',
-              pointerEvents: newMinimizedState ? 'none' : 'auto',
-              opacity: newMinimizedState ? 0 : 1 // Agregar opacidad como seguridad adicional
+              visibility: 'hidden',
+              pointerEvents: 'none',
+              opacity: 0
             }
           };
         }

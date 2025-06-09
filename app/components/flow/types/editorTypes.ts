@@ -99,6 +99,8 @@ export interface FlowEditorProps {
   environmentId?: string;
   diagramId?: string;
   initialDiagram?: Diagram;
+  initialExpandedGroupId?: string | null;
+  onGroupExpandedChange?: (groupId: string | null) => void;
 }
 
 export interface ResourceProperties {

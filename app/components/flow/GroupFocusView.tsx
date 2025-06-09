@@ -90,31 +90,62 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
 
   const initialGroupNodes = useMemo(() => {
     if (!parentNode) return [];
+    console.log('🔍 [GROUP VIEW] Loading nodes for group:', focusedGroupId);
+    console.log('🔍 [GROUP VIEW] All nodes:', allNodes.map(n => ({
+      id: n.id,
+      parentId: n.parentId,
+      parentNode: n.parentNode,
+      position: n.position
+    })));
+    
     const childrenOfFocusedGroup = allNodes
-      .filter((n: FlowNode) => n.parentId === focusedGroupId)
+      .filter((n: FlowNode) => n.parentId === focusedGroupId || n.parentNode === focusedGroupId)
       .map((n: FlowNode) => {
+        console.log('🔍 [GROUP VIEW] Processing child node:', {
+          id: n.id,
+          position: n.position,
+          parentId: n.parentId,
+          parentNode: n.parentNode
+        });
+        
         const focusedViewNode: FlowNode = {
           id: n.id,
           type: n.type,
-          position: n.position, 
+          position: n.position || { x: 0, y: 0 }, 
           data: n.data ? { ...n.data } : {}, 
           width: n.width,
           height: n.height,
           selected: n.selected || false, 
-          style: n.style ? { ...n.style } : undefined, 
+          // Eliminar cualquier estilo de ocultación para que los nodos sean visibles
+          style: n.style ? { 
+            ...n.style,
+            visibility: 'visible',
+            opacity: 1,
+            pointerEvents: 'auto'
+          } : undefined, 
           draggable: typeof n.draggable === 'boolean' ? n.draggable : true,
           selectable: typeof n.selectable === 'boolean' ? n.selectable : true,
           connectable: typeof n.connectable === 'boolean' ? n.connectable : true,
+          // Asegurarse de que hidden sea false
+          hidden: false,
         };
         return focusedViewNode;
       });
+    
+    console.log('🔍 [GROUP VIEW] Children nodes found:', childrenOfFocusedGroup.length);
     return childrenOfFocusedGroup;
   }, [allNodes, focusedGroupId, parentNode]);
 
   const initialGroupEdges = useMemo(() => {
     const childNodeIds = new Set(initialGroupNodes.map((n: FlowNode) => n.id));
-    return allEdges.filter((edge: FlowEdge) => childNodeIds.has(edge.source) && childNodeIds.has(edge.target));
-  }, [allEdges, initialGroupNodes]);
+    return allEdges.filter((edge: FlowEdge) => {
+      // Include edges between child nodes within the group
+      const isInternalEdge = childNodeIds.has(edge.source) && childNodeIds.has(edge.target);
+      // Include edges that connect the group node to external nodes
+      const isGroupExternalEdge = edge.source === focusedGroupId || edge.target === focusedGroupId;
+      return isInternalEdge || isGroupExternalEdge;
+    });
+  }, [allEdges, initialGroupNodes, focusedGroupId]);
 
   const [nodes, setNodes, onNodesChangeInternal] = useNodesState(initialGroupNodes);
   const [edges, setEdges, onEdgesChangeInternal] = useEdgesState(initialGroupEdges);
@@ -125,6 +156,11 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   useEffect(() => {
     const currentInitialGroupNodesJSON = JSON.stringify(initialGroupNodes);
     if (currentInitialGroupNodesJSON !== previousInitialGroupNodesJSON.current) {
+      console.log('Updating group nodes:', {
+        groupId: focusedGroupId,
+        nodeCount: initialGroupNodes.length,
+        previousCount: nodes.length
+      });
       setNodes(initialGroupNodes);
       previousInitialGroupNodesJSON.current = currentInitialGroupNodesJSON;
     }
@@ -133,6 +169,11 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
   useEffect(() => {
     const currentInitialGroupEdgesJSON = JSON.stringify(initialGroupEdges);
     if (currentInitialGroupEdgesJSON !== previousInitialGroupEdgesJSON.current) {
+      console.log('Updating group edges:', {
+        groupId: focusedGroupId,
+        edgeCount: initialGroupEdges.length,
+        previousCount: edges.length
+      });
       setEdges(initialGroupEdges);
       previousInitialGroupEdgesJSON.current = currentInitialGroupEdgesJSON;
     }
@@ -187,7 +228,15 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
 
 
   const onDragStartSidebarInGroup = (event: React.DragEvent, item: ResourceItem) => {
-    event.dataTransfer.setData('application/reactflow-group-internal', JSON.stringify(item));
+    // Only serialize serializable properties, excluding icon which contains circular references
+    const serializableItem = {
+      type: item.type,
+      name: item.name,
+      description: item.description,
+      provider: item.provider,
+      data: item.data
+    };
+    event.dataTransfer.setData('application/reactflow-group-internal', JSON.stringify(serializableItem));
     event.dataTransfer.effectAllowed = 'move';
   };
 
@@ -256,9 +305,19 @@ const GroupFocusView: React.FC<GroupFocusViewProps> = ({
     const nodesToSave = nodes.map((n: FlowNode) => ({
       ...n,
       parentId: focusedGroupId, 
-      extent: 'parent' as const, 
+      extent: 'parent' as const,
+      // Asegurar que la posición se mantenga
+      position: {
+        x: n.position.x,
+        y: n.position.y
+      }
     }));
     const currentGroupViewport = groupFlowInstance.getViewport();
+    console.log('🔍 [GROUP SAVE] Saving nodes with positions:', nodesToSave.map((n: FlowNode) => ({
+      id: n.id,
+      position: n.position,
+      parentId: n.parentId
+    })));
     onSaveRef.current?.(nodesToSave, edges, currentGroupViewport);
     onClose();
   };

@@ -87,6 +87,13 @@ export default function DashboardPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const convertToReactFlowNodes = (customNodes: CustomNode[]): any[] => { 
+    console.log('🔍 [LOAD DEBUG] Converting nodes from backend:', customNodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      parentNode: n.parentNode
+    })));
+    
     return customNodes.map(node => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const reactFlowNode: any = {
@@ -108,6 +115,13 @@ export default function DashboardPage() {
           };
         }
       }
+
+      console.log('🔍 [LOAD DEBUG] Converted node:', {
+        id: reactFlowNode.id,
+        position: reactFlowNode.position,
+        parentId: reactFlowNode.parentId,
+        parentNode: node.parentNode
+      });
 
       return reactFlowNode; 
     }); 
@@ -151,6 +165,78 @@ export default function DashboardPage() {
     }
   }, [searchParams, activeSectionInSidebar]);
 
+  // Estado para el grupo expandido inicial
+  const [initialExpandedGroup, setInitialExpandedGroup] = useState<string | null>(null);
+
+  // Sincronizar parámetros de URL con el estado
+  useEffect(() => {
+    if (!dataLoading && activeCompany && environments.length > 0) {
+      const envParam = searchParams.get('env');
+      const diagramParam = searchParams.get('diagram');
+      const groupParam = searchParams.get('group');
+      
+      // Si hay parámetros en la URL, intentar aplicarlos
+      if (envParam || diagramParam || groupParam) {
+        const applyUrlParams = async () => {
+          // Buscar ambiente por nombre
+          if (envParam) {
+            const targetEnv = environments.find(e => e.name.toLowerCase().replace(/\s+/g, '-') === envParam.toLowerCase());
+            if (targetEnv && targetEnv.id !== selectedEnvironment) {
+              await useNavigationStore.getState().handleEnvironmentChange(targetEnv.id);
+            }
+          }
+          
+          // Buscar diagrama por nombre (después de cambiar ambiente si es necesario)
+          if (diagramParam && diagramsFromStore.length > 0) {
+            const targetDiagram = diagramsFromStore.find(d => d.name.toLowerCase().replace(/\s+/g, '-') === diagramParam.toLowerCase());
+            if (targetDiagram && targetDiagram.id !== selectedDiagram) {
+              await useNavigationStore.getState().handleDiagramChange(targetDiagram.id);
+            }
+          }
+          
+          // Establecer el grupo expandido inicial si está en la URL
+          if (groupParam && currentDiagram) {
+            // Buscar el grupo por su label
+            const groupNode = currentDiagram.nodes?.find(n => 
+              n.type === 'group' && 
+              n.data?.label && 
+              typeof n.data.label === 'string' &&
+              n.data.label.toLowerCase().replace(/\s+/g, '-') === groupParam.toLowerCase()
+            );
+            if (groupNode) {
+              setInitialExpandedGroup(groupNode.id);
+            }
+          }
+        };
+        
+        applyUrlParams();
+      }
+    }
+  }, [dataLoading, activeCompany, environments, searchParams, currentDiagram]);
+
+  // Actualizar URL cuando cambian ambiente o diagrama
+  useEffect(() => {
+    if (!dataLoading && selectedEnvironment && selectedDiagram) {
+      const currentParams = new URLSearchParams(searchParams);
+      
+      // Encontrar nombres para la URL
+      const selectedEnv = environments.find(e => e.id === selectedEnvironment);
+      const selectedDiag = diagramsFromStore.find(d => d.id === selectedDiagram);
+      
+      if (selectedEnv) {
+        currentParams.set('env', selectedEnv.name.toLowerCase().replace(/\s+/g, '-'));
+      }
+      if (selectedDiag) {
+        currentParams.set('diagram', selectedDiag.name.toLowerCase().replace(/\s+/g, '-'));
+      }
+      
+      const newUrl = `${pathname}?${currentParams.toString()}`;
+      if (window.location.href !== window.location.origin + newUrl) {
+        router.replace(newUrl);
+      }
+    }
+  }, [selectedEnvironment, selectedDiagram, environments, diagramsFromStore, dataLoading, pathname, searchParams, router]);
+
   const handleInternalSectionChange = (sectionString: string) => {
     const section = sectionString as SidebarSectionKey;
     if (VALID_SECTIONS.includes(section)) {
@@ -169,10 +255,29 @@ export default function DashboardPage() {
       message.error("No se puede guardar: falta información de compañía, ambiente o diagrama.");
       return;
     }
+    
+    // Debug: Log nodes before conversion
+    console.log('🔍 [SAVE DEBUG] Nodes before conversion:', data.nodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      parentId: n.parentId,
+      parentNode: n.parentNode
+    })));
+    
     const customNodes = data.nodes.map(n => ({ 
       id: n.id, type: n.type!, position: n.position, data: n.data, 
       width: n.width, height: n.height, parentNode: n.parentId, style: n.style 
     } as CustomNode));
+    
+    // Debug: Log nodes after conversion
+    console.log('🔍 [SAVE DEBUG] Nodes after conversion:', customNodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      parentNode: n.parentNode
+    })));
+    
     const customEdges = data.edges.map(e => ({ 
       id: e.id, source: e.source, target: e.target, type: e.type, 
       animated: e.animated, label: e.label as string, data: e.data, style: e.style 
@@ -184,8 +289,8 @@ export default function DashboardPage() {
       nodeCount: customNodes.length,
       edgeCount: customEdges.length,
       groupNodes: customNodes.filter(n => n.type === 'groupNode'),
-      groupEdges: customEdges.filter(e => e.source?.includes('group') || e.target?.includes('group')),
-      allNodesTypes: customNodes.map(n => ({ id: n.id, type: n.type }))
+      childNodesInGroups: customNodes.filter(n => n.parentNode),
+      allNodesTypes: customNodes.map(n => ({ id: n.id, type: n.type, parentNode: n.parentNode }))
     });
     
     const diagramUpdateData = { 
@@ -473,7 +578,25 @@ export default function DashboardPage() {
                         initialViewport={currentDiagram.viewport}
                         onSave={handleSaveDiagramLocal}
                         nodeTypes={nodeTypes}
-                        resourceCategories={memoizedResourceCategories} 
+                        resourceCategories={memoizedResourceCategories}
+                        initialExpandedGroupId={initialExpandedGroup}
+                        onGroupExpandedChange={(groupId: string | null) => {
+                          const currentParams = new URLSearchParams(searchParams);
+                          
+                          if (groupId) {
+                            // Buscar el label del grupo
+                            const groupNode = currentDiagram.nodes?.find(n => n.id === groupId);
+                            if (groupNode?.data?.label && typeof groupNode.data.label === 'string') {
+                              currentParams.set('group', groupNode.data.label.toLowerCase().replace(/\s+/g, '-'));
+                            }
+                          } else {
+                            // Si no hay grupo expandido, quitar el parámetro
+                            currentParams.delete('group');
+                          }
+                          
+                          const newUrl = `${pathname}?${currentParams.toString()}`;
+                          router.replace(newUrl);
+                        }}
                       />
                     )}
                     {!selectedEnvironment && environments && environments.length === 0 && !dataLoading && ( 

@@ -80,6 +80,8 @@ const FlowEditorContent = ({
   nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
   resourceCategories = [],
+  initialExpandedGroupId,
+  onGroupExpandedChange,
 }: FlowEditorProps): JSX.Element => {
   
   const memoizedNodeTypes = useMemo(() => {
@@ -249,13 +251,26 @@ const FlowEditorContent = ({
 
   const handleCollapseGroup = useCallback((groupId: string) => {
     groupManagementActions.handleCollapseGroupView(groupId);
-  }, [groupManagementActions]); // Añadir groupManagementActions como dependencia
+    onGroupExpandedChange?.(null);
+  }, [groupManagementActions, onGroupExpandedChange]);
+
+  // Expandir grupo inicial si está especificado
+  useEffect(() => {
+    if (initialExpandedGroupId && nodes.length > 0) {
+      const groupExists = nodes.some((n: FlowNode) => n.id === initialExpandedGroupId && n.type === 'group');
+      if (groupExists) {
+        groupManagementActions.handleExpandGroupView(initialExpandedGroupId);
+        onGroupExpandedChange?.(initialExpandedGroupId);
+      }
+    }
+  }, [initialExpandedGroupId, nodes.length]); // Solo ejecutar cuando cambie initialExpandedGroupId o cuando se carguen los nodos
 
   useEffect(() => {
     const expandHandler = (event: Event) => {
       const customEvent = event as CustomEvent<{ groupId: string }>;
       if (customEvent.detail?.groupId) {
         groupManagementActions.handleExpandGroupView(customEvent.detail.groupId);
+        onGroupExpandedChange?.(customEvent.detail.groupId);
       }
     };
     const collapseHandler = (event: Event) => {
@@ -271,7 +286,7 @@ const FlowEditorContent = ({
       window.removeEventListener('expandGroupView', expandHandler);
       window.removeEventListener('collapseGroupView', collapseHandler);
     };
-  }, [groupManagementActions.handleExpandGroupView, handleCollapseGroup]);
+  }, [groupManagementActions.handleExpandGroupView, handleCollapseGroup, onGroupExpandedChange]);
   
   useEffect(() => {
     const handleShowSingleNodePreview = (event: Event) => {
