@@ -194,6 +194,45 @@ export function useFlowInteractions({
         );
       }
       
+      // Primero verificar si el nodo está saliendo de un grupo
+      if (draggedNode.parentId) {
+        const parentGroup = nodes.find(n => n.id === draggedNode.parentId && n.type === 'group');
+        
+        if (parentGroup && draggedNode.positionAbsolute && parentGroup.positionAbsolute) {
+          // Verificar si el nodo está fuera de los límites del grupo padre
+          const nodeOutsideGroup = 
+            draggedNode.positionAbsolute.x < parentGroup.positionAbsolute.x ||
+            draggedNode.positionAbsolute.x > parentGroup.positionAbsolute.x + (parentGroup.width || 0) ||
+            draggedNode.positionAbsolute.y < parentGroup.positionAbsolute.y ||
+            draggedNode.positionAbsolute.y > parentGroup.positionAbsolute.y + (parentGroup.height || 0);
+          
+          if (nodeOutsideGroup) {
+            // Sacar el nodo del grupo
+            const nodesToUpdate = reactFlowInstance.getNodes().map((n: Node) => {
+              if (n.id === draggedNode.id) {
+                return {
+                  ...n,
+                  parentId: undefined,
+                  extent: undefined,
+                  position: draggedNode.positionAbsolute || draggedNode.position,
+                  hidden: false,
+                  style: { 
+                    ...n.style, 
+                    visibility: 'visible',
+                    pointerEvents: 'auto',
+                    opacity: 1
+                  }
+                };
+              }
+              return n;
+            });
+            setTimeout(() => setNodes(nodesToUpdate), 0);
+            return; // Salir de la función para evitar añadir el nodo a otro grupo
+          }
+        }
+      }
+      
+      // Luego verificar si el nodo está entrando a un nuevo grupo
       const targetGroup = nodes.find(
         (g) =>
           g.type === 'group' &&
@@ -209,7 +248,7 @@ export function useFlowInteractions({
       );
 
       if (targetGroup && targetGroup.id) {
-        const nodesToUpdate = reactFlowInstance.getNodes().map((n: Node) => { // Añadido tipo explícito a n
+        const nodesToUpdate = reactFlowInstance.getNodes().map((n: Node) => {
           if (n.id === draggedNode.id) {
             const newPosition = { 
               x: (draggedNode.positionAbsolute?.x ?? 0) - (targetGroup.positionAbsolute?.x ?? 0),

@@ -19,7 +19,8 @@ import {
   FolderIcon,
   FolderOpenIcon,
   ArrowsPointingOutIcon,
-  ArrowsPointingInIcon
+  ArrowsPointingInIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 // Type aliases to work around ReactFlow TypeScript namespace issues (consistent with other files in codebase)
@@ -63,6 +64,7 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editedLabel, setEditedLabel] = useState(data.label || 'Group');
   const labelInputRef = useRef<HTMLInputElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
 
   // Usar la altura actual del nodo (puede haber sido redimensionado)
   const currentHeight = height || DEFAULT_HEIGHT;
@@ -266,6 +268,55 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
     window.dispatchEvent(event);
   }, [id]);
 
+  const handleNodeContextMenu = useCallback((e: React.MouseEvent, nodeId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
+  }, []);
+
+  const handleRemoveFromGroup = useCallback((nodeId: string) => {
+    const nodeToRemove = allNodes.find((n: Node) => n.id === nodeId);
+    if (!nodeToRemove) return;
+
+    setNodes((nds: Node[]) => nds.map((n: Node) => {
+      if (n.id === nodeId) {
+        // Calcular posición absoluta aproximada
+        const groupNode = getNode(id);
+        if (!groupNode) return n;
+        
+        const absolutePosition = {
+          x: (groupNode.positionAbsolute?.x || groupNode.position.x) + (n.position?.x || 0),
+          y: (groupNode.positionAbsolute?.y || groupNode.position.y) + (n.position?.y || 0)
+        };
+
+        return {
+          ...n,
+          parentId: undefined,
+          extent: undefined,
+          position: absolutePosition,
+          hidden: false,
+          style: { 
+            ...n.style, 
+            visibility: 'visible',
+            pointerEvents: 'auto',
+            opacity: 1
+          }
+        };
+      }
+      return n;
+    }));
+    setContextMenu(null);
+  }, [allNodes, id, getNode, setNodes]);
+
+  // Cerrar menú contextual al hacer clic fuera
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu]);
+
   const handleStyle = {
     width: '12px',
     height: '12px',
@@ -366,7 +417,7 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
         height: '100%',
         boxSizing: 'border-box',
         borderRadius: '12px',
-        overflow: 'visible',
+        overflow: 'visible', // Mantener visible para handles y resize
         position: 'relative',
         zIndex: 1
       }}
@@ -436,42 +487,71 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
       </div>
       
       <div 
-        className="flex-1 flex flex-col overflow-hidden"
         style={{ 
           padding: `${CONTENT_PADDING}px`,
+          paddingBottom: data.isExpandedView ? `${CONTENT_PADDING}px` : `${CONTENT_PADDING}px`,
           borderBottomLeftRadius: '12px',
           borderBottomRightRadius: '12px',
+          height: `calc(100% - ${HEADER_HEIGHT}px)`,
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
         }}
       >
         {!data.isExpandedView && childNodes.length > 0 && (
           <div 
-            className="flex-1 overflow-y-auto space-y-2 pr-1 mb-2"
+            className="custom-scrollbar"
             style={{ 
-              minHeight: '0', // Permite que flex shrink funcione
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 56, // Espacio para el área de drop
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              padding: '0 12px', // Padding lateral para separar de los bordes
             }}
           >
-            {childNodes.map((node: Node) => ( 
-              <div key={node.id} className="flex items-center p-2.5 bg-white rounded-lg border border-gray-200 text-xs hover:bg-gray-50 transition-colors duration-200">
-                <ServerIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                <span className="ml-2 truncate" title={node.data?.label || node.id}>
-                  {node.data?.label || node.id}
-                </span>
-              </div>
-            ))}
+            <div className="space-y-2 py-2">
+              {childNodes.map((node: Node) => ( 
+                <div 
+                  key={node.id} 
+                  className="group flex items-center p-2.5 bg-white rounded-lg border border-gray-200 text-xs hover:bg-gray-50 transition-colors duration-200"
+                >
+                  <ServerIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <span className="ml-2 truncate flex-1" title={node.data?.label || node.id}>
+                    {node.data?.label || node.id}
+                  </span>
+                  <button
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-all duration-200"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveFromGroup(node.id);
+                    }}
+                    title="Sacar del grupo"
+                  >
+                    <ArrowRightOnRectangleIcon className="w-3.5 h-3.5 text-gray-600" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         
-        {/* Área de drop - siempre al final y con tamaño fijo */}
+        {/* Área de drop */}
         <div
           className={`
             text-center text-xs border-2 border-dashed border-red-400 bg-red-100/70 text-red-700 rounded-lg transition-all duration-200 ease-in-out flex items-center justify-center
             hover:bg-red-100/90 hover:border-red-500 hover:shadow-md
             focus-within:ring-2 focus-within:ring-red-300 focus-within:ring-opacity-50
-            ${data.isExpandedView ? 'flex-1' : 'flex-shrink-0'}
           `}
           style={{ 
-            height: data.isExpandedView ? 'auto' : '40px',
-            minHeight: data.isExpandedView ? '60px' : '40px',
+            position: 'absolute',
+            bottom: CONTENT_PADDING,
+            left: CONTENT_PADDING,
+            right: CONTENT_PADDING,
+            height: '40px',
             backdropFilter: 'blur(2px)'
           }}
         >
@@ -496,6 +576,26 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
           isConnectable={true}
         />
       ))}
+
+      {/* Menú contextual */}
+      {contextMenu && (
+        <div
+          className="fixed bg-white shadow-lg rounded-lg border border-gray-200 py-1 z-50"
+          style={{
+            top: contextMenu.y,
+            left: contextMenu.x,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+            onClick={() => handleRemoveFromGroup(contextMenu.nodeId)}
+          >
+            <ArrowRightOnRectangleIcon className="w-4 h-4" />
+            Sacar del grupo
+          </button>
+        </div>
+      )}
     </div>
   );
 };

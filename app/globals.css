@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Estilos personalizados para scrollbar en NodeGroup */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f3f4f6;
+}
+
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
@@ -87,6 +112,7 @@ body {
 .react-flow__node-group.selectable:focus-visible {
   box-shadow: none !important;
 }
+
 
 /* Eliminar el box-shadow de los nodos en estado hover para evitar estilos no deseados */
 .react-flow__node-default.selectable:hover,
