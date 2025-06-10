@@ -140,6 +140,30 @@ export default function DashboardPage() {
     return currentDiagram?.edges ? convertToReactFlowEdges(currentDiagram.edges) : [];
   }, [currentDiagram?.edges]);
   
+  // Log del viewport inicial y validación
+  useEffect(() => {
+    if (currentDiagram?.viewport) {
+      // Validar que el viewport sea válido (debe tener x, y, zoom como números)
+      const viewport = currentDiagram.viewport;
+      if (
+        typeof viewport === 'object' && 
+        typeof viewport.x === 'number' && 
+        typeof viewport.y === 'number' && 
+        typeof viewport.zoom === 'number'
+      ) {
+        console.log('📍 [VIEWPORT LOAD] Loading valid viewport from currentDiagram:', viewport);
+      } else {
+        console.log('📍 [VIEWPORT LOAD] Invalid viewport detected, using default:', viewport);
+        // Si el viewport es inválido, usar valores por defecto
+        if (currentDiagram) {
+          currentDiagram.viewport = { x: 0, y: 0, zoom: 1 };
+        }
+      }
+    } else {
+      console.log('📍 [VIEWPORT LOAD] No viewport in currentDiagram');
+    }
+  }, [currentDiagram]);
+  
   useEffect(() => {
     if (!user && !dataLoading) {
       fetchInitialUser(); 
@@ -316,6 +340,7 @@ export default function DashboardPage() {
     };
     
     console.log('🔍 [SAVE DEBUG] Full diagram update data:', diagramUpdateData);
+    console.log('📍 [VIEWPORT SAVE] Saving viewport:', data.viewport);
     
     try {
       await updateDiagram(activeCompany._id, selectedEnvironment, selectedDiagram, diagramUpdateData);

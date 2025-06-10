@@ -95,7 +95,7 @@ interface FlowCanvasProps {
   selectedNodes: FlowNode[]; // Necesario para la lógica del menú contextual
   
   // Prop para manejar cambios en el viewport
-  onViewportChange?: () => void;
+  onViewportChange?: (viewport: FlowViewport) => void;
   
   // Prop para controlar la interactividad
   isInteractive: boolean;
@@ -137,6 +137,36 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
   onViewportChange,
   isInteractive,
 }) => {
+  // Estado local para manejar el viewport y si ya se aplicó el inicial
+  const [viewport, setViewport] = React.useState(initialViewport || { x: 0, y: 0, zoom: 1 });
+  const [hasAppliedInitialViewport, setHasAppliedInitialViewport] = React.useState(false);
+  
+  // Aplicar el viewport inicial solo una vez cuando ReactFlow esté listo
+  React.useEffect(() => {
+    if (initialViewport && reactFlowInstance && !hasAppliedInitialViewport &&
+        typeof initialViewport.x === 'number' && 
+        typeof initialViewport.y === 'number' && 
+        typeof initialViewport.zoom === 'number') {
+      console.log('[FlowCanvas] Applying initial viewport:', initialViewport);
+      
+      // Aplicar inmediatamente y marcar como aplicado
+      reactFlowInstance.setViewport(initialViewport, { duration: 0 });
+      setHasAppliedInitialViewport(true);
+    }
+  }, [initialViewport, reactFlowInstance, hasAppliedInitialViewport]);
+  
+  // Reset del flag cuando cambia el initialViewport (cambio de diagrama)
+  React.useEffect(() => {
+    setHasAppliedInitialViewport(false);
+  }, [initialViewport?.x, initialViewport?.y, initialViewport?.zoom]);
+  
+  // Manejar cambios en el viewport
+  const handleViewportChange = React.useCallback((event: any, newViewport: FlowViewport) => {
+    // onMove pasa el evento como primer parámetro y el viewport como segundo
+    setViewport(newViewport);
+    // Siempre propagar el cambio hacia arriba
+    onViewportChange?.(newViewport);
+  }, [onViewportChange]);
   // Agregar listener para el rectángulo de selección
   useEffect(() => {
     const handleSelectionRectContextMenu = (e: MouseEvent) => {
@@ -270,8 +300,9 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
           cursor: ${activeTool === 'note' || activeTool === 'text' || activeTool === 'area' || activeTool === 'lasso' ? 'crosshair' : 'default'};
         }
       `}</style>
-      <ReactFlow
+        <ReactFlow
         defaultViewport={initialViewport || { x: 0, y: 0, zoom: 1 }}
+        onMove={handleViewportChange}
         minZoom={0.1}
         maxZoom={2}
         deleteKeyCode={[]}
@@ -295,7 +326,6 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
         onDrop={onDrop}
         onDragOver={onDragOver}
         onDragEnd={onDragEndSidebar}
-        onMove={onViewportChange}
         elementsSelectable={isInteractive}
         nodesDraggable={isInteractive && activeTool !== 'area'}
         nodesConnectable={isInteractive}

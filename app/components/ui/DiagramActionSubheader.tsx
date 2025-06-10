@@ -9,6 +9,7 @@ import {
   PlayCircleOutlined,
   CloudUploadOutlined,
   DeleteOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import { useNavigationStore } from '@/app/hooks/useNavigationStore';
 
@@ -24,6 +25,13 @@ export default function DiagramActionSubheader() {
   const handleRun = useNavigationStore(state => state.handleRun);
   const handlePromote = useNavigationStore(state => state.handlePromote);
   const handleDestroy = useNavigationStore(state => state.handleDestroy);
+
+  // Handler para mostrar el código generado
+  const handleShowGeneratedCode = () => {
+    // Disparar evento para abrir el modal de código generado
+    const event = new CustomEvent('showGeneratedCodeModal');
+    window.dispatchEvent(event);
+  };
 
   // El subheader solo se muestra si hay un diagrama actual (implícito, ya que estos botones operan sobre él)
   // La lógica para mostrar/ocultar el subheader completo estaría en la página que lo usa (DashboardPage)
@@ -50,6 +58,9 @@ export default function DiagramActionSubheader() {
       </Tooltip>
       {/* Separador personalizado */}
       <div className="h-5 w-px bg-gray-300 dark:bg-gray-600 self-center"></div>
+      <Tooltip title='Código Generado'>
+        <Button icon={<CodeOutlined />} size="small" onClick={handleShowGeneratedCode} disabled={dataLoading} />
+      </Tooltip>
       <Tooltip title='Promover a Ambiente'>
         <Button 
           icon={<CloudUploadOutlined />} 

@@ -238,3 +238,56 @@ body {
   scrollbar-width: thin; /* "auto" o "thin" */
   scrollbar-color: #c1c1c1 transparent; /* thumb track */
 }
+
+/* Animaciones para el modal de código generado */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Animación de pulso mejorada */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Estilos adicionales para el modal de código */
+.generated-code-modal .ant-modal-content {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.generated-code-modal .ant-modal-header {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px 24px;
+}
+
+.generated-code-modal .ant-tree-node-content-wrapper {
+  transition: all 0.2s ease;
+}
+
+.generated-code-modal .ant-tree-node-content-wrapper:hover {
+  background-color: #f3f4f6;
+}
+
+.generated-code-modal .ant-tree-node-selected {
+  background-color: #eff6ff !important;
+}

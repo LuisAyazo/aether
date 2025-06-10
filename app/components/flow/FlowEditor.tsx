@@ -42,6 +42,7 @@ import { Toolbar } from './components/Toolbar';
 import { EditGroupModal } from './components/EditGroupModal';
 // import EdgeDeleteButton from './components/EdgeDeleteButton'; // Movido a FlowCanvas
 import FlowCanvas from './components/FlowCanvas';
+import GeneratedCodeModal from '../ui/GeneratedCodeModal';
 import { Modal, Tag, Divider } from 'antd';
 
 
@@ -149,36 +150,71 @@ const FlowEditorContent = ({
   const [singleNodePreviewData, setSingleNodePreviewData] = useState<any>(null);
   const viewportChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isInteractive, setIsInteractive] = useState(true);
+  const [generatedCodeModalVisible, setGeneratedCodeModalVisible] = useState(false);
+  const isUnmountingRef = useRef(false);
 
   const contextMenuActions = useContextMenuManager({ selectedNodes, setSelectedNodes });
   const groupManagementActions = useGroupManagement({ lastViewportRef });
   const toolbarActions = useToolbarHandler();
   const executionActions = useExecutionHandler({ setExecutionLogs });
-  const saveActions = useSaveHandler({ nodes, edges, onSave, expandedGroupId });
+  const saveActions = useSaveHandler({ nodes, edges, onSave, expandedGroupId, lastViewportRef });
   
   // Manejar cambios en el viewport
-  const handleViewportChange = useCallback(() => {
-    if (!expandedGroupId && reactFlowInstance) {
-      // Cancelar el timeout anterior si existe
-      if (viewportChangeTimeoutRef.current) {
-        clearTimeout(viewportChangeTimeoutRef.current);
+  const handleViewportChange = useCallback((viewport?: FlowViewport) => {
+    if (!expandedGroupId && !isUnmountingRef.current) {
+      // Siempre actualizar el viewport actual
+      if (viewport) {
+        lastViewportRef.current = viewport;
+        console.log('📍 [VIEWPORT UPDATE] Viewport changed:', viewport);
       }
       
-      // Establecer un nuevo timeout para guardar después de 1 segundo
-      viewportChangeTimeoutRef.current = setTimeout(() => {
-        saveActions.saveCurrentDiagramState();
-      }, 1000);
+      // Solo programar guardado si tenemos reactFlowInstance
+      if (reactFlowInstance) {
+        // Cancelar el timeout anterior si existe
+        if (viewportChangeTimeoutRef.current) {
+          clearTimeout(viewportChangeTimeoutRef.current);
+        }
+        
+        // Establecer un nuevo timeout para guardar después de 1 segundo
+        viewportChangeTimeoutRef.current = setTimeout(() => {
+          if (!isUnmountingRef.current && reactFlowInstance) {
+            // Capturar el viewport más reciente justo antes de guardar
+            const currentViewport = reactFlowInstance.getViewport();
+            lastViewportRef.current = currentViewport;
+            console.log('📍 [VIEWPORT SAVE TRIGGER] Saving with current viewport:', currentViewport);
+            saveActions.saveCurrentDiagramState();
+          }
+        }, 1000);
+      }
     }
   }, [expandedGroupId, reactFlowInstance, saveActions]);
   
-  // Limpiar el timeout cuando el componente se desmonte
+  // Limpiar el timeout cuando el componente se desmonte y guardar el estado actual
   useEffect(() => {
     return () => {
+      isUnmountingRef.current = true;
+      console.log('📍 [VIEWPORT CLEANUP] Component unmounting');
       if (viewportChangeTimeoutRef.current) {
         clearTimeout(viewportChangeTimeoutRef.current);
+        // Solo guardar si había un cambio pendiente y un viewport válido
+        if (lastViewportRef.current && 
+            typeof lastViewportRef.current.x === 'number' && 
+            typeof lastViewportRef.current.y === 'number' && 
+            typeof lastViewportRef.current.zoom === 'number') {
+          console.log('📍 [VIEWPORT CLEANUP] Saving pending viewport changes');
+          saveActions.saveCurrentDiagramState();
+        }
       }
     };
-  }, []);
+  }, []); // Vacío para evitar recreaciones
+  
+  // Efecto para guardar el viewport inicial cuando se carga
+  useEffect(() => {
+    if (initialViewport && reactFlowInstance) {
+      lastViewportRef.current = initialViewport;
+      console.log('📍 [VIEWPORT INIT] Setting initial viewport:', initialViewport);
+    }
+  }, [initialViewport, reactFlowInstance]);
   useKeyboardShortcuts({ 
     handleToolClick: toolbarActions.handleToolClick, 
     createEmptyGroup: groupManagementActions.createEmptyGroup 
@@ -224,11 +260,34 @@ const FlowEditorContent = ({
       const {nodeId,data} = (e as CustomEvent).detail; 
       reactFlowInstance.setNodes((ns: FlowNode[]) => ns.map((n: FlowNode) => n.id === nodeId ? {...n, data:{...n.data, ...data}} : n)); 
     };
-    window.addEventListener('updateAreaNode', areaUpdate as EventListener);
-    return () => { 
-      window.removeEventListener('updateAreaNode', areaUpdate as EventListener); 
+    
+    // Listener para actualizar datos de nodos (desde IaCTemplatePanel)
+    const nodeDataUpdate = (e: Event) => {
+      const { nodeId, data } = (e as CustomEvent).detail;
+      console.log('📝 Updating node data:', nodeId, data);
+      
+      reactFlowInstance.setNodes((ns: FlowNode[]) => 
+        ns.map((n: FlowNode) => 
+          n.id === nodeId 
+            ? { ...n, data: { ...n.data, ...data } }
+            : n
+        )
+      );
+      
+      // Guardar automáticamente después de actualizar
+      setTimeout(() => {
+        saveActions.saveCurrentDiagramState();
+      }, 100);
     };
-  }, [reactFlowInstance]);
+    
+    window.addEventListener('updateAreaNode', areaUpdate as EventListener);
+    window.addEventListener('updateNodeData', nodeDataUpdate as EventListener);
+    
+    return () => { 
+      window.removeEventListener('updateAreaNode', areaUpdate as EventListener);
+      window.removeEventListener('updateNodeData', nodeDataUpdate as EventListener);
+    };
+  }, [reactFlowInstance, saveActions]);
   
   useOnSelectionChange({onChange:({nodes:sel}: {nodes: FlowNode[]})=>setSelectedNodes(sel)});
   useEffect(()=>{ const focus=(e:Event)=>{const{nodeId,isFocused}=(e as CustomEvent).detail;setFocusedNodeId(isFocused?nodeId:null);}; window.addEventListener('nodeGroupFocus',focus as EventListener); return()=>window.removeEventListener('nodeGroupFocus',focus as EventListener); },[]);
@@ -301,6 +360,33 @@ const FlowEditorContent = ({
     window.addEventListener('showSingleNodePreview', handleShowSingleNodePreview);
     return () => window.removeEventListener('showSingleNodePreview', handleShowSingleNodePreview);
   }, []);
+
+  // Listener para mostrar el modal de código generado
+  useEffect(() => {
+    const handleShowGeneratedCodeModal = () => {
+      setGeneratedCodeModalVisible(true);
+    };
+    
+    window.addEventListener('showGeneratedCodeModal', handleShowGeneratedCodeModal);
+    return () => window.removeEventListener('showGeneratedCodeModal', handleShowGeneratedCodeModal);
+  }, []);
+
+  // Listener para forzar guardado cuando se cambia de diagrama
+  useEffect(() => {
+    const handleForceSave = () => {
+      console.log('📍 [FLOW EDITOR] Evento forceSaveCurrentDiagram recibido, guardando estado actual');
+      // Capturar el viewport más reciente antes de guardar
+      if (reactFlowInstance && !isUnmountingRef.current) {
+        const currentViewport = reactFlowInstance.getViewport();
+        lastViewportRef.current = currentViewport;
+        console.log('📍 [FLOW EDITOR] Guardando con viewport:', currentViewport);
+        saveActions.saveCurrentDiagramState();
+      }
+    };
+    
+    window.addEventListener('forceSaveCurrentDiagram', handleForceSave);
+    return () => window.removeEventListener('forceSaveCurrentDiagram', handleForceSave);
+  }, [reactFlowInstance, saveActions]);
 
   // Agregar listener para clicks en el rectángulo de selección
   useEffect(() => {
@@ -540,6 +626,13 @@ const FlowEditorContent = ({
           </div>
         )}
       </Modal>
+      
+      {/* Modal de Código Generado */}
+      <GeneratedCodeModal
+        visible={generatedCodeModalVisible}
+        onClose={() => setGeneratedCodeModalVisible(false)}
+        nodes={nodes}
+      />
     </div>
   );
 };

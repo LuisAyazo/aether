@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Dropdown, Avatar, Button, Modal, Select, Timeline, Input, Spin, Empty, Tag, Form, Tooltip } from 'antd'; // Tooltip añadido
 import { 
+  CodeOutlined,
   UserOutlined, 
   SettingOutlined, 
   LogoutOutlined, 
@@ -20,6 +21,7 @@ import { useNavigationStore } from '@/app/hooks/useNavigationStore';
 import type { Environment } from '../services/diagramService';
 import EnvironmentTreeSelect from "./ui/EnvironmentTreeSelect";
 import DiagramTreeSelect from "./ui/DiagramTreeSelect"; 
+import GeneratedCodeModal from "./ui/GeneratedCodeModal";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -43,6 +45,8 @@ export default function Navigation() {
   const router = useRouter();
   const [formCreateEnv] = Form.useForm(); 
   const [formCreateDiag] = Form.useForm(); 
+
+  const [generatedCodeModalVisible, setGeneratedCodeModalVisible] = useState(false);
 
   const user = useNavigationStore(state => state.user);
   const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
@@ -248,6 +252,20 @@ export default function Navigation() {
                         aria-label="Crear Nuevo Diagrama"
                         disabled={!selectedEnvironment} 
                       />
+                    </Tooltip>
+                  </div>
+                )}
+                {selectedDiagram && (
+                  <div className="flex items-center gap-x-1">
+                    <Tooltip title="Ver Código Generado para el Diagrama Completo">
+                      <Button
+                        icon={<CodeOutlined />}
+                        onClick={() => setGeneratedCodeModalVisible(true)}
+                        type="primary"
+                        className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md hover:shadow-lg transition-all"
+                      >
+                        Ver Código
+                      </Button>
                     </Tooltip>
                   </div>
                 )}
@@ -470,6 +488,12 @@ export default function Navigation() {
         <p className="mt-2">Por favor, escribe el nombre del diagrama para confirmar:</p>
         <Input placeholder={currentDiagram?.name || "Nombre del diagrama"} value={destroyConfirmationText} onChange={(e) => setDestroyConfirmationText(e.target.value)} />
       </Modal>
+
+      <GeneratedCodeModal
+        visible={generatedCodeModalVisible}
+        onClose={() => setGeneratedCodeModalVisible(false)}
+        nodes={currentDiagram?.nodes || []}
+      />
     </>
   );
 }

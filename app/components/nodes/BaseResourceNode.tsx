@@ -274,7 +274,9 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         resourceData: {
           label: data.label,
           provider: data.provider,
-          resourceType: data.resourceType
+          resourceType: data.resourceType,
+          // Include saved configuration if it exists
+          dynamicProperties: (data as any).dynamicProperties || {}
         }
       }
     });
@@ -585,7 +587,9 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
               resourceData: {
                 label: data.label,
                 provider: data.provider,
-                resourceType: data.resourceType
+                resourceType: data.resourceType,
+                // Include saved configuration if it exists
+                dynamicProperties: (data as any).dynamicProperties || {}
               }
             }
           });

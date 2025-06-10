@@ -59,6 +59,8 @@ interface IaCTemplatePanelProps {
     label: string;
     provider: 'aws' | 'gcp' | 'azure' | 'generic';
     resourceType: ResourceType; // Este es el tipo completo del nodo, ej: gcp_compute_disk
+    nodeId?: string; // ID del nodo para actualizar sus datos
+    dynamicProperties?: Record<string, any>; // Valores guardados previamente
   };
   environments?: Array<{
     id: string;
@@ -444,10 +446,18 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
           const fields = await configObject.fields(); // Resolver los campos
           setCurrentFields(fields); // Guardar los campos resueltos
 
+          // Combinar defaults con valores guardados
+          const savedValues = resourceData.dynamicProperties || {};
           const initialValues = {
             ...(defaults || {}),
-            name: resourceData.label || defaults?.name || 'resource',
+            ...savedValues, // Los valores guardados tienen prioridad
+            name: savedValues.name || resourceData.label || defaults?.name || 'resource',
           };
+          console.log('📝 [IaCTemplatePanel] Loading initial values:', {
+            defaults,
+            savedValues,
+            initialValues
+          });
           setConfigValues(initialValues);
           validateValues(initialValues, schema);
         } else {
@@ -510,12 +520,62 @@ const IaCTemplatePanel: React.FC<IaCTemplatePanelProps> = ({
     validateValues(newValues, validationSchema);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (validateValues(configValues, validationSchema)) {
-      console.log('Saving configuration (valid):', configValues);
-      // TODO: Implement save logic 
+      console.log('📝 [IaCTemplatePanel] Saving configuration:', {
+        nodeId: resourceData.nodeId,
+        configValues,
+        configKeys: Object.keys(configValues)
+      });
+      setIsGenerating(true);
+      try {
+        // Emitir evento para que FlowCanvas actualice el nodo
+        const event = new CustomEvent('updateNodeData', {
+          detail: {
+            nodeId: resourceData.nodeId, // ID del nodo para actualizar
+            data: {
+              dynamicProperties: configValues,
+              configuredAt: new Date().toISOString()
+            }
+          }
+        });
+        window.dispatchEvent(event);
+        console.log('📝 [IaCTemplatePanel] Event dispatched successfully');
+        
+        // Mostrar mensaje de éxito
+        const successEvent = new CustomEvent('showMessage', {
+          detail: {
+            type: 'success',
+            message: 'Configuration saved successfully'
+          }
+        });
+        window.dispatchEvent(successEvent);
+        
+        // Cerrar el panel después de guardar
+        setTimeout(() => {
+          onClose();
+        }, 500);
+      } catch (error) {
+        console.error('Error saving configuration:', error);
+        const errorEvent = new CustomEvent('showMessage', {
+          detail: {
+            type: 'error',
+            message: 'Failed to save configuration'
+          }
+        });
+        window.dispatchEvent(errorEvent);
+      } finally {
+        setIsGenerating(false);
+      }
     } else {
       console.log('Save prevented due to validation errors.');
+      const errorEvent = new CustomEvent('showMessage', {
+        detail: {
+          type: 'error',
+          message: 'Please fix validation errors before saving'
+        }
+      });
+      window.dispatchEvent(errorEvent);
     }
   };
 

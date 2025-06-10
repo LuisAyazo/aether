@@ -13,6 +13,7 @@ interface UseSaveHandlerProps {
   edges: FlowEdge[];
   onSave?: (diagramData: { nodes: FlowNode[]; edges: FlowEdge[]; viewport?: FlowViewport }) => void;
   expandedGroupId: string | null;
+  lastViewportRef?: React.MutableRefObject<FlowViewport | null>;
 }
 
 export function useSaveHandler({
@@ -20,6 +21,7 @@ export function useSaveHandler({
   edges,
   onSave,
   expandedGroupId,
+  lastViewportRef,
 }: UseSaveHandlerProps) {
   const reactFlowInstance = useReactFlow();
   const onSaveRef = useRef(onSave);
@@ -34,16 +36,22 @@ export function useSaveHandler({
 
   const saveCurrentDiagramState = useCallback(() => {
     if (reactFlowInstance && onSaveRef.current) {
-      const viewport = reactFlowInstance.getViewport();
+      // Usar el viewport de lastViewportRef si está disponible, sino obtenerlo de reactFlowInstance
+      const viewport = lastViewportRef?.current || reactFlowInstance.getViewport();
       const diagramDataToSave = {
         nodes,
         edges,
         viewport,
       };
       onSaveRef.current(diagramDataToSave);
-      console.log('[FlowEditor][useSaveHandler] Saving diagram. Nodes:', nodes.length, 'Edges:', edges.length);
+      console.log('📍 [VIEWPORT SAVE] Saving diagram state:', {
+        nodeCount: nodes.length, 
+        edgeCount: edges.length,
+        viewport: viewport,
+        source: lastViewportRef?.current ? 'lastViewportRef' : 'reactFlowInstance'
+      });
     }
-  }, [reactFlowInstance, nodes, edges, onSaveRef]);
+  }, [reactFlowInstance, nodes, edges, onSaveRef, lastViewportRef]);
 
   useEffect(() => {
     if (onSaveRef.current && reactFlowInstance && !isCanvasDragging) {

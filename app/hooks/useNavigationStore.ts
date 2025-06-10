@@ -417,11 +417,21 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
   },
 
   handleDiagramChange: async (diagramId) => {
-    const { activeCompany, selectedEnvironment } = get();
+    const { activeCompany, selectedEnvironment, selectedDiagram, currentDiagram } = get();
     if (!activeCompany || !selectedEnvironment) { 
       console.warn('[NavStore] handleDiagramChange: No hay compañía activa o ambiente seleccionado.');
       set({dataLoading: false}); return; 
     }
+    
+    // Si estamos cambiando desde otro diagrama, emitir evento para forzar guardado
+    if (selectedDiagram && selectedDiagram !== diagramId && currentDiagram) {
+      console.log('[NavStore] handleDiagramChange: Emitiendo evento para guardar viewport del diagrama actual');
+      // Emitir evento personalizado para que FlowEditor guarde inmediatamente
+      window.dispatchEvent(new CustomEvent('forceSaveCurrentDiagram'));
+      // Dar tiempo para que se complete el guardado
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
     console.log(`[NavStore] handleDiagramChange: Cambiando a diagrama ID: ${diagramId} en ambiente ID: ${selectedEnvironment}`);
     set({ selectedDiagram: diagramId, dataLoading: true });
     try {
@@ -617,26 +627,30 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     set({ dataLoading: true });
     try {
       // El backend espera `null` si el path se elimina (raíz), o una string.
-      // El modelo DiagramUpdate tiene path: Optional[str].
-      // Si newPath es null, se enviará { path: null }.
-      // Si newPath es una string vacía "", se enviará { path: "" }.
-      // Para "sin path" o raíz, es mejor usar null o una string vacía consistente.
-      // Asumiremos que el backend interpreta `null` como "sin path" (raíz).
-      // Si se quiere una string vacía para la raíz, newPath debería ser `''` en lugar de `null`.
-      // Por ahora, si newPath es null (desde __ROOT_DROP_AREA__), se enviará path: null.
-      const pathPayload = newPath === null ? null : (newPath.trim() === '' ? null : newPath.trim());
-
-      await updateDiagramServiceAPICall(activeCompany._id, selectedEnvironment, diagramId, { path: pathPayload });
+      // Para TypeScript, construimos el payload condicionalmente
+      const updatePayload: { path?: string } = {};
+      const pathForState: string | undefined = newPath === null ? undefined : (newPath.trim() === '' ? undefined : newPath.trim());
+      
+      if (newPath === null || newPath.trim() === '') {
+        // Si es null o vacío, enviamos un objeto con path explícitamente como any para forzar null
+        await updateDiagramServiceAPICall(activeCompany._id, selectedEnvironment, diagramId, { path: null as any });
+      } else {
+        // Si hay un path válido, lo enviamos normalmente
+        updatePayload.path = newPath.trim();
+        await updateDiagramServiceAPICall(activeCompany._id, selectedEnvironment, diagramId, updatePayload);
+      }
+      
       message.success("Diagrama movido exitosamente.");
 
       // Refrescar la lista de diagramas para el ambiente actual
       const updatedDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment);
+      
       set(state => ({
         diagrams: updatedDiagrams,
         dataLoading: false,
         // Actualizar el currentDiagram si es el que se movió
         currentDiagram: state.currentDiagram?.id === diagramId 
-          ? { ...state.currentDiagram, path: typeof pathPayload === 'string' ? pathPayload : undefined } 
+          ? { ...state.currentDiagram, path: pathForState } 
           : state.currentDiagram
       }));
       

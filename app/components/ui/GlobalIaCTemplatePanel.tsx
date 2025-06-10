@@ -112,7 +112,10 @@ export default function GlobalIaCTemplatePanel() {
       <IaCTemplatePanel
         isOpen={isOpen}
         onClose={handleClose}
-        resourceData={resourceData}
+        resourceData={{
+          ...resourceData,
+          nodeId: nodeId
+        }}
       />
     </div>,
     portalElement

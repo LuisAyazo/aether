@@ -130,7 +130,7 @@ ${config.logging_cloudwatch_enabled ?
 const ${pulumiResourceName}StateMachine = new aws.sfn.StateMachine("${pulumiResourceName}", {
     name: "${config.name}",
     roleArn: "${config.role_arn}",
-    definition: \`${formattedDefinition.replace(/`/g, '\\`')}\`, // Escapar backticks en la definición
+    definition: \`${(formattedDefinition || '{}').replace(/`/g, '\\`')}\`, // Escapar backticks en la definición
     type: "${config.type || 'STANDARD'}",
     ${pulumiLoggingConfiguration()}
     tags: {
