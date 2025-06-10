@@ -82,9 +82,25 @@ export function useFlowInteractions({
       });
     };
 
+    const handleShowMultipleSelectionMenu = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { x, y } = customEvent.detail;
+      setContextMenu({
+        visible: true,
+        x,
+        y,
+        nodeId: null,
+        nodeType: null,
+        isPane: true, // Usar el menú del pane para selección múltiple
+        customItems: undefined,
+      });
+    };
+
     window.addEventListener('showContextMenu', handleShowContextMenu);
+    window.addEventListener('showMultipleSelectionMenu', handleShowMultipleSelectionMenu);
     return () => {
       window.removeEventListener('showContextMenu', handleShowContextMenu);
+      window.removeEventListener('showMultipleSelectionMenu', handleShowMultipleSelectionMenu);
     };
   }, [setContextMenu]);
 
@@ -116,6 +132,9 @@ export function useFlowInteractions({
 
   const handlePaneClick = useCallback(
     (event: React.MouseEvent) => {
+      // No ocultar el menú contextual si es un click derecho
+      if (event.button === 2) return;
+      
       setSelectedEdge(null);
       hideContextMenu();
       if (activeTool === 'lasso') return;
@@ -163,6 +182,23 @@ export function useFlowInteractions({
       evt.preventDefault();
       evt.stopPropagation();
       
+      // Verificar si hay múltiples nodos seleccionados
+      const selectedNodesCount = reactFlowInstance.getNodes().filter((n: Node) => n.selected).length;
+      
+      // Si hay más de un nodo seleccionado, mostrar el menú de selección múltiple
+      if (selectedNodesCount > 1) {
+        setContextMenu({
+          visible: true,
+          x: evt.clientX,
+          y: evt.clientY,
+          nodeId: null,
+          nodeType: null,
+          isPane: true, // Usar el menú del pane para selección múltiple
+          customItems: undefined,
+        });
+        return;
+      }
+      
       // Para nodos de recursos, el menú es manejado por el evento 'showContextMenu'
       // Para otros tipos de nodos (area, note, text), mostrar el menú básico aquí
       const utilityNodeTypes = ['areaNode', 'noteNode', 'textNode'];
@@ -179,15 +215,86 @@ export function useFlowInteractions({
         });
       }
     },
-    [setContextMenu]
+    [setContextMenu, reactFlowInstance]
   );
 
   const handlePaneContextMenu = useCallback(
     (evt: React.MouseEvent) => {
       evt.preventDefault();
-      hideContextMenu();
+      evt.stopPropagation();
+      
+      const target = evt.target as HTMLElement;
+      console.log('[useFlowInteractions] handlePaneContextMenu - target:', target.className);
+      
+      // Obtener nodos seleccionados directamente del reactFlowInstance
+      const selectedNodes = reactFlowInstance.getNodes().filter((n: Node) => n.selected);
+      const selectedNodesCount = selectedNodes.length;
+      
+      console.log('[useFlowInteractions] handlePaneContextMenu - selectedNodesCount:', selectedNodesCount);
+      
+      // Si el click fue en el rectángulo de selección y hay nodos seleccionados
+      if (target.classList?.contains('react-flow__nodesselection-rect') && selectedNodesCount > 0) {
+        console.log('[useFlowInteractions] Click on selection rect - showing multiple selection menu');
+        const menuState = {
+          visible: true,
+          x: evt.clientX,
+          y: evt.clientY,
+          nodeId: null,
+          nodeType: null,
+          isPane: true,
+          customItems: undefined,
+        };
+        console.log('[useFlowInteractions] Setting context menu state:', menuState);
+        setContextMenu(menuState);
+        
+        // Verificar que se está actualizando el estado
+        setTimeout(() => {
+          const currentState = useEditorStore.getState().contextMenu;
+          console.log('[useFlowInteractions] Context menu state after update:', currentState);
+        }, 100);
+        
+        return;
+      }
+      
+      // Si hay nodos seleccionados, mostrar el menú de selección múltiple
+      if (selectedNodesCount > 0) {
+        console.log('[useFlowInteractions] Showing multiple selection menu');
+        const menuState = {
+          visible: true,
+          x: evt.clientX,
+          y: evt.clientY,
+          nodeId: null,
+          nodeType: null,
+          isPane: true,
+          customItems: undefined,
+        };
+        console.log('[useFlowInteractions] Setting context menu state:', menuState);
+        setContextMenu(menuState);
+      } else if (activeTool === 'lasso') {
+        // Con lasso activo, permitir menú aunque no haya selección
+        setContextMenu({
+          visible: true,
+          x: evt.clientX,
+          y: evt.clientY,
+          nodeId: null,
+          nodeType: null,
+          isPane: true,
+          customItems: undefined,
+        });
+      } else {
+        // No hay selección y no está el lasso activo - mostrar menú de canvas vacío
+        setContextMenu({
+          visible: true,
+          x: evt.clientX,
+          y: evt.clientY,
+          nodeId: null,
+          nodeType: null,
+          isPane: true,
+          customItems: undefined,
+        });
+      }
     },
-    [hideContextMenu]
+    [reactFlowInstance, setContextMenu, activeTool]
   );
 
   const onNodeDragStart = useCallback(() => {

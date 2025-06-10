@@ -121,8 +121,9 @@ const NoteNode: React.FC<NodeProps> = ({ id, data, selected }) => {
       }}
       onDoubleClick={handleDoubleClick}
       onContextMenu={(e) => {
-        // No detener la propagación del click derecho
-        // Permitir que el evento llegue a ReactFlow
+        // Prevenir el menú contextual predeterminado del navegador
+        e.preventDefault();
+        // No detener la propagación para que ReactFlow pueda manejar el evento
       }}
     >
       <NodeResizer

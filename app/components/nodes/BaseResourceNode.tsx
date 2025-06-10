@@ -545,26 +545,34 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     e.preventDefault();
     e.stopPropagation();
     
+    // Si hay múltiples nodos seleccionados, mostrar el menú de selección múltiple
+    const selectedNodes = reactFlowInstance.getNodes().filter((n: any) => n.selected);
+    const selectedNodesCount = selectedNodes.length;
+    
+    if (selectedNodesCount > 1) {
+      // Disparar el evento para mostrar el menú de selección múltiple
+      const event = new CustomEvent('showMultipleSelectionMenu', {
+        detail: {
+          x: e.clientX,
+          y: e.clientY,
+          selectedNodes: selectedNodes,
+          selectedNodesCount: selectedNodesCount
+        }
+      });
+      window.dispatchEvent(event);
+      return;
+    }
+    
     const menuItems = [
-      {
-        label: 'Preview',
-        icon: <EyeIcon className="w-4 h-4" />,
-        onClick: () => handlePreview()
-      },
       {
         label: 'Run',
         icon: <PlayCircleIcon className="w-4 h-4" />,
         onClick: () => handleRun({ stopPropagation: () => {} } as React.MouseEvent)
       },
       {
-        label: isLocked ? 'Unlock' : 'Lock',
-        icon: isLocked ? <LockOpenIcon className="w-4 h-4" /> : <LockClosedIcon className="w-4 h-4" />,
-        onClick: () => handleLockToggle({ stopPropagation: () => {} } as React.MouseEvent)
-      },
-      {
-        label: 'Duplicate',
-        icon: <DocumentDuplicateIcon className="w-4 h-4" />,
-        onClick: () => handleDuplicate({ stopPropagation: () => {} } as React.MouseEvent)
+        label: 'Preview',
+        icon: <EyeIcon className="w-4 h-4" />,
+        onClick: () => handlePreview()
       },
       {
         label: 'Configuración',
@@ -586,24 +594,14 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         }
       },
       {
-        label: isListView ? 'Vista Normal' : 'Vista Lista',
-        icon: isListView ? <Squares2X2Icon className="w-4 h-4" /> : <ListBulletIcon className="w-4 h-4" />,
-        onClick: () => toggleListView({ stopPropagation: () => {} } as React.MouseEvent)
+        label: 'Duplicate',
+        icon: <DocumentDuplicateIcon className="w-4 h-4" />,
+        onClick: () => handleDuplicate({ stopPropagation: () => {} } as React.MouseEvent)
       },
       {
-        label: isFocused ? 'Quitar Foco' : 'Enfocar',
-        icon: isFocused ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />,
-        onClick: () => toggleFocus({ stopPropagation: () => {} } as React.MouseEvent)
-      },
-      {
-        label: isCollapsed ? 'Expandir' : 'Colapsar',
-        icon: isCollapsed ? <ArrowsPointingOutIcon className="w-4 h-4" /> : <ArrowsPointingInIcon className="w-4 h-4" />,
-        onClick: () => toggleCollapse({ stopPropagation: () => {} } as React.MouseEvent)
-      },
-      {
-        label: isResizable ? 'Desactivar Redimensionar' : 'Activar Redimensionar',
-        icon: <ArrowsPointingOutIcon className="w-4 h-4" />,
-        onClick: () => toggleResizable({ stopPropagation: () => {} } as React.MouseEvent)
+        label: isLocked ? 'Unlock' : 'Lock',
+        icon: isLocked ? <LockOpenIcon className="w-4 h-4" /> : <LockClosedIcon className="w-4 h-4" />,
+        onClick: () => handleLockToggle({ stopPropagation: () => {} } as React.MouseEvent)
       },
       {
         label: 'Eliminar',

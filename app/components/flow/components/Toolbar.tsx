@@ -97,40 +97,80 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInte
       style={{ flexDirection: toolbarLayout === 'horizontal' ? 'row' : 'column' }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <button
-        onClick={() => {
-          const newLayout = toolbarLayout === 'horizontal' ? 'vertical' : 'horizontal';
-          setToolbarLayout(newLayout);
+      <Tooltip 
+        title={toolbarLayout === 'horizontal' ? "Cambiar a barra vertical" : "Cambiar a barra horizontal"} 
+        placement="bottom"
+        mouseEnterDelay={0}
+        styles={{ 
+          root: {
+            backgroundColor: 'black',
+            color: 'white',
+            fontSize: '12px'
+          }
         }}
-        title={toolbarLayout === 'horizontal' ? "Cambiar a barra vertical" : "Cambiar a barra horizontal"}
-        className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+        color="black"
       >
-        <ArrowsUpDownIcon className="h-5 w-5" />
-      </button>
-      <button
-        onClick={onSaveDiagram}
-        title="Guardar estado actual (zoom y posición)"
-        className="p-1.5 bg-green-500 text-white hover:bg-green-600 rounded flex items-center justify-center"
+        <button
+          onClick={() => {
+            const newLayout = toolbarLayout === 'horizontal' ? 'vertical' : 'horizontal';
+            setToolbarLayout(newLayout);
+          }}
+          className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+        >
+          <ArrowsUpDownIcon className="h-5 w-5" />
+        </button>
+      </Tooltip>
+      
+      <Tooltip 
+        title="Guardar estado actual (zoom y posición)" 
+        placement="bottom"
+        mouseEnterDelay={0}
+        styles={{ 
+          root: {
+            backgroundColor: 'black',
+            color: 'white',
+            fontSize: '12px'
+          }
+        }}
+        color="black"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-        </svg>
-      </button>
+        <button
+          onClick={onSaveDiagram}
+          className="p-1.5 bg-green-500 text-white hover:bg-green-600 rounded flex items-center justify-center"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+        </button>
+      </Tooltip>
 
       {tools.map(tool => (
-        <button 
+        <Tooltip 
           key={tool.name}
-          onClick={() => {
-            onToolClick(tool.name);
-            if (tool.action) {
-              tool.action();
-            }
-          }} 
           title={tool.title} 
-          className={`p-1.5 hover:bg-gray-200 rounded ${activeTool === tool.name ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-500' : 'text-gray-600'}`}
+          placement="bottom"
+          mouseEnterDelay={0}
+          styles={{ 
+            root: {
+              backgroundColor: 'black',
+              color: 'white',
+              fontSize: '12px'
+            }
+          }}
+          color="black"
         >
-          <tool.icon className="h-5 w-5" />
-        </button>
+          <button 
+            onClick={() => {
+              onToolClick(tool.name);
+              if (tool.action) {
+                tool.action();
+              }
+            }} 
+            className={`p-1.5 hover:bg-gray-200 rounded ${activeTool === tool.name ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-500' : 'text-gray-600'}`}
+          >
+            <tool.icon className="h-5 w-5" />
+          </button>
+        </Tooltip>
       ))}
       
       <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-6 mx-1' : 'h-px w-full my-1'}`}></div>
@@ -139,7 +179,20 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInte
         const IconComponent = edgeToolbarIcons[cfg.logicalType];
         const isSelected = selectedLogicalType === cfg.logicalType;
         return (
-          <Tooltip title={`Edge: ${cfg.label}`} placement="bottom" key={cfg.logicalType}>
+          <Tooltip 
+            title={`Edge: ${cfg.label}`} 
+            placement="bottom" 
+            key={cfg.logicalType}
+            mouseEnterDelay={0}
+            styles={{ 
+              root: {
+                backgroundColor: 'black',
+                color: 'white',
+                fontSize: '12px'
+              }
+            }}
+            color="black"
+          >
             <button
               onClick={() => handleEdgeTypeSelect(cfg.logicalType)}
               className={`p-1.5 rounded hover:bg-gray-200 ${isSelected ? 'bg-blue-100 ring-1 ring-blue-500' : 'bg-transparent'}`}
@@ -153,7 +206,19 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInte
 
       <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-6 mx-1' : 'h-px w-full my-1'}`}></div>
 
-      <Tooltip title="Acercar" placement="bottom">
+      <Tooltip 
+        title="Acercar" 
+        placement="bottom"
+        mouseEnterDelay={0}
+        styles={{ 
+          root: {
+            backgroundColor: 'black',
+            color: 'white',
+            fontSize: '12px'
+          }
+        }}
+        color="black"
+      >
         <button
           onClick={handleZoomIn}
           className="p-1.5 hover:bg-gray-200 rounded text-gray-700"
@@ -162,7 +227,19 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInte
         </button>
       </Tooltip>
 
-      <Tooltip title="Alejar" placement="bottom">
+      <Tooltip 
+        title="Alejar" 
+        placement="bottom"
+        mouseEnterDelay={0}
+        styles={{ 
+          root: {
+            backgroundColor: 'black',
+            color: 'white',
+            fontSize: '12px'
+          }
+        }}
+        color="black"
+      >
         <button
           onClick={handleZoomOut}
           className="p-1.5 hover:bg-gray-200 rounded text-gray-700"
@@ -171,7 +248,19 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInte
         </button>
       </Tooltip>
 
-      <Tooltip title="Ajustar vista" placement="bottom">
+      <Tooltip 
+        title="Ajustar vista" 
+        placement="bottom"
+        mouseEnterDelay={0}
+        styles={{ 
+          root: {
+            backgroundColor: 'black',
+            color: 'white',
+            fontSize: '12px'
+          }
+        }}
+        color="black"
+      >
         <button
           onClick={handleFitView}
           className="p-1.5 hover:bg-gray-200 rounded text-gray-700"
@@ -180,7 +269,19 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInte
         </button>
       </Tooltip>
 
-      <Tooltip title={isInteractive ? "Bloquear interacción" : "Desbloquear interacción"} placement="bottom">
+      <Tooltip 
+        title={isInteractive ? "Bloquear interacción" : "Desbloquear interacción"} 
+        placement="bottom"
+        mouseEnterDelay={0}
+        styles={{ 
+          root: {
+            backgroundColor: 'black',
+            color: 'white',
+            fontSize: '12px'
+          }
+        }}
+        color="black"
+      >
         <button
           onClick={toggleInteractivity}
           className={`p-1.5 hover:bg-gray-200 rounded ${isInteractive ? 'text-gray-700' : 'text-orange-600 bg-orange-100'}`}

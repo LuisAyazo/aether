@@ -302,6 +302,47 @@ const FlowEditorContent = ({
     return () => window.removeEventListener('showSingleNodePreview', handleShowSingleNodePreview);
   }, []);
 
+  // Agregar listener para clicks en el rectángulo de selección
+  useEffect(() => {
+    const handleSelectionRectClick = (e: MouseEvent) => {
+      if (e.button === 2 && selectedNodes.length > 0) { // Click derecho y hay nodos seleccionados
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Disparar el evento del menú contextual para selección múltiple
+        const event = new CustomEvent('showMultipleSelectionMenu', {
+          detail: {
+            x: e.clientX,
+            y: e.clientY,
+            selectedNodes: selectedNodes,
+            selectedNodesCount: selectedNodes.length
+          }
+        });
+        window.dispatchEvent(event);
+      }
+    };
+
+    // Usar delegación de eventos para capturar clicks en el rectángulo de selección
+    const handleContextMenuCapture = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      console.log('[FlowEditor] Context menu capture:', target.className, selectedNodes.length);
+      
+      if (target.classList.contains('react-flow__nodesselection-rect') && selectedNodes.length > 0) {
+        console.log('[FlowEditor] Handling selection rect click');
+        handleSelectionRectClick(e);
+      }
+    };
+
+    // Agregar listener tanto en fase de captura como de burbuja
+    document.addEventListener('contextmenu', handleContextMenuCapture, true);
+    window.addEventListener('contextmenu', handleContextMenuCapture, true);
+    
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenuCapture, true);
+      window.removeEventListener('contextmenu', handleContextMenuCapture, true);
+    };
+  }, [selectedNodes]);
+
   const edgeToolbarIcons: Record<LogicalEdgeType, React.ElementType> = {
     [LogicalEdgeType.DEPENDS_ON]: ShareIcon,
     [LogicalEdgeType.CALLS]: HeroPhoneArrowUpRightIcon,

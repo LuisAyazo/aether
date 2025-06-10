@@ -53,7 +53,7 @@ export interface NodeGroupData {
   };
 }
 
-const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
+const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) => {
   const { setNodes, getNode } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
   const allNodes = useNodes();
@@ -186,22 +186,28 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
     let bgColorClass = 'bg-white';
     let headerBgClass = 'bg-gray-50';
     
-    switch (data.provider) {
-      case 'aws': 
-        borderColorClass = 'border-orange-300';
-        bgColorClass = 'bg-orange-50/50';
-        headerBgClass = 'bg-orange-100/80';
-        break;
-      case 'gcp': 
-        borderColorClass = 'border-blue-300';
-        bgColorClass = 'bg-blue-50/50';
-        headerBgClass = 'bg-blue-100/80';
-        break;
-      case 'azure': 
-        borderColorClass = 'border-sky-300';
-        bgColorClass = 'bg-sky-50/50';
-        headerBgClass = 'bg-sky-100/80';
-        break;
+    // Solo aplicar colores de provider si no es 'generic'
+    if (data.provider && data.provider !== 'generic') {
+      switch (data.provider) {
+        case 'aws': 
+          borderColorClass = 'border-orange-300';
+          bgColorClass = 'bg-orange-50/50';
+          headerBgClass = 'bg-orange-100/80';
+          break;
+        case 'gcp': 
+          borderColorClass = 'border-blue-300';
+          bgColorClass = 'bg-blue-50/50';
+          headerBgClass = 'bg-blue-100/80';
+          break;
+        case 'azure': 
+          borderColorClass = 'border-sky-300';
+          bgColorClass = 'bg-sky-50/50';
+          headerBgClass = 'bg-sky-100/80';
+          break;
+        default:
+          // Mantener colores grises por defecto
+          break;
+      }
     }
     
     if (selected) borderColorClass = 'border-blue-500';
@@ -354,6 +360,11 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onContextMenu={(e) => {
+          // Prevenir el menú contextual predeterminado del navegador
+          e.preventDefault();
+          // No detener la propagación para que ReactFlow pueda manejar el evento
+        }}
         data-minimized="true"
         data-handleid="group-header"
       >
@@ -418,6 +429,11 @@ const NodeGroup: React.FC<any> = ({ id, data, selected, width, height }) => {
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onContextMenu={(e) => {
+        // Prevenir el menú contextual predeterminado del navegador
+        e.preventDefault();
+        // No detener la propagación para que ReactFlow pueda manejar el evento
+      }}
       className={`${borderColorClass} ${bgColorClass} flex flex-col transition-all duration-200 border ${selected || isHovered ? 'shadow-lg' : 'shadow-sm'}`}
       style={{
         width: '100%',
