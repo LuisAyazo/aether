@@ -111,19 +111,32 @@ export function useFlowInteractions({
         console.warn("onConnectInternal: source o target es null", params);
         return;
       }
+      
+      // Debug logging for handles
+      console.log('🔗 [EDGE CREATION DEBUG] Creating edge with handles:', {
+        source,
+        target,
+        sourceHandle,
+        targetHandle,
+        params
+      });
+      
       const logicalTypeToUse = selectedLogicalType || LogicalEdgeType.CONNECTS_TO;
       const config = getEdgeConfig(logicalTypeToUse);
       const newEdge: Edge = { // Cambiado Edge<CustomEdgeData> a Edge (que es any)
         source: source!,
         target: target!,
-        sourceHandle: sourceHandle,
-        targetHandle: targetHandle,
+        sourceHandle: sourceHandle || null,
+        targetHandle: targetHandle || null,
         id: `edge-${Date.now()}-${source!}-${target!}`,
         type: config.visualType,
         style: config.style,
         markerEnd: config.markerEnd,
         data: { label: config.label, edgeKind: config.logicalType },
       };
+      
+      console.log('🔗 [EDGE CREATION DEBUG] New edge object:', newEdge);
+      
       setEdges((eds) => addEdge(newEdge, eds));
       if (onConnectProp) onConnectProp(params);
     },

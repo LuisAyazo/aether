@@ -95,6 +95,14 @@ export default function DashboardPage() {
         console.log('🔍 Debug de llamadas API activado');
       };
       document.head.appendChild(apiScript);
+      
+      // Script de debug de edge handles
+      const edgeScript = document.createElement('script');
+      edgeScript.src = '/debug-edge-handles.js';
+      edgeScript.onload = () => {
+        console.log('🔍 Debug de edge handles activado');
+      };
+      document.head.appendChild(edgeScript);
     }
   }, []);
 
@@ -170,6 +178,12 @@ export default function DashboardPage() {
       edgeKind: e.data?.edgeKind
     })));
     
+    // Exponer edges globalmente para debug
+    if (typeof window !== 'undefined') {
+      (window as any).__DEBUG_BACKEND_EDGES__ = customEdges;
+      (window as any).__DEBUG_CONVERTED_EDGES__ = [];
+    }
+    
     return customEdges.map(edge => {
       // Si el edge tiene data.edgeKind, aplicar la configuración visual
       if (edge.data?.edgeKind) {
@@ -202,6 +216,11 @@ export default function DashboardPage() {
           targetHandle: reactFlowEdge.targetHandle
         });
         
+        // Guardar para debug
+        if (typeof window !== 'undefined' && (window as any).__DEBUG_CONVERTED_EDGES__) {
+          (window as any).__DEBUG_CONVERTED_EDGES__.push(reactFlowEdge);
+        }
+        
         return reactFlowEdge;
       }
       
@@ -215,9 +234,24 @@ export default function DashboardPage() {
     return currentDiagram?.nodes ? convertToReactFlowNodes(currentDiagram.nodes) : [];
   }, [currentDiagram?.nodes]);
 
-  const initialEdgesForFlow = useMemo(() => {
-    return currentDiagram?.edges ? convertToReactFlowEdges(currentDiagram.edges) : [];
+  const [delayedEdges, setDelayedEdges] = useState<any[]>([]);
+  
+  useEffect(() => {
+    if (currentDiagram?.edges) {
+      // Delay edge loading to ensure handles are rendered
+      const timer = setTimeout(() => {
+        const edges = convertToReactFlowEdges(currentDiagram.edges);
+        console.log('🔍 [EDGE TIMING] Setting delayed edges:', edges.length);
+        setDelayedEdges(edges);
+      }, 100); // Small delay to ensure nodes and handles are rendered
+      
+      return () => clearTimeout(timer);
+    }
   }, [currentDiagram?.edges]);
+
+  const initialEdgesForFlow = useMemo(() => {
+    return delayedEdges;
+  }, [delayedEdges]);
   
   // Log del viewport inicial y validación
   useEffect(() => {
@@ -511,6 +545,16 @@ export default function DashboardPage() {
       parentNode: n.parentNode
     })));
     
+    // Debug edges before conversion
+    console.log('🔍 [SAVE DEBUG] Raw edges before conversion:', data.edges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+      data: e.data
+    })));
+    
     const customEdges = data.edges.map(e => ({ 
       id: e.id, source: e.source, target: e.target, type: e.type, 
       animated: e.animated, label: e.label as string, data: e.data, style: e.style,
@@ -522,6 +566,11 @@ export default function DashboardPage() {
       diagramId: selectedDiagram,
       nodeCount: customNodes.length,
       edgeCount: customEdges.length,
+      edgesWithHandles: customEdges.map(e => ({
+        id: e.id,
+        sourceHandle: e.sourceHandle || 'NONE',
+        targetHandle: e.targetHandle || 'NONE'
+      })),
       groupNodes: customNodes.filter(n => n.type === 'groupNode'),
       childNodesInGroups: customNodes.filter(n => n.parentNode),
       allNodesTypes: customNodes.map(n => ({ id: n.id, type: n.type, parentNode: n.parentNode }))
