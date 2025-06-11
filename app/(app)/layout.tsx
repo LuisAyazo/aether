@@ -52,9 +52,8 @@ export default function AppLayout({
   const [authProcessed, setAuthProcessed] = useState(false); 
   const [initialLoadDone, setInitialLoadDone] = useState(false); // Para controlar la carga inicial de datos de compañía/ambientes
 
-  useEffect(() => {
-    fetchInitialUser(); // Cargar usuario desde localStorage o API al montar
-  }, [fetchInitialUser]);
+  // REMOVIDO: fetchInitialUser se llama desde el dashboard page, no desde aquí
+  // para evitar llamadas duplicadas
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

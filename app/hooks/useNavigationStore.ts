@@ -318,6 +318,12 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       hasActiveCompany: !!state.activeCompany
     });
     
+    // Si ya estamos cargando, no hacer nada
+    if (state.dataLoading) {
+      console.log('[NavStore] fetchInitialUser: Ya está cargando, saltando...');
+      return;
+    }
+    
     // Si ya tenemos todo cargado, no hacer nada
     if (state.user && state.activeCompany) {
       console.log('[NavStore] fetchInitialUser: Ya completamente inicializado, saltando...');
@@ -349,7 +355,13 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       companiesCount: state.userCompanies?.length
     });
     
-    // Prevenir múltiples ejecuciones solo si ya tenemos datos completos
+    // Prevenir múltiples ejecuciones si ya estamos cargando
+    if (state.dataLoading) {
+      console.log('[NavStore] initializeAppLogic: Ya está cargando, saltando...');
+      return;
+    }
+    
+    // Prevenir múltiples ejecuciones si ya tenemos datos completos
     if (state.activeCompany && state.environments.length > 0) {
       console.log('[NavStore] initializeAppLogic: Ya inicializado completamente, saltando...');
       set({ dataLoading: false }); // Asegurar que dataLoading sea false

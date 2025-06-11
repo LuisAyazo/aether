@@ -71,12 +71,13 @@ export default function DashboardPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   
-  // TEMPORAL: Monitoreo de rendimiento
+  // TEMPORAL: Monitoreo de rendimiento y llamadas API
   useEffect(() => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      const script = document.createElement('script');
-      script.src = '/debug-backend-performance.js';
-      script.onload = () => {
+      // Script de rendimiento
+      const perfScript = document.createElement('script');
+      perfScript.src = '/debug-backend-performance.js';
+      perfScript.onload = () => {
         console.log('🔍 Monitoreo de rendimiento activado');
         // Auto-reporte después de 5 segundos de carga
         setTimeout(() => {
@@ -85,7 +86,15 @@ export default function DashboardPage() {
           }
         }, 5000);
       };
-      document.head.appendChild(script);
+      document.head.appendChild(perfScript);
+      
+      // Script de debug de llamadas API
+      const apiScript = document.createElement('script');
+      apiScript.src = '/debug-api-calls.js';
+      apiScript.onload = () => {
+        console.log('🔍 Debug de llamadas API activado');
+      };
+      document.head.appendChild(apiScript);
     }
   }, []);
 
@@ -241,13 +250,21 @@ export default function DashboardPage() {
 
   // Detectar cuando un usuario no tiene compañías (posiblemente eliminado) y redirigir
   useEffect(() => {
-    console.log('[Dashboard] Company check:', { 
+    console.log('[Dashboard] Company check effect ejecutándose:', { 
       dataLoading, 
       user: user?.email, 
       activeCompany: activeCompany?.name,
       hasCheckedCompanies,
-      userCompanies: useNavigationStore.getState().userCompanies?.length 
+      userCompanies: useNavigationStore.getState().userCompanies?.length,
+      pathname,
+      timestamp: new Date().toISOString()
     });
+    
+    // Evitar loop si ya estamos en create-company
+    if (pathname === '/create-company') {
+      console.log('[Dashboard] Ya estamos en create-company, evitando redirección');
+      return;
+    }
     
     // Solo verificar después de que la carga inicial se complete
     if (!dataLoading && user && !hasCheckedCompanies) {
@@ -262,44 +279,42 @@ export default function DashboardPage() {
           localStorage.removeItem('justCreatedCompany');
           console.log('Compañía recién creada, esperando actualización del estado...');
           
-          // No intentar refrescar aquí, ya se maneja en el hook
+          // Dar más tiempo antes de decidir redirigir
+          const timeoutId = setTimeout(() => {
+            // Verificar de nuevo después del delay
+            const currentState = useNavigationStore.getState();
+            if (!currentState.activeCompany && currentState.userCompanies && currentState.userCompanies.length === 0) {
+              console.log('Aún sin compañía activa después de esperar, redirigiendo...');
+              router.push('/create-company');
+            }
+          }, 3000); // Esperar 3 segundos
           
-      // Dar más tiempo antes de decidir redirigir
-      const timeoutId = setTimeout(() => {
-        // Verificar de nuevo después del delay
-        const currentState = useNavigationStore.getState();
-        if (!currentState.activeCompany) {
-          console.log('Aún sin compañía activa después de esperar, redirigiendo...');
-          router.push('/create-company');
+          return () => clearTimeout(timeoutId);
+        } else {
+          // Si no acabamos de crear una compañía, verificar si realmente no tiene compañías
+          const currentState = useNavigationStore.getState();
+          console.log('[Dashboard] Current state check:', {
+            userCompanies: currentState.userCompanies,
+            activeCompany: currentState.activeCompany,
+            dataLoading: currentState.dataLoading
+          });
+          
+          if (currentState.userCompanies && currentState.userCompanies.length === 0) {
+            // Solo redirigir si confirmamos que no hay compañías
+            console.log('[Dashboard] Usuario confirmado sin compañías, redirigiendo...');
+            const timeoutId = setTimeout(() => {
+              router.push('/create-company');
+            }, 500);
+            
+            return () => clearTimeout(timeoutId);
+          } else {
+            // userCompanies podría ser null/undefined, esperar más
+            console.log('[Dashboard] userCompanies no está listo aún, esperando...');
+          }
         }
-      }, 3000); // Esperar 3 segundos
-      
-      return () => clearTimeout(timeoutId);
-    } else {
-      // Si no acabamos de crear una compañía, verificar si realmente no tiene compañías
-      const currentState = useNavigationStore.getState();
-      console.log('[Dashboard] Current state check:', {
-        userCompanies: currentState.userCompanies,
-        activeCompany: currentState.activeCompany,
-        dataLoading: currentState.dataLoading
-      });
-      
-      if (currentState.userCompanies && currentState.userCompanies.length === 0) {
-        // Solo redirigir si confirmamos que no hay compañías
-        console.log('[Dashboard] Usuario confirmado sin compañías, redirigiendo...');
-        const timeoutId = setTimeout(() => {
-          router.push('/create-company');
-        }, 500);
-        
-        return () => clearTimeout(timeoutId);
-      } else {
-        // userCompanies podría ser null/undefined, esperar más
-        console.log('[Dashboard] userCompanies no está listo aún, esperando...');
       }
     }
-  }
-}
-}, [dataLoading, user, activeCompany, hasCheckedCompanies, router]);
+  }, [dataLoading, user, activeCompany, hasCheckedCompanies, router, pathname]);
 
   useEffect(() => {
     if (user && user._id && !dataLoading && !dataError && activeCompany) {
@@ -397,40 +412,59 @@ export default function DashboardPage() {
       const companyParam = activeCompany.slug || activeCompany.name.toLowerCase().replace(/\s+/g, '-');
       const workspaceParam = activeWorkspace.slug || activeWorkspace.name.toLowerCase().replace(/\s+/g, '-');
       
-      // Actualizar compañía y workspace
+      // Verificar si realmente necesitamos actualizar algo
+      let needsUpdate = false;
+      
+      // Verificar compañía y workspace
       if (currentParams.get('company') !== companyParam) {
         currentParams.set('company', companyParam);
+        needsUpdate = true;
       }
       if (currentParams.get('workspace') !== workspaceParam) {
         currentParams.set('workspace', workspaceParam);
+        needsUpdate = true;
       }
       
-      // Actualizar ambiente y diagrama si existen
+      // Verificar ambiente
       if (selectedEnv) {
         const envParam = selectedEnv.name.toLowerCase().replace(/\s+/g, '-');
         if (currentParams.get('env') !== envParam) {
           currentParams.set('env', envParam);
+          needsUpdate = true;
         }
-      } else {
+      } else if (currentParams.has('env')) {
         currentParams.delete('env');
+        needsUpdate = true;
       }
       
+      // Verificar diagrama
       if (selectedDiag) {
         const diagramParam = selectedDiag.name.toLowerCase().replace(/\s+/g, '-');
         if (currentParams.get('diagram') !== diagramParam) {
           currentParams.set('diagram', diagramParam);
+          needsUpdate = true;
         }
-      } else {
+      } else if (currentParams.has('diagram')) {
         currentParams.delete('diagram');
+        needsUpdate = true;
       }
       
       // Eliminar el parámetro group cuando cambia el diagrama
       if (currentParams.has('group') && !selectedDiag) {
         currentParams.delete('group');
+        needsUpdate = true;
       }
       
-      const newUrl = `${pathname}?${currentParams.toString()}`;
-      router.replace(newUrl, { scroll: false });
+      // Solo actualizar la URL si realmente hay cambios
+      if (needsUpdate) {
+        const newUrl = `${pathname}?${currentParams.toString()}`;
+        console.log('[Dashboard] Actualizando URL params:', {
+          from: window.location.search,
+          to: currentParams.toString(),
+          timestamp: new Date().toISOString()
+        });
+        router.replace(newUrl, { scroll: false });
+      }
     }, 100); // Pequeño delay para evitar múltiples actualizaciones
     
     return () => clearTimeout(timeoutId);

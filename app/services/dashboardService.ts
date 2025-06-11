@@ -33,7 +33,13 @@ class DashboardService {
     const cacheKey = `${CACHE_KEYS.DASHBOARD_DATA}_${token.substring(0, 20)}`;
     const requestKey = `dashboard_initial_${token.substring(0, 20)}`;
     
-    console.log('[DashboardService] getInitialDashboardData called', { forceRefresh, cacheKey });
+    // Log stack trace to identify caller
+    console.log('[DashboardService] getInitialDashboardData called', { 
+      forceRefresh, 
+      cacheKey,
+      requestKey,
+      stack: new Error().stack?.split('\n').slice(2, 5).join('\n')
+    });
     
     try {
       // Check cache first unless force refresh

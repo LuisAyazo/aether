@@ -116,11 +116,8 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
   const setDestroyConfirmationText = useNavigationStore(state => state.setDestroyConfirmationText);
   const handleDestroyConfirm = useNavigationStore(state => state.handleDestroyConfirm);
 
-  useEffect(() => {
-    if (!user) {
-      fetchInitialUser();
-    }
-  }, [user, fetchInitialUser]);
+  // REMOVIDO: fetchInitialUser se llama desde el dashboard page
+  // No es necesario llamarlo desde Navigation
 
   const handleLogout = () => {
     authLogout();
