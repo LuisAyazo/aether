@@ -22,6 +22,7 @@ import type { Environment } from '../services/diagramService';
 import EnvironmentTreeSelect from "./ui/EnvironmentTreeSelect";
 import DiagramTreeSelect from "./ui/DiagramTreeSelect"; 
 import GeneratedCodeModal from "./ui/GeneratedCodeModal";
+import WorkspaceSelector from "./WorkspaceSelector";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -197,6 +198,18 @@ export default function Navigation() {
           <div className={`flex items-center gap-x-3 ${!isOnMarketingPage && activeCompany ? 'ml-8 sm:ml-12 md:ml-16 lg:ml-60' : ''}`}> {/* ml-60 para simular ancho de sidebar */}
             {!isOnMarketingPage && activeCompany && (
               <>
+                {/* Selector de Workspace */}
+                <div className="flex items-center gap-x-1">
+                  <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0 hidden md:inline">Workspace:</span>
+                  <WorkspaceSelector 
+                    companyId={activeCompany.id || activeCompany._id}
+                    currentWorkspaceId={user?.workspace_id}
+                  />
+                </div>
+
+                {/* Divider */}
+                <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2 hidden md:block" />
+                
                 {/* Selector de Ambiente y Botón Añadir */}
                 {(environments && environments.length >= 0) && ( // Mostrar siempre el botón de añadir ambiente si la sección es relevante
                   <div className="flex items-center gap-x-1">

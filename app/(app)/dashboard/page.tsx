@@ -170,6 +170,20 @@ export default function DashboardPage() {
     }
   }, [user, dataLoading, fetchInitialUser]);
 
+  // Detectar cuando un usuario no tiene compañías (posiblemente eliminado) y redirigir
+  useEffect(() => {
+    if (!dataLoading && user && !activeCompany) {
+      // Si el usuario existe pero no tiene compañía activa, podría estar eliminado
+      console.log('Usuario sin compañía activa detectado, redirigiendo...');
+      // Dar un pequeño delay para evitar flashes
+      const timeoutId = setTimeout(() => {
+        router.push('/create-company');
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [dataLoading, user, activeCompany, router]);
+
   useEffect(() => {
     if (user && user._id && !dataLoading && !dataError && activeCompany) {
       const welcomeModalSeenKey = `welcomeModalSeen_${user._id}_${activeCompany._id}`;

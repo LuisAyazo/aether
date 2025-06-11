@@ -31,16 +31,43 @@ interface CompanyCreationData {
   logo_url?: string;
 }
 
+// Helper function to generate slug from name
+const generateSlug = (name: string): string => {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '') // Remove special characters
+    .replace(/[\s_-]+/g, '-') // Replace spaces, underscores with hyphens
+    .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+};
+
 // Helper function to ensure consistent ID structure
 const ensureConsistentId = (company: any): Company => {
-  if (company.id && !company._id) {
-    company._id = company.id;
-  } else if (company._id && !company.id) {
-    company.id = company._id; // También asegurar que 'id' exista si '_id' existe
+  // Ensure id is a string (backend might return UUID object)
+  if (company.id) {
+    company.id = String(company.id);
   }
-  // Si después de esto _id sigue faltando pero id existe (improbable si la interfaz _id es obligatoria)
-  // o si ambos faltan, podría haber un problema más profundo con los datos del backend.
-  // Por ahora, la interfaz Company hace _id obligatorio.
+  
+  // Set _id from id if not present
+  if (company.id && !company._id) {
+    company._id = String(company.id);
+  } else if (company._id && !company.id) {
+    company.id = String(company._id);
+  }
+  
+  // Ensure other UUID fields are strings
+  if (company.owner_id) {
+    company.owner_id = String(company.owner_id);
+  }
+  
+  // Ensure date fields are strings
+  if (company.created_at) {
+    company.created_at = String(company.created_at);
+  }
+  if (company.updated_at) {
+    company.updated_at = String(company.updated_at);
+  }
+  
   return company as Company;
 };
 
@@ -51,8 +78,9 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
     throw new Error('No estás autenticado');
   }
 
-  const payload: CompanyCreationData = {
+  const payload: any = {
     name: companyData.name,
+    slug: generateSlug(companyData.name), // Generate slug from name
   };
   if (companyData.description !== undefined) {
     payload.description = companyData.description;
@@ -87,7 +115,12 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
           if (Array.isArray(errorData.detail) && errorData.detail.length > 0) {
             errorDetail = errorData.detail.map((d: any) => `${d.loc ? d.loc.join('.') : 'detail'}: ${d.msg}`).join('; ');
           } else if (typeof errorData.detail === 'string') {
-            errorDetail = errorData.detail;
+            // Check for duplicate key error
+            if (errorData.detail.includes('duplicate key') && errorData.detail.includes('slug')) {
+              errorDetail = 'Ya existe una compañía con ese nombre. Por favor, elige un nombre diferente.';
+            } else {
+              errorDetail = errorData.detail;
+            }
           } else {
             errorDetail = JSON.stringify(errorData.detail);
           }
