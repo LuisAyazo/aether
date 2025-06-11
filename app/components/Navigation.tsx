@@ -49,17 +49,19 @@ export default function Navigation() {
 
   const [generatedCodeModalVisible, setGeneratedCodeModalVisible] = useState(false);
 
-  const user = useNavigationStore(state => state.user);
-  const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
-  const activeCompany = useNavigationStore(state => state.activeCompany);
-  const environments = useNavigationStore(state => state.environments);
-  const diagrams = useNavigationStore(state => state.diagrams);
-  const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
-  const selectedDiagram = useNavigationStore(state => state.selectedDiagram);
-  const currentDiagram = useNavigationStore(state => state.currentDiagram);
-  const dataLoading = useNavigationStore(state => state.dataLoading);
-  const handleEnvironmentChange = useNavigationStore(state => state.handleEnvironmentChange);
-  const handleDiagramChange = useNavigationStore(state => state.handleDiagramChange);
+const user = useNavigationStore(state => state.user);
+const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
+const activeCompany = useNavigationStore(state => state.activeCompany);
+const workspaces = useNavigationStore(state => state.workspaces); // Añadir workspaces del store
+const activeWorkspace = useNavigationStore(state => state.activeWorkspace); // Añadir workspace activo
+const environments = useNavigationStore(state => state.environments);
+const diagrams = useNavigationStore(state => state.diagrams);
+const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
+const selectedDiagram = useNavigationStore(state => state.selectedDiagram);
+const currentDiagram = useNavigationStore(state => state.currentDiagram);
+const dataLoading = useNavigationStore(state => state.dataLoading);
+const handleEnvironmentChange = useNavigationStore(state => state.handleEnvironmentChange);
+const handleDiagramChange = useNavigationStore(state => state.handleDiagramChange);
   
   const newEnvironmentModalVisible = useNavigationStore(state => state.newEnvironmentModalVisible);
   const setNewEnvironmentModalVisible = useNavigationStore(state => state.setNewEnvironmentModalVisible);
@@ -203,7 +205,8 @@ export default function Navigation() {
                   <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0 hidden md:inline">Workspace:</span>
                   <WorkspaceSelector 
                     companyId={activeCompany.id || activeCompany._id}
-                    currentWorkspaceId={user?.workspace_id}
+                    currentWorkspaceId={activeWorkspace?.id || user?.workspace_id}
+                    workspaces={workspaces} // Pasar workspaces como prop
                   />
                 </div>
 

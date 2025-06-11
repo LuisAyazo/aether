@@ -12,15 +12,17 @@ const { TextArea } = Input;
 interface WorkspaceSelectorProps {
   companyId: string;
   currentWorkspaceId?: string;
+  workspaces?: Workspace[]; // Recibir workspaces como prop
   onWorkspaceChange?: (workspaceId: string) => void;
 }
 
 export default function WorkspaceSelector({ 
   companyId, 
   currentWorkspaceId,
+  workspaces: propsWorkspaces, // Recibir desde props
   onWorkspaceChange 
 }: WorkspaceSelectorProps) {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(propsWorkspaces || []);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | undefined>(currentWorkspaceId);
   const [loading, setLoading] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -28,9 +30,26 @@ export default function WorkspaceSelector({
   const router = useRouter();
   const [form] = Form.useForm();
 
+  // Sincronizar con el workspace activo del store
   useEffect(() => {
-    loadWorkspaces();
-  }, [companyId]);
+    if (currentWorkspaceId && currentWorkspaceId !== selectedWorkspaceId) {
+      setSelectedWorkspaceId(currentWorkspaceId);
+    }
+  }, [currentWorkspaceId]);
+
+  useEffect(() => {
+    // Solo cargar si no se reciben workspaces como props
+    if (!propsWorkspaces || propsWorkspaces.length === 0) {
+      loadWorkspaces();
+    }
+  }, [companyId, propsWorkspaces]);
+
+  useEffect(() => {
+    // Actualizar workspaces locales cuando cambien las props
+    if (propsWorkspaces && propsWorkspaces.length > 0) {
+      setWorkspaces(propsWorkspaces);
+    }
+  }, [propsWorkspaces]);
 
   useEffect(() => {
     // Sync with prop changes

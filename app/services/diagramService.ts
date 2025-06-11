@@ -2,6 +2,7 @@
 
 import { API_BASE_URL } from '../config';
 import { isAuthenticated, getAuthTokenAsync } from './authService';
+import { cacheService, CACHE_KEYS, CACHE_TTL } from './cacheService';
 
 export interface Node {
   id: string;
@@ -92,7 +93,7 @@ export interface Environment {
 }
 
 // Funciones relacionadas con ambientes
-export const getEnvironments = async (companyId: string): Promise<Environment[]> => {
+export const getEnvironments = async (companyId: string, forceRefresh: boolean = false): Promise<Environment[]> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
@@ -101,6 +102,16 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
   if (!companyId) {
     console.error('Error: companyId es undefined o null en getEnvironments');
     throw new Error('ID de compañía no válido en getEnvironments');
+  }
+
+  // Check cache first unless force refresh
+  const cacheKey = CACHE_KEYS.ENVIRONMENTS(companyId);
+  if (!forceRefresh) {
+    const cachedData = cacheService.get<Environment[]>(cacheKey);
+    if (cachedData) {
+      console.log('📦 Environments loaded from cache');
+      return cachedData;
+    }
   }
 
   const token = await getAuthTokenAsync();
@@ -146,6 +157,10 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
     // Devolver los ambientes del backend
     const backendEnvironments = await response.json();
     console.log(`Recibidos ${backendEnvironments.length} ambientes del backend`);
+    
+    // Cache the data
+    cacheService.set(cacheKey, backendEnvironments, CACHE_TTL.ENVIRONMENTS);
+    
     return backendEnvironments;
   } catch (error) {
     console.error('Error en getEnvironments:', error);
@@ -268,7 +283,7 @@ export const deleteEnvironment = async (companyId: string, environmentId: string
 };
 
 // Funciones relacionadas con diagramas asociados a ambientes
-export const getDiagramsByEnvironment = async (companyId: string, environmentId: string): Promise<Diagram[]> => {
+export const getDiagramsByEnvironment = async (companyId: string, environmentId: string, forceRefresh: boolean = false): Promise<Diagram[]> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
@@ -280,6 +295,16 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
     if (!currentWorkspaceId) {
       console.error('No workspace selected');
       throw new Error('Por favor selecciona un workspace antes de acceder a los diagramas.');
+    }
+
+    // Check cache first unless force refresh
+    const cacheKey = CACHE_KEYS.DIAGRAMS(companyId, environmentId);
+    if (!forceRefresh) {
+      const cachedData = cacheService.get<Diagram[]>(cacheKey);
+      if (cachedData) {
+        console.log('📦 Diagrams loaded from cache');
+        return cachedData;
+      }
     }
 
     console.log(`Obteniendo diagramas para workspace: ${currentWorkspaceId}, ambiente: ${environmentId}`);
@@ -313,6 +338,10 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
 
     const backendDiagrams = await response.json();
     console.log(`Recibidos ${backendDiagrams.length} diagramas del backend`);
+    
+    // Cache the data
+    cacheService.set(cacheKey, backendDiagrams, CACHE_TTL.DIAGRAMS);
+    
     return backendDiagrams;
   } catch (error) {
     console.error('Error en getDiagramsByEnvironment:', error);
@@ -323,7 +352,7 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
   }
 };
 
-export const getDiagram = async (companyId: string, environmentId: string, diagramId: string): Promise<Diagram> => {
+export const getDiagram = async (companyId: string, environmentId: string, diagramId: string, forceRefresh: boolean = false): Promise<Diagram> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
@@ -340,6 +369,16 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
     if (!currentWorkspaceId) {
       console.error('No workspace selected');
       throw new Error('Por favor selecciona un workspace antes de acceder a los diagramas.');
+    }
+
+    // Check cache first unless force refresh
+    const cacheKey = CACHE_KEYS.DIAGRAM(companyId, environmentId, diagramId);
+    if (!forceRefresh) {
+      const cachedData = cacheService.get<Diagram>(cacheKey);
+      if (cachedData) {
+        console.log('📦 Diagram loaded from cache');
+        return cachedData;
+      }
     }
 
     console.log(`Obteniendo diagrama: workspace ${currentWorkspaceId}, diagrama ${diagramId}`);

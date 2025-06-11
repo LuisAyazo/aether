@@ -1,4 +1,5 @@
 import { getAuthToken } from './authService';
+import { cacheService, CACHE_KEYS, CACHE_TTL } from './cacheService';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -45,9 +46,31 @@ class WorkspaceService {
     };
   }
 
-  async listCompanyWorkspaces(companyId: string): Promise<Workspace[]> {
+  async listCompanyWorkspaces(companyId: string, forceRefresh: boolean = false): Promise<Workspace[]> {
     try {
-      // Use the correct backend route structure
+      // Check cache first unless force refresh
+      const cacheKey = CACHE_KEYS.WORKSPACES(companyId);
+      if (!forceRefresh) {
+        const cachedData = cacheService.get<Workspace[]>(cacheKey);
+        if (cachedData) {
+          console.log('📦 Workspaces loaded from cache');
+          return cachedData;
+        }
+      }
+
+      // Simple retry logic - only retry once if no token
+      const token = getAuthToken();
+      
+      if (!token) {
+        // Wait once for token
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const retryToken = getAuthToken();
+        if (!retryToken) {
+          throw new Error('No authentication token available');
+        }
+      }
+
+      console.log('🔄 Fetching workspaces from API...');
       const response = await fetch(`${API_BASE_URL}/api/v1/workspaces?company_id=${companyId}`, {
         headers: this.getHeaders(),
       });
@@ -56,7 +79,12 @@ class WorkspaceService {
         throw new Error(`Failed to fetch workspaces: ${response.statusText}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      
+      // Cache the data
+      cacheService.set(cacheKey, data, CACHE_TTL.WORKSPACES);
+      
+      return data;
     } catch (error) {
       console.error('Error fetching workspaces:', error);
       throw error;

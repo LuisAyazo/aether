@@ -52,9 +52,11 @@ import DiagramActionSubheader from '../../components/ui/DiagramActionSubheader';
 
 import { Node as CustomNode, Edge as CustomEdge } from '../../services/diagramService';
 import { useNavigationStore } from '../../hooks/useNavigationStore';
+import { useDashboardDataSimple } from '../../hooks/useDashboardDataSimple';
 import { updateDiagram } from '../../services/diagramService';
 
 import nodeTypes from '../../components/nodes/NodeTypes';
+import { getEdgeConfig, LogicalEdgeType } from '../../config/edgeConfig';
 // RESOURCE_REGISTRY no se usará directamente para construir categories, se usará la estructura manual
 // import { RESOURCE_REGISTRY, SupportedProvider } from '../../config/schemas'; 
 import type { ResourceCategory } from '../../components/flow/types/editorTypes'; // ResourceItem eliminado
@@ -68,18 +70,38 @@ export default function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  
+  // TEMPORAL: Monitoreo de rendimiento
+  useEffect(() => {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      const script = document.createElement('script');
+      script.src = '/debug-backend-performance.js';
+      script.onload = () => {
+        console.log('🔍 Monitoreo de rendimiento activado');
+        // Auto-reporte después de 5 segundos de carga
+        setTimeout(() => {
+          if ((window as any).performanceReport) {
+            (window as any).performanceReport();
+          }
+        }, 5000);
+      };
+      document.head.appendChild(script);
+    }
+  }, []);
 
-  const user = useNavigationStore(state => state.user);
-  const activeCompany = useNavigationStore(state => state.activeCompany);
+  // Usar el hook simplificado temporalmente para depuración
+  const { user, dataLoading, activeCompany } = useDashboardDataSimple();
+  
+  // Otros estados del store
   const isPersonalSpace = useNavigationStore(state => state.isPersonalSpace);
+  const workspaces = useNavigationStore(state => state.workspaces);
+  const activeWorkspace = useNavigationStore(state => state.activeWorkspace);
   const environments = useNavigationStore(state => state.environments);
   const diagramsFromStore = useNavigationStore(state => state.diagrams);
   const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
   const selectedDiagram = useNavigationStore(state => state.selectedDiagram);
   const currentDiagram = useNavigationStore(state => state.currentDiagram);
-  const dataLoading = useNavigationStore(state => state.dataLoading);
   const dataError = useNavigationStore(state => state.dataError);
-  const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
   
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -130,8 +152,54 @@ export default function DashboardPage() {
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const convertToReactFlowEdges = (customEdges: CustomEdge[]): any[] => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return customEdges.map(e => ({...e} as any)); 
+    console.log('🔍 [EDGE LOAD DEBUG] Converting edges from backend:', customEdges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+      edgeKind: e.data?.edgeKind
+    })));
+    
+    return customEdges.map(edge => {
+      // Si el edge tiene data.edgeKind, aplicar la configuración visual
+      if (edge.data?.edgeKind) {
+        const edgeConfig = getEdgeConfig(edge.data.edgeKind as LogicalEdgeType);
+        
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reactFlowEdge: any = {
+          ...edge,
+          type: edgeConfig.visualType,
+          style: edgeConfig.style,
+          markerEnd: {
+            type: edgeConfig.markerEnd.type,
+            color: edgeConfig.markerEnd.color,
+            width: edgeConfig.markerEnd.width || 20,
+            height: edgeConfig.markerEnd.height || 20,
+            strokeWidth: edgeConfig.markerEnd.strokeWidth || 1
+          },
+          // Asegurar que se preserven los handles
+          sourceHandle: edge.sourceHandle,
+          targetHandle: edge.targetHandle
+        };
+        
+        console.log('🔍 [EDGE LOAD DEBUG] Converted edge with config:', {
+          id: reactFlowEdge.id,
+          edgeKind: edge.data.edgeKind,
+          type: reactFlowEdge.type,
+          style: reactFlowEdge.style,
+          markerEnd: reactFlowEdge.markerEnd,
+          sourceHandle: reactFlowEdge.sourceHandle,
+          targetHandle: reactFlowEdge.targetHandle
+        });
+        
+        return reactFlowEdge;
+      }
+      
+      // Si no tiene edgeKind, retornar el edge tal cual
+      console.log('⚠️ [EDGE LOAD DEBUG] Edge sin edgeKind:', edge);
+      return edge;
+    });
   }
 
   const initialNodesForFlow = useMemo(() => {
@@ -166,13 +234,7 @@ export default function DashboardPage() {
     }
   }, [currentDiagram]);
   
-  useEffect(() => {
-    console.log('[Dashboard] User state:', { user, dataLoading, activeCompany });
-    if (!user && !dataLoading) {
-      console.log('[Dashboard] No user and not loading, fetching initial user...');
-      fetchInitialUser(); 
-    }
-  }, [user, dataLoading, fetchInitialUser]);
+  // El hook useDashboardData maneja la inicialización
 
   // Estado para rastrear si ya verificamos las compañías
   const [hasCheckedCompanies, setHasCheckedCompanies] = useState(false);
@@ -200,49 +262,44 @@ export default function DashboardPage() {
           localStorage.removeItem('justCreatedCompany');
           console.log('Compañía recién creada, esperando actualización del estado...');
           
-          // Intentar refrescar los datos del usuario
-          fetchInitialUser();
+          // No intentar refrescar aquí, ya se maneja en el hook
           
-          // Dar más tiempo antes de decidir redirigir
-          const timeoutId = setTimeout(() => {
-            // Verificar de nuevo después del delay
-            const currentState = useNavigationStore.getState();
-            if (!currentState.activeCompany) {
-              console.log('Aún sin compañía activa después de esperar, redirigiendo...');
-              router.push('/create-company');
-            }
-          }, 3000); // Esperar 3 segundos
-          
-          return () => clearTimeout(timeoutId);
-        } else {
-          // Si no acabamos de crear una compañía, verificar si realmente no tiene compañías
-          const currentState = useNavigationStore.getState();
-          console.log('[Dashboard] Current state check:', {
-            userCompanies: currentState.userCompanies,
-            activeCompany: currentState.activeCompany,
-            dataLoading: currentState.dataLoading
-          });
-          
-          if (currentState.userCompanies && currentState.userCompanies.length === 0) {
-            // Solo redirigir si confirmamos que no hay compañías
-            console.log('[Dashboard] Usuario confirmado sin compañías, redirigiendo...');
-            const timeoutId = setTimeout(() => {
-              router.push('/create-company');
-            }, 500);
-            
-            return () => clearTimeout(timeoutId);
-          } else if (currentState.userCompanies && currentState.userCompanies.length > 0) {
-            // Si hay compañías pero no se seleccionó ninguna, intentar inicializar de nuevo
-            console.log('[Dashboard] Hay compañías pero ninguna seleccionada, reinicializando...', currentState.userCompanies);
-            fetchInitialUser();
-          } else {
-            // userCompanies podría ser null/undefined, esperar más
-            console.log('[Dashboard] userCompanies no está listo aún, esperando...');
-          }
+      // Dar más tiempo antes de decidir redirigir
+      const timeoutId = setTimeout(() => {
+        // Verificar de nuevo después del delay
+        const currentState = useNavigationStore.getState();
+        if (!currentState.activeCompany) {
+          console.log('Aún sin compañía activa después de esperar, redirigiendo...');
+          router.push('/create-company');
         }
+      }, 3000); // Esperar 3 segundos
+      
+      return () => clearTimeout(timeoutId);
+    } else {
+      // Si no acabamos de crear una compañía, verificar si realmente no tiene compañías
+      const currentState = useNavigationStore.getState();
+      console.log('[Dashboard] Current state check:', {
+        userCompanies: currentState.userCompanies,
+        activeCompany: currentState.activeCompany,
+        dataLoading: currentState.dataLoading
+      });
+      
+      if (currentState.userCompanies && currentState.userCompanies.length === 0) {
+        // Solo redirigir si confirmamos que no hay compañías
+        console.log('[Dashboard] Usuario confirmado sin compañías, redirigiendo...');
+        const timeoutId = setTimeout(() => {
+          router.push('/create-company');
+        }, 500);
+        
+        return () => clearTimeout(timeoutId);
+      } else {
+        // userCompanies podría ser null/undefined, esperar más
+        console.log('[Dashboard] userCompanies no está listo aún, esperando...');
       }
     }
-  }, [dataLoading, user, activeCompany, hasCheckedCompanies, router, fetchInitialUser]);
+  }
+}
+}, [dataLoading, user, activeCompany, hasCheckedCompanies, router]);
 
   useEffect(() => {
     if (user && user._id && !dataLoading && !dataError && activeCompany) {
@@ -278,12 +335,17 @@ export default function DashboardPage() {
 
   // Sincronizar parámetros de URL con el estado solo en la carga inicial
   useEffect(() => {
-    if (!dataLoading && activeCompany && environments.length > 0 && !urlParamsLoaded) {
+    if (!dataLoading && activeCompany && workspaces.length > 0 && environments.length > 0 && !urlParamsLoaded) {
+      const companyParam = searchParams.get('company');
+      const workspaceParam = searchParams.get('workspace');
       const envParam = searchParams.get('env');
       const diagramParam = searchParams.get('diagram');
       const groupParam = searchParams.get('group');
       
       const applyUrlParams = async () => {
+        // TODO: Implementar cambio de compañía y workspace desde URL
+        // Por ahora solo manejamos ambiente y diagrama
+        
         // Buscar ambiente por nombre
         if (envParam) {
           const targetEnv = environments.find(e => e.name.toLowerCase().replace(/\s+/g, '-') === envParam.toLowerCase());
@@ -320,40 +382,59 @@ export default function DashboardPage() {
       
       applyUrlParams();
     }
-  }, [dataLoading, activeCompany, environments, searchParams, currentDiagram, selectedEnvironment, selectedDiagram, diagramsFromStore, urlParamsLoaded]);
+  }, [dataLoading, activeCompany, workspaces, environments, searchParams, currentDiagram, selectedEnvironment, selectedDiagram, diagramsFromStore, urlParamsLoaded]);
 
-  // Actualizar URL cuando cambian ambiente o diagrama (pero solo después de que se cargaron los parámetros iniciales)
+  // Actualizar URL cuando cambian compañía, workspace, ambiente o diagrama (pero solo después de que se cargaron los parámetros iniciales)
   useEffect(() => {
-    if (!urlParamsLoaded || !selectedEnvironment || !selectedDiagram) return;
+    if (!urlParamsLoaded || !activeCompany || !activeWorkspace) return;
     
     const selectedEnv = environments.find(e => e.id === selectedEnvironment);
     const selectedDiag = diagramsFromStore.find(d => d.id === selectedDiagram);
     
-    if (selectedEnv && selectedDiag) {
-      // Usar un timeout para evitar múltiples actualizaciones rápidas
-      const timeoutId = setTimeout(() => {
-        const currentParams = new URLSearchParams(window.location.search);
-        const envParam = selectedEnv.name.toLowerCase().replace(/\s+/g, '-');
-        const diagramParam = selectedDiag.name.toLowerCase().replace(/\s+/g, '-');
-        
-        // Solo actualizar si realmente cambió
-        if (currentParams.get('env') !== envParam || currentParams.get('diagram') !== diagramParam) {
-          currentParams.set('env', envParam);
-          currentParams.set('diagram', diagramParam);
-          
-          // Eliminar el parámetro group cuando cambia el diagrama
-          if (currentParams.has('group')) {
-            currentParams.delete('group');
-          }
-          
-          const newUrl = `${pathname}?${currentParams.toString()}`;
-          router.replace(newUrl, { scroll: false });
-        }
-      }, 100); // Pequeño delay para evitar múltiples actualizaciones
+    // Usar un timeout para evitar múltiples actualizaciones rápidas
+    const timeoutId = setTimeout(() => {
+      const currentParams = new URLSearchParams(window.location.search);
+      const companyParam = activeCompany.slug || activeCompany.name.toLowerCase().replace(/\s+/g, '-');
+      const workspaceParam = activeWorkspace.slug || activeWorkspace.name.toLowerCase().replace(/\s+/g, '-');
       
-      return () => clearTimeout(timeoutId);
-    }
-  }, [selectedEnvironment, selectedDiagram, environments, diagramsFromStore, pathname, router, urlParamsLoaded]);
+      // Actualizar compañía y workspace
+      if (currentParams.get('company') !== companyParam) {
+        currentParams.set('company', companyParam);
+      }
+      if (currentParams.get('workspace') !== workspaceParam) {
+        currentParams.set('workspace', workspaceParam);
+      }
+      
+      // Actualizar ambiente y diagrama si existen
+      if (selectedEnv) {
+        const envParam = selectedEnv.name.toLowerCase().replace(/\s+/g, '-');
+        if (currentParams.get('env') !== envParam) {
+          currentParams.set('env', envParam);
+        }
+      } else {
+        currentParams.delete('env');
+      }
+      
+      if (selectedDiag) {
+        const diagramParam = selectedDiag.name.toLowerCase().replace(/\s+/g, '-');
+        if (currentParams.get('diagram') !== diagramParam) {
+          currentParams.set('diagram', diagramParam);
+        }
+      } else {
+        currentParams.delete('diagram');
+      }
+      
+      // Eliminar el parámetro group cuando cambia el diagrama
+      if (currentParams.has('group') && !selectedDiag) {
+        currentParams.delete('group');
+      }
+      
+      const newUrl = `${pathname}?${currentParams.toString()}`;
+      router.replace(newUrl, { scroll: false });
+    }, 100); // Pequeño delay para evitar múltiples actualizaciones
+    
+    return () => clearTimeout(timeoutId);
+  }, [activeCompany, activeWorkspace, selectedEnvironment, selectedDiagram, environments, diagramsFromStore, pathname, router, urlParamsLoaded]);
 
   const handleInternalSectionChange = (sectionString: string) => {
     const section = sectionString as SidebarSectionKey;
@@ -398,7 +479,8 @@ export default function DashboardPage() {
     
     const customEdges = data.edges.map(e => ({ 
       id: e.id, source: e.source, target: e.target, type: e.type, 
-      animated: e.animated, label: e.label as string, data: e.data, style: e.style 
+      animated: e.animated, label: e.label as string, data: e.data, style: e.style,
+      sourceHandle: e.sourceHandle, targetHandle: e.targetHandle 
     } as CustomEdge));
     
     // Debug logging to trace save data
