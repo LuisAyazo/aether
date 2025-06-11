@@ -46,7 +46,7 @@ export default function WorkspaceSelector({
       // If no workspace is selected, select the default one
       if (!selectedWorkspaceId && data.length > 0) {
         const defaultWorkspace = data.find(w => w.is_default) || data[0];
-        handleWorkspaceChange(defaultWorkspace.id);
+        handleWorkspaceChange(defaultWorkspace.id, true); // Skip reload on initial load
       }
     } catch (error) {
       message.error('Error al cargar workspaces');
@@ -56,7 +56,7 @@ export default function WorkspaceSelector({
     }
   };
 
-  const handleWorkspaceChange = (workspaceId: string) => {
+  const handleWorkspaceChange = (workspaceId: string, skipReload?: boolean) => {
     setSelectedWorkspaceId(workspaceId);
     workspaceService.setCurrentWorkspace(workspaceId);
     
@@ -64,8 +64,11 @@ export default function WorkspaceSelector({
       onWorkspaceChange(workspaceId);
     }
     
-    // Reload the page to update context
-    window.location.reload();
+    // Only reload if not skipping (for initial load)
+    if (!skipReload) {
+      // Reload the page to update context
+      window.location.reload();
+    }
   };
 
   const handleCreateWorkspace = async (values: WorkspaceCreate) => {
@@ -98,7 +101,7 @@ export default function WorkspaceSelector({
       <Space>
         <Select
           value={selectedWorkspaceId}
-          onChange={handleWorkspaceChange}
+          onChange={(value) => handleWorkspaceChange(value)}
           loading={loading}
           style={{ minWidth: 200 }}
           placeholder="Seleccionar workspace"

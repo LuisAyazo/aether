@@ -65,11 +65,13 @@ export default function CreateCompanyPage() {
       if (company && company._id) {
         console.log('Compañía creada con éxito. Actualizando sesión de usuario...');
         
+        // Marcar que acabamos de crear una compañía
+        localStorage.setItem('justCreatedCompany', 'true');
+        
         const updatedUser = await fetchAndUpdateCurrentUser();
         
         if (updatedUser) {
           console.log('Sesión de usuario actualizada. Redirigiendo a /dashboard');
-          // localStorage.setItem('lastCreatedCompany', JSON.stringify(company)); // Opcional
           router.push('/dashboard');
         } else {
           console.error('Error al actualizar la sesión del usuario después de crear la compañía.');

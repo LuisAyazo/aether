@@ -1,6 +1,6 @@
 import { getAuthToken } from './authService';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Helper function to generate slug from name
 const generateSlug = (name: string): string => {
@@ -48,7 +48,7 @@ class WorkspaceService {
   async listCompanyWorkspaces(companyId: string): Promise<Workspace[]> {
     try {
       // Use the correct backend route structure
-      const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}/workspaces`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workspaces?company_id=${companyId}`, {
         headers: this.getHeaders(),
       });
 
@@ -65,7 +65,7 @@ class WorkspaceService {
 
   async getWorkspace(companyId: string, workspaceId: string): Promise<Workspace> {
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}/workspaces/${workspaceId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}`, {
         headers: this.getHeaders(),
       });
 
@@ -82,10 +82,10 @@ class WorkspaceService {
 
   async createWorkspace(companyId: string, data: WorkspaceCreate): Promise<Workspace> {
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}/workspaces`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workspaces`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, company_id: companyId }),
       });
 
       if (!response.ok) {
@@ -106,7 +106,7 @@ class WorkspaceService {
     data: WorkspaceUpdate
   ): Promise<Workspace> {
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}/workspaces/${workspaceId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}`, {
         method: 'PUT',
         headers: this.getHeaders(),
         body: JSON.stringify(data),
@@ -126,7 +126,7 @@ class WorkspaceService {
 
   async deleteWorkspace(companyId: string, workspaceId: string): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/v1/companies/${companyId}/workspaces/${workspaceId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workspaces/${workspaceId}`, {
         method: 'DELETE',
         headers: this.getHeaders(),
       });
@@ -144,7 +144,7 @@ class WorkspaceService {
   async setDefaultWorkspace(companyId: string, workspaceId: string): Promise<Workspace> {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/v1/companies/${companyId}/workspaces/${workspaceId}/set-default`,
+        `${API_BASE_URL}/api/v1/workspaces/${workspaceId}/set-default`,
         {
           method: 'POST',
           headers: this.getHeaders(),

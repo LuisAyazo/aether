@@ -32,7 +32,7 @@ import {
   DocumentTextIcon,
   ListBulletIcon,
 } from '@heroicons/react/24/outline';
-import { SettingOutlined } from '@ant-design/icons'; 
+import { SettingOutlined, CheckOutlined } from '@ant-design/icons'; 
 
 import {
   UserCircleIcon as UserCircleIconSolid,
@@ -84,6 +84,8 @@ export default function DashboardPage() {
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState<boolean>(false);
+  const [showOnboardingFlow, setShowOnboardingFlow] = useState<boolean>(false);
+  const [onboardingStep, setOnboardingStep] = useState<number>(1);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const convertToReactFlowNodes = (customNodes: CustomNode[]): any[] => { 
@@ -165,34 +167,99 @@ export default function DashboardPage() {
   }, [currentDiagram]);
   
   useEffect(() => {
+    console.log('[Dashboard] User state:', { user, dataLoading, activeCompany });
     if (!user && !dataLoading) {
+      console.log('[Dashboard] No user and not loading, fetching initial user...');
       fetchInitialUser(); 
     }
   }, [user, dataLoading, fetchInitialUser]);
 
+  // Estado para rastrear si ya verificamos las compañías
+  const [hasCheckedCompanies, setHasCheckedCompanies] = useState(false);
+
   // Detectar cuando un usuario no tiene compañías (posiblemente eliminado) y redirigir
   useEffect(() => {
-    if (!dataLoading && user && !activeCompany) {
-      // Si el usuario existe pero no tiene compañía activa, podría estar eliminado
-      console.log('Usuario sin compañía activa detectado, redirigiendo...');
-      // Dar un pequeño delay para evitar flashes
-      const timeoutId = setTimeout(() => {
-        router.push('/create-company');
-      }, 500);
+    console.log('[Dashboard] Company check:', { 
+      dataLoading, 
+      user: user?.email, 
+      activeCompany: activeCompany?.name,
+      hasCheckedCompanies,
+      userCompanies: useNavigationStore.getState().userCompanies?.length 
+    });
+    
+    // Solo verificar después de que la carga inicial se complete
+    if (!dataLoading && user && !hasCheckedCompanies) {
+      setHasCheckedCompanies(true);
       
-      return () => clearTimeout(timeoutId);
+      // Si después de cargar no hay compañía activa
+      if (!activeCompany) {
+        // Verificar si acabamos de crear una compañía
+        const justCreatedCompany = localStorage.getItem('justCreatedCompany');
+        if (justCreatedCompany) {
+          // Si acabamos de crear una compañía, dar más tiempo para que se actualice el estado
+          localStorage.removeItem('justCreatedCompany');
+          console.log('Compañía recién creada, esperando actualización del estado...');
+          
+          // Intentar refrescar los datos del usuario
+          fetchInitialUser();
+          
+          // Dar más tiempo antes de decidir redirigir
+          const timeoutId = setTimeout(() => {
+            // Verificar de nuevo después del delay
+            const currentState = useNavigationStore.getState();
+            if (!currentState.activeCompany) {
+              console.log('Aún sin compañía activa después de esperar, redirigiendo...');
+              router.push('/create-company');
+            }
+          }, 3000); // Esperar 3 segundos
+          
+          return () => clearTimeout(timeoutId);
+        } else {
+          // Si no acabamos de crear una compañía, verificar si realmente no tiene compañías
+          const currentState = useNavigationStore.getState();
+          console.log('[Dashboard] Current state check:', {
+            userCompanies: currentState.userCompanies,
+            activeCompany: currentState.activeCompany,
+            dataLoading: currentState.dataLoading
+          });
+          
+          if (currentState.userCompanies && currentState.userCompanies.length === 0) {
+            // Solo redirigir si confirmamos que no hay compañías
+            console.log('[Dashboard] Usuario confirmado sin compañías, redirigiendo...');
+            const timeoutId = setTimeout(() => {
+              router.push('/create-company');
+            }, 500);
+            
+            return () => clearTimeout(timeoutId);
+          } else if (currentState.userCompanies && currentState.userCompanies.length > 0) {
+            // Si hay compañías pero no se seleccionó ninguna, intentar inicializar de nuevo
+            console.log('[Dashboard] Hay compañías pero ninguna seleccionada, reinicializando...', currentState.userCompanies);
+            fetchInitialUser();
+          } else {
+            // userCompanies podría ser null/undefined, esperar más
+            console.log('[Dashboard] userCompanies no está listo aún, esperando...');
+          }
+        }
+      }
     }
-  }, [dataLoading, user, activeCompany, router]);
+  }, [dataLoading, user, activeCompany, hasCheckedCompanies, router, fetchInitialUser]);
 
   useEffect(() => {
     if (user && user._id && !dataLoading && !dataError && activeCompany) {
       const welcomeModalSeenKey = `welcomeModalSeen_${user._id}_${activeCompany._id}`;
       const welcomeModalAlreadySeen = localStorage.getItem(welcomeModalSeenKey);
-      if (!welcomeModalAlreadySeen) {
+      
+      // Verificar si es una compañía nueva (sin ambientes)
+      const isNewCompany = environments.length === 0;
+      
+      if (!welcomeModalAlreadySeen && isNewCompany) {
+        setIsWelcomeModalVisible(true);
+        setShowOnboardingFlow(true);
+      } else if (!welcomeModalAlreadySeen) {
         setIsWelcomeModalVisible(true);
       }
     }
-  }, [user, activeCompany, dataLoading, dataError]);
+  }, [user, activeCompany, dataLoading, dataError, environments]);
 
   useEffect(() => {
     const sectionFromQuery = searchParams.get('section') as SidebarSectionKey;
@@ -589,10 +656,14 @@ export default function DashboardPage() {
                 if (user && user._id && activeCompany) {
                   localStorage.setItem(`welcomeModalSeen_${user._id}_${activeCompany._id}`, 'true');
                 }
+                // Si es una compañía nueva, iniciar el flujo de onboarding
+                if (showOnboardingFlow) {
+                  setOnboardingStep(2); // Pasar al paso de crear ambiente
+                }
               }}
               className="bg-electric-purple-600 hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600"
             >
-              Comenzar a Explorar
+              {showOnboardingFlow ? 'Configurar mi Espacio' : 'Comenzar a Explorar'}
             </Button>
           </div>
         </Modal>
@@ -654,16 +725,35 @@ export default function DashboardPage() {
                     {!selectedEnvironment && environments && environments.length === 0 && !dataLoading && ( 
                       <div className="flex flex-col items-center justify-center h-full p-6 sm:p-10 text-center">
                         {/* Card eliminada, contenido directamente sobre el fondo de la página */}
+                        {showOnboardingFlow && onboardingStep === 2 && (
+                          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 max-w-lg">
+                            <div className="flex items-center">
+                              <CheckOutlined className="text-green-500 mr-2" />
+                              <span className="text-slate-700 dark:text-slate-300">
+                                ✅ <strong>Workspace creado:</strong> Se creó automáticamente tu workspace principal
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         <FolderIconOutline className="mx-auto h-24 w-24 sm:h-28 sm:w-28 text-electric-purple-500 dark:text-electric-purple-400 mb-8" />
-                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Define tu Primer Ambiente</h3>
+                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">
+                          {showOnboardingFlow && onboardingStep === 2 ? 'Paso 2: Crea tu Primer Ambiente' : 'Define tu Primer Ambiente'}
+                        </h3>
                         <p className="text-slate-500 dark:text-slate-400 mb-10 text-base sm:text-lg max-w-lg">
-                          {isPersonalSpace ? "Tu espacio personal está listo. " : "Esta compañía aún no tiene ambientes. "}
-                          Crea un ambiente para empezar a diseñar diagramas y dar vida a tus ideas de infraestructura.
+                          {showOnboardingFlow && onboardingStep === 2 
+                            ? "Los ambientes te permiten separar tus recursos (dev, staging, producción). Comienza creando tu primer ambiente."
+                            : (isPersonalSpace ? "Tu espacio personal está listo. " : "Esta compañía aún no tiene ambientes. ") + "Crea un ambiente para empezar a diseñar diagramas y dar vida a tus ideas de infraestructura."
+                          }
                         </p>
                         <Button 
                           type="primary" 
                           size="large"
-                          onClick={() => useNavigationStore.getState().setNewEnvironmentModalVisible(true)}
+                          onClick={() => {
+                            useNavigationStore.getState().setNewEnvironmentModalVisible(true);
+                            if (showOnboardingFlow) {
+                              setOnboardingStep(3);
+                            }
+                          }}
                           className="bg-electric-purple-600 hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600 px-8 py-3 text-base"
                         >
                           Crear Ambiente
@@ -673,15 +763,45 @@ export default function DashboardPage() {
                     {selectedEnvironment && (!diagramsFromStore || diagramsFromStore.length === 0) && !dataLoading && ( 
                       <div className="flex flex-col items-center justify-center h-full p-6 sm:p-10 text-center">
                         {/* Card eliminada */}
+                        {showOnboardingFlow && onboardingStep === 3 && (
+                          <div className="mb-6 space-y-3 max-w-lg">
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <div className="flex items-center">
+                                <CheckOutlined className="text-green-500 mr-2" />
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  ✅ <strong>Workspace creado:</strong> Main Workspace
+                                </span>
+                              </div>
+                            </div>
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <div className="flex items-center">
+                                <CheckOutlined className="text-green-500 mr-2" />
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  ✅ <strong>Ambiente creado:</strong> {environments.find(e => e.id === selectedEnvironment)?.name || 'Ambiente'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         <DocumentDuplicateIconOutline className="mx-auto h-24 w-24 sm:h-28 sm:w-28 text-emerald-green-500 dark:text-emerald-green-400 mb-8" />
-                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Crea tu Primer Diagrama</h3>
+                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">
+                          {showOnboardingFlow && onboardingStep === 3 ? 'Paso 3: Crea tu Primer Diagrama' : 'Crea tu Primer Diagrama'}
+                        </h3>
                         <p className="text-slate-500 dark:text-slate-400 mb-10 text-base sm:text-lg max-w-lg">
-                          Este ambiente está listo. Comienza a visualizar tu infraestructura arrastrando componentes al lienzo.
+                          {showOnboardingFlow && onboardingStep === 3
+                            ? "¡Excelente! Ya tienes todo listo. Ahora crea tu primer diagrama para empezar a diseñar tu infraestructura visualmente."
+                            : "Este ambiente está listo. Comienza a visualizar tu infraestructura arrastrando componentes al lienzo."
+                          }
                         </p>
                         <Button 
                           type="primary" 
                           size="large"
-                          onClick={() => useNavigationStore.getState().setNewDiagramModalVisible(true)}
+                          onClick={() => {
+                            useNavigationStore.getState().setNewDiagramModalVisible(true);
+                            if (showOnboardingFlow) {
+                              setShowOnboardingFlow(false); // Terminar el flujo de onboarding
+                            }
+                          }}
                           className="bg-emerald-green-600 hover:bg-emerald-green-700 dark:bg-emerald-green-500 dark:hover:bg-emerald-green-600 px-8 py-3 text-base"
                         >
                           Crear Diagrama
