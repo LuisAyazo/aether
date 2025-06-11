@@ -285,7 +285,8 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
     console.log(`Obteniendo diagramas para workspace: ${currentWorkspaceId}, ambiente: ${environmentId}`);
     
     // Use the new workspace-based route with environment filter
-    const response = await fetch(`${API_BASE_URL}/v1/workspaces/${currentWorkspaceId}/diagrams?environment_id=${environmentId}`, {
+    // Note: diagrams router is mounted at /api, not /api/v1
+    const response = await fetch(`${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams?environment_id=${environmentId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -344,7 +345,8 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
     console.log(`Obteniendo diagrama: workspace ${currentWorkspaceId}, diagrama ${diagramId}`);
     
     // Use the new workspace-based route
-    const response = await fetch(`${API_BASE_URL}/v1/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, {
+    // Note: diagrams router is mounted at /api, not /api/v1
+    const response = await fetch(`${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -397,11 +399,13 @@ export const createDiagram = async (companyId: string, environmentId: string, di
     
     const diagramPayload = {
       ...diagramData,
+      workspace_id: currentWorkspaceId,
       environment_id: environmentId
     };
     
     // Use the new workspace-based route
-    const response = await fetch(`${API_BASE_URL}/v1/workspaces/${currentWorkspaceId}/diagrams`, {
+    // Note: diagrams router is mounted at /api, not /api/v1
+    const response = await fetch(`${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -504,8 +508,9 @@ export const updateDiagram = async (
 
   try {
     // Use the new workspace-based route
+    // Note: diagrams router is mounted at /api, not /api/v1
     const response = await fetch(
-      `${API_BASE_URL}/v1/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, 
+      `${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, 
       {
         method: 'PUT',
         headers: {
@@ -575,7 +580,8 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
     console.log(`Intentando eliminar diagrama: workspace ${currentWorkspaceId}, diagrama ${diagramId}`);
     
     // Use the new workspace-based route
-    const response = await fetch(`${API_BASE_URL}/v1/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, {
+    // Note: diagrams router is mounted at /api, not /api/v1
+    const response = await fetch(`${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

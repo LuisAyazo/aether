@@ -211,7 +211,7 @@ export default function Navigation() {
                 <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2 hidden md:block" />
                 
                 {/* Selector de Ambiente y Botón Añadir */}
-                {(environments && environments.length >= 0) && ( // Mostrar siempre el botón de añadir ambiente si la sección es relevante
+                {(environments && environments.length >= 0) && ( // Mostrar siempre el contenedor si la sección es relevante
                   <div className="flex items-center gap-x-1">
                     {environments.length > 0 && ( // Mostrar selector solo si hay ambientes
                       <>
@@ -226,19 +226,22 @@ export default function Navigation() {
                         />
                       </>
                     )}
-                    <Tooltip title='Crear Nuevo Ambiente'>
-                      <Button 
-                        icon={<PlusOutlined />} 
-                        size="small" 
-                        onClick={() => onEnvChange('create-new-env')}
-                        aria-label="Crear Nuevo Ambiente"
-                      />
-                    </Tooltip>
+                    {/* Solo mostrar botón de crear si ya hay ambientes (no en onboarding) */}
+                    {environments.length > 0 && (
+                      <Tooltip title='Crear Nuevo Ambiente'>
+                        <Button 
+                          icon={<PlusOutlined />} 
+                          size="small" 
+                          onClick={() => onEnvChange('create-new-env')}
+                          aria-label="Crear Nuevo Ambiente"
+                        />
+                      </Tooltip>
+                    )}
                   </div>
                 )}
                 
                 {/* Selector de Diagrama y Botón Añadir */}
-                {selectedEnvironment && (diagrams && diagrams.length >= 0) && ( // Mostrar siempre el botón de añadir diagrama si hay ambiente
+                {selectedEnvironment && (diagrams && diagrams.length >= 0) && ( // Mostrar contenedor si hay ambiente
                   <div className="flex items-center gap-x-1">
                     {diagrams.length > 0 && ( // Mostrar selector solo si hay diagramas
                       <>
@@ -257,15 +260,18 @@ export default function Navigation() {
                         />
                       </>
                     )}
-                    <Tooltip title='Crear Nuevo Diagrama'>
-                      <Button 
-                        icon={<PlusOutlined />} 
-                        size="small" 
-                        onClick={() => onDiagramChange('create-new-diag')}
-                        aria-label="Crear Nuevo Diagrama"
-                        disabled={!selectedEnvironment} 
-                      />
-                    </Tooltip>
+                    {/* Solo mostrar botón de crear si ya hay diagramas (no en onboarding) */}
+                    {diagrams.length > 0 && (
+                      <Tooltip title='Crear Nuevo Diagrama'>
+                        <Button 
+                          icon={<PlusOutlined />} 
+                          size="small" 
+                          onClick={() => onDiagramChange('create-new-diag')}
+                          aria-label="Crear Nuevo Diagrama"
+                          disabled={!selectedEnvironment} 
+                        />
+                      </Tooltip>
+                    )}
                   </div>
                 )}
                 {selectedDiagram && (

@@ -297,10 +297,23 @@ export async function logoutUser() {
     console.error('Error during logout:', err);
   }
   
-  // Clear local storage
+  // Clear all authentication data
   if (typeof window !== 'undefined') {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    // Clear localStorage
+    localStorage.clear();
+    
+    // Clear sessionStorage
+    sessionStorage.clear();
+    
+    // Clear cookies
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c
+        .replace(/^ +/, "")
+        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+    });
+    
+    // Redirect to login
+    window.location.href = '/login?session_expired=true';
   }
 }
 

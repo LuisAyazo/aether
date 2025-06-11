@@ -303,6 +303,13 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
   },
 
   fetchInitialUser: () => {
+    // Prevenir múltiples ejecuciones concurrentes
+    const state = get();
+    if (state.dataLoading && state.user) {
+      console.log('[NavStore] fetchInitialUser: Ya se está ejecutando, saltando...');
+      return;
+    }
+    
     console.log('[NavStore] fetchInitialUser: Obteniendo usuario...');
     const currentUser = getCurrentUser(); 
     console.log('[NavStore] fetchInitialUser: Usuario obtenido:', currentUser);
@@ -327,13 +334,31 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     set({ dataLoading: true, dataError: null });
     try {
       console.log('[NavStore] initializeAppLogic: Obteniendo compañías...');
-      const companies = await getCompanies(); 
-      console.log('[NavStore] initializeAppLogic: Compañías obtenidas:', companies);
-      set({ userCompanies: companies });
+      
+      // Añadir timeout de 10 segundos
+      const companiesPromise = getCompanies();
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: La solicitud tardó demasiado')), 10000)
+      );
+      
+      let companies: Company[] = [];
+      try {
+        companies = await Promise.race([companiesPromise, timeoutPromise]);
+        console.log('[NavStore] initializeAppLogic: Compañías obtenidas:', companies);
+        set({ userCompanies: companies });
+      } catch (timeoutError) {
+        if (timeoutError instanceof Error && timeoutError.message.includes('Timeout')) {
+          console.error('[NavStore] initializeAppLogic: Timeout obteniendo compañías');
+          message.error('La conexión con el servidor está tardando demasiado. Por favor, verifica tu conexión.');
+          set({ dataError: 'Timeout al obtener compañías', dataLoading: false, userCompanies: [] });
+          return;
+        }
+        throw timeoutError; // Re-lanzar si no es timeout
+      }
 
       if (companies.length > 0) {
         const personalSpaceName = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${user.name || user.email}`;
-        let companyToSelect = companies.find(c => c.name === personalSpaceName);
+        let companyToSelect = companies.find((c: Company) => c.name === personalSpaceName);
         let isPersonal = !!companyToSelect;
 
         if (!companyToSelect) {

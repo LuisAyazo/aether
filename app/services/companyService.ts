@@ -5,6 +5,7 @@ export const PERSONAL_SPACE_COMPANY_NAME_PREFIX = "Personal Space for "; // Aña
 import { getAuthTokenAsync } from './authService';
 import { Settings, API_BASE_URL } from '../config'; // Importar API_BASE_URL
 import { Environment } from './diagramService';
+import { fetchWithAuthInterceptor } from '../utils/api-interceptor';
 
 // Extendemos la interfaz Company para ser compatible con ambos usos
 export interface Company {
@@ -152,30 +153,41 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
 }
 
 export async function getCompanies(): Promise<Company[]> {
+  console.log('[getCompanies] Starting...');
   const token = await getAuthTokenAsync();
+  console.log('[getCompanies] Token exists:', !!token);
   
   if (!token) {
     throw new Error('No estás autenticado');
   }
 
-  const response = await fetch(`${API_BASE_URL}/v1/companies`, { // Usar API_BASE_URL
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  });
+  const url = `${API_BASE_URL}/v1/companies`;
+  console.log('[getCompanies] Fetching from:', url);
+  
+  try {
+    const response = await fetchWithAuthInterceptor(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    console.log('[getCompanies] Response status:', response.status);
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login?session_expired=true';
-      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+    if (!response.ok) {
+      // El interceptor manejará los errores 401 automáticamente
+      const error = await response.json();
+      throw new Error(error.detail || 'Error al obtener las compañías');
     }
-    const error = await response.json();
-    throw new Error(error.detail || 'Error al obtener las compañías');
+
+    const companiesData = await response.json();
+    console.log('[getCompanies] Companies received:', companiesData);
+    const mappedCompanies = companiesData.map((company: any) => ensureConsistentId(company));
+    console.log('[getCompanies] Companies mapped:', mappedCompanies);
+    return mappedCompanies;
+  } catch (error) {
+    console.error('[getCompanies] Error:', error);
+    throw error;
   }
-
-  const companiesData = await response.json();
-  return companiesData.map((company: any) => ensureConsistentId(company));
 }
 
 export const getCompany = async (companyId: string): Promise<Company> => {

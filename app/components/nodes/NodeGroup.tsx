@@ -44,6 +44,8 @@ export interface NodeGroupData {
   isMinimized?: boolean;
   width?: number;
   height?: number;
+  savedWidth?: number;  // Dimensiones guardadas antes de minimizar
+  savedHeight?: number; // Dimensiones guardadas antes de minimizar
   childCount?: number;
   isExpandedView: boolean;
   viewport?: {
@@ -66,9 +68,11 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
   const labelInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
 
-  // Usar la altura actual del nodo (puede haber sido redimensionado)
-  const currentHeight = height || DEFAULT_HEIGHT;
-  const currentWidth = width || DEFAULT_WIDTH;
+  // Usar las props width/height si están disponibles, sino usar las guardadas o por defecto
+  const currentHeight = isMinimized ? MINIMIZED_HEIGHT : (height || data.height || DEFAULT_HEIGHT);
+  const currentWidth = isMinimized ? MINIMIZED_WIDTH : (width || data.width || DEFAULT_WIDTH);
+  
+  // Eliminado el efecto de corrección de dimensiones para mejorar el rendimiento
 
   const isNodeConnected = useMemo(() => {
     return allEdges.some((edge: Edge) => edge.source === id || edge.target === id);
@@ -89,49 +93,26 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
       );
   }, [allNodes, id]);
 
+  // Optimizado: Solo actualizar si realmente cambió el childCount
   useEffect(() => {
     const groupNode = getNode(id);
-    if (!groupNode) return;
+    if (!groupNode || groupNode.data?.childCount === childNodes.length) return;
     
-    const newChildCount = childNodes.length;
-    
-    if (groupNode.data?.childCount !== newChildCount) {
-      setNodes((nds: Node[]) => nds.map((n: Node) => {
-        if (n.id === id) {
-          return { 
-            ...n, 
-            data: { 
-              ...n.data, 
-              childCount: newChildCount,
-            } 
-          };
-        }
-        return n;
-      }));
-    }
-  }, [id, childNodes.length, getNode, setNodes]);
+    setNodes((nds: Node[]) => nds.map((n: Node) => {
+      if (n.id === id) {
+        return { 
+          ...n, 
+          data: { 
+            ...n.data, 
+            childCount: childNodes.length,
+          } 
+        };
+      }
+      return n;
+    }));
+  }, [childNodes.length]); // Simplificado las dependencias
 
-  // Efecto para sincronizar la visibilidad de nodos hijos
-  // Los nodos hijos SIEMPRE deben estar ocultos cuando pertenecen a un grupo
-  useEffect(() => {
-    setNodes((nds: Node[]) =>
-      nds.map((n: Node) => {
-        if (n.parentId === id) {
-          return { 
-            ...n, 
-            hidden: true, // Los nodos hijos siempre están ocultos
-            style: { 
-              ...n.style, 
-              visibility: 'hidden',
-              pointerEvents: 'none',
-              opacity: 0
-            }
-          };
-        }
-        return n;
-      })
-    );
-  }, [id, setNodes]); // Solo depende del id del grupo
+  // Eliminado: La sincronización de visibilidad se maneja en otros lugares
 
   const handleLabelSubmit = useCallback(() => {
     setIsEditingLabel(false);
@@ -154,6 +135,26 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
     }
   }, [handleLabelSubmit, data.label]);
 
+  const handleResize = useCallback((_: any, params: { width: number; height: number }) => {
+    setNodes((nodes: Node[]) =>
+      nodes.map((node: Node) => {
+        if (node.id === id) {
+          return {
+            ...node,
+            width: params.width,
+            height: params.height,
+            style: {
+              ...node.style,
+              width: params.width,
+              height: params.height
+            }
+          };
+        }
+        return node;
+      })
+    );
+  }, [id, setNodes]);
+
   const handleResizeEnd = useCallback((_: any, params: { width: number; height: number }) => {
     setNodes((nodes: Node[]) =>
       nodes.map((node: Node) => {
@@ -162,7 +163,16 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
             ...node,
             width: params.width,
             height: params.height,
-            data: { ...node.data, width: params.width, height: params.height },
+            style: {
+              ...node.style,
+              width: params.width,
+              height: params.height
+            },
+            data: { 
+              ...node.data, 
+              width: params.width, 
+              height: params.height 
+            }
           };
         }
         return node;
@@ -180,6 +190,7 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
   useEffect(() => {
     updateNodeInternals(id);
   }, [isMinimized, id, updateNodeInternals]);
+
 
   const getDynamicClasses = useCallback(() => {
     let borderColorClass = 'border-gray-300';
@@ -231,14 +242,14 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
 
           if (newMinimizedState) {
             // Guardar dimensiones actuales antes de minimizar
-            dataUpdate.width = n.width || DEFAULT_WIDTH;
-            dataUpdate.height = n.height || DEFAULT_HEIGHT;
-            newWidth = MINIMIZED_WIDTH; // Usar ancho minimizado específico
+            dataUpdate.savedWidth = n.width || n.data.width || DEFAULT_WIDTH;
+            dataUpdate.savedHeight = n.height || n.data.height || DEFAULT_HEIGHT;
+            newWidth = MINIMIZED_WIDTH;
             newHeight = MINIMIZED_HEIGHT;
           } else {
-            // Restaurar dimensiones guardadas
-            newWidth = n.data.width || DEFAULT_WIDTH;
-            newHeight = n.data.height || DEFAULT_HEIGHT;
+            // Restaurar dimensiones guardadas o usar las por defecto
+            newWidth = n.data.savedWidth || n.data.width || DEFAULT_WIDTH;
+            newHeight = n.data.savedHeight || n.data.height || DEFAULT_HEIGHT;
           }
 
           return {
@@ -246,6 +257,11 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
             data: { ...n.data, ...dataUpdate },
             width: newWidth,
             height: newHeight,
+            style: {
+              ...n.style,
+              width: `${newWidth}px`,
+              height: `${newHeight}px`
+            }
           };
         }
 
@@ -266,7 +282,12 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
         return n;
       })
     );
-  }, [id, isMinimized, setNodes]);
+    
+    // Actualizar los internals del nodo después de cambiar las dimensiones
+    setTimeout(() => {
+      updateNodeInternals(id);
+    }, 0);
+  }, [id, isMinimized, setNodes, updateNodeInternals]);
 
   const handleExpandViewClick = useCallback(() => {
     const event = new CustomEvent('expandGroupView', { detail: { groupId: id } });
@@ -337,10 +358,9 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
     border: '2px solid white',
     borderRadius: '50%',
     opacity: 0,
-    transition: 'opacity 0.2s ease-in-out',
     position: 'absolute' as const,
     zIndex: 1000,
-    pointerEvents: 'all' as const
+    pointerEvents: 'none' as const // Cambiar a 'none' cuando no es visible
   };
 
   const { borderColorClass, bgColorClass, headerBgClass } = getDynamicClasses();
@@ -348,26 +368,30 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
   if (isMinimized) {
     return (
       <div
-        className={`relative px-4 py-2.5 ${borderColorClass} ${bgColorClass} flex items-center justify-between shadow-sm transition-all duration-200 border`}
-        style={{ 
-          width: `${MINIMIZED_WIDTH}px`, // Usar ancho minimizado fijo
+        style={{
+          width: `${MINIMIZED_WIDTH}px`,
           height: `${MINIMIZED_HEIGHT}px`,
-          boxSizing: 'border-box',
-          borderRadius: '12px',
-          overflow: 'visible',
-          pointerEvents: 'auto',
-          position: 'relative'
+          position: 'relative',
+          overflow: 'visible'
         }}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onContextMenu={(e) => {
-          // Prevenir el menú contextual predeterminado del navegador
-          e.preventDefault();
-          // No detener la propagación para que ReactFlow pueda manejar el evento
-        }}
-        data-minimized="true"
-        data-handleid="group-header"
       >
+        <div
+          className={`absolute inset-0 px-4 py-2.5 ${borderColorClass} ${bgColorClass} flex items-center justify-between shadow-sm border`}
+          style={{ 
+            boxSizing: 'border-box',
+            borderRadius: '12px',
+            pointerEvents: 'auto',
+          }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          onContextMenu={(e) => {
+            // Prevenir el menú contextual predeterminado del navegador
+            e.preventDefault();
+            // No detener la propagación para que ReactFlow pueda manejar el evento
+          }}
+          data-minimized="true"
+          data-handleid="group-header"
+        >
         <div className="flex items-center gap-3 overflow-hidden flex-grow">
           <div className={`p-1.5 rounded-lg ${headerBgClass}`}>
             <FolderIcon className="w-5 h-5 text-gray-600" />
@@ -389,7 +413,7 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
               </button>
             </div>
           ) : (
-            <span className="font-medium text-gray-800 text-sm cursor-pointer truncate hover:text-blue-600 transition-colors duration-200" onClick={() => setIsEditingLabel(true)} title={data.label}>
+            <span className="font-medium text-gray-800 text-sm cursor-pointer truncate hover:text-blue-600" onClick={() => setIsEditingLabel(true)} title={data.label}>
               {data.label}
             </span>
           )}
@@ -400,27 +424,29 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
           )}
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-          <button onClick={handleExpandViewClick} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors duration-200" title="Ampliar vista del grupo">
+          <button onClick={handleExpandViewClick} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Ampliar vista del grupo">
             <ArrowsPointingOutIcon className="w-4 h-4 text-gray-600" />
           </button>
-          <button onClick={toggleMinimize} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors duration-200" title="Expandir grupo">
+          <button onClick={toggleMinimize} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Expandir grupo">
             <Squares2X2Icon className="w-4 h-4 text-gray-600" />
           </button>
+          </div>
+          
+          {[Position.Top, Position.Bottom, Position.Left, Position.Right].map(pos => (
+            <Handle 
+              key={pos}
+              type={pos === Position.Top || pos === Position.Left ? 'target' : 'source'} 
+              position={pos} 
+              id={`${pos}-${pos === Position.Top || pos === Position.Left ? 'target' : 'source'}`}
+              style={{ 
+                ...handleStyle,
+                opacity: isHovered || isNodeConnected ? 1 : 0,
+                pointerEvents: (isHovered || isNodeConnected) ? 'all' : 'none'
+              }}
+              isConnectable={true}
+            />
+          ))}
         </div>
-        
-        {[Position.Top, Position.Bottom, Position.Left, Position.Right].map(pos => (
-          <Handle 
-            key={pos}
-            type={pos === Position.Top || pos === Position.Left ? 'target' : 'source'} 
-            position={pos} 
-            id={`${pos}-${pos === Position.Top || pos === Position.Left ? 'target' : 'source'}`}
-            style={{ 
-              ...handleStyle,
-              opacity: isHovered || isNodeConnected ? 1 : 0
-            }}
-            isConnectable={true}
-          />
-        ))}
       </div>
     );
   }
@@ -434,7 +460,7 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
         e.preventDefault();
         // No detener la propagación para que ReactFlow pueda manejar el evento
       }}
-      className={`${borderColorClass} ${bgColorClass} flex flex-col transition-all duration-200 border ${selected || isHovered ? 'shadow-lg' : 'shadow-sm'}`}
+      className={`${borderColorClass} ${bgColorClass} flex flex-col border ${selected || isHovered ? 'shadow-lg' : 'shadow-sm'}`}
       style={{
         width: '100%',
         height: '100%',
@@ -449,9 +475,11 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
         isVisible={selected}
         minWidth={DEFAULT_WIDTH}
         minHeight={DEFAULT_HEIGHT}
+        onResize={handleResize}
         onResizeEnd={handleResizeEnd}
         lineStyle={{ borderColor: '#3b82f6' }}
-        handleStyle={{ backgroundColor: 'white', border: '2px solid #3b82f6', width: '16px', height: '16px' }}
+        handleStyle={{ backgroundColor: 'white', border: '2px solid #3b82f6', width: '16px', height: '16px', cursor: 'se-resize' }}
+        shouldResize={() => !isMinimized}
       />
       <div 
         className={`flex items-center justify-between px-4 py-2.5 cursor-move group-header ${headerBgClass}`}
@@ -483,7 +511,7 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
               </button>
             </div>
           ) : (
-            <span className="font-medium text-gray-800 text-sm cursor-pointer truncate hover:text-blue-600 transition-colors duration-200" onClick={() => setIsEditingLabel(true)} title={data.label}>
+            <span className="font-medium text-gray-800 text-sm cursor-pointer truncate hover:text-blue-600" onClick={() => setIsEditingLabel(true)} title={data.label}>
               {data.label}
             </span>
           )}
@@ -495,15 +523,15 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
           {data.isExpandedView ? (
-            <button onClick={handleCollapseViewClick} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors duration-200" title="Colapsar vista del grupo">
+            <button onClick={handleCollapseViewClick} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Colapsar vista del grupo">
               <ArrowsPointingInIcon className="w-4 h-4 text-gray-600" />
             </button>
           ) : (
-            <button onClick={handleExpandViewClick} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors duration-200" title="Ampliar vista del grupo">
+            <button onClick={handleExpandViewClick} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Ampliar vista del grupo">
               <ArrowsPointingOutIcon className="w-4 h-4 text-gray-600" />
             </button>
           )}
-          <button onClick={toggleMinimize} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors duration-200" title="Minimizar grupo">
+          <button onClick={toggleMinimize} className="p-1.5 hover:bg-gray-100 rounded-lg" title="Minimizar grupo">
             <EyeSlashIcon className="w-4 h-4 text-gray-600" />
           </button>
         </div>
@@ -540,14 +568,14 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
               {childNodes.map((node: Node) => ( 
                 <div 
                   key={node.id} 
-                  className="group flex items-center p-2.5 bg-gray-100 rounded-lg border border-gray-200 text-xs hover:bg-gray-200 transition-colors duration-200"
+                  className="group flex items-center p-2.5 bg-gray-100 rounded-lg border border-gray-200 text-xs hover:bg-gray-200"
                 >
                   <ServerIcon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                   <span className="ml-2 truncate flex-1" title={node.data?.label || node.id}>
                     {node.data?.label || node.id}
                   </span>
                   <button
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-all duration-200"
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleRemoveFromGroup(node.id);
@@ -565,7 +593,7 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
         {/* Área de drop */}
         <div
           className={`
-            text-center text-xs border-2 border-dashed border-red-400 bg-red-100/70 text-red-700 rounded-lg transition-all duration-200 ease-in-out flex items-center justify-center
+            text-center text-xs border-2 border-dashed border-red-400 bg-red-100/70 text-red-700 rounded-lg flex items-center justify-center
             hover:bg-red-100/90 hover:border-red-500 hover:shadow-md
             focus-within:ring-2 focus-within:ring-red-300 focus-within:ring-opacity-50
           `}
@@ -594,7 +622,8 @@ const NodeGroup: React.FC<NodeProps> = ({ id, data, selected, width, height }) =
           id={`${pos}-${pos === Position.Top || pos === Position.Left ? 'target' : 'source'}`}
           style={{ 
             ...handleStyle,
-            opacity: isHovered || isNodeConnected ? 1 : 0
+            opacity: isHovered || isNodeConnected ? 1 : 0,
+            pointerEvents: (isHovered || isNodeConnected) ? 'all' : 'none'
           }}
           isConnectable={true}
         />

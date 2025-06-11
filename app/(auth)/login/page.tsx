@@ -34,6 +34,12 @@ export default function LoginPage() {
 
   const registrationSuccess = searchParams.get('registered') === 'true';
   const authError = searchParams.get('error');
+  const sessionExpired = searchParams.get('session_expired') === 'true';
+
+  // Show session expired message
+  if (sessionExpired && !error) {
+    setError('Tu sesión ha expirado. Por favor, inicia sesión nuevamente.');
+  }
 
   // Show auth errors from OAuth callbacks
   if (authError && !error) {
