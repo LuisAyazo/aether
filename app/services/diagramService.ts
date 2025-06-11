@@ -290,10 +290,12 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
 
   const token = await getAuthTokenAsync();
   try {
-    // Get current workspace from localStorage
-    const currentWorkspaceId = localStorage.getItem('currentWorkspaceId');
+    // Get current workspace from the navigation store
+    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const currentWorkspaceId = navStore.activeWorkspace?.id;
+    
     if (!currentWorkspaceId) {
-      console.error('No workspace selected');
+      console.error('No workspace selected in store');
       throw new Error('Por favor selecciona un workspace antes de acceder a los diagramas.');
     }
 
@@ -364,10 +366,12 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
   const token = await getAuthTokenAsync();
   
   try {
-    // Get current workspace from localStorage
-    const currentWorkspaceId = localStorage.getItem('currentWorkspaceId');
+    // Get current workspace from the navigation store
+    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const currentWorkspaceId = navStore.activeWorkspace?.id;
+    
     if (!currentWorkspaceId) {
-      console.error('No workspace selected');
+      console.error('No workspace selected in store');
       throw new Error('Por favor selecciona un workspace antes de acceder a los diagramas.');
     }
 
@@ -427,10 +431,12 @@ export const createDiagram = async (companyId: string, environmentId: string, di
   const token = await getAuthTokenAsync();
   
   try {
-    // Get current workspace from localStorage
-    const currentWorkspaceId = localStorage.getItem('currentWorkspaceId');
+    // Get current workspace from the navigation store
+    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const currentWorkspaceId = navStore.activeWorkspace?.id;
+    
     if (!currentWorkspaceId) {
-      console.error('No workspace selected');
+      console.error('No workspace selected in store');
       throw new Error('Por favor selecciona un workspace antes de crear diagramas.');
     }
 
@@ -528,10 +534,12 @@ export const updateDiagram = async (
     throw new Error('No estás autenticado');
   }
 
-  // Get current workspace from localStorage
-  const currentWorkspaceId = localStorage.getItem('currentWorkspaceId');
+  // Get current workspace from the navigation store
+  const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+  const currentWorkspaceId = navStore.activeWorkspace?.id;
+  
   if (!currentWorkspaceId) {
-    console.error('No workspace selected');
+    console.error('No workspace selected in store');
     throw new Error('Por favor selecciona un workspace antes de actualizar diagramas.');
   }
 
@@ -608,10 +616,12 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
 
   const token = await getAuthTokenAsync();
   
-  // Get current workspace from localStorage
-  const currentWorkspaceId = localStorage.getItem('currentWorkspaceId');
+  // Get current workspace from the navigation store
+  const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+  const currentWorkspaceId = navStore.activeWorkspace?.id;
+  
   if (!currentWorkspaceId) {
-    console.error('No workspace selected');
+    console.error('No workspace selected in store');
     throw new Error('Por favor selecciona un workspace antes de eliminar diagramas.');
   }
 

@@ -8,15 +8,24 @@
   const callMap = new Map();
   
   window.fetch = function(...args) {
-    const url = args[0];
+    // Extraer la URL como string
+    let urlString = '';
+    if (typeof args[0] === 'string') {
+      urlString = args[0];
+    } else if (args[0] instanceof Request) {
+      urlString = args[0].url;
+    } else if (args[0] instanceof URL) {
+      urlString = args[0].toString();
+    }
+    
     const stack = new Error().stack;
     
     // Solo rastrear llamadas a dashboard/initial-load
-    if (url.includes('dashboard/initial-load')) {
+    if (urlString && urlString.includes('dashboard/initial-load')) {
       callCount++;
       const timestamp = new Date().toISOString();
       const callInfo = {
-        url,
+        url: urlString,
         timestamp,
         stack: stack.split('\n').slice(2, 10).join('\n'),
         callNumber: callCount

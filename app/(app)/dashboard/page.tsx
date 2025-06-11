@@ -74,19 +74,19 @@ export default function DashboardPage() {
   // TEMPORAL: Monitoreo de rendimiento y llamadas API
   useEffect(() => {
     if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      // Script de rendimiento
-      const perfScript = document.createElement('script');
-      perfScript.src = '/debug-backend-performance.js';
-      perfScript.onload = () => {
-        console.log('🔍 Monitoreo de rendimiento activado');
-        // Auto-reporte después de 5 segundos de carga
-        setTimeout(() => {
-          if ((window as any).performanceReport) {
-            (window as any).performanceReport();
-          }
-        }, 5000);
-      };
-      document.head.appendChild(perfScript);
+      // Script de rendimiento - DESHABILITADO
+      // const perfScript = document.createElement('script');
+      // perfScript.src = '/debug-backend-performance.js';
+      // perfScript.onload = () => {
+      //   console.log('🔍 Monitoreo de rendimiento activado');
+      //   // Auto-reporte después de 5 segundos de carga
+      //   setTimeout(() => {
+      //     if ((window as any).performanceReport) {
+      //       (window as any).performanceReport();
+      //     }
+      //   }, 5000);
+      // };
+      // document.head.appendChild(perfScript);
       
       // Script de debug de llamadas API
       const apiScript = document.createElement('script');
@@ -689,7 +689,7 @@ export default function DashboardPage() {
 
   if (dataLoading && !activeCompany) { 
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850" style={{ height: 'calc(100vh - 3.5rem)' }}>
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850" style={{ height: 'calc(100vh - 5rem)' }}>
         <Spin size="large" />
         <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando datos...</p>
       </div>
@@ -698,7 +698,7 @@ export default function DashboardPage() {
   
   if (dataError) { 
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 3.5rem)' }}>
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 5rem)' }}>
         <p className="text-red-500 p-4 bg-red-100 border border-red-300 rounded-md">{dataError}</p>
       </div>
     );
@@ -706,7 +706,7 @@ export default function DashboardPage() {
 
   if (!activeCompany && !dataLoading) { 
     return (
-        <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 3.5rem)' }}>
+        <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 5rem)' }}>
             <Text>No se ha podido cargar la información de la compañía. Por favor, recarga o contacta a soporte.</Text>
         </div>
     );
@@ -784,7 +784,7 @@ export default function DashboardPage() {
           </div>
         </Modal>
 
-        <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 3.5rem)' }}>
+        <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 5rem)' }}>
           {activeCompany && (
             <CompanySidebar 
               companyName={companyDisplayName} activeSection={activeSectionInSidebar} 
@@ -793,11 +793,11 @@ export default function DashboardPage() {
               sections={sidebarSections} isPersonalSpace={isPersonalSpace || false}
             />
           )}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden h-full">
             {/* Subheader de acciones del diagrama */}
             {currentDiagram && activeSectionInSidebar === 'diagrams' && <DiagramActionSubheader />}
 
-            <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto">
+            <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-hidden">
                 {dataLoading && activeSectionInSidebar === 'diagrams' && !currentDiagram && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>
                 )}

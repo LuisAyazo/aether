@@ -299,18 +299,33 @@ export async function logoutUser() {
   
   // Clear all authentication data
   if (typeof window !== 'undefined') {
-    // Clear localStorage
-    localStorage.clear();
+    // Clear only auth-related data from localStorage
+    const keysToRemove = ['token', 'user', 'access_token', 'refresh_token'];
     
-    // Clear sessionStorage
+    // Also clear cache keys
+    const allKeys = Object.keys(localStorage);
+    const cacheAndAuthKeys = allKeys.filter(key => 
+      keysToRemove.includes(key) || 
+      key.startsWith('cache_') || 
+      key.startsWith('dashboard_') ||
+      key.startsWith('supabase.auth.')
+    );
+    
+    cacheAndAuthKeys.forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Clear sessionStorage completely (it's session-specific anyway)
     sessionStorage.clear();
     
     // Clear cookies
-    document.cookie.split(";").forEach((c) => {
-      document.cookie = c
-        .replace(/^ +/, "")
-        .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-    });
+    if (document.cookie && document.cookie.length > 0) {
+      document.cookie.split(";").forEach((c) => {
+        document.cookie = c
+          .replace(/^ +/, "")
+          .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+      });
+    }
     
     // Redirect to login
     window.location.href = '/login?session_expired=true';

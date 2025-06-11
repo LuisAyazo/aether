@@ -10,6 +10,7 @@ import {
 } from '@/app/services/diagramService'; 
 import { 
   getCurrentUser,
+  logoutUser,
 } from '@/app/services/authService';
 import { 
   getEnvironments, 
@@ -348,11 +349,15 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     const state = get();
     const user = state.user;
     
-    console.log('[NavStore] initializeAppLogic: Estado al iniciar:', {
+    // Log con timestamp para detectar llamadas duplicadas
+    const callId = Math.random().toString(36).substring(7);
+    console.log(`[NavStore] initializeAppLogic START (Call ID: ${callId}):`, {
+      timestamp: new Date().toISOString(),
       userId: user?._id,
       dataLoading: state.dataLoading,
       hasActiveCompany: !!state.activeCompany,
-      companiesCount: state.userCompanies?.length
+      companiesCount: state.userCompanies?.length,
+      callStack: new Error().stack?.split('\n').slice(2, 5).join('\n')
     });
     
     // Prevenir múltiples ejecuciones si ya estamos cargando
@@ -377,7 +382,7 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     console.log('[NavStore] initializeAppLogic: Iniciando para usuario:', user._id);
     set({ dataLoading: true, dataError: null });
     try {
-      console.log('[NavStore] initializeAppLogic: Obteniendo datos del dashboard con RPC optimizada...');
+      console.log(`[NavStore] initializeAppLogic: Llamando a getInitialDashboardData (Call ID: ${callId})...`);
       
       // Usar el servicio de dashboard optimizado con timeout
       const dashboardPromise = dashboardService.getInitialDashboardData();
@@ -388,7 +393,12 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       let dashboardData;
       try {
         dashboardData = await Promise.race([dashboardPromise, timeoutPromise]);
-        console.log('[NavStore] initializeAppLogic: Datos del dashboard obtenidos:', dashboardData);
+        console.log(`[NavStore] initializeAppLogic: Datos recibidos (Call ID: ${callId}):`, {
+          timestamp: new Date().toISOString(),
+          companies: dashboardData.companies?.length,
+          workspaces: dashboardData.workspaces?.length,
+          environments: dashboardData.environments?.length
+        });
       } catch (timeoutError) {
         if (timeoutError instanceof Error && timeoutError.message.includes('Timeout')) {
           console.error('[NavStore] initializeAppLogic: Timeout obteniendo datos del dashboard');
@@ -427,12 +437,27 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
           isPersonal = companyToSelect.name.startsWith(PERSONAL_SPACE_COMPANY_NAME_PREFIX);
         }
         
-        console.log('[NavStore] initializeAppLogic: Compañía seleccionada:', companyToSelect, 'Es personal:', isPersonal);
+        console.log(`[NavStore] initializeAppLogic: Compañía seleccionada (Call ID: ${callId}):`, {
+          companyName: companyToSelect?.name,
+          isPersonal,
+          timestamp: new Date().toISOString()
+        });
         
         // Buscar el workspace activo
         let activeWorkspace = null;
         if (active_workspace_id && workspaces) {
           activeWorkspace = workspaces.find(w => w.id === active_workspace_id || w._id === active_workspace_id);
+        }
+        
+        // Si no hay workspace activo pero hay workspaces disponibles, usar el primero
+        if (!activeWorkspace && workspaces && workspaces.length > 0) {
+          activeWorkspace = workspaces[0];
+          console.log('[NavStore] No active workspace found, using first available:', activeWorkspace);
+        }
+        
+        // No guardar en localStorage - se obtendrá del store cuando se necesite
+        if (activeWorkspace && activeWorkspace.id) {
+          console.log('[NavStore] Active workspace set in store:', activeWorkspace.id);
         }
         
         // Establecer el estado con todos los datos de una vez
@@ -449,6 +474,16 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
           dataLoading: false
         });
         
+        console.log(`[NavStore] initializeAppLogic COMPLETE (Call ID: ${callId}):`, {
+          timestamp: new Date().toISOString(),
+          finalState: {
+            hasActiveCompany: !!companyToSelect,
+            hasActiveWorkspace: !!activeWorkspace,
+            environmentsCount: environments?.length || 0,
+            diagramsCount: recent_diagrams?.length || 0
+          }
+        });
+        
         // Si hay un diagrama seleccionado, asegurarse de que esté completamente cargado
         if (recent_diagrams && recent_diagrams.length > 0 && recent_diagrams[0].id) {
           // Solo cargar el diagrama completo si es necesario (si no tiene nodes/edges)
@@ -463,6 +498,15 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error(`[NavStore] initializeAppLogic: Error obteniendo datos del dashboard: ${errorMsg}`);
+      
+      // Handle session expiration
+      if (errorMsg.includes('Session expired') || errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
+        console.log('[NavStore] Session expired, logging out...');
+        // logoutUser already handles redirect to login
+        await logoutUser();
+        return;
+      }
+      
       message.error(`Error obteniendo datos: ${errorMsg}`);
       set({ dataError: errorMsg, dataLoading: false, userCompanies: [] });
     }

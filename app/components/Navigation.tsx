@@ -304,37 +304,15 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
             )}
           </div>
           
-          {/* Grupo Derecho: Menú Usuario */}
-          <div className="flex items-center shrink-0">
-            {isOnMarketingPage && (
+          {/* Grupo Derecho: Login/Register para páginas de marketing */}
+          {isOnMarketingPage && (
+            <div className="flex items-center shrink-0">
               <div className="flex gap-3 items-center">
                 <Link href="/login" className="text-gray-700 dark:text-gray-300 hover:text-electric-purple-600 dark:hover:text-electric-purple-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Login</Link>
                 <Link href="/register" className="bg-electric-purple-600 text-white hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600 transition-colors px-4 py-2 text-sm font-medium rounded-md">Sign Up</Link>
               </div>
-            )}
-            {!isOnMarketingPage && user && (
-              <div className="flex items-center gap-4">
-                <Dropdown menu={{ items: userMenuItems }} trigger={['click']}>
-                  <a onClick={e => e.preventDefault()} className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <Avatar icon={<UserOutlined />} src={user.avatar_url || undefined} size="default" />
-                    <div className="hidden sm:flex sm:flex-col sm:items-start">
-                      {user.name && (
-                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-tight">
-                          {user.name}
-                        </span>
-                      )}
-                      {user.email && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 leading-tight mt-0.5">
-                          <MailOutlined />
-                          {user.email}
-                        </span>
-                      )}
-                    </div>
-                  </a>
-                </Dropdown>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </nav>
 

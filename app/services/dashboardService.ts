@@ -1,4 +1,4 @@
-import { getAuthToken } from './authService';
+import { getAuthToken, logoutUser } from './authService';
 import { cacheService, CACHE_KEYS, CACHE_TTL } from './cacheService';
 import { singletonRequests } from '../utils/singletonRequests';
 
@@ -69,6 +69,13 @@ class DashboardService {
         console.log('[DashboardService] Response status:', response.status);
 
         if (!response.ok) {
+          // Handle 401 Unauthorized - token expired
+          if (response.status === 401) {
+            console.error('[DashboardService] 401 Unauthorized - Token expired, logging out...');
+            await logoutUser();
+            throw new Error('Session expired');
+          }
+          
           const errorText = await response.text();
           console.error('[DashboardService] Error response:', errorText);
           throw new Error(`Failed to fetch dashboard data: ${response.statusText}`);
@@ -106,6 +113,13 @@ class DashboardService {
       );
 
       if (!response.ok) {
+        // Handle 401 Unauthorized - token expired
+        if (response.status === 401) {
+          console.error('[DashboardService] 401 Unauthorized - Token expired, logging out...');
+          await logoutUser();
+          throw new Error('Session expired');
+        }
+        
         throw new Error(`Failed to fetch workspace data: ${response.statusText}`);
       }
 
