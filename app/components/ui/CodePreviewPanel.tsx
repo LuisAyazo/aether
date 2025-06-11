@@ -260,7 +260,7 @@ const CodePreviewPanel: React.FC<CodePreviewPanelProps> = ({ nodes, isVisible = 
       }
       size="small"
       className="h-full"
-      bodyStyle={{ padding: 0, height: 'calc(100% - 55px)', overflow: 'hidden' }}
+      styles={{ body: { padding: 0, height: 'calc(100% - 55px)', overflow: 'hidden' } }}
     >
       <div className="h-full flex flex-col">
         {/* Toolbar */}

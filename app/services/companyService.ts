@@ -2,7 +2,7 @@
 
 export const PERSONAL_SPACE_COMPANY_NAME_PREFIX = "Personal Space for "; // Añadido y exportado
 
-import { getAuthToken } from './authService';
+import { getAuthTokenAsync } from './authService';
 import { Settings, API_BASE_URL } from '../config'; // Importar API_BASE_URL
 import { Environment } from './diagramService';
 
@@ -45,7 +45,7 @@ const ensureConsistentId = (company: any): Company => {
 };
 
 export async function createCompany(companyData: CompanyCreationData): Promise<Company> {
-  const token = getAuthToken();
+  const token = await getAuthTokenAsync();
   
   if (!token) {
     throw new Error('No estás autenticado');
@@ -119,7 +119,7 @@ export async function createCompany(companyData: CompanyCreationData): Promise<C
 }
 
 export async function getCompanies(): Promise<Company[]> {
-  const token = getAuthToken();
+  const token = await getAuthTokenAsync();
   
   if (!token) {
     throw new Error('No estás autenticado');
@@ -146,7 +146,7 @@ export async function getCompanies(): Promise<Company[]> {
 }
 
 export const getCompany = async (companyId: string): Promise<Company> => {
-  const token = getAuthToken();
+  const token = await getAuthTokenAsync();
   if (!token) {
     throw new Error('No estás autenticado');
   }
@@ -178,7 +178,7 @@ export const getCompany = async (companyId: string): Promise<Company> => {
 };
 
 export async function updateCompany(companyId: string, companyData: Partial<Company>): Promise<Company> {
-  const token = getAuthToken();
+  const token = await getAuthTokenAsync();
   
   if (!token) {
     throw new Error('No estás autenticado');
@@ -208,7 +208,7 @@ export async function updateCompany(companyId: string, companyData: Partial<Comp
 }
 
 export async function addMember(companyId: string, userEmail: string): Promise<{ message: string }> {
-  const token = getAuthToken();
+  const token = await getAuthTokenAsync();
   
   if (!token) {
     throw new Error('No estás autenticado');

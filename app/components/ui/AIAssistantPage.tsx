@@ -242,7 +242,7 @@ const AIAssistantPage: React.FC = () => {
           <div>
             <Card
               className={`${isUser ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-gray-50 dark:bg-gray-800'}`}
-              bodyStyle={{ padding: '12px 16px' }}
+              styles={{ body: { padding: '12px 16px' } }}
             >
               <p className="whitespace-pre-wrap text-sm">{message.content}</p>
               

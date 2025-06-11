@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Network } from 'lucide-react'; // Importar el icono de nodo
-import { loginUser, saveAuthData } from '../../services/authService';
+import { loginUser, saveAuthData, loginWithGoogle, loginWithGitHub } from '../../services/authService';
 
 // Icono de Google (SVG simple)
 const GoogleIcon = () => (
@@ -33,6 +33,16 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
 
   const registrationSuccess = searchParams.get('registered') === 'true';
+  const authError = searchParams.get('error');
+
+  // Show auth errors from OAuth callbacks
+  if (authError && !error) {
+    if (authError === 'auth_failed') {
+      setError('Error al autenticar con el proveedor. Por favor, intenta de nuevo.');
+    } else if (authError === 'unexpected') {
+      setError('Error inesperado durante la autenticación.');
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,21 +59,30 @@ export default function LoginPage() {
     }
   }
 
-  const handleGoogleLogin = () => {
-    // Redirigir al endpoint del backend que iniciará el flujo OAuth de Google
-    // Asegúrate de que la URL base del backend sea la correcta (ej. http://localhost:8000)
-    // Esta URL puede necesitar ser configurable o provenir de una variable de entorno.
-    // Corregido: Se añadió /v1 a la ruta para que coincida con el prefijo del backend
-    const backendGoogleLoginUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/v1/auth/google/login`;
-    window.location.href = backendGoogleLoginUrl;
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      // Use Supabase OAuth login
+      await loginWithGoogle();
+      // Note: The user will be redirected to Google and then back to /auth/callback
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar sesión con Google');
+      setLoading(false);
+    }
   };
 
-  const handleGitHubLogin = () => {
-    // Similar para GitHub, si se implementa
-    // Corregido: Se añadió /v1 a la ruta
-    const backendGitHubLoginUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/v1/auth/github/login`;
-    // router.push('/api/auth/github'); // Esto era para un route handler de Next.js, ajustar si es necesario
-    window.location.href = backendGitHubLoginUrl; // Asumiendo que el backend maneja el inicio
+  const handleGitHubLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      // Use Supabase OAuth login
+      await loginWithGitHub();
+      // Note: The user will be redirected to GitHub and then back to /auth/callback
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar sesión con GitHub');
+      setLoading(false);
+    }
   };
 
   return (
@@ -160,7 +179,8 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="w-full inline-flex justify-center items-center py-3 px-4 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cloud-blue-500 transition-all duration-150 ease-in-out transform hover:scale-105"
+              disabled={loading}
+              className="w-full inline-flex justify-center items-center py-3 px-4 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cloud-blue-500 transition-all duration-150 ease-in-out transform hover:scale-105 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               <GoogleIcon />
               Iniciar sesión con Google
@@ -168,7 +188,8 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleGitHubLogin}
-              className="w-full inline-flex justify-center items-center py-3 px-4 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-150 ease-in-out transform hover:scale-105"
+              disabled={loading}
+              className="w-full inline-flex justify-center items-center py-3 px-4 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-150 ease-in-out transform hover:scale-105 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               <GitHubIcon />
               Iniciar sesión con GitHub

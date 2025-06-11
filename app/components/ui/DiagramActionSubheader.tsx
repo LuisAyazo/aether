@@ -125,7 +125,7 @@ export default function DiagramActionSubheader() {
         footer={null}
         width="95%"
         style={{ top: 20 }}
-        bodyStyle={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}
+        styles={{ body: { height: 'calc(100vh - 200px)', overflow: 'auto' } }}
       >
         <MonitoringPage />
       </Modal>
@@ -137,7 +137,7 @@ export default function DiagramActionSubheader() {
         footer={null}
         width="95%"
         style={{ top: 20 }}
-        bodyStyle={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}
+        styles={{ body: { height: 'calc(100vh - 200px)', overflow: 'auto' } }}
       >
         <SecurityPage />
       </Modal>
@@ -149,7 +149,7 @@ export default function DiagramActionSubheader() {
         footer={null}
         width="95%"
         style={{ top: 20 }}
-        bodyStyle={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}
+        styles={{ body: { height: 'calc(100vh - 200px)', overflow: 'auto' } }}
       >
         <CostsPage />
       </Modal>
@@ -161,7 +161,7 @@ export default function DiagramActionSubheader() {
         footer={null}
         width="95%"
         style={{ top: 20 }}
-        bodyStyle={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}
+        styles={{ body: { height: 'calc(100vh - 200px)', overflow: 'auto' } }}
       >
         <AIAssistantPage />
       </Modal>
@@ -173,7 +173,7 @@ export default function DiagramActionSubheader() {
         footer={null}
         width="95%"
         style={{ top: 20 }}
-        bodyStyle={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}
+        styles={{ body: { height: 'calc(100vh - 200px)', overflow: 'auto' } }}
       >
         <ResourceCenterPage />
       </Modal>

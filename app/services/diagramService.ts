@@ -1,7 +1,7 @@
 // Servicio para la gestión de diagramas
 
 import { API_BASE_URL } from '../config';
-import { isAuthenticated } from './authService';
+import { isAuthenticated, getAuthTokenAsync } from './authService';
 
 export interface Node {
   id: string;
@@ -103,7 +103,7 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
     throw new Error('ID de compañía no válido en getEnvironments');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   // API_BASE_URL es http://localhost:8000/api
   // El backend espera /api/v1/companies/...
   const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments`;
@@ -158,7 +158,7 @@ export const createEnvironment = async (companyId: string, environmentData: { na
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   
   try {
     console.log(`Intentando crear ambiente para compañía ${companyId}:`, environmentData);
@@ -213,7 +213,7 @@ export const updateEnvironment = async (companyId: string, environmentId: string
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   // API_BASE_URL es http://localhost:8000/api
   // El backend espera /api/v1/companies/...
   const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
@@ -244,7 +244,7 @@ export const deleteEnvironment = async (companyId: string, environmentId: string
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   // API_BASE_URL es http://localhost:8000/api
   // El backend espera /api/v1/companies/...
   const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
@@ -279,7 +279,7 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
     throw new Error('ID de compañía no válido. Por favor, vuelve a la página principal y selecciona una compañía.');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   try {
     console.log(`Obteniendo diagramas para compañía: ${companyId}, ambiente: ${environmentId}`);
     const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams`, {
@@ -322,7 +322,7 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
     throw new Error('Parámetros inválidos: Se requieren companyId, environmentId y diagramId');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   
   try {
     console.log(`Obteniendo diagrama: compañía ${companyId}, ambiente ${environmentId}, diagrama ${diagramId}`);
@@ -359,7 +359,7 @@ export const createDiagram = async (companyId: string, environmentId: string, di
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   
   try {
     console.log(`Intentando crear diagrama para compañía ${companyId}, ambiente ${environmentId}`);
@@ -446,7 +446,7 @@ export const updateDiagram = async (
   diagramId: string,
   diagramData: Partial<Diagram>
 ): Promise<Diagram> => {
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   if (!token) {
     throw new Error('No estás autenticado');
   }
@@ -518,7 +518,7 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   try {
     console.log(`Intentando eliminar diagrama: compañía ${companyId}, ambiente ${environmentId}, diagrama ${diagramId}`);
     const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, {
@@ -549,7 +549,7 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
 
 export async function updateDiagramPaths(companyId: string, environmentId: string): Promise<Diagram[]> {
   try {
-    const token = localStorage.getItem('token');
+    const token = await getAuthTokenAsync();
     if (!token) {
       throw new Error('No authentication token available');
     }
