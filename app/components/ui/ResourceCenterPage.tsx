@@ -312,7 +312,7 @@ const ResourceCenterPage: React.FC = () => {
             <Col key={index} span={4}>
               <Card 
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                bodyStyle={{ padding: '16px' }}
+                styles={{ body: { padding: '16px' } }}
               >
                 <div className="text-center">
                   <div className={`text-3xl mb-2 text-${link.color}-500`}>

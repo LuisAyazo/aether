@@ -10,6 +10,7 @@ import {
 } from '@/app/services/diagramService'; 
 import { 
   getCurrentUser,
+  logoutUser,
 } from '@/app/services/authService';
 import { 
   getEnvironments, 
@@ -22,6 +23,8 @@ import {
   updateDiagram as updateDiagramServiceAPICall // Añadir updateDiagram
 } from '@/app/services/diagramService';
 import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '@/app/services/companyService'; // Importar servicio de compañía
+import { dashboardService } from '@/app/services/dashboardService'; // Importar servicio de dashboard optimizado
+import { cacheService, CACHE_KEYS } from '@/app/services/cacheService'; // Importar servicio de caché
 
 // Tipos para el historial y previsualización
 interface VersionHistoryItem {
@@ -66,6 +69,8 @@ export interface NavigationStoreState {
   userCompanies: Company[]; 
   activeCompany: Company | null;
   isPersonalSpace: boolean;
+  workspaces: any[]; // Agregar workspaces
+  activeWorkspace: any | null; // Workspace activo
   environments: Environment[];
   diagrams: Diagram[]; 
   selectedEnvironment: string | null;
@@ -154,12 +159,14 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
   userCompanies: [], 
   activeCompany: null,
   isPersonalSpace: false,
+  workspaces: [], // Inicializar workspaces
+  activeWorkspace: null, // Inicializar workspace activo
   environments: [],
   diagrams: [],
   selectedEnvironment: null,
   selectedDiagram: null,
   currentDiagram: null,
-  dataLoading: true, 
+  dataLoading: false, // Iniciar en false para permitir la primera carga
   dataError: null,
 
   newEnvironmentModalVisible: false,
@@ -303,10 +310,32 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
   },
 
   fetchInitialUser: () => {
+    // Prevenir múltiples ejecuciones concurrentes
+    const state = get();
+    
+    console.log('[NavStore] fetchInitialUser: Estado actual:', {
+      hasUser: !!state.user,
+      dataLoading: state.dataLoading,
+      hasActiveCompany: !!state.activeCompany
+    });
+    
+    // Si ya estamos cargando, no hacer nada
+    if (state.dataLoading) {
+      console.log('[NavStore] fetchInitialUser: Ya está cargando, saltando...');
+      return;
+    }
+    
+    // Si ya tenemos todo cargado, no hacer nada
+    if (state.user && state.activeCompany) {
+      console.log('[NavStore] fetchInitialUser: Ya completamente inicializado, saltando...');
+      return;
+    }
+    
     console.log('[NavStore] fetchInitialUser: Obteniendo usuario...');
     const currentUser = getCurrentUser(); 
     console.log('[NavStore] fetchInitialUser: Usuario obtenido:', currentUser);
     set({ user: currentUser }); 
+    
     if (currentUser) {
       console.log('[NavStore] fetchInitialUser: Usuario existe, llamando a initializeAppLogic.');
       get().initializeAppLogic();
@@ -317,39 +346,168 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
   },
 
   initializeAppLogic: async () => {
-    const user = get().user;
+    const state = get();
+    const user = state.user;
+    
+    // Log con timestamp para detectar llamadas duplicadas
+    const callId = Math.random().toString(36).substring(7);
+    console.log(`[NavStore] initializeAppLogic START (Call ID: ${callId}):`, {
+      timestamp: new Date().toISOString(),
+      userId: user?._id,
+      dataLoading: state.dataLoading,
+      hasActiveCompany: !!state.activeCompany,
+      companiesCount: state.userCompanies?.length,
+      callStack: new Error().stack?.split('\n').slice(2, 5).join('\n')
+    });
+    
+    // Prevenir múltiples ejecuciones si ya estamos cargando
+    if (state.dataLoading) {
+      console.log('[NavStore] initializeAppLogic: Ya está cargando, saltando...');
+      return;
+    }
+    
+    // Prevenir múltiples ejecuciones si ya tenemos datos completos
+    if (state.activeCompany && state.environments.length > 0) {
+      console.log('[NavStore] initializeAppLogic: Ya inicializado completamente, saltando...');
+      set({ dataLoading: false }); // Asegurar que dataLoading sea false
+      return;
+    }
+    
     if (!user?._id) {
       console.error('[NavStore] initializeAppLogic: Usuario no encontrado en el store.');
       set({ dataLoading: false, dataError: "No se pudo inicializar: Usuario no encontrado." });
       return;
     }
+    
     console.log('[NavStore] initializeAppLogic: Iniciando para usuario:', user._id);
     set({ dataLoading: true, dataError: null });
     try {
-      console.log('[NavStore] initializeAppLogic: Obteniendo compañías...');
-      const companies = await getCompanies(); 
-      console.log('[NavStore] initializeAppLogic: Compañías obtenidas:', companies);
+      console.log(`[NavStore] initializeAppLogic: Llamando a getInitialDashboardData (Call ID: ${callId})...`);
+      
+      // Usar el servicio de dashboard optimizado con timeout
+      const dashboardPromise = dashboardService.getInitialDashboardData();
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: La solicitud tardó demasiado')), 10000)
+      );
+      
+      let dashboardData;
+      try {
+        dashboardData = await Promise.race([dashboardPromise, timeoutPromise]);
+        console.log(`[NavStore] initializeAppLogic: Datos recibidos (Call ID: ${callId}):`, {
+          timestamp: new Date().toISOString(),
+          companies: dashboardData.companies?.length,
+          workspaces: dashboardData.workspaces?.length,
+          environments: dashboardData.environments?.length
+        });
+      } catch (timeoutError) {
+        if (timeoutError instanceof Error && timeoutError.message.includes('Timeout')) {
+          console.error('[NavStore] initializeAppLogic: Timeout obteniendo datos del dashboard');
+          message.error('La conexión con el servidor está tardando demasiado. Por favor, verifica tu conexión.');
+          set({ dataError: 'Timeout al obtener datos', dataLoading: false, userCompanies: [] });
+          return;
+        }
+        throw timeoutError;
+      }
+
+      const { companies, workspaces, environments, recent_diagrams, active_company_id, active_workspace_id } = dashboardData;
+      
+      // Establecer las compañías
       set({ userCompanies: companies });
 
       if (companies.length > 0) {
-        const personalSpaceName = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${user.name || user.email}`;
-        let companyToSelect = companies.find(c => c.name === personalSpaceName);
-        let isPersonal = !!companyToSelect;
-
+        // Determinar qué compañía seleccionar
+        let companyToSelect;
+        let isPersonal = false;
+        
+        // Si hay un active_company_id del RPC, usarlo
+        if (active_company_id) {
+          companyToSelect = companies.find(c => c._id === active_company_id || c.id === active_company_id);
+        }
+        
+        // Si no se encontró, buscar espacio personal
+        if (!companyToSelect) {
+          const personalSpaceName = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${user.name || user.email}`;
+          companyToSelect = companies.find((c: Company) => c.name === personalSpaceName);
+          isPersonal = !!companyToSelect;
+        }
+        
+        // Si aún no se encontró, usar la primera
         if (!companyToSelect) {
           companyToSelect = companies[0];
           isPersonal = companyToSelect.name.startsWith(PERSONAL_SPACE_COMPANY_NAME_PREFIX);
         }
-        console.log('[NavStore] initializeAppLogic: Compañía a seleccionar:', companyToSelect, 'Es personal:', isPersonal);
-        await get().setActiveCompanyAndLoadData(companyToSelect, isPersonal);
+        
+        console.log(`[NavStore] initializeAppLogic: Compañía seleccionada (Call ID: ${callId}):`, {
+          companyName: companyToSelect?.name,
+          isPersonal,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Buscar el workspace activo
+        let activeWorkspace = null;
+        if (active_workspace_id && workspaces) {
+          activeWorkspace = workspaces.find(w => w.id === active_workspace_id || w._id === active_workspace_id);
+        }
+        
+        // Si no hay workspace activo pero hay workspaces disponibles, usar el primero
+        if (!activeWorkspace && workspaces && workspaces.length > 0) {
+          activeWorkspace = workspaces[0];
+          console.log('[NavStore] No active workspace found, using first available:', activeWorkspace);
+        }
+        
+        // No guardar en localStorage - se obtendrá del store cuando se necesite
+        if (activeWorkspace && activeWorkspace.id) {
+          console.log('[NavStore] Active workspace set in store:', activeWorkspace.id);
+        }
+        
+        // Establecer el estado con todos los datos de una vez
+        set({
+          activeCompany: companyToSelect,
+          isPersonalSpace: isPersonal,
+          workspaces: workspaces || [], // Establecer workspaces
+          activeWorkspace: activeWorkspace, // Establecer workspace activo
+          environments: environments || [],
+          diagrams: recent_diagrams || [],
+          selectedEnvironment: environments && environments.length > 0 ? environments[0].id : null,
+          selectedDiagram: recent_diagrams && recent_diagrams.length > 0 ? recent_diagrams[0].id : null,
+          currentDiagram: recent_diagrams && recent_diagrams.length > 0 ? recent_diagrams[0] : null,
+          dataLoading: false
+        });
+        
+        console.log(`[NavStore] initializeAppLogic COMPLETE (Call ID: ${callId}):`, {
+          timestamp: new Date().toISOString(),
+          finalState: {
+            hasActiveCompany: !!companyToSelect,
+            hasActiveWorkspace: !!activeWorkspace,
+            environmentsCount: environments?.length || 0,
+            diagramsCount: recent_diagrams?.length || 0
+          }
+        });
+        
+        // Si hay un diagrama seleccionado, asegurarse de que esté completamente cargado
+        if (recent_diagrams && recent_diagrams.length > 0 && recent_diagrams[0].id) {
+          // Solo cargar el diagrama completo si es necesario (si no tiene nodes/edges)
+          if (!recent_diagrams[0].nodes || !recent_diagrams[0].edges) {
+            await get().handleDiagramChange(recent_diagrams[0].id);
+          }
+        }
       } else {
         console.log('[NavStore] initializeAppLogic: No hay compañías para el usuario.');
         set({ activeCompany: null, dataLoading: false });
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[NavStore] initializeAppLogic: Error obteniendo compañías: ${errorMsg}`);
-      message.error(`Error obteniendo compañías: ${errorMsg}`);
+      console.error(`[NavStore] initializeAppLogic: Error obteniendo datos del dashboard: ${errorMsg}`);
+      
+      // Handle session expiration
+      if (errorMsg.includes('Session expired') || errorMsg.includes('401') || errorMsg.includes('Unauthorized')) {
+        console.log('[NavStore] Session expired, logging out...');
+        // logoutUser already handles redirect to login
+        await logoutUser();
+        return;
+      }
+      
+      message.error(`Error obteniendo datos: ${errorMsg}`);
       set({ dataError: errorMsg, dataLoading: false, userCompanies: [] });
     }
   },
@@ -470,8 +628,11 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       const createdEnv = await createEnvironmentServiceAPICall(activeCompany._id, environmentPayload);
       message.success(`Ambiente "${createdEnv.name}" creado exitosamente.`);
       
-      // Refrescar la lista de ambientes
-      const updatedEnvs = await getEnvironments(activeCompany._id); 
+      // Invalidar caché de ambientes
+      cacheService.clear(CACHE_KEYS.ENVIRONMENTS(activeCompany._id));
+      
+      // Refrescar la lista de ambientes (forzar actualización)
+      const updatedEnvs = await getEnvironments(activeCompany._id, true); 
       set({ 
         environments: updatedEnvs, 
         newEnvironmentName: '', 
@@ -522,9 +683,13 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
         viewport: {x:0, y:0, zoom:1} as any 
       });
       message.success("Diagrama creado.");
-      const currentDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); 
+      
+      // Invalidar caché de diagramas
+      cacheService.clear(CACHE_KEYS.DIAGRAMS(activeCompany._id, selectedEnvironment));
+      
+      const currentDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment, true); 
       set({ diagrams: currentDiagrams, dataLoading: false }); 
-      await get().handleDiagramChange(newDiag.id); 
+      await get().handleDiagramChange(newDiag.id);
       
       set({ newDiagramName: '', newDiagramPath: '', newDiagramDescription: '', newDiagramModalVisible: false });
     } catch (e: unknown) { 

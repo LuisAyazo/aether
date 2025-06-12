@@ -22,6 +22,8 @@ import type { Environment } from '../services/diagramService';
 import EnvironmentTreeSelect from "./ui/EnvironmentTreeSelect";
 import DiagramTreeSelect from "./ui/DiagramTreeSelect"; 
 import GeneratedCodeModal from "./ui/GeneratedCodeModal";
+import WorkspaceSelector from "./WorkspaceSelector";
+import { CompanySelector } from "./multi-tenant/CompanySelector";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -48,17 +50,19 @@ export default function Navigation() {
 
   const [generatedCodeModalVisible, setGeneratedCodeModalVisible] = useState(false);
 
-  const user = useNavigationStore(state => state.user);
-  const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
-  const activeCompany = useNavigationStore(state => state.activeCompany);
-  const environments = useNavigationStore(state => state.environments);
-  const diagrams = useNavigationStore(state => state.diagrams);
-  const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
-  const selectedDiagram = useNavigationStore(state => state.selectedDiagram);
-  const currentDiagram = useNavigationStore(state => state.currentDiagram);
-  const dataLoading = useNavigationStore(state => state.dataLoading);
-  const handleEnvironmentChange = useNavigationStore(state => state.handleEnvironmentChange);
-  const handleDiagramChange = useNavigationStore(state => state.handleDiagramChange);
+const user = useNavigationStore(state => state.user);
+const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
+const activeCompany = useNavigationStore(state => state.activeCompany);
+const workspaces = useNavigationStore(state => state.workspaces); // Añadir workspaces del store
+const activeWorkspace = useNavigationStore(state => state.activeWorkspace); // Añadir workspace activo
+const environments = useNavigationStore(state => state.environments);
+const diagrams = useNavigationStore(state => state.diagrams);
+const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
+const selectedDiagram = useNavigationStore(state => state.selectedDiagram);
+const currentDiagram = useNavigationStore(state => state.currentDiagram);
+const dataLoading = useNavigationStore(state => state.dataLoading);
+const handleEnvironmentChange = useNavigationStore(state => state.handleEnvironmentChange);
+const handleDiagramChange = useNavigationStore(state => state.handleDiagramChange);
   
   const newEnvironmentModalVisible = useNavigationStore(state => state.newEnvironmentModalVisible);
   const setNewEnvironmentModalVisible = useNavigationStore(state => state.setNewEnvironmentModalVisible);
@@ -113,11 +117,8 @@ export default function Navigation() {
   const setDestroyConfirmationText = useNavigationStore(state => state.setDestroyConfirmationText);
   const handleDestroyConfirm = useNavigationStore(state => state.handleDestroyConfirm);
 
-  useEffect(() => {
-    if (!user) {
-      fetchInitialUser();
-    }
-  }, [user, fetchInitialUser]);
+  // REMOVIDO: fetchInitialUser se llama desde el dashboard page
+  // No es necesario llamarlo desde Navigation
 
   const handleLogout = () => {
     authLogout();
@@ -195,10 +196,33 @@ export default function Navigation() {
           {/* Para la alineación con el sidebar, se necesitaría un padding global o un cálculo más complejo. */}
           {/* Por ahora, se añade un margen izquierdo significativo si no es página de marketing. */}
           <div className={`flex items-center gap-x-3 ${!isOnMarketingPage && activeCompany ? 'ml-8 sm:ml-12 md:ml-16 lg:ml-60' : ''}`}> {/* ml-60 para simular ancho de sidebar */}
-            {!isOnMarketingPage && activeCompany && (
+            {!isOnMarketingPage && user && (
               <>
+                {/* Selector de Company */}
+                <div className="flex items-center gap-x-1">
+                  <CompanySelector />
+                </div>
+
+                {/* Divider */}
+                <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2 hidden md:block" />
+
+                {/* Selector de Workspace */}
+                {activeCompany && (
+                  <div className="flex items-center gap-x-1">
+                    <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0 hidden md:inline">Workspace:</span>
+                    <WorkspaceSelector 
+                      companyId={activeCompany.id || activeCompany._id}
+                      currentWorkspaceId={activeWorkspace?.id || user?.workspace_id}
+                      workspaces={workspaces} // Pasar workspaces como prop
+                    />
+                  </div>
+                )}
+
+                {/* Divider */}
+                <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2 hidden md:block" />
+                
                 {/* Selector de Ambiente y Botón Añadir */}
-                {(environments && environments.length >= 0) && ( // Mostrar siempre el botón de añadir ambiente si la sección es relevante
+                {(environments && environments.length >= 0) && ( // Mostrar siempre el contenedor si la sección es relevante
                   <div className="flex items-center gap-x-1">
                     {environments.length > 0 && ( // Mostrar selector solo si hay ambientes
                       <>
@@ -213,19 +237,22 @@ export default function Navigation() {
                         />
                       </>
                     )}
-                    <Tooltip title='Crear Nuevo Ambiente'>
-                      <Button 
-                        icon={<PlusOutlined />} 
-                        size="small" 
-                        onClick={() => onEnvChange('create-new-env')}
-                        aria-label="Crear Nuevo Ambiente"
-                      />
-                    </Tooltip>
+                    {/* Solo mostrar botón de crear si ya hay ambientes (no en onboarding) */}
+                    {environments.length > 0 && (
+                      <Tooltip title='Crear Nuevo Ambiente'>
+                        <Button 
+                          icon={<PlusOutlined />} 
+                          size="small" 
+                          onClick={() => onEnvChange('create-new-env')}
+                          aria-label="Crear Nuevo Ambiente"
+                        />
+                      </Tooltip>
+                    )}
                   </div>
                 )}
                 
                 {/* Selector de Diagrama y Botón Añadir */}
-                {selectedEnvironment && (diagrams && diagrams.length >= 0) && ( // Mostrar siempre el botón de añadir diagrama si hay ambiente
+                {selectedEnvironment && (diagrams && diagrams.length >= 0) && ( // Mostrar contenedor si hay ambiente
                   <div className="flex items-center gap-x-1">
                     {diagrams.length > 0 && ( // Mostrar selector solo si hay diagramas
                       <>
@@ -244,15 +271,18 @@ export default function Navigation() {
                         />
                       </>
                     )}
-                    <Tooltip title='Crear Nuevo Diagrama'>
-                      <Button 
-                        icon={<PlusOutlined />} 
-                        size="small" 
-                        onClick={() => onDiagramChange('create-new-diag')}
-                        aria-label="Crear Nuevo Diagrama"
-                        disabled={!selectedEnvironment} 
-                      />
-                    </Tooltip>
+                    {/* Solo mostrar botón de crear si ya hay diagramas (no en onboarding) */}
+                    {diagrams.length > 0 && (
+                      <Tooltip title='Crear Nuevo Diagrama'>
+                        <Button 
+                          icon={<PlusOutlined />} 
+                          size="small" 
+                          onClick={() => onDiagramChange('create-new-diag')}
+                          aria-label="Crear Nuevo Diagrama"
+                          disabled={!selectedEnvironment} 
+                        />
+                      </Tooltip>
+                    )}
                   </div>
                 )}
                 {selectedDiagram && (
@@ -285,37 +315,15 @@ export default function Navigation() {
             )}
           </div>
           
-          {/* Grupo Derecho: Menú Usuario */}
-          <div className="flex items-center shrink-0">
-            {isOnMarketingPage && (
+          {/* Grupo Derecho: Login/Register para páginas de marketing */}
+          {isOnMarketingPage && (
+            <div className="flex items-center shrink-0">
               <div className="flex gap-3 items-center">
                 <Link href="/login" className="text-gray-700 dark:text-gray-300 hover:text-electric-purple-600 dark:hover:text-electric-purple-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">Login</Link>
                 <Link href="/register" className="bg-electric-purple-600 text-white hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600 transition-colors px-4 py-2 text-sm font-medium rounded-md">Sign Up</Link>
               </div>
-            )}
-            {!isOnMarketingPage && user && (
-              <div className="flex items-center gap-4">
-                <Dropdown menu={{ items: userMenuItems }} trigger={['click']}>
-                  <a onClick={e => e.preventDefault()} className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <Avatar icon={<UserOutlined />} src={user.avatar_url || undefined} size="default" />
-                    <div className="hidden sm:flex sm:flex-col sm:items-start">
-                      {user.name && (
-                        <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-tight">
-                          {user.name}
-                        </span>
-                      )}
-                      {user.email && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 leading-tight mt-0.5">
-                          <MailOutlined />
-                          {user.email}
-                        </span>
-                      )}
-                    </div>
-                  </a>
-                </Dropdown>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </nav>
 

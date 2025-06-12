@@ -16,6 +16,18 @@ export default function CreateCompanyPage() {
   const [isPersonalSpaceSetup, setIsPersonalSpaceSetup] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null); // Definir User aquí o importar
 
+  // Debug script
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = '/debug-create-company.js';
+    document.head.appendChild(script);
+    return () => {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const user = getCurrentUser();
     setCurrentUser(user);
@@ -62,14 +74,16 @@ export default function CreateCompanyPage() {
 
       const company = await createCompany({ name: companyNameForCreation }); 
       
-      if (company && company._id) {
+      if (company && (company._id || company.id)) {
         console.log('Compañía creada con éxito. Actualizando sesión de usuario...');
+        
+        // Marcar que acabamos de crear una compañía
+        localStorage.setItem('justCreatedCompany', 'true');
         
         const updatedUser = await fetchAndUpdateCurrentUser();
         
         if (updatedUser) {
           console.log('Sesión de usuario actualizada. Redirigiendo a /dashboard');
-          // localStorage.setItem('lastCreatedCompany', JSON.stringify(company)); // Opcional
           router.push('/dashboard');
         } else {
           console.error('Error al actualizar la sesión del usuario después de crear la compañía.');
@@ -83,15 +97,19 @@ export default function CreateCompanyPage() {
         // Redirigir al dashboard después de 3 segundos
         setTimeout(() => router.push('/dashboard'), 3000);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error al crear compañía:', err);
-      if (err instanceof Error) {
-        setError(err.message);
+      
+      // Extraer mensaje de error del backend
+      let errorMessage = 'Ocurrió un error desconocido al crear la compañía.';
+      
+      if (err.message) {
+        errorMessage = err.message;
       } else if (typeof err === 'string') {
-        setError(err);
-      } else {
-        setError('Ocurrió un error desconocido al crear la compañía.');
+        errorMessage = err;
       }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

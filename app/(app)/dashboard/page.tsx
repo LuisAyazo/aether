@@ -32,7 +32,7 @@ import {
   DocumentTextIcon,
   ListBulletIcon,
 } from '@heroicons/react/24/outline';
-import { SettingOutlined } from '@ant-design/icons'; 
+import { SettingOutlined, CheckOutlined } from '@ant-design/icons'; 
 
 import {
   UserCircleIcon as UserCircleIconSolid,
@@ -52,9 +52,11 @@ import DiagramActionSubheader from '../../components/ui/DiagramActionSubheader';
 
 import { Node as CustomNode, Edge as CustomEdge } from '../../services/diagramService';
 import { useNavigationStore } from '../../hooks/useNavigationStore';
+import { useDashboardDataSimple } from '../../hooks/useDashboardDataSimple';
 import { updateDiagram } from '../../services/diagramService';
 
 import nodeTypes from '../../components/nodes/NodeTypes';
+import { getEdgeConfig, LogicalEdgeType } from '../../config/edgeConfig';
 // RESOURCE_REGISTRY no se usará directamente para construir categories, se usará la estructura manual
 // import { RESOURCE_REGISTRY, SupportedProvider } from '../../config/schemas'; 
 import type { ResourceCategory } from '../../components/flow/types/editorTypes'; // ResourceItem eliminado
@@ -68,22 +70,61 @@ export default function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  
+  // TEMPORAL: Monitoreo de rendimiento y llamadas API
+  useEffect(() => {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      // Script de rendimiento - DESHABILITADO
+      // const perfScript = document.createElement('script');
+      // perfScript.src = '/debug-backend-performance.js';
+      // perfScript.onload = () => {
+      //   console.log('🔍 Monitoreo de rendimiento activado');
+      //   // Auto-reporte después de 5 segundos de carga
+      //   setTimeout(() => {
+      //     if ((window as any).performanceReport) {
+      //       (window as any).performanceReport();
+      //     }
+      //   }, 5000);
+      // };
+      // document.head.appendChild(perfScript);
+      
+      // Script de debug de llamadas API
+      const apiScript = document.createElement('script');
+      apiScript.src = '/debug-api-calls.js';
+      apiScript.onload = () => {
+        console.log('🔍 Debug de llamadas API activado');
+      };
+      document.head.appendChild(apiScript);
+      
+      // Script de debug de edge handles
+      const edgeScript = document.createElement('script');
+      edgeScript.src = '/debug-edge-handles.js';
+      edgeScript.onload = () => {
+        console.log('🔍 Debug de edge handles activado');
+      };
+      document.head.appendChild(edgeScript);
+    }
+  }, []);
 
-  const user = useNavigationStore(state => state.user);
-  const activeCompany = useNavigationStore(state => state.activeCompany);
+  // Usar el hook simplificado temporalmente para depuración
+  const { user, dataLoading, activeCompany } = useDashboardDataSimple();
+  
+  // Otros estados del store
   const isPersonalSpace = useNavigationStore(state => state.isPersonalSpace);
+  const workspaces = useNavigationStore(state => state.workspaces);
+  const activeWorkspace = useNavigationStore(state => state.activeWorkspace);
   const environments = useNavigationStore(state => state.environments);
   const diagramsFromStore = useNavigationStore(state => state.diagrams);
   const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
   const selectedDiagram = useNavigationStore(state => state.selectedDiagram);
   const currentDiagram = useNavigationStore(state => state.currentDiagram);
-  const dataLoading = useNavigationStore(state => state.dataLoading);
   const dataError = useNavigationStore(state => state.dataError);
-  const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
   
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState<boolean>(false);
+  const [showOnboardingFlow, setShowOnboardingFlow] = useState<boolean>(false);
+  const [onboardingStep, setOnboardingStep] = useState<number>(1);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const convertToReactFlowNodes = (customNodes: CustomNode[]): any[] => { 
@@ -128,17 +169,89 @@ export default function DashboardPage() {
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const convertToReactFlowEdges = (customEdges: CustomEdge[]): any[] => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return customEdges.map(e => ({...e} as any)); 
+    console.log('🔍 [EDGE LOAD DEBUG] Converting edges from backend:', customEdges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+      edgeKind: e.data?.edgeKind
+    })));
+    
+    // Exponer edges globalmente para debug
+    if (typeof window !== 'undefined') {
+      (window as any).__DEBUG_BACKEND_EDGES__ = customEdges;
+      (window as any).__DEBUG_CONVERTED_EDGES__ = [];
+    }
+    
+    return customEdges.map(edge => {
+      // Si el edge tiene data.edgeKind, aplicar la configuración visual
+      if (edge.data?.edgeKind) {
+        const edgeConfig = getEdgeConfig(edge.data.edgeKind as LogicalEdgeType);
+        
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reactFlowEdge: any = {
+          ...edge,
+          type: edgeConfig.visualType,
+          style: edgeConfig.style,
+          markerEnd: {
+            type: edgeConfig.markerEnd.type,
+            color: edgeConfig.markerEnd.color,
+            width: edgeConfig.markerEnd.width || 20,
+            height: edgeConfig.markerEnd.height || 20,
+            strokeWidth: edgeConfig.markerEnd.strokeWidth || 1
+          },
+          // Asegurar que se preserven los handles
+          sourceHandle: edge.sourceHandle,
+          targetHandle: edge.targetHandle
+        };
+        
+        console.log('🔍 [EDGE LOAD DEBUG] Converted edge with config:', {
+          id: reactFlowEdge.id,
+          edgeKind: edge.data.edgeKind,
+          type: reactFlowEdge.type,
+          style: reactFlowEdge.style,
+          markerEnd: reactFlowEdge.markerEnd,
+          sourceHandle: reactFlowEdge.sourceHandle,
+          targetHandle: reactFlowEdge.targetHandle
+        });
+        
+        // Guardar para debug
+        if (typeof window !== 'undefined' && (window as any).__DEBUG_CONVERTED_EDGES__) {
+          (window as any).__DEBUG_CONVERTED_EDGES__.push(reactFlowEdge);
+        }
+        
+        return reactFlowEdge;
+      }
+      
+      // Si no tiene edgeKind, retornar el edge tal cual
+      console.log('⚠️ [EDGE LOAD DEBUG] Edge sin edgeKind:', edge);
+      return edge;
+    });
   }
 
   const initialNodesForFlow = useMemo(() => {
     return currentDiagram?.nodes ? convertToReactFlowNodes(currentDiagram.nodes) : [];
   }, [currentDiagram?.nodes]);
 
-  const initialEdgesForFlow = useMemo(() => {
-    return currentDiagram?.edges ? convertToReactFlowEdges(currentDiagram.edges) : [];
+  const [delayedEdges, setDelayedEdges] = useState<any[]>([]);
+  
+  useEffect(() => {
+    if (currentDiagram?.edges) {
+      // Delay edge loading to ensure handles are rendered
+      const timer = setTimeout(() => {
+        const edges = convertToReactFlowEdges(currentDiagram.edges);
+        console.log('🔍 [EDGE TIMING] Setting delayed edges:', edges.length);
+        setDelayedEdges(edges);
+      }, 100); // Small delay to ensure nodes and handles are rendered
+      
+      return () => clearTimeout(timer);
+    }
   }, [currentDiagram?.edges]);
+
+  const initialEdgesForFlow = useMemo(() => {
+    return delayedEdges;
+  }, [delayedEdges]);
   
   // Log del viewport inicial y validación
   useEffect(() => {
@@ -164,21 +277,114 @@ export default function DashboardPage() {
     }
   }, [currentDiagram]);
   
+  // El hook useDashboardData maneja la inicialización
+
+  // Estado para rastrear si ya verificamos las compañías
+  const [hasCheckedCompanies, setHasCheckedCompanies] = useState(false);
+
+  // Detectar cuando un usuario no tiene compañías y redirigir según el estado de onboarding
   useEffect(() => {
-    if (!user && !dataLoading) {
-      fetchInitialUser(); 
+    console.log('[Dashboard] Company/Onboarding check effect ejecutándose:', { 
+      dataLoading, 
+      user: user?.email, 
+      activeCompany: activeCompany?.name,
+      hasCheckedCompanies,
+      userCompanies: useNavigationStore.getState().userCompanies?.length,
+      pathname,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Evitar loops si ya estamos en las páginas de destino
+    if (pathname === '/create-company' || pathname === '/onboarding/select-usage') {
+      console.log('[Dashboard] Ya estamos en create-company o onboarding, evitando redirección');
+      return;
     }
-  }, [user, dataLoading, fetchInitialUser]);
+    
+    // Solo verificar después de que la carga inicial se complete
+    if (!dataLoading && user && !hasCheckedCompanies) {
+      setHasCheckedCompanies(true);
+      
+      // Verificar el estado de onboarding del usuario
+      const hasCompletedOnboarding = localStorage.getItem(`onboarding_completed_${user._id}`);
+      
+      // Si después de cargar no hay compañía activa
+      if (!activeCompany) {
+        // Verificar si acabamos de crear una compañía
+        const justCreatedCompany = localStorage.getItem('justCreatedCompany');
+        if (justCreatedCompany) {
+          // Si acabamos de crear una compañía, dar más tiempo para que se actualice el estado
+          localStorage.removeItem('justCreatedCompany');
+          console.log('Compañía recién creada, esperando actualización del estado...');
+          
+          // Dar más tiempo antes de decidir redirigir
+          const timeoutId = setTimeout(() => {
+            // Verificar de nuevo después del delay
+            const currentState = useNavigationStore.getState();
+            if (!currentState.activeCompany && currentState.userCompanies && currentState.userCompanies.length === 0) {
+              console.log('Aún sin compañía activa después de esperar, decidiendo redirección...');
+              
+              // Decidir a dónde redirigir basado en el estado de onboarding
+              if (!hasCompletedOnboarding) {
+                console.log('[Dashboard] Usuario sin onboarding, redirigiendo a /onboarding/select-usage');
+                router.push('/onboarding/select-usage');
+              } else {
+                console.log('[Dashboard] Usuario con onboarding completado, redirigiendo a /create-company');
+                router.push('/create-company');
+              }
+            }
+          }, 3000); // Esperar 3 segundos
+          
+          return () => clearTimeout(timeoutId);
+        } else {
+          // Si no acabamos de crear una compañía, verificar si realmente no tiene compañías
+          const currentState = useNavigationStore.getState();
+          console.log('[Dashboard] Current state check:', {
+            userCompanies: currentState.userCompanies,
+            activeCompany: currentState.activeCompany,
+            dataLoading: currentState.dataLoading,
+            hasCompletedOnboarding
+          });
+          
+          if (currentState.userCompanies && currentState.userCompanies.length === 0) {
+            // Usuario confirmado sin compañías
+            console.log('[Dashboard] Usuario confirmado sin compañías, decidiendo redirección...');
+            const timeoutId = setTimeout(() => {
+              // Decidir a dónde redirigir basado en el estado de onboarding
+              if (!hasCompletedOnboarding) {
+                console.log('[Dashboard] Usuario sin onboarding, redirigiendo a /onboarding/select-usage');
+                router.push('/onboarding/select-usage');
+              } else {
+                console.log('[Dashboard] Usuario con onboarding completado, redirigiendo a /create-company');
+                router.push('/create-company');
+              }
+            }, 500);
+            
+            return () => clearTimeout(timeoutId);
+          } else {
+            // userCompanies podría ser null/undefined, esperar más
+            console.log('[Dashboard] userCompanies no está listo aún, esperando...');
+          }
+        }
+      }
+    }
+  }, [dataLoading, user, activeCompany, hasCheckedCompanies, router, pathname]);
 
   useEffect(() => {
     if (user && user._id && !dataLoading && !dataError && activeCompany) {
       const welcomeModalSeenKey = `welcomeModalSeen_${user._id}_${activeCompany._id}`;
       const welcomeModalAlreadySeen = localStorage.getItem(welcomeModalSeenKey);
-      if (!welcomeModalAlreadySeen) {
+      
+      // Verificar si es una compañía nueva (sin ambientes)
+      const isNewCompany = environments.length === 0;
+      
+      if (!welcomeModalAlreadySeen && isNewCompany) {
+        setIsWelcomeModalVisible(true);
+        setShowOnboardingFlow(true);
+      } else if (!welcomeModalAlreadySeen) {
         setIsWelcomeModalVisible(true);
       }
     }
-  }, [user, activeCompany, dataLoading, dataError]);
+  }, [user, activeCompany, dataLoading, dataError, environments]);
 
   useEffect(() => {
     const sectionFromQuery = searchParams.get('section') as SidebarSectionKey;
@@ -197,12 +403,17 @@ export default function DashboardPage() {
 
   // Sincronizar parámetros de URL con el estado solo en la carga inicial
   useEffect(() => {
-    if (!dataLoading && activeCompany && environments.length > 0 && !urlParamsLoaded) {
+    if (!dataLoading && activeCompany && workspaces.length > 0 && environments.length > 0 && !urlParamsLoaded) {
+      const companyParam = searchParams.get('company');
+      const workspaceParam = searchParams.get('workspace');
       const envParam = searchParams.get('env');
       const diagramParam = searchParams.get('diagram');
       const groupParam = searchParams.get('group');
       
       const applyUrlParams = async () => {
+        // TODO: Implementar cambio de compañía y workspace desde URL
+        // Por ahora solo manejamos ambiente y diagrama
+        
         // Buscar ambiente por nombre
         if (envParam) {
           const targetEnv = environments.find(e => e.name.toLowerCase().replace(/\s+/g, '-') === envParam.toLowerCase());
@@ -239,40 +450,78 @@ export default function DashboardPage() {
       
       applyUrlParams();
     }
-  }, [dataLoading, activeCompany, environments, searchParams, currentDiagram, selectedEnvironment, selectedDiagram, diagramsFromStore, urlParamsLoaded]);
+  }, [dataLoading, activeCompany, workspaces, environments, searchParams, currentDiagram, selectedEnvironment, selectedDiagram, diagramsFromStore, urlParamsLoaded]);
 
-  // Actualizar URL cuando cambian ambiente o diagrama (pero solo después de que se cargaron los parámetros iniciales)
+  // Actualizar URL cuando cambian compañía, workspace, ambiente o diagrama (pero solo después de que se cargaron los parámetros iniciales)
   useEffect(() => {
-    if (!urlParamsLoaded || !selectedEnvironment || !selectedDiagram) return;
+    if (!urlParamsLoaded || !activeCompany || !activeWorkspace) return;
     
     const selectedEnv = environments.find(e => e.id === selectedEnvironment);
     const selectedDiag = diagramsFromStore.find(d => d.id === selectedDiagram);
     
-    if (selectedEnv && selectedDiag) {
-      // Usar un timeout para evitar múltiples actualizaciones rápidas
-      const timeoutId = setTimeout(() => {
-        const currentParams = new URLSearchParams(window.location.search);
-        const envParam = selectedEnv.name.toLowerCase().replace(/\s+/g, '-');
-        const diagramParam = selectedDiag.name.toLowerCase().replace(/\s+/g, '-');
-        
-        // Solo actualizar si realmente cambió
-        if (currentParams.get('env') !== envParam || currentParams.get('diagram') !== diagramParam) {
-          currentParams.set('env', envParam);
-          currentParams.set('diagram', diagramParam);
-          
-          // Eliminar el parámetro group cuando cambia el diagrama
-          if (currentParams.has('group')) {
-            currentParams.delete('group');
-          }
-          
-          const newUrl = `${pathname}?${currentParams.toString()}`;
-          router.replace(newUrl, { scroll: false });
-        }
-      }, 100); // Pequeño delay para evitar múltiples actualizaciones
+    // Usar un timeout para evitar múltiples actualizaciones rápidas
+    const timeoutId = setTimeout(() => {
+      const currentParams = new URLSearchParams(window.location.search);
+      const companyParam = activeCompany.slug || activeCompany.name.toLowerCase().replace(/\s+/g, '-');
+      const workspaceParam = activeWorkspace.slug || activeWorkspace.name.toLowerCase().replace(/\s+/g, '-');
       
-      return () => clearTimeout(timeoutId);
-    }
-  }, [selectedEnvironment, selectedDiagram, environments, diagramsFromStore, pathname, router, urlParamsLoaded]);
+      // Verificar si realmente necesitamos actualizar algo
+      let needsUpdate = false;
+      
+      // Verificar compañía y workspace
+      if (currentParams.get('company') !== companyParam) {
+        currentParams.set('company', companyParam);
+        needsUpdate = true;
+      }
+      if (currentParams.get('workspace') !== workspaceParam) {
+        currentParams.set('workspace', workspaceParam);
+        needsUpdate = true;
+      }
+      
+      // Verificar ambiente
+      if (selectedEnv) {
+        const envParam = selectedEnv.name.toLowerCase().replace(/\s+/g, '-');
+        if (currentParams.get('env') !== envParam) {
+          currentParams.set('env', envParam);
+          needsUpdate = true;
+        }
+      } else if (currentParams.has('env')) {
+        currentParams.delete('env');
+        needsUpdate = true;
+      }
+      
+      // Verificar diagrama
+      if (selectedDiag) {
+        const diagramParam = selectedDiag.name.toLowerCase().replace(/\s+/g, '-');
+        if (currentParams.get('diagram') !== diagramParam) {
+          currentParams.set('diagram', diagramParam);
+          needsUpdate = true;
+        }
+      } else if (currentParams.has('diagram')) {
+        currentParams.delete('diagram');
+        needsUpdate = true;
+      }
+      
+      // Eliminar el parámetro group cuando cambia el diagrama
+      if (currentParams.has('group') && !selectedDiag) {
+        currentParams.delete('group');
+        needsUpdate = true;
+      }
+      
+      // Solo actualizar la URL si realmente hay cambios
+      if (needsUpdate) {
+        const newUrl = `${pathname}?${currentParams.toString()}`;
+        console.log('[Dashboard] Actualizando URL params:', {
+          from: window.location.search,
+          to: currentParams.toString(),
+          timestamp: new Date().toISOString()
+        });
+        router.replace(newUrl, { scroll: false });
+      }
+    }, 100); // Pequeño delay para evitar múltiples actualizaciones
+    
+    return () => clearTimeout(timeoutId);
+  }, [activeCompany, activeWorkspace, selectedEnvironment, selectedDiagram, environments, diagramsFromStore, pathname, router, urlParamsLoaded]);
 
   const handleInternalSectionChange = (sectionString: string) => {
     const section = sectionString as SidebarSectionKey;
@@ -315,9 +564,20 @@ export default function DashboardPage() {
       parentNode: n.parentNode
     })));
     
+    // Debug edges before conversion
+    console.log('🔍 [SAVE DEBUG] Raw edges before conversion:', data.edges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+      data: e.data
+    })));
+    
     const customEdges = data.edges.map(e => ({ 
       id: e.id, source: e.source, target: e.target, type: e.type, 
-      animated: e.animated, label: e.label as string, data: e.data, style: e.style 
+      animated: e.animated, label: e.label as string, data: e.data, style: e.style,
+      sourceHandle: e.sourceHandle, targetHandle: e.targetHandle 
     } as CustomEdge));
     
     // Debug logging to trace save data
@@ -325,6 +585,11 @@ export default function DashboardPage() {
       diagramId: selectedDiagram,
       nodeCount: customNodes.length,
       edgeCount: customEdges.length,
+      edgesWithHandles: customEdges.map(e => ({
+        id: e.id,
+        sourceHandle: e.sourceHandle || 'NONE',
+        targetHandle: e.targetHandle || 'NONE'
+      })),
       groupNodes: customNodes.filter(n => n.type === 'groupNode'),
       childNodesInGroups: customNodes.filter(n => n.parentNode),
       allNodesTypes: customNodes.map(n => ({ id: n.id, type: n.type, parentNode: n.parentNode }))
@@ -492,7 +757,7 @@ export default function DashboardPage() {
 
   if (dataLoading && !activeCompany) { 
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850" style={{ height: 'calc(100vh - 3.5rem)' }}>
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850" style={{ height: 'calc(100vh - 5rem)' }}>
         <Spin size="large" />
         <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando datos...</p>
       </div>
@@ -501,7 +766,7 @@ export default function DashboardPage() {
   
   if (dataError) { 
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 3.5rem)' }}>
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 5rem)' }}>
         <p className="text-red-500 p-4 bg-red-100 border border-red-300 rounded-md">{dataError}</p>
       </div>
     );
@@ -509,7 +774,7 @@ export default function DashboardPage() {
 
   if (!activeCompany && !dataLoading) { 
     return (
-        <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 3.5rem)' }}>
+        <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 5rem)' }}>
             <Text>No se ha podido cargar la información de la compañía. Por favor, recarga o contacta a soporte.</Text>
         </div>
     );
@@ -575,15 +840,19 @@ export default function DashboardPage() {
                 if (user && user._id && activeCompany) {
                   localStorage.setItem(`welcomeModalSeen_${user._id}_${activeCompany._id}`, 'true');
                 }
+                // Si es una compañía nueva, iniciar el flujo de onboarding
+                if (showOnboardingFlow) {
+                  setOnboardingStep(2); // Pasar al paso de crear ambiente
+                }
               }}
               className="bg-electric-purple-600 hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600"
             >
-              Comenzar a Explorar
+              {showOnboardingFlow ? 'Configurar mi Espacio' : 'Comenzar a Explorar'}
             </Button>
           </div>
         </Modal>
 
-        <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 3.5rem)' }}>
+        <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 5rem)' }}>
           {activeCompany && (
             <CompanySidebar 
               companyName={companyDisplayName} activeSection={activeSectionInSidebar} 
@@ -592,11 +861,11 @@ export default function DashboardPage() {
               sections={sidebarSections} isPersonalSpace={isPersonalSpace || false}
             />
           )}
-          <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden h-full">
             {/* Subheader de acciones del diagrama */}
             {currentDiagram && activeSectionInSidebar === 'diagrams' && <DiagramActionSubheader />}
 
-            <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto">
+            <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-hidden">
                 {dataLoading && activeSectionInSidebar === 'diagrams' && !currentDiagram && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>
                 )}
@@ -640,16 +909,35 @@ export default function DashboardPage() {
                     {!selectedEnvironment && environments && environments.length === 0 && !dataLoading && ( 
                       <div className="flex flex-col items-center justify-center h-full p-6 sm:p-10 text-center">
                         {/* Card eliminada, contenido directamente sobre el fondo de la página */}
+                        {showOnboardingFlow && onboardingStep === 2 && (
+                          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 max-w-lg">
+                            <div className="flex items-center">
+                              <CheckOutlined className="text-green-500 mr-2" />
+                              <span className="text-slate-700 dark:text-slate-300">
+                                ✅ <strong>Workspace creado:</strong> Se creó automáticamente tu workspace principal
+                              </span>
+                            </div>
+                          </div>
+                        )}
                         <FolderIconOutline className="mx-auto h-24 w-24 sm:h-28 sm:w-28 text-electric-purple-500 dark:text-electric-purple-400 mb-8" />
-                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Define tu Primer Ambiente</h3>
+                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">
+                          {showOnboardingFlow && onboardingStep === 2 ? 'Paso 2: Crea tu Primer Ambiente' : 'Define tu Primer Ambiente'}
+                        </h3>
                         <p className="text-slate-500 dark:text-slate-400 mb-10 text-base sm:text-lg max-w-lg">
-                          {isPersonalSpace ? "Tu espacio personal está listo. " : "Esta compañía aún no tiene ambientes. "}
-                          Crea un ambiente para empezar a diseñar diagramas y dar vida a tus ideas de infraestructura.
+                          {showOnboardingFlow && onboardingStep === 2 
+                            ? "Los ambientes te permiten separar tus recursos (dev, staging, producción). Comienza creando tu primer ambiente."
+                            : (isPersonalSpace ? "Tu espacio personal está listo. " : "Esta compañía aún no tiene ambientes. ") + "Crea un ambiente para empezar a diseñar diagramas y dar vida a tus ideas de infraestructura."
+                          }
                         </p>
                         <Button 
                           type="primary" 
                           size="large"
-                          onClick={() => useNavigationStore.getState().setNewEnvironmentModalVisible(true)}
+                          onClick={() => {
+                            useNavigationStore.getState().setNewEnvironmentModalVisible(true);
+                            if (showOnboardingFlow) {
+                              setOnboardingStep(3);
+                            }
+                          }}
                           className="bg-electric-purple-600 hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600 px-8 py-3 text-base"
                         >
                           Crear Ambiente
@@ -659,15 +947,45 @@ export default function DashboardPage() {
                     {selectedEnvironment && (!diagramsFromStore || diagramsFromStore.length === 0) && !dataLoading && ( 
                       <div className="flex flex-col items-center justify-center h-full p-6 sm:p-10 text-center">
                         {/* Card eliminada */}
+                        {showOnboardingFlow && onboardingStep === 3 && (
+                          <div className="mb-6 space-y-3 max-w-lg">
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <div className="flex items-center">
+                                <CheckOutlined className="text-green-500 mr-2" />
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  ✅ <strong>Workspace creado:</strong> Main Workspace
+                                </span>
+                              </div>
+                            </div>
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <div className="flex items-center">
+                                <CheckOutlined className="text-green-500 mr-2" />
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  ✅ <strong>Ambiente creado:</strong> {environments.find(e => e.id === selectedEnvironment)?.name || 'Ambiente'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         <DocumentDuplicateIconOutline className="mx-auto h-24 w-24 sm:h-28 sm:w-28 text-emerald-green-500 dark:text-emerald-green-400 mb-8" />
-                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">Crea tu Primer Diagrama</h3>
+                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">
+                          {showOnboardingFlow && onboardingStep === 3 ? 'Paso 3: Crea tu Primer Diagrama' : 'Crea tu Primer Diagrama'}
+                        </h3>
                         <p className="text-slate-500 dark:text-slate-400 mb-10 text-base sm:text-lg max-w-lg">
-                          Este ambiente está listo. Comienza a visualizar tu infraestructura arrastrando componentes al lienzo.
+                          {showOnboardingFlow && onboardingStep === 3
+                            ? "¡Excelente! Ya tienes todo listo. Ahora crea tu primer diagrama para empezar a diseñar tu infraestructura visualmente."
+                            : "Este ambiente está listo. Comienza a visualizar tu infraestructura arrastrando componentes al lienzo."
+                          }
                         </p>
                         <Button 
                           type="primary" 
                           size="large"
-                          onClick={() => useNavigationStore.getState().setNewDiagramModalVisible(true)}
+                          onClick={() => {
+                            useNavigationStore.getState().setNewDiagramModalVisible(true);
+                            if (showOnboardingFlow) {
+                              setShowOnboardingFlow(false); // Terminar el flujo de onboarding
+                            }
+                          }}
                           className="bg-emerald-green-600 hover:bg-emerald-green-700 dark:bg-emerald-green-500 dark:hover:bg-emerald-green-600 px-8 py-3 text-base"
                         >
                           Crear Diagrama

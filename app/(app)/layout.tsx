@@ -9,6 +9,9 @@ import { User } from '../services/authService';
 import { useNavigationStore } from '../hooks/useNavigationStore'; // Importar el nuevo store
 // import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../services/companyService'; // Se manejará en el store
 
+// Import the API interceptor to handle 401 errors globally
+import '../utils/apiInterceptor';
+
 // Función para obtener datos del usuario desde /me (puede permanecer aquí o moverse al authService)
 async function fetchCurrentUserFromApi(token: string): Promise<User | null> { // Renombrada para evitar confusión
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -52,9 +55,8 @@ export default function AppLayout({
   const [authProcessed, setAuthProcessed] = useState(false); 
   const [initialLoadDone, setInitialLoadDone] = useState(false); // Para controlar la carga inicial de datos de compañía/ambientes
 
-  useEffect(() => {
-    fetchInitialUser(); // Cargar usuario desde localStorage o API al montar
-  }, [fetchInitialUser]);
+  // REMOVIDO: fetchInitialUser se llama desde el dashboard page, no desde aquí
+  // para evitar llamadas duplicadas
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -89,7 +91,7 @@ export default function AppLayout({
       fetchCurrentUserFromApi(token).then(userFromApi => {
         if (userFromApi) {
           saveAuthData({ access_token: token, token_type: tokenType as string, user: userFromApi });
-          fetchInitialUser(); // Recargar el usuario en el store después de guardar nuevos datos de auth
+          // No llamar fetchInitialUser aquí - se llamará desde el dashboard
         }
         setAuthProcessed(true); 
       });

@@ -341,7 +341,7 @@ const FlowCanvas: React.FC<FlowCanvasProps> = ({
         nodeDragThreshold={5}
         selectNodesOnDrag={false}
       >
-        <Background id="1" gap={10} color="#000000" variant={BackgroundVariant.Dots} size={1.2} style={{opacity:0.25,backgroundColor:'#E8F5E9'}}/>
+        <Background id="1" gap={10} color="#000000" variant={BackgroundVariant.Dots} size={1.2} style={{opacity:0.15,backgroundColor:'#f8f9fa'}}/>
         <Background id="2" gap={100} color="#000000" variant={BackgroundVariant.Dots} size={1.2} style={{opacity:0.25}}/>
         <MiniMap position="bottom-right" style={{bottom:20,right:20}}/>
         
