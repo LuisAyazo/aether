@@ -11,10 +11,22 @@ export default function CreateCompanyPage() {
   const [slug, setSlug] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loadingStep, setLoadingStep] = useState(0);
   const router = useRouter();
   const searchParams = useSearchParams(); // Para leer query params
   const [isPersonalSpaceSetup, setIsPersonalSpaceSetup] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null); // Definir User aquí o importar
+
+  // Mensajes de carga progresivos
+  const loadingMessages = [
+    'Creando tu organización...',
+    'Configurando tu workspace...',
+    'Preparando el entorno de trabajo...',
+    'Estableciendo permisos...',
+    'Iniciando servicios...',
+    'Casi listo...',
+    'Finalizando configuración...'
+  ];
 
   // Debug script
   useEffect(() => {
@@ -49,14 +61,23 @@ export default function CreateCompanyPage() {
     setSlug(generatedSlug);
   }, [name]);
   
-  /*
+  // Efecto para cambiar los mensajes de carga
   useEffect(() => {
-    // Verificar si el usuario está autenticado
-    if (!isAuthenticated()) {
-      router.push('/login');
+    if (loading) {
+      const interval = setInterval(() => {
+        setLoadingStep((prev) => {
+          if (prev < loadingMessages.length - 1) {
+            return prev + 1;
+          }
+          return prev;
+        });
+      }, 2000); // Cambiar mensaje cada 2 segundos
+
+      return () => clearInterval(interval);
+    } else {
+      setLoadingStep(0);
     }
-  }, [router]);
-  */
+  }, [loading, loadingMessages.length]);
   
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -84,11 +105,15 @@ export default function CreateCompanyPage() {
         
         if (updatedUser) {
           console.log('Sesión de usuario actualizada. Redirigiendo a /dashboard');
-          router.push('/dashboard');
+          // Usar window.location para una redirección más inmediata
+          window.location.href = '/dashboard';
         } else {
           console.error('Error al actualizar la sesión del usuario después de crear la compañía.');
           setError('La compañía se creó, pero hubo un problema al actualizar tu sesión. Por favor, intenta recargar o iniciar sesión de nuevo.');
-          // No redirigir automáticamente si la sesión no se pudo actualizar.
+          // Redirigir de todos modos después de 2 segundos
+          setTimeout(() => {
+            window.location.href = '/dashboard';
+          }, 2000);
         }
       } else {
         console.error('Error: La compañía creada no tiene un ID válido o no se retornó', company);
@@ -225,7 +250,7 @@ export default function CreateCompanyPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Creando Organización...
+                  {loadingMessages[loadingStep]}
                 </>
               ) : (
                 <>

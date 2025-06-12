@@ -17,6 +17,20 @@ export interface UpdateCompanyDTO {
   logo?: string;
 }
 
+export interface CompanyMember {
+  id: string;
+  user_id: string;
+  role: 'owner' | 'admin' | 'member';
+  joined_at: string;
+  email?: string;
+  name?: string;
+}
+
+export interface InviteUserDTO {
+  email: string;
+  role: 'admin' | 'member';
+}
+
 class CompanyService {
   async getCompanies(): Promise<Company[]> {
     try {
@@ -85,9 +99,20 @@ class CompanyService {
     }
   }
 
+  async getCompanyMembers(companyId: string): Promise<CompanyMember[]> {
+    try {
+      const response = await api.get(`/companies/${companyId}/members`)
+      // El backend ahora devuelve un array directamente
+      return Array.isArray(response) ? response : []
+    } catch (error) {
+      console.error('Error fetching company members:', error)
+      throw error
+    }
+  }
+
   async updateUserRole(companyId: string, userId: string, role: string): Promise<void> {
     try {
-      await api.patch(`/companies/${companyId}/members/${userId}`, { role });
+      await api.put(`/companies/${companyId}/members/${userId}/role`, { role });
     } catch (error) {
       console.error('Error updating user role:', error);
       throw error;

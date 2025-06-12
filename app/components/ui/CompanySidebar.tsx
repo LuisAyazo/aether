@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation'; 
 import Link from 'next/link';
-import { Dropdown, Avatar } from 'antd';
+import { Dropdown, Avatar, Popover, message } from 'antd';
 import { 
   UserOutlined, 
   SettingOutlined, 
   LogoutOutlined,
-  MailOutlined
+  MailOutlined,
+  CheckOutlined,
+  PlusOutlined
 } from '@ant-design/icons';
 import { 
   // ChartBarIcon, // No usado en defaultCompanySections actualizado
@@ -35,8 +37,10 @@ import {
   ServerStackIcon as ServerStackIconSolid,
   UsersIcon as UsersIconSolid
 } from '@heroicons/react/24/solid';
+import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import { logoutUser as authLogout } from '@/app/services/authService';
 import { useNavigationStore } from '@/app/hooks/useNavigationStore';
+import { PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '@/app/services/companyService';
 
 export interface SidebarSection {
   key: string; 
@@ -122,10 +126,14 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   const router = useRouter();
   const companyId = params.companyId as string;
   
-  // Obtener el usuario del store
+  // Obtener datos del store
   const user = useNavigationStore(state => state.user);
+  const userCompanies = useNavigationStore(state => state.userCompanies);
+  const activeCompany = useNavigationStore(state => state.activeCompany);
+  const setActiveCompanyAndLoadData = useNavigationStore(state => state.setActiveCompanyAndLoadData);
 
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(propIsCollapsed);
+  const [companySelectorOpen, setCompanySelectorOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && companyId) { 
@@ -232,15 +240,101 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
             </>
           ) : (
             <>
-              <div className="flex items-center space-x-3 min-w-0">
-                <div className={`w-10 h-10 bg-gradient-to-br ${isPersonalSpace ? 'from-emerald-green-500 to-sky-500' : 'from-blue-500 to-purple-600'} rounded-lg flex items-center justify-center shadow-md`}>
-                 {isPersonalSpace ? <UserCircleIconOutline className="w-6 h-6 text-white" /> : <BuildingOfficeIcon className="w-6 h-6 text-white" />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h1 className="text-md font-semibold text-slate-900 dark:text-white truncate" title={companyHeaderTitle}>{companyHeaderTitle}</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate" title={companyHeaderSubtitle}>{companyHeaderSubtitle}</p>
-                </div>
-              </div>
+              <Popover
+                content={
+                  <div className="w-72 max-h-96 overflow-y-auto">
+                    <div className="p-2">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 px-2 py-1">Tus Organizaciones</p>
+                      {userCompanies.map((company) => {
+                        console.log('Company data in sidebar:', company); // Debug log
+                        const isActive = activeCompany?._id === company._id || activeCompany?.id === company.id;
+                        const companyIsPersonal = company.name.startsWith(PERSONAL_SPACE_COMPANY_NAME_PREFIX);
+                        return (
+                          <button
+                            key={company._id || company.id}
+                            onClick={async () => {
+                              try {
+                                await setActiveCompanyAndLoadData(company, companyIsPersonal);
+                                setCompanySelectorOpen(false);
+                              } catch (error) {
+                                console.error('Error al cambiar de compañía:', error);
+                                message.error(`No tienes permisos para acceder a ${company.name}. Por favor, contacta al administrador de la organización.`);
+                                // No cerrar el selector si hay error, para que el usuario pueda intentar con otra compañía
+                              }
+                            }}
+                            className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${
+                              isActive ? 'bg-slate-100 dark:bg-slate-800' : ''
+                            }`}
+                          >
+                            <div className={`w-8 h-8 bg-gradient-to-br ${companyIsPersonal ? 'from-emerald-500 to-sky-500' : 'from-blue-500 to-purple-600'} rounded-lg flex items-center justify-center shadow-sm flex-shrink-0`}>
+                              {companyIsPersonal ? (
+                                <UserCircleIconOutline className="w-5 h-5 text-white" />
+                              ) : (
+                                <BuildingOfficeIcon className="w-5 h-5 text-white" />
+                              )}
+                            </div>
+                            <div className="flex-1 text-left min-w-0">
+                              <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                                {companyIsPersonal ? 'Espacio Personal' : company.name}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                  {companyIsPersonal ? 'Cuenta Personal' : 'Empresa'}
+                                </p>
+                                {!companyIsPersonal && company.memberCount && (
+                                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                                    • {company.memberCount} {company.memberCount === 1 ? 'miembro' : 'miembros'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {isActive && (
+                              <CheckOutlined className="text-blue-500 dark:text-blue-400" />
+                            )}
+                          </button>
+                        );
+                      })}
+                      <div className="border-t border-slate-200 dark:border-slate-700 mt-2 pt-2">
+                        <button
+                          onClick={() => {
+                            router.push('/create-company');
+                            setCompanySelectorOpen(false);
+                          }}
+                          className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-lg flex items-center justify-center">
+                            <PlusOutlined className="text-slate-600 dark:text-slate-400" />
+                          </div>
+                          <p className="text-sm text-slate-700 dark:text-slate-300">Crear nueva organización</p>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                }
+                trigger="click"
+                open={companySelectorOpen}
+                onOpenChange={setCompanySelectorOpen}
+                placement="bottomLeft"
+                overlayClassName="company-selector-popover"
+              >
+                <button className="flex items-center gap-3 min-w-0 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg p-2 transition-colors">
+                  <div className={`w-10 h-10 bg-gradient-to-br ${isPersonalSpace ? 'from-emerald-500 to-sky-500' : 'from-blue-500 to-purple-600'} rounded-lg flex items-center justify-center shadow-md`}>
+                    {isPersonalSpace ? <UserCircleIconOutline className="w-6 h-6 text-white" /> : <BuildingOfficeIcon className="w-6 h-6 text-white" />}
+                  </div>
+                  <div className="min-w-0 flex-1 text-left">
+                    <h1 className="text-md font-semibold text-slate-900 dark:text-white truncate" title={companyHeaderTitle}>{companyHeaderTitle}</h1>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-slate-500 dark:text-slate-400" title={companyHeaderSubtitle}>{companyHeaderSubtitle}</p>
+                      {activeCompany?.role && !isPersonalSpace && (
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium">
+                          {activeCompany.role === 'owner' ? 'Propietario' : activeCompany.role === 'admin' ? 'Admin' : 'Miembro'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronDownIcon className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                </button>
+              </Popover>
               <button
                 onClick={handleToggleCollapse}
                 className="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"

@@ -150,10 +150,12 @@ export default function SelectUsagePage() {
       const updatedUser = await updateUserUsageSettings(selectedUsageType, token);
       console.log("handleSubmitOnboarding: Usuario actualizado desde API:", updatedUser);
       
+      let newUserData = updatedUser; // Variable para almacenar los datos del usuario actualizados
+      
       if (typeof window !== 'undefined' && updatedUser) {
          const existingUser = getCurrentUser();
          if (existingUser) {
-            const newUserData = { ...existingUser, ...updatedUser };
+            newUserData = { ...existingUser, ...updatedUser };
             console.log("handleSubmitOnboarding: Actualizando localStorage con newUserData:", newUserData);
             localStorage.setItem('user', JSON.stringify(newUserData));
             setCurrentUser(newUserData); 
@@ -179,11 +181,9 @@ export default function SelectUsagePage() {
       }
 
       console.log("handleSubmitOnboarding: Redirigiendo después de la actualización...");
-      if (selectedUsageType === 'personal') {
-        router.push('/dashboard');
-      } else { // company
-        router.push('/create-company'); // Corregir la ruta de redirección
-      }
+      // Siempre redirigir al dashboard
+      // El dashboard se encargará de verificar si el usuario necesita crear una compañía
+      router.push('/dashboard');
     } catch (err: unknown) {
       console.error("handleSubmitOnboarding: Error durante el proceso.", err);
       if (err instanceof Error) {

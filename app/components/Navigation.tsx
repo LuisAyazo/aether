@@ -23,7 +23,6 @@ import EnvironmentTreeSelect from "./ui/EnvironmentTreeSelect";
 import DiagramTreeSelect from "./ui/DiagramTreeSelect"; 
 import GeneratedCodeModal from "./ui/GeneratedCodeModal";
 import WorkspaceSelector from "./WorkspaceSelector";
-import { CompanySelector } from "./multi-tenant/CompanySelector";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -198,14 +197,6 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
           <div className={`flex items-center gap-x-3 ${!isOnMarketingPage && activeCompany ? 'ml-8 sm:ml-12 md:ml-16 lg:ml-60' : ''}`}> {/* ml-60 para simular ancho de sidebar */}
             {!isOnMarketingPage && user && (
               <>
-                {/* Selector de Company */}
-                <div className="flex items-center gap-x-1">
-                  <CompanySelector />
-                </div>
-
-                {/* Divider */}
-                <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2 hidden md:block" />
-
                 {/* Selector de Workspace */}
                 {activeCompany && (
                   <div className="flex items-center gap-x-1">

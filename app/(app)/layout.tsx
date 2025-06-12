@@ -126,9 +126,9 @@ export default function AppLayout({
         // setIsLoading(false); 
       }
     } else {
-      if (localUser && localUser.usage_type === null) { 
-        router.replace('/onboarding/select-usage');
-      } else if (localUser && !activeCompany && !initialLoadDone) {
+      // NUNCA verificar onboarding desde localStorage - el backend es la única fuente de verdad
+      // Si hay usuario y no hay compañía activa, dejar que el dashboard lo maneje
+      if (localUser && !activeCompany && !initialLoadDone) {
         // Aquí es donde se debería iniciar la carga de compañía/ambientes
         // Esta lógica se moverá al store o a un componente wrapper
         // Por ahora, asumimos que el store se encarga o DashboardPage lo hará
@@ -160,7 +160,7 @@ export default function AppLayout({
     <>
       {/* El Navigation (futuro MainHeader) consumirá datos del store */}
       {showNavigation && <Navigation />} 
-      <main className={showNavigation ? "pt-20" : ""}> {/* Ajustado a pt-20 (h-20 del Navigation) */}
+      <main className={showNavigation ? "pt-20" : ""}> {/* Sin altura fija */}
         {children}
       </main>
     </>

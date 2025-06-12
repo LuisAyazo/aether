@@ -12,6 +12,7 @@ export interface User {
   avatar_url?: string;
   workspace_id?: string;
   company_id?: string;
+  onboarding_completed?: boolean;
 }
 
 export interface AuthResponse {
@@ -40,7 +41,8 @@ function convertSupabaseUser(supabaseUser: SupabaseUser, profile?: any): User {
     auth_provider: authProvider,
     avatar_url: profile?.avatar_url || supabaseUser.user_metadata?.avatar_url,
     workspace_id: profile?.workspace_id,
-    company_id: profile?.company_id
+    company_id: profile?.company_id,
+    onboarding_completed: profile?.onboarding_completed || false
   };
 }
 
@@ -302,13 +304,16 @@ export async function logoutUser() {
     // Clear only auth-related data from localStorage
     const keysToRemove = ['token', 'user', 'access_token', 'refresh_token'];
     
-    // Also clear cache keys
+    // Also clear cache keys and company-related keys
     const allKeys = Object.keys(localStorage);
     const cacheAndAuthKeys = allKeys.filter(key => 
       keysToRemove.includes(key) || 
       key.startsWith('cache_') || 
       key.startsWith('dashboard_') ||
-      key.startsWith('supabase.auth.')
+      key.startsWith('supabase.auth.') ||
+      key.startsWith('company') ||
+      key.startsWith('lastCompany') ||
+      key.startsWith('currentCompany')
     );
     
     cacheAndAuthKeys.forEach(key => {
@@ -326,6 +331,10 @@ export async function logoutUser() {
           .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
       });
     }
+    
+    // Reset company store
+    const { useCompanyStore } = await import('@/app/stores/companyStore');
+    useCompanyStore.getState().reset();
     
     // Redirect to login
     window.location.href = '/login?session_expired=true';

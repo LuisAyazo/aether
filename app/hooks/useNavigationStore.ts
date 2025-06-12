@@ -730,11 +730,12 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
              await handleEnvironmentChange(updatedEnvs[0].id);
           }
 
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : String(error);
-          message.error(`Error al eliminar ambiente: ${errorMsg}`);
-          set({ dataError: errorMsg, dataLoading: false });
-        }
+      } catch (error) {
+        console.error('[NavStore] handleEnvironmentChange: Error al cambiar de ambiente:', error);
+        set({ dataLoading: false });
+        // NO lanzar el error para que el UI no se bloquee
+        // throw error;
+      }
       },
     });
   },
