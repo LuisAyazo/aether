@@ -282,9 +282,9 @@ export default function DashboardPage() {
   // Estado para rastrear si ya verificamos las compañías
   const [hasCheckedCompanies, setHasCheckedCompanies] = useState(false);
 
-  // Detectar cuando un usuario no tiene compañías (posiblemente eliminado) y redirigir
+  // Detectar cuando un usuario no tiene compañías y redirigir según el estado de onboarding
   useEffect(() => {
-    console.log('[Dashboard] Company check effect ejecutándose:', { 
+    console.log('[Dashboard] Company/Onboarding check effect ejecutándose:', { 
       dataLoading, 
       user: user?.email, 
       activeCompany: activeCompany?.name,
@@ -294,15 +294,18 @@ export default function DashboardPage() {
       timestamp: new Date().toISOString()
     });
     
-    // Evitar loop si ya estamos en create-company
-    if (pathname === '/create-company') {
-      console.log('[Dashboard] Ya estamos en create-company, evitando redirección');
+    // Evitar loops si ya estamos en las páginas de destino
+    if (pathname === '/create-company' || pathname === '/onboarding/select-usage') {
+      console.log('[Dashboard] Ya estamos en create-company o onboarding, evitando redirección');
       return;
     }
     
     // Solo verificar después de que la carga inicial se complete
     if (!dataLoading && user && !hasCheckedCompanies) {
       setHasCheckedCompanies(true);
+      
+      // Verificar el estado de onboarding del usuario
+      const hasCompletedOnboarding = localStorage.getItem(`onboarding_completed_${user._id}`);
       
       // Si después de cargar no hay compañía activa
       if (!activeCompany) {
@@ -318,8 +321,16 @@ export default function DashboardPage() {
             // Verificar de nuevo después del delay
             const currentState = useNavigationStore.getState();
             if (!currentState.activeCompany && currentState.userCompanies && currentState.userCompanies.length === 0) {
-              console.log('Aún sin compañía activa después de esperar, redirigiendo...');
-              router.push('/create-company');
+              console.log('Aún sin compañía activa después de esperar, decidiendo redirección...');
+              
+              // Decidir a dónde redirigir basado en el estado de onboarding
+              if (!hasCompletedOnboarding) {
+                console.log('[Dashboard] Usuario sin onboarding, redirigiendo a /onboarding/select-usage');
+                router.push('/onboarding/select-usage');
+              } else {
+                console.log('[Dashboard] Usuario con onboarding completado, redirigiendo a /create-company');
+                router.push('/create-company');
+              }
             }
           }, 3000); // Esperar 3 segundos
           
@@ -330,14 +341,22 @@ export default function DashboardPage() {
           console.log('[Dashboard] Current state check:', {
             userCompanies: currentState.userCompanies,
             activeCompany: currentState.activeCompany,
-            dataLoading: currentState.dataLoading
+            dataLoading: currentState.dataLoading,
+            hasCompletedOnboarding
           });
           
           if (currentState.userCompanies && currentState.userCompanies.length === 0) {
-            // Solo redirigir si confirmamos que no hay compañías
-            console.log('[Dashboard] Usuario confirmado sin compañías, redirigiendo...');
+            // Usuario confirmado sin compañías
+            console.log('[Dashboard] Usuario confirmado sin compañías, decidiendo redirección...');
             const timeoutId = setTimeout(() => {
-              router.push('/create-company');
+              // Decidir a dónde redirigir basado en el estado de onboarding
+              if (!hasCompletedOnboarding) {
+                console.log('[Dashboard] Usuario sin onboarding, redirigiendo a /onboarding/select-usage');
+                router.push('/onboarding/select-usage');
+              } else {
+                console.log('[Dashboard] Usuario con onboarding completado, redirigiendo a /create-company');
+                router.push('/create-company');
+              }
             }, 500);
             
             return () => clearTimeout(timeoutId);

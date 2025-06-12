@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { useNavigationStore } from '@/app/hooks/useNavigationStore';
-import { vi } from 'vitest';
+import { vi, describe, beforeEach, it, expect } from 'vitest';
 import * as dashboardService from '@/app/services/dashboardService';
 
 vi.mock('@/app/services/dashboardService');
@@ -28,7 +28,14 @@ describe('useNavigationStore', () => {
 
   it('loads dashboard data successfully', async () => {
     const mockDashboardData = {
-      companies: [{ _id: '1', name: 'Test Company' }],
+      companies: [{ 
+        _id: '1', 
+        id: '1',
+        name: 'Test Company',
+        role: 'owner' as const,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }],
       workspaces: [{ id: 'ws-1', name: 'Main Workspace' }],
       environments: [{ id: 'env-1', name: 'Production' }],
       recent_diagrams: [],
@@ -57,10 +64,31 @@ describe('useNavigationStore', () => {
     // Set initial state
     act(() => {
       useNavigationStore.setState({
-        activeCompany: { _id: '1', name: 'Test Company' },
+        activeCompany: { 
+          _id: '1', 
+          id: '1',
+          name: 'Test Company',
+          role: 'owner' as const,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
         environments: [
-          { id: 'env-1', name: 'Production' },
-          { id: 'env-2', name: 'Development' }
+          { 
+            id: 'env-1', 
+            name: 'Production',
+            is_active: true,
+            diagrams: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          },
+          { 
+            id: 'env-2', 
+            name: 'Development',
+            is_active: true,
+            diagrams: [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
         ]
       });
     });

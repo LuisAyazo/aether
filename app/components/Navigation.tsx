@@ -23,6 +23,7 @@ import EnvironmentTreeSelect from "./ui/EnvironmentTreeSelect";
 import DiagramTreeSelect from "./ui/DiagramTreeSelect"; 
 import GeneratedCodeModal from "./ui/GeneratedCodeModal";
 import WorkspaceSelector from "./WorkspaceSelector";
+import { CompanySelector } from "./multi-tenant/CompanySelector";
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -195,17 +196,27 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
           {/* Para la alineación con el sidebar, se necesitaría un padding global o un cálculo más complejo. */}
           {/* Por ahora, se añade un margen izquierdo significativo si no es página de marketing. */}
           <div className={`flex items-center gap-x-3 ${!isOnMarketingPage && activeCompany ? 'ml-8 sm:ml-12 md:ml-16 lg:ml-60' : ''}`}> {/* ml-60 para simular ancho de sidebar */}
-            {!isOnMarketingPage && activeCompany && (
+            {!isOnMarketingPage && user && (
               <>
-                {/* Selector de Workspace */}
+                {/* Selector de Company */}
                 <div className="flex items-center gap-x-1">
-                  <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0 hidden md:inline">Workspace:</span>
-                  <WorkspaceSelector 
-                    companyId={activeCompany.id || activeCompany._id}
-                    currentWorkspaceId={activeWorkspace?.id || user?.workspace_id}
-                    workspaces={workspaces} // Pasar workspaces como prop
-                  />
+                  <CompanySelector />
                 </div>
+
+                {/* Divider */}
+                <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2 hidden md:block" />
+
+                {/* Selector de Workspace */}
+                {activeCompany && (
+                  <div className="flex items-center gap-x-1">
+                    <span className="text-sm text-gray-500 dark:text-gray-400 shrink-0 hidden md:inline">Workspace:</span>
+                    <WorkspaceSelector 
+                      companyId={activeCompany.id || activeCompany._id}
+                      currentWorkspaceId={activeWorkspace?.id || user?.workspace_id}
+                      workspaces={workspaces} // Pasar workspaces como prop
+                    />
+                  </div>
+                )}
 
                 {/* Divider */}
                 <div className="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2 hidden md:block" />
