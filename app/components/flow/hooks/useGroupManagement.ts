@@ -1,10 +1,14 @@
 import { useCallback, RefObject } from 'react';
-import { useReactFlow, Node, Viewport, applyNodeChanges } from 'reactflow';
+import { useReactFlow, /* Node, Viewport, */ applyNodeChanges } from 'reactflow'; // Node y Viewport se definirán localmente
 import { useEditorStore } from './useEditorStore';
 import { 
   MIN_EXPANDED_GROUP_WIDTH, 
   MIN_EXPANDED_GROUP_HEIGHT 
 } from '../utils/constants';
+
+// Tipos workaround como en otros hooks
+type Node = any;
+type Viewport = any;
 
 interface UseGroupManagementProps {
   lastViewportRef: RefObject<Viewport | null>;
@@ -36,9 +40,10 @@ export function useGroupManagement({ lastViewportRef }: UseGroupManagementProps)
       type: 'group',
       position,
       data: { label: 'New Group', provider, isCollapsed: false, isMinimized: false },
-      style: { width: 300, height: 200 },
+      style: { width: 300, height: 200 }, // zIndex eliminado del style
+      zIndex: 1, // zIndex a nivel de objeto nodo
     };
-    setNodes((nds) => applyNodeChanges([{ type: 'add', item: newGroupNode }], nds));
+    setNodes((nds: Node[]) => applyNodeChanges([{ type: 'add', item: newGroupNode }], nds)); // Añadir tipo a nds
     setTimeout(() => document.dispatchEvent(new CustomEvent('nodesChanged', { detail: { action: 'nodeAdded', nodeIds: [newGroupId] } })), 100);
     return newGroupId;
   }, [reactFlowInstance, setNodes]);
@@ -47,8 +52,8 @@ export function useGroupManagement({ lastViewportRef }: UseGroupManagementProps)
     if (reactFlowInstance) {
       lastViewportRef.current = reactFlowInstance.getViewport();
     }
-    setNodes(nds =>
-      nds.map(n => {
+    setNodes((nds: Node[]) => // Añadir tipo a nds
+      nds.map((n: Node) => { // Añadir tipo a n
         if (n.id === groupId) {
           const groupData = { ...n.data, isExpandedView: true, isMinimized: false };
           if (!groupData.viewport && reactFlowInstance) {
@@ -76,8 +81,8 @@ export function useGroupManagement({ lastViewportRef }: UseGroupManagementProps)
       const defaultWidth = MIN_EXPANDED_GROUP_WIDTH;
       const defaultHeight = MIN_EXPANDED_GROUP_HEIGHT;
 
-      setNodes(currentNodesMap =>
-        currentNodesMap.map(n => {
+      setNodes((currentNodesMap: Node[]) => // Añadir tipo a currentNodesMap
+        currentNodesMap.map((n: Node) => { // Añadir tipo a n
           if (n.id === groupIdToCollapse) {
             return {
               ...n,
@@ -95,8 +100,8 @@ export function useGroupManagement({ lastViewportRef }: UseGroupManagementProps)
     }
 
     setExpandedGroupId(null);
-    setNodes(nds =>
-      nds.map(n => {
+    setNodes((nds: Node[]) => // Añadir tipo a nds
+      nds.map((n: Node) => { // Añadir tipo a n
         if (n.id === groupIdToCollapse) {
           return {
             ...n,

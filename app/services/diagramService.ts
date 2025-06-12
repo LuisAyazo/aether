@@ -1,7 +1,8 @@
 // Servicio para la gestión de diagramas
 
 import { API_BASE_URL } from '../config';
-import { isAuthenticated } from './authService';
+import { isAuthenticated, getAuthTokenAsync } from './authService';
+import { cacheService, CACHE_KEYS, CACHE_TTL } from './cacheService';
 
 export interface Node {
   id: string;
@@ -10,7 +11,7 @@ export interface Node {
     x: number;
     y: number;
   };
-  data: any;
+  data: Record<string, unknown>;
   width?: number;
   height?: number;
   selected?: boolean;
@@ -20,7 +21,7 @@ export interface Node {
   };
   dragging?: boolean;
   parentNode?: string;
-  style?: any;
+  style?: Record<string, unknown>;
   // Nuevos campos para el manejo mejorado de grupos
   originalPosition?: {
     x: number;
@@ -40,8 +41,8 @@ export interface Edge {
   type?: string;
   animated?: boolean;
   label?: string;
-  data?: any;
-  style?: any;
+  data?: Record<string, unknown>;
+  style?: Record<string, unknown>;
   selected?: boolean;
   sourceHandle?: string;
   targetHandle?: string;
@@ -72,7 +73,7 @@ export interface Diagram {
     label?: string;
     isMinimized?: boolean;
     isCollapsed?: boolean;
-    style?: Record<string, any>;
+    style?: Record<string, unknown>;
   }>;
   nodePositions?: Record<string, Record<string, { 
     relativePosition: { x: number, y: number },
@@ -84,6 +85,7 @@ export interface Environment {
   id: string;
   name: string;
   description?: string;
+  path?: string; // Añadido para la ruta del directorio
   is_active: boolean;
   diagrams: string[];
   created_at: string;
@@ -91,7 +93,7 @@ export interface Environment {
 }
 
 // Funciones relacionadas con ambientes
-export const getEnvironments = async (companyId: string): Promise<Environment[]> => {
+export const getEnvironments = async (companyId: string, forceRefresh: boolean = false): Promise<Environment[]> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
@@ -102,7 +104,17 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
     throw new Error('ID de compañía no válido en getEnvironments');
   }
 
-  const token = localStorage.getItem('token');
+  // Check cache first unless force refresh
+  const cacheKey = CACHE_KEYS.ENVIRONMENTS(companyId);
+  if (!forceRefresh) {
+    const cachedData = cacheService.get<Environment[]>(cacheKey);
+    if (cachedData) {
+      console.log('📦 Environments loaded from cache');
+      return cachedData;
+    }
+  }
+
+  const token = await getAuthTokenAsync();
   // API_BASE_URL es http://localhost:8000/api
   // El backend espera /api/v1/companies/...
   const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments`;
@@ -133,8 +145,9 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
       try {
         const errorData = await response.json();
         errorDetail = errorData.detail || errorData.message || `Error ${response.status} del servidor.`;
-      } catch (e) {
+      } catch (parseError) {
         // Si el cuerpo del error no es JSON o está vacío
+        console.warn('Could not parse error response in getEnvironments:', parseError);
         errorDetail = `Error ${response.status}: ${response.statusText}. No se pudo obtener más detalle del error.`;
       }
       console.error(`Error en la respuesta de getEnvironments: ${errorDetail}`);
@@ -144,6 +157,10 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
     // Devolver los ambientes del backend
     const backendEnvironments = await response.json();
     console.log(`Recibidos ${backendEnvironments.length} ambientes del backend`);
+    
+    // Cache the data
+    cacheService.set(cacheKey, backendEnvironments, CACHE_TTL.ENVIRONMENTS);
+    
     return backendEnvironments;
   } catch (error) {
     console.error('Error en getEnvironments:', error);
@@ -151,12 +168,12 @@ export const getEnvironments = async (companyId: string): Promise<Environment[]>
   }
 };
 
-export const createEnvironment = async (companyId: string, environmentData: { name: string; description?: string; category?: string }): Promise<Environment> => {
+export const createEnvironment = async (companyId: string, environmentData: { name: string; description?: string; path?: string }): Promise<Environment> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   
   try {
     console.log(`Intentando crear ambiente para compañía ${companyId}:`, environmentData);
@@ -173,9 +190,11 @@ export const createEnvironment = async (companyId: string, environmentData: { na
         'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify({
-        ...environmentData,
-        is_active: true,
-        diagrams: []
+        name: environmentData.name,
+        description: environmentData.description,
+        path: environmentData.path,
+        company_id: companyId // Añadir company_id al cuerpo
+        // is_active y diagrams no se envían, el backend debe asignarles valores por defecto si es necesario.
       })
     });
 
@@ -198,18 +217,18 @@ export const createEnvironment = async (companyId: string, environmentData: { na
     const data = await response.json();
     console.log('Ambiente creado exitosamente:', data);
     return data;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error en createEnvironment:', error);
     throw error;
   }
 };
 
-export const updateEnvironment = async (companyId: string, environmentId: string, environmentData: { name: string; description?: string; is_active: boolean }): Promise<Environment> => {
+export const updateEnvironment = async (companyId: string, environmentId: string, environmentData: { name: string; description?: string; path?: string; is_active: boolean }): Promise<Environment> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   // API_BASE_URL es http://localhost:8000/api
   // El backend espera /api/v1/companies/...
   const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
@@ -232,7 +251,7 @@ export const updateEnvironment = async (companyId: string, environmentId: string
     throw new Error(errorData.detail || 'Error actualizando ambiente');
   }
 
-  return await response.json();
+  return await response.json() as Environment;
 };
 
 export const deleteEnvironment = async (companyId: string, environmentId: string): Promise<void> => {
@@ -240,7 +259,7 @@ export const deleteEnvironment = async (companyId: string, environmentId: string
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   // API_BASE_URL es http://localhost:8000/api
   // El backend espera /api/v1/companies/...
   const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
@@ -264,21 +283,37 @@ export const deleteEnvironment = async (companyId: string, environmentId: string
 };
 
 // Funciones relacionadas con diagramas asociados a ambientes
-export const getDiagramsByEnvironment = async (companyId: string, environmentId: string): Promise<Diagram[]> => {
+export const getDiagramsByEnvironment = async (companyId: string, environmentId: string, forceRefresh: boolean = false): Promise<Diagram[]> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
 
-  // Verificar companyId es válido
-  if (!companyId || companyId === 'undefined') {
-    console.error('Error: companyId es undefined o inválido en getDiagramsByEnvironment');
-    throw new Error('ID de compañía no válido. Por favor, vuelve a la página principal y selecciona una compañía.');
-  }
-
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   try {
-    console.log(`Obteniendo diagramas para compañía: ${companyId}, ambiente: ${environmentId}`);
-    const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams`, {
+    // Get current workspace from the navigation store
+    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const currentWorkspaceId = navStore.activeWorkspace?.id;
+    
+    if (!currentWorkspaceId) {
+      console.error('No workspace selected in store');
+      throw new Error('Por favor selecciona un workspace antes de acceder a los diagramas.');
+    }
+
+    // Check cache first unless force refresh
+    const cacheKey = CACHE_KEYS.DIAGRAMS(companyId, environmentId);
+    if (!forceRefresh) {
+      const cachedData = cacheService.get<Diagram[]>(cacheKey);
+      if (cachedData) {
+        console.log('📦 Diagrams loaded from cache');
+        return cachedData;
+      }
+    }
+
+    console.log(`Obteniendo diagramas para workspace: ${currentWorkspaceId}, ambiente: ${environmentId}`);
+    
+    // Use the new workspace-based route with environment filter
+    // Note: diagrams router is mounted at /api, not /api/v1
+    const response = await fetch(`${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams?environment_id=${environmentId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -292,11 +327,12 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
         window.location.href = '/login?session_expired=true';
         throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
       }
+      if (response.status === 403) {
+        throw new Error('No tienes permiso para ver diagramas en este workspace.');
+      }
       if (response.status === 404) {
         console.log('No se encontraron diagramas en el servidor.');
-        // Considerar si esto debe ser un error o un array vacío. Por ahora, mantenemos el error.
-        // throw new Error('El endpoint para obtener diagramas no está disponible en el backend. Contacta al administrador.');
-        return []; // Devolver array vacío si es 404 y no hay diagramas
+        return []; 
       }
       const errorData = await response.json();
       throw new Error(errorData.detail || 'Error obteniendo diagramas');
@@ -304,28 +340,56 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
 
     const backendDiagrams = await response.json();
     console.log(`Recibidos ${backendDiagrams.length} diagramas del backend`);
+    
+    // Cache the data
+    cacheService.set(cacheKey, backendDiagrams, CACHE_TTL.DIAGRAMS);
+    
     return backendDiagrams;
   } catch (error) {
     console.error('Error en getDiagramsByEnvironment:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
     throw new Error('No se pudieron obtener los diagramas. Por favor, inténtelo de nuevo.');
   }
 };
 
-export const getDiagram = async (companyId: string, environmentId: string, diagramId: string): Promise<Diagram> => {
+export const getDiagram = async (companyId: string, environmentId: string, diagramId: string, forceRefresh: boolean = false): Promise<Diagram> => {
   if (!isAuthenticated()) {
     throw new Error('Usuario no autenticado');
   }
 
-  // Verificar IDs
   if (!companyId || !environmentId || !diagramId) {
     throw new Error('Parámetros inválidos: Se requieren companyId, environmentId y diagramId');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   
   try {
-    console.log(`Obteniendo diagrama: compañía ${companyId}, ambiente ${environmentId}, diagrama ${diagramId}`);
-    const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, {
+    // Get current workspace from the navigation store
+    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const currentWorkspaceId = navStore.activeWorkspace?.id;
+    
+    if (!currentWorkspaceId) {
+      console.error('No workspace selected in store');
+      throw new Error('Por favor selecciona un workspace antes de acceder a los diagramas.');
+    }
+
+    // Check cache first unless force refresh
+    const cacheKey = CACHE_KEYS.DIAGRAM(companyId, environmentId, diagramId);
+    if (!forceRefresh) {
+      const cachedData = cacheService.get<Diagram>(cacheKey);
+      if (cachedData) {
+        console.log('📦 Diagram loaded from cache');
+        return cachedData;
+      }
+    }
+
+    console.log(`Obteniendo diagrama: workspace ${currentWorkspaceId}, diagrama ${diagramId}`);
+    
+    // Use the new workspace-based route
+    // Note: diagrams router is mounted at /api, not /api/v1
+    const response = await fetch(`${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -338,6 +402,9 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
         localStorage.removeItem('token');
         window.location.href = '/login?session_expired=true';
         throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
+      }
+      if (response.status === 403) {
+        throw new Error('No tienes permiso para ver este diagrama. Verifica que el workspace correcto esté seleccionado.');
       }
       if (response.status === 404) {
         throw new Error('El diagrama solicitado no se encuentra en la base de datos.');
@@ -346,9 +413,12 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
       throw new Error(errorData.detail || 'Error obteniendo diagrama');
     }
 
-    return await response.json();
-  } catch (error: any) {
+    return await response.json() as Diagram;
+  } catch (error: unknown) {
     console.error('Error en getDiagram:', error);
+    if (error instanceof Error) {
+      throw error;
+    }
     throw new Error('No se pudo obtener el diagrama. Por favor, vuelve a intentarlo.');
   }
 };
@@ -358,20 +428,29 @@ export const createDiagram = async (companyId: string, environmentId: string, di
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   
   try {
-    console.log(`Intentando crear diagrama para compañía ${companyId}, ambiente ${environmentId}`);
+    // Get current workspace from the navigation store
+    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const currentWorkspaceId = navStore.activeWorkspace?.id;
     
-    // Incluir company_id y environment_id en el payload según el esquema DiagramCreate del backend
+    if (!currentWorkspaceId) {
+      console.error('No workspace selected in store');
+      throw new Error('Por favor selecciona un workspace antes de crear diagramas.');
+    }
+
+    console.log(`Intentando crear diagrama para workspace ${currentWorkspaceId}, ambiente ${environmentId}`);
+    
     const diagramPayload = {
       ...diagramData,
-      company_id: companyId,
+      workspace_id: currentWorkspaceId,
       environment_id: environmentId
     };
     
-    // Crear el diagrama usando el endpoint del backend
-    const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams`, {
+    // Use the new workspace-based route
+    // Note: diagrams router is mounted at /api, not /api/v1
+    const response = await fetch(`${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -391,18 +470,20 @@ export const createDiagram = async (companyId: string, environmentId: string, di
         window.location.href = '/login?session_expired=true';
         throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
       }
+      if (response.status === 403) {
+        throw new Error('No tienes permiso para crear diagramas en este workspace.');
+      }
       let errorMessage = 'Error creando diagrama';
       try {
         const errorData = await response.json();
         console.error('Error al crear diagrama:', errorData);
         if (typeof errorData === 'object' && errorData.detail) {
-          // Si detail es un array de objetos de error (como en validaciones de Pydantic)
           if (Array.isArray(errorData.detail)) {
-            const errorMessages = errorData.detail.map((err: any) => {
+            const errorMessages = errorData.detail.map((err: Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any
               if (typeof err === 'object' && err.msg) {
-                return `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`;
+                return `${err.loc ? (err.loc as string[]).join('.') + ': ' : ''}${err.msg}`;
               }
-              return err.toString();
+              return String(err);
             }).join(', ');
             errorMessage = errorMessages;
           } else {
@@ -422,15 +503,23 @@ export const createDiagram = async (companyId: string, environmentId: string, di
 
     const data = await response.json();
     console.log('Diagrama creado exitosamente:', data);
-    return data;
-  } catch (error: any) {
+    return data as Diagram;
+  } catch (error: unknown) {
     console.error('Error en createDiagram:', error);
-    // Si el error ya es una instancia de Error con un mensaje personalizado, lo relanzamos
     if (error instanceof Error) {
       throw error;
     }
-    // Si no, creamos un nuevo error con un mensaje más descriptivo
-    throw new Error(error?.message || 'Error desconocido al crear el diagrama');
+    const unknownError = error as { message?: string; detail?: string | Array<Record<string, unknown>> };
+    let errorMessage = 'Error desconocido al crear el diagrama';
+    if (typeof unknownError?.detail === 'string') {
+      errorMessage = unknownError.detail;
+    } else if (Array.isArray(unknownError?.detail) && unknownError.detail.length > 0) {
+      const firstError = unknownError.detail[0] as { msg?: string };
+      errorMessage = firstError?.msg || errorMessage;
+    } else if (unknownError?.message) {
+      errorMessage = unknownError.message;
+    }
+    throw new Error(errorMessage);
   }
 };
 
@@ -440,14 +529,35 @@ export const updateDiagram = async (
   diagramId: string,
   diagramData: Partial<Diagram>
 ): Promise<Diagram> => {
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
   if (!token) {
     throw new Error('No estás autenticado');
   }
 
+  // Get current workspace from the navigation store
+  const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+  const currentWorkspaceId = navStore.activeWorkspace?.id;
+  
+  if (!currentWorkspaceId) {
+    console.error('No workspace selected in store');
+    throw new Error('Por favor selecciona un workspace antes de actualizar diagramas.');
+  }
+
+  console.log('🔍 [DIAGRAM SERVICE] Sending diagram update request:', {
+    workspaceId: currentWorkspaceId,
+    diagramId,
+    nodesCount: diagramData.nodes?.length || 0,
+    edgesCount: diagramData.edges?.length || 0,
+    hasNodeGroups: !!diagramData.nodeGroups,
+    nodeGroupsKeys: diagramData.nodeGroups ? Object.keys(diagramData.nodeGroups) : [],
+    requestData: diagramData
+  });
+
   try {
+    // Use the new workspace-based route
+    // Note: diagrams router is mounted at /api, not /api/v1
     const response = await fetch(
-      `${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, // Usar API_BASE_URL consistentemente
+      `${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, 
       {
         method: 'PUT',
         headers: {
@@ -458,30 +568,44 @@ export const updateDiagram = async (
       }
     );
 
+    console.log('🔍 [DIAGRAM SERVICE] Response status:', response.status);
+
     if (!response.ok) {
       if (response.status === 401) {
         localStorage.removeItem('token');
         window.location.href = '/login?session_expired=true';
         throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
       }
+      if (response.status === 403) {
+        throw new Error('No tienes permiso para actualizar este diagrama.');
+      }
       let errorMessage = 'Error actualizando diagrama';
       try {
         const errorData = await response.json();
-        errorMessage = errorData.detail || errorData.message || errorData.error || errorMessage;
-      } catch (e) {
-        console.error('Error parsing error response:', e);
+        console.log('🔍 [DIAGRAM SERVICE] Error response data:', errorData);
+        errorMessage = errorData.detail || errorData.message || (errorData as Record<string, string>).error || errorMessage;
+      } catch (parseErr) {
+        console.error('Error parsing error response:', parseErr);
       }
       throw new Error(errorMessage);
     }
 
     const data = await response.json();
-    return data;
+    console.log('🔍 [DIAGRAM SERVICE] Success response data:', data);
+    return data as Diagram;
   } catch (error) {
-    console.error('Error en updateDiagram:', error);
+    console.error('🔍 [DIAGRAM SERVICE] Error en updateDiagram:', error);
     if (error instanceof Error) {
       throw error;
     }
-    throw new Error('Error desconocido al actualizar el diagrama');
+    const unknownError = error as { message?: string; detail?: string | Record<string, unknown> | Array<Record<string, unknown>> };
+    let errorMessage = 'Error desconocido al actualizar el diagrama';
+    if (typeof unknownError?.detail === 'string') {
+      errorMessage = unknownError.detail;
+    } else if (unknownError?.message) {
+      errorMessage = unknownError.message;
+    }
+    throw new Error(errorMessage);
   }
 };
 
@@ -490,10 +614,23 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
     throw new Error('Usuario no autenticado');
   }
 
-  const token = localStorage.getItem('token');
+  const token = await getAuthTokenAsync();
+  
+  // Get current workspace from the navigation store
+  const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+  const currentWorkspaceId = navStore.activeWorkspace?.id;
+  
+  if (!currentWorkspaceId) {
+    console.error('No workspace selected in store');
+    throw new Error('Por favor selecciona un workspace antes de eliminar diagramas.');
+  }
+
   try {
-    console.log(`Intentando eliminar diagrama: compañía ${companyId}, ambiente ${environmentId}, diagrama ${diagramId}`);
-    const response = await fetch(`${API_BASE_URL}/diagrams/${companyId}/environments/${environmentId}/diagrams/${diagramId}`, {
+    console.log(`Intentando eliminar diagrama: workspace ${currentWorkspaceId}, diagrama ${diagramId}`);
+    
+    // Use the new workspace-based route
+    // Note: diagrams router is mounted at /api, not /api/v1
+    const response = await fetch(`${API_BASE_URL}/workspaces/${currentWorkspaceId}/diagrams/${diagramId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -507,13 +644,16 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
         window.location.href = '/login?session_expired=true';
         throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
       }
+      if (response.status === 403) {
+        throw new Error('No tienes permiso para eliminar este diagrama.');
+      }
       const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
       console.error('Error eliminando diagrama:', errorData);
       throw new Error(errorData.detail || 'Error eliminando diagrama');
     }
     
     console.log('Diagrama eliminado exitosamente del backend');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error en deleteDiagram:', error);
     throw error;
   }
@@ -521,7 +661,7 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
 
 export async function updateDiagramPaths(companyId: string, environmentId: string): Promise<Diagram[]> {
   try {
-    const token = localStorage.getItem('token');
+    const token = await getAuthTokenAsync();
     if (!token) {
       throw new Error('No authentication token available');
     }
@@ -548,8 +688,21 @@ export async function updateDiagramPaths(companyId: string, environmentId: strin
     }
 
     return await response.json();
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating diagram paths:', error);
-    throw error;
+    if (error instanceof Error) {
+      throw error;
+    }
+    const unknownError = error as { message?: string; detail?: string | Array<Record<string, unknown>> };
+    let errorMessage = 'Error desconocido al actualizar las rutas del diagrama';
+     if (typeof unknownError?.detail === 'string') {
+      errorMessage = unknownError.detail;
+    } else if (Array.isArray(unknownError?.detail) && unknownError.detail.length > 0) {
+        const firstError = unknownError.detail[0] as { msg?: string };
+        errorMessage = firstError?.msg || errorMessage;
+    } else if (unknownError?.message) {
+      errorMessage = unknownError.message;
+    }
+    throw new Error(errorMessage);
   }
 }

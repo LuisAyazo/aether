@@ -1,6 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useReactFlow, NodeProps, NodeResizer } from 'reactflow';
+import { useReactFlow, NodeResizer } from 'reactflow';
 import '@reactflow/node-resizer/dist/style.css';
+
+// Type aliases to work around ReactFlow TypeScript namespace issues
+type Node = any;
+type NodeProps = any;
 
 interface TextNodeData {
   text: string;
@@ -22,7 +26,7 @@ const colorOptions = [
   { name: 'Blanco', value: '#FFFFFF' },
 ];
 
-const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => {
+const TextNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(data.text);
   const [fontWeight, setFontWeight] = useState(data.fontWeight || 'normal');
@@ -44,13 +48,13 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
     setIsEditing(false);
     
     // Update node data
-    reactFlow.setNodes((nodes) =>
-      nodes.map((node) =>
+    reactFlow.setNodes((nodes: Node[]) => // Tipar nodes como Node[]
+      nodes.map((node: Node) => // Tipar node como Node
         node.id === id
           ? {
               ...node,
               data: {
-                ...node.data,
+                ...(node.data as TextNodeData), // Castear node.data a TextNodeData
                 text,
                 fontWeight,
                 textAlign,
@@ -104,6 +108,7 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
     width: '100%',
     height: '100%',
     position: 'relative' as const,
+    zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
     cursor: isEditing ? 'text' : selected ? 'move' : 'default',
     outline: selected ? '2px solid #3b82f6' : 'none',
     outlineOffset: '2px',
@@ -118,6 +123,10 @@ const TextNode: React.FC<NodeProps<TextNodeData>> = ({ id, data, selected }) => 
       onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setShowToolbar(true)}
       onMouseLeave={() => setShowToolbar(false)}
+      onContextMenu={(e) => {
+        // No detener la propagación del click derecho
+        // Permitir que el evento llegue a ReactFlow
+      }}
     >
       <NodeResizer
         isVisible={selected}

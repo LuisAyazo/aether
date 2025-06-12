@@ -1,606 +1,614 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, JSX, useMemo } from 'react'; 
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'; 
-import { Button, Modal, Input, Spin, message, Typography } from 'antd';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { Spin, message, Typography, Modal, Button } from 'antd';
 import { 
-  PlusOutlined as AntPlusOutlined, 
-  EyeOutlined, 
-  PlayCircleOutlined, 
-  FolderOpenOutlined as AntFolderIcon, 
-  SettingOutlined,
-} from '@ant-design/icons'; 
-import { 
-  FolderIcon, 
+  FolderIcon as FolderIconOutline, 
   UserCircleIcon as UserCircleIconOutline, 
   DocumentDuplicateIcon as DocumentDuplicateIconOutline, 
   UsersIcon as UsersIconOutline,
-  ServerIcon, 
-  CloudIcon,  
-  CircleStackIcon, 
-  CpuChipIcon, 
-  CodeBracketIcon, 
-  ArchiveBoxIcon, 
-  TableCellsIcon, 
-  BoltIcon, 
-  ChatBubbleOvalLeftEllipsisIcon, 
-  CalendarDaysIcon, 
-  AdjustmentsHorizontalIcon, 
-  ListBulletIcon, 
-  RectangleGroupIcon, 
-  RssIcon, 
-  ComputerDesktopIcon, 
   ServerStackIcon, 
-  CubeIcon, 
-  GlobeAltIcon, 
-  RectangleStackIcon, 
-  ShieldCheckIcon, 
-  ArrowsRightLeftIcon, 
-  DocumentTextIcon, 
+  SparklesIcon,
+  CloudIcon, 
+  CircleStackIcon,
+  TableCellsIcon,
+  BoltIcon,
+  CodeBracketIcon,
+  GlobeAltIcon,
+  RectangleStackIcon,
+  ChatBubbleOvalLeftEllipsisIcon,
+  CalendarDaysIcon,
+  AdjustmentsHorizontalIcon,
+  ServerIcon,
+  CubeIcon,
+  CpuChipIcon,
+  ArrowsRightLeftIcon,
+  ComputerDesktopIcon,
+  ArchiveBoxIcon,
+  RssIcon,
+  RectangleGroupIcon,
+  ShieldCheckIcon,
+  DocumentTextIcon,
+  ListBulletIcon,
 } from '@heroicons/react/24/outline';
+import { SettingOutlined, CheckOutlined } from '@ant-design/icons'; 
 
 import {
-  DocumentDuplicateIcon as DocumentDuplicateIconSolid,
-  WrenchScrewdriverIcon as WrenchScrewdriverIconSolid, 
   UserCircleIcon as UserCircleIconSolid,
   UsersIcon as UsersIconSolid, 
-  PlayCircleIcon as PlayCircleIconSolid 
+  PlayCircleIcon as PlayCircleIconSolid,
+  DocumentDuplicateIcon as DocumentDuplicateIconSolid,
+  // ChartBarIcon as SolidChartBarIcon, // Eliminado si no se usa
 } from '@heroicons/react/24/solid';
 
-import FlowEditor from '../../components/flow/FlowEditor'; 
-import EnvironmentTreeSelect from '../../components/ui/EnvironmentTreeSelect'; 
-import DiagramTreeSelect from '../../components/ui/DiagramTreeSelect'; 
-import CompanySidebar from '../../components/ui/CompanySidebar'; 
-import CredentialsPage from '../../components/ui/CredentialsPage'; 
+import FlowEditor from '../../components/flow/FlowEditor';
+import CompanySidebar from '../../components/ui/CompanySidebar';
+import CredentialsPage from '../../components/ui/CredentialsPage';
 import DeploymentsPage from '../../components/ui/DeploymentsPage';
 import SettingsPage from '../../components/ui/SettingsPage';
-import EnvironmentsPage from '../../components/ui/EnvironmentsPage'; 
+import EnvironmentsPage from '../../components/ui/EnvironmentsPage';
+import DiagramActionSubheader from '../../components/ui/DiagramActionSubheader'; // Importar el nuevo subheader
 
-import { getCompanies, Company, createCompany } from '../../services/companyService';
-import { getEnvironments, getDiagramsByEnvironment, getDiagram, Environment, Diagram, createDiagram as createDiagramService, updateDiagram, deleteDiagram as deleteDiagramService } from '../../services/diagramService';
-import { getCurrentUser, isAuthenticated, User } from '../../services/authService';
-
-import nodeTypes from '../../components/nodes/NodeTypes'; 
 import { Node as CustomNode, Edge as CustomEdge } from '../../services/diagramService';
-import { 
-  Node as ReactFlowNode, 
-  Edge as ReactFlowEdge, 
-  Viewport as ReactFlowViewport, 
-} from 'reactflow';
+import { useNavigationStore } from '../../hooks/useNavigationStore';
+import { useDashboardDataSimple } from '../../hooks/useDashboardDataSimple';
+import { updateDiagram } from '../../services/diagramService';
+
+import nodeTypes from '../../components/nodes/NodeTypes';
+import { getEdgeConfig, LogicalEdgeType } from '../../config/edgeConfig';
+// RESOURCE_REGISTRY no se usará directamente para construir categories, se usará la estructura manual
+// import { RESOURCE_REGISTRY, SupportedProvider } from '../../config/schemas'; 
+import type { ResourceCategory } from '../../components/flow/types/editorTypes'; // ResourceItem eliminado
 
 const { Text } = Typography;
 
-const PERSONAL_SPACE_COMPANY_NAME_PREFIX = "Personal Space for ";
 type SidebarSectionKey = 'diagrams' | 'settings' | 'templates' | 'credentials' | 'deployments' | 'team' | 'environments';
 const VALID_SECTIONS: SidebarSectionKey[] = ['diagrams', 'settings', 'templates', 'credentials', 'deployments', 'team', 'environments'];
-
-
-interface ResourceItem {
-  type: string;
-  name: string;
-  description: string;
-  icon?: JSX.Element; 
-  provider: 'aws' | 'gcp' | 'generic' | 'azure';
-}
-
-interface ResourceCategory {
-  name: string;
-  provider: 'aws' | 'gcp' | 'generic' | 'azure';
-  items: ResourceItem[];
-}
-
-const resourceCategories: ResourceCategory[] = [
-  {
-    name: 'AWS - Almacenamiento',
-    provider: 'aws',
-    items: [
-      { type: 'aws_s3_bucket', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws', icon: <CloudIcon /> },
-      { type: 'aws_rds_instance', name: 'RDS Instance', description: 'Base de datos relacional gestionada', provider: 'aws', icon: <CircleStackIcon /> },
-      { type: 'aws_dynamodb_table', name: 'DynamoDB Table', description: 'Base de datos NoSQL Key-Value y Documento', provider: 'aws', icon: <TableCellsIcon /> },
-      { type: 'aws_elasticache_cluster', name: 'ElastiCache Cluster', description: 'Caché en memoria (Redis/Memcached)', provider: 'aws', icon: <BoltIcon /> },
-      { type: 'aws_redshift_cluster', name: 'Redshift Cluster', description: 'Almacén de datos (Data Warehouse)', provider: 'aws', icon: <CircleStackIcon /> },
-      { type: 'aws_efs_file_system', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws', icon: <FolderIcon /> },
-    ]
-  },
-  {
-    name: 'AWS - Aplicación',
-    provider: 'aws',
-    items: [
-      { type: 'aws_lambda_function', name: 'Lambda Function', description: 'Ejecuta código sin aprovisionar servidores', provider: 'aws', icon: <CodeBracketIcon /> },
-      { type: 'aws_api_gateway_rest_api', name: 'API Gateway (REST)', description: 'API REST/WebSocket', provider: 'aws', icon: <GlobeAltIcon /> },
-      { type: 'aws_sqs_queue', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws', icon: <RectangleStackIcon /> },
-      { type: 'aws_sns_topic', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws', icon: <ChatBubbleOvalLeftEllipsisIcon /> },
-      { type: 'aws_cloudwatch_event_rule', name: 'EventBridge Rule', description: 'Orquestación de eventos', provider: 'aws', icon: <CalendarDaysIcon /> },
-      { type: 'aws_sfn_state_machine', name: 'Step Functions State Machine', description: 'Flujos de trabajo serverless', provider: 'aws', icon: <AdjustmentsHorizontalIcon /> },
-    ]
-  },
-  {
-    name: 'AWS - Cómputo',
-    provider: 'aws',
-    items: [
-      { type: 'aws_instance', name: 'EC2 Instance', description: 'Máquina Virtual', provider: 'aws', icon: <ServerIcon /> },
-      { type: 'aws_autoscaling_group', name: 'Auto Scaling Group', description: 'Grupo de Autoescalado', provider: 'aws', icon: <ServerStackIcon /> },
-      { type: 'aws_ecs_service', name: 'ECS Service', description: 'Servicio de Contenedores ECS', provider: 'aws', icon: <CubeIcon /> },
-      { type: 'aws_eks_cluster', name: 'EKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'aws', icon: <CpuChipIcon /> },
-      { type: 'aws_elasticbeanstalk_environment', name: 'Elastic Beanstalk Env', description: 'Entorno de Elastic Beanstalk', provider: 'aws', icon: <CloudIcon /> },
-    ]
-  },
-  {
-    name: 'AWS - Redes',
-    provider: 'aws',
-    items: [
-      { type: 'aws_lb', name: 'Load Balancer (ALB/NLB)', description: 'Balanceador de Carga de Aplicación/Red', provider: 'aws', icon: <ArrowsRightLeftIcon /> },
-    ]
-  },
-  {
-    name: 'Azure - Cómputo',
-    provider: 'azure',
-    items: [
-      { type: 'azurerm_virtual_machine', name: 'Virtual Machine', description: 'Máquina virtual', provider: 'azure', icon: <ComputerDesktopIcon /> },
-      { type: 'azurerm_linux_virtual_machine_scale_set', name: 'Linux VM Scale Set', description: 'Conjunto de escalado Linux', provider: 'azure', icon: <ServerStackIcon /> },
-      { type: 'azurerm_kubernetes_cluster', name: 'AKS Cluster', description: 'Cluster de Kubernetes Gestionado', provider: 'azure', icon: <CpuChipIcon /> },
-      { type: 'azurerm_linux_web_app', name: 'App Service (Linux)', description: 'Aplicación web PaaS en Linux', provider: 'azure', icon: <GlobeAltIcon /> },
-      { type: 'azurerm_container_group', name: 'Container Instances', description: 'Grupo de Contenedores', provider: 'azure', icon: <CubeIcon /> },
-      { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless en Linux', provider: 'azure', icon: <BoltIcon /> },
-    ]
-  },
-  {
-    name: 'Azure - Almacenamiento',
-    provider: 'azure',
-    items: [
-      { type: 'azurerm_storage_container', name: 'Storage Container (Blob)', description: 'Contenedor de Blob Storage', provider: 'azure', icon: <ArchiveBoxIcon /> },
-      { type: 'azurerm_cosmosdb_account', name: 'Cosmos DB Account', description: 'Cuenta de Azure Cosmos DB (NoSQL)', provider: 'azure', icon: <CircleStackIcon /> },
-      { type: 'azurerm_mssql_database', name: 'SQL Database', description: 'Base de datos SQL de Azure', provider: 'azure', icon: <CircleStackIcon /> },
-      { type: 'azurerm_storage_share', name: 'File Share', description: 'Recurso compartido de Azure Files', provider: 'azure', icon: <FolderIcon /> },
-    ]
-  },
-  {
-    name: 'Azure - Caché',
-    provider: 'azure',
-    items: [
-      { type: 'azurerm_redis_cache', name: 'Cache for Redis', description: 'Caché en memoria Redis', provider: 'azure', icon: <BoltIcon /> },
-    ]
-  },
-  {
-    name: 'Azure - Aplicación',
-    provider: 'azure',
-    items: [
-      { type: 'azurerm_api_management', name: 'API Management Service', description: 'Servicio de gestión de APIs', provider: 'azure', icon: <GlobeAltIcon /> },
-      { type: 'azurerm_servicebus_namespace', name: 'Service Bus Namespace', description: 'Namespace para mensajería de Service Bus', provider: 'azure', icon: <ChatBubbleOvalLeftEllipsisIcon /> },
-      { type: 'azurerm_eventgrid_topic', name: 'Event Grid Topic', description: 'Tema de Azure Event Grid', provider: 'azure', icon: <RssIcon /> },
-      { type: 'azurerm_logic_app_workflow', name: 'Logic App Workflow', description: 'Flujo de trabajo de Logic Apps (Consumo)', provider: 'azure', icon: <RectangleGroupIcon /> },
-      { type: 'azurerm_eventhub_namespace', name: 'Event Hubs Namespace', description: 'Namespace para streaming de eventos', provider: 'azure', icon: <BoltIcon /> },
-    ]
-  },
-  {
-    name: 'Azure - Redes',
-    provider: 'azure',
-    items: [
-      { type: 'azurerm_virtual_network', name: 'Virtual Network', description: 'Red virtual privada', provider: 'azure', icon: <GlobeAltIcon /> },
-      { type: 'azurerm_subnet', name: 'Subnet', description: 'Subred dentro de una VNet', provider: 'azure', icon: <RectangleStackIcon /> },
-      { type: 'azurerm_network_security_group', name: 'Network Security Group', description: 'Reglas de seguridad de red', provider: 'azure', icon: <ShieldCheckIcon /> },
-      { type: 'azurerm_lb', name: 'Load Balancer', description: 'Balanceador de carga L4', provider: 'azure', icon: <ArrowsRightLeftIcon /> },
-      { type: 'azurerm_application_gateway', name: 'Application Gateway', description: 'Balanceador de carga L7', provider: 'azure', icon: <GlobeAltIcon /> },
-      { type: 'azurerm_firewall', name: 'Firewall', description: 'Firewall de red gestionado', provider: 'azure', icon: <ShieldCheckIcon /> },
-    ]
-  },
-  {
-    name: 'GCP - Cómputo',
-    provider: 'gcp',
-    items: [
-      { type: 'gcp_compute_instance', name: 'Compute Engine', description: 'Máquina virtual en la nube', provider: 'gcp', icon: <ServerIcon /> },
-      { type: 'gcp_compute_disk', name: 'Compute Disk', description: 'Disco persistente para VMs', provider: 'gcp', icon: <ArchiveBoxIcon /> },
-      { type: 'gcp_compute_instance_template', name: 'Instance Template', description: 'Plantilla para instancias de VM', provider: 'gcp', icon: <RectangleStackIcon /> },
-      { type: 'gcp_compute_instance_group_manager', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp', icon: <ServerStackIcon /> },
-      { type: 'gcp_gke_cluster', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp', icon: <CpuChipIcon /> },
-      { type: 'gcp_cloudrun_service', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp', icon: <CodeBracketIcon /> },
-      { type: 'gcp_appengine_app', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp', icon: <CloudIcon /> },
-      { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Funciones serverless (Cómputo)', provider: 'gcp', icon: <BoltIcon /> },
-    ]
-  },
-  {
-    name: 'GCP - Redes',
-    provider: 'gcp',
-    items: [
-      { type: 'gcp_compute_network', name: 'VPC Network', description: 'Red Virtual Privada', provider: 'gcp', icon: <GlobeAltIcon /> },
-      { type: 'gcp_compute_firewall', name: 'Firewall Rule', description: 'Regla de firewall VPC', provider: 'gcp', icon: <ShieldCheckIcon /> },
-      { type: 'gcp_compute_load_balancer', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'gcp', icon: <ArrowsRightLeftIcon /> },
-    ]
-  },
-  {
-    name: 'GCP - Almacenamiento',
-    provider: 'gcp',
-    items: [
-      { type: 'gcp_cloud_storage_bucket', name: 'Cloud Storage Bucket', description: 'Almacenamiento de objetos', provider: 'gcp', icon: <CloudIcon /> },
-      { type: 'gcp_sql_instance', name: 'Cloud SQL Instance', description: 'Base de datos MySQL, PostgreSQL, SQL Server', provider: 'gcp', icon: <CircleStackIcon /> },
-      { type: 'gcp_bigquery_dataset', name: 'BigQuery Dataset', description: 'Conjunto de datos de BigQuery', provider: 'gcp', icon: <TableCellsIcon /> },
-      { type: 'gcp_firestore_database', name: 'Firestore Database', description: 'Base de datos NoSQL en modo Nativo o Datastore', provider: 'gcp', icon: <DocumentTextIcon /> }, 
-      { type: 'gcp_memorystore_instance', name: 'Memorystore Instance', description: 'Servicio de caché Redis o Memcached', provider: 'gcp', icon: <BoltIcon /> },
-      { type: 'gcp_filestore_instance', name: 'Filestore Instance', description: 'Almacenamiento de archivos NFS gestionado', provider: 'gcp', icon: <FolderIcon /> },
-    ]
-  },
-  {
-    name: 'GCP - Aplicación',
-    provider: 'gcp',
-    items: [
-      { type: 'gcp_api_gateway', name: 'Cloud Endpoints', description: 'API Gateway', provider: 'gcp', icon: <GlobeAltIcon /> }, 
-      { type: 'gcp_pubsub_topic', name: 'Pub/Sub', description: 'Mensajería', provider: 'gcp', icon: <ChatBubbleOvalLeftEllipsisIcon /> }, 
-      { type: 'gcp_cloud_tasks_queue', name: 'Cloud Tasks Queue', description: 'Colas de tareas', provider: 'gcp', icon: <ListBulletIcon /> },
-      { type: 'gcp_workflows_workflow', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp', icon: <RectangleGroupIcon /> },
-      { type: 'gcp_eventarc_trigger', name: 'Eventarc Trigger', description: 'Orquestación de eventos', provider: 'gcp', icon: <RssIcon /> },
-    ]
-  },
-  {
-    name: 'Grupos y Áreas',
-    provider: 'generic',
-    items: [
-      { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos', provider: 'generic', icon: <RectangleGroupIcon /> },
-      { type: 'areaNode', name: 'Área', description: 'Definir un área visual', provider: 'generic', icon: <CubeIcon /> },
-    ]
-  }
-];
-
 
 export default function DashboardPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [activeCompany, setActiveCompany] = useState<Company | null>(null);
-  const [isPersonalSpace, setIsPersonalSpace] = useState(false);
-  const [environments, setEnvironments] = useState<Environment[]>([]);
-  const [diagrams, setDiagrams] = useState<Diagram[]>([]);
-  const [selectedEnvironment, setSelectedEnvironment] = useState<string | null>(null);
-  const [selectedDiagram, setSelectedDiagram] = useState<string | null>(null);
-  const [currentDiagram, setCurrentDiagram] = useState<Diagram | null>(null);
   
-  const convertToReactFlowNodes = (customNodes: CustomNode[]): ReactFlowNode[] => {
-    return customNodes.map(node => ({
-      ...node,
-      parentId: node.parentNode, 
-      data: { ...node.data }
-    } as ReactFlowNode));
+  // TEMPORAL: Monitoreo de rendimiento y llamadas API
+  useEffect(() => {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      // Script de rendimiento - DESHABILITADO
+      // const perfScript = document.createElement('script');
+      // perfScript.src = '/debug-backend-performance.js';
+      // perfScript.onload = () => {
+      //   console.log('🔍 Monitoreo de rendimiento activado');
+      //   // Auto-reporte después de 5 segundos de carga
+      //   setTimeout(() => {
+      //     if ((window as any).performanceReport) {
+      //       (window as any).performanceReport();
+      //     }
+      //   }, 5000);
+      // };
+      // document.head.appendChild(perfScript);
+      
+      // Script de debug de llamadas API
+      const apiScript = document.createElement('script');
+      apiScript.src = '/debug-api-calls.js';
+      apiScript.onload = () => {
+        console.log('🔍 Debug de llamadas API activado');
+      };
+      document.head.appendChild(apiScript);
+      
+      // Script de debug de edge handles
+      const edgeScript = document.createElement('script');
+      edgeScript.src = '/debug-edge-handles.js';
+      edgeScript.onload = () => {
+        console.log('🔍 Debug de edge handles activado');
+      };
+      document.head.appendChild(edgeScript);
+    }
+  }, []);
+
+  // Usar el hook simplificado temporalmente para depuración
+  const { user, dataLoading, activeCompany } = useDashboardDataSimple();
+  
+  // Otros estados del store
+  const isPersonalSpace = useNavigationStore(state => state.isPersonalSpace);
+  const workspaces = useNavigationStore(state => state.workspaces);
+  const activeWorkspace = useNavigationStore(state => state.activeWorkspace);
+  const environments = useNavigationStore(state => state.environments);
+  const diagramsFromStore = useNavigationStore(state => state.diagrams);
+  const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
+  const selectedDiagram = useNavigationStore(state => state.selectedDiagram);
+  const currentDiagram = useNavigationStore(state => state.currentDiagram);
+  const dataError = useNavigationStore(state => state.dataError);
+  
+  const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState<boolean>(false);
+  const [showOnboardingFlow, setShowOnboardingFlow] = useState<boolean>(false);
+  const [onboardingStep, setOnboardingStep] = useState<number>(1);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const convertToReactFlowNodes = (customNodes: CustomNode[]): any[] => { 
+    console.log('🔍 [LOAD DEBUG] Converting nodes from backend:', customNodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      parentNode: n.parentNode
+    })));
+    
+    return customNodes.map(node => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const reactFlowNode: any = {
+        ...node,
+        parentId: node.parentNode, 
+        data: { ...node.data }
+      };
+
+      // Check if this node is a child of a minimized group and apply hidden state immediately
+      if (node.parentNode) {
+        const parentNode = customNodes.find(n => n.id === node.parentNode);
+        if (parentNode?.data?.isMinimized) {
+          reactFlowNode.hidden = true;
+          reactFlowNode.style = {
+            ...reactFlowNode.style,
+            visibility: 'hidden',
+            pointerEvents: 'none',
+            opacity: 0
+          };
+        }
+      }
+
+      console.log('🔍 [LOAD DEBUG] Converted node:', {
+        id: reactFlowNode.id,
+        position: reactFlowNode.position,
+        parentId: reactFlowNode.parentId,
+        parentNode: node.parentNode
+      });
+
+      return reactFlowNode; 
+    }); 
   };
-  const convertToReactFlowEdges = (customEdges: CustomEdge[]): ReactFlowEdge[] => customEdges.map(e => ({...e} as ReactFlowEdge));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const convertToReactFlowEdges = (customEdges: CustomEdge[]): any[] => {
+    console.log('🔍 [EDGE LOAD DEBUG] Converting edges from backend:', customEdges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+      edgeKind: e.data?.edgeKind
+    })));
+    
+    // Exponer edges globalmente para debug
+    if (typeof window !== 'undefined') {
+      (window as any).__DEBUG_BACKEND_EDGES__ = customEdges;
+      (window as any).__DEBUG_CONVERTED_EDGES__ = [];
+    }
+    
+    return customEdges.map(edge => {
+      // Si el edge tiene data.edgeKind, aplicar la configuración visual
+      if (edge.data?.edgeKind) {
+        const edgeConfig = getEdgeConfig(edge.data.edgeKind as LogicalEdgeType);
+        
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reactFlowEdge: any = {
+          ...edge,
+          type: edgeConfig.visualType,
+          style: edgeConfig.style,
+          markerEnd: {
+            type: edgeConfig.markerEnd.type,
+            color: edgeConfig.markerEnd.color,
+            width: edgeConfig.markerEnd.width || 20,
+            height: edgeConfig.markerEnd.height || 20,
+            strokeWidth: edgeConfig.markerEnd.strokeWidth || 1
+          },
+          // Asegurar que se preserven los handles
+          sourceHandle: edge.sourceHandle,
+          targetHandle: edge.targetHandle
+        };
+        
+        console.log('🔍 [EDGE LOAD DEBUG] Converted edge with config:', {
+          id: reactFlowEdge.id,
+          edgeKind: edge.data.edgeKind,
+          type: reactFlowEdge.type,
+          style: reactFlowEdge.style,
+          markerEnd: reactFlowEdge.markerEnd,
+          sourceHandle: reactFlowEdge.sourceHandle,
+          targetHandle: reactFlowEdge.targetHandle
+        });
+        
+        // Guardar para debug
+        if (typeof window !== 'undefined' && (window as any).__DEBUG_CONVERTED_EDGES__) {
+          (window as any).__DEBUG_CONVERTED_EDGES__.push(reactFlowEdge);
+        }
+        
+        return reactFlowEdge;
+      }
+      
+      // Si no tiene edgeKind, retornar el edge tal cual
+      console.log('⚠️ [EDGE LOAD DEBUG] Edge sin edgeKind:', edge);
+      return edge;
+    });
+  }
 
   const initialNodesForFlow = useMemo(() => {
     return currentDiagram?.nodes ? convertToReactFlowNodes(currentDiagram.nodes) : [];
   }, [currentDiagram?.nodes]);
 
-  const initialEdgesForFlow = useMemo(() => {
-    return currentDiagram?.edges ? convertToReactFlowEdges(currentDiagram.edges) : [];
+  const [delayedEdges, setDelayedEdges] = useState<any[]>([]);
+  
+  useEffect(() => {
+    if (currentDiagram?.edges) {
+      // Delay edge loading to ensure handles are rendered
+      const timer = setTimeout(() => {
+        const edges = convertToReactFlowEdges(currentDiagram.edges);
+        console.log('🔍 [EDGE TIMING] Setting delayed edges:', edges.length);
+        setDelayedEdges(edges);
+      }, 100); // Small delay to ensure nodes and handles are rendered
+      
+      return () => clearTimeout(timer);
+    }
   }, [currentDiagram?.edges]);
 
-  const [newEnvironmentModalVisible, setNewEnvironmentModalVisible] = useState<boolean>(false);
-  const [newEnvironmentName, setNewEnvironmentName] = useState<string>('');
-  const [newEnvironmentDescription, setNewEnvironmentDescription] = useState<string>('');
-
-  const [newDiagramModalVisible, setNewDiagramModalVisible] = useState<boolean>(false);
-  const [newDiagramName, setNewDiagramName] = useState<string>('');
-  const [newDiagramPath, setNewDiagramPath] = useState<string>('');
-  const [newDiagramDescription, setNewDiagramDescription] = useState<string>('');
-
-  const [deleteDiagramModalVisible, setDeleteDiagramModalVisible] = useState<boolean>(false); 
-  const [diagramToDeleteId, setDiagramToDeleteId] = useState<string | null>(null); 
+  const initialEdgesForFlow = useMemo(() => {
+    return delayedEdges;
+  }, [delayedEdges]);
   
-  const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [needsPersonalSpaceSetup, setNeedsPersonalSpaceSetup] = useState(false);
+  // Log del viewport inicial y validación
+  useEffect(() => {
+    if (currentDiagram?.viewport) {
+      // Validar que el viewport sea válido (debe tener x, y, zoom como números)
+      const viewport = currentDiagram.viewport;
+      if (
+        typeof viewport === 'object' && 
+        typeof viewport.x === 'number' && 
+        typeof viewport.y === 'number' && 
+        typeof viewport.zoom === 'number'
+      ) {
+        console.log('📍 [VIEWPORT LOAD] Loading valid viewport from currentDiagram:', viewport);
+      } else {
+        console.log('📍 [VIEWPORT LOAD] Invalid viewport detected, using default:', viewport);
+        // Si el viewport es inválido, usar valores por defecto
+        if (currentDiagram) {
+          currentDiagram.viewport = { x: 0, y: 0, zoom: 1 };
+        }
+      }
+    } else {
+      console.log('📍 [VIEWPORT LOAD] No viewport in currentDiagram');
+    }
+  }, [currentDiagram]);
+  
+  // El hook useDashboardData maneja la inicialización
+
+  // Estado para rastrear si ya verificamos las compañías
+  const [hasCheckedCompanies, setHasCheckedCompanies] = useState(false);
+
+  // Detectar cuando un usuario no tiene compañías y redirigir según el estado de onboarding
+  useEffect(() => {
+    console.log('[Dashboard] Company/Onboarding check effect ejecutándose:', { 
+      dataLoading, 
+      user: user?.email, 
+      activeCompany: activeCompany?.name,
+      hasCheckedCompanies,
+      userCompanies: useNavigationStore.getState().userCompanies?.length,
+      pathname,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Evitar loops si ya estamos en las páginas de destino
+    if (pathname === '/create-company' || pathname === '/onboarding/select-usage') {
+      console.log('[Dashboard] Ya estamos en create-company o onboarding, evitando redirección');
+      return;
+    }
+    
+    // Solo verificar después de que la carga inicial se complete
+    if (!dataLoading && user && !hasCheckedCompanies) {
+      setHasCheckedCompanies(true);
+      
+      // Verificar el estado de onboarding del usuario
+      const hasCompletedOnboarding = localStorage.getItem(`onboarding_completed_${user._id}`);
+      
+      // Si después de cargar no hay compañía activa
+      if (!activeCompany) {
+        // Verificar si acabamos de crear una compañía
+        const justCreatedCompany = localStorage.getItem('justCreatedCompany');
+        if (justCreatedCompany) {
+          // Si acabamos de crear una compañía, dar más tiempo para que se actualice el estado
+          localStorage.removeItem('justCreatedCompany');
+          console.log('Compañía recién creada, esperando actualización del estado...');
+          
+          // Dar más tiempo antes de decidir redirigir
+          const timeoutId = setTimeout(() => {
+            // Verificar de nuevo después del delay
+            const currentState = useNavigationStore.getState();
+            if (!currentState.activeCompany && currentState.userCompanies && currentState.userCompanies.length === 0) {
+              console.log('Aún sin compañía activa después de esperar, decidiendo redirección...');
+              
+              // Decidir a dónde redirigir basado en el estado de onboarding
+              if (!hasCompletedOnboarding) {
+                console.log('[Dashboard] Usuario sin onboarding, redirigiendo a /onboarding/select-usage');
+                router.push('/onboarding/select-usage');
+              } else {
+                console.log('[Dashboard] Usuario con onboarding completado, redirigiendo a /create-company');
+                router.push('/create-company');
+              }
+            }
+          }, 3000); // Esperar 3 segundos
+          
+          return () => clearTimeout(timeoutId);
+        } else {
+          // Si no acabamos de crear una compañía, verificar si realmente no tiene compañías
+          const currentState = useNavigationStore.getState();
+          console.log('[Dashboard] Current state check:', {
+            userCompanies: currentState.userCompanies,
+            activeCompany: currentState.activeCompany,
+            dataLoading: currentState.dataLoading,
+            hasCompletedOnboarding
+          });
+          
+          if (currentState.userCompanies && currentState.userCompanies.length === 0) {
+            // Usuario confirmado sin compañías
+            console.log('[Dashboard] Usuario confirmado sin compañías, decidiendo redirección...');
+            const timeoutId = setTimeout(() => {
+              // Decidir a dónde redirigir basado en el estado de onboarding
+              if (!hasCompletedOnboarding) {
+                console.log('[Dashboard] Usuario sin onboarding, redirigiendo a /onboarding/select-usage');
+                router.push('/onboarding/select-usage');
+              } else {
+                console.log('[Dashboard] Usuario con onboarding completado, redirigiendo a /create-company');
+                router.push('/create-company');
+              }
+            }, 500);
+            
+            return () => clearTimeout(timeoutId);
+          } else {
+            // userCompanies podría ser null/undefined, esperar más
+            console.log('[Dashboard] userCompanies no está listo aún, esperando...');
+          }
+        }
+      }
+    }
+  }, [dataLoading, user, activeCompany, hasCheckedCompanies, router, pathname]);
+
+  useEffect(() => {
+    if (user && user._id && !dataLoading && !dataError && activeCompany) {
+      const welcomeModalSeenKey = `welcomeModalSeen_${user._id}_${activeCompany._id}`;
+      const welcomeModalAlreadySeen = localStorage.getItem(welcomeModalSeenKey);
+      
+      // Verificar si es una compañía nueva (sin ambientes)
+      const isNewCompany = environments.length === 0;
+      
+      if (!welcomeModalAlreadySeen && isNewCompany) {
+        setIsWelcomeModalVisible(true);
+        setShowOnboardingFlow(true);
+      } else if (!welcomeModalAlreadySeen) {
+        setIsWelcomeModalVisible(true);
+      }
+    }
+  }, [user, activeCompany, dataLoading, dataError, environments]);
 
   useEffect(() => {
     const sectionFromQuery = searchParams.get('section') as SidebarSectionKey;
     if (sectionFromQuery && VALID_SECTIONS.includes(sectionFromQuery)) {
       setActiveSectionInSidebar(sectionFromQuery);
+    } else if (!sectionFromQuery && activeSectionInSidebar !== 'diagrams') {
+      setActiveSectionInSidebar('diagrams');
     }
-  }, [searchParams]);
+  }, [searchParams, activeSectionInSidebar]);
 
+  // Estado para el grupo expandido inicial
+  const [initialExpandedGroup, setInitialExpandedGroup] = useState<string | null>(null);
 
+  // Estado para rastrear si ya se cargaron los parámetros iniciales de URL
+  const [urlParamsLoaded, setUrlParamsLoaded] = useState(false);
+
+  // Sincronizar parámetros de URL con el estado solo en la carga inicial
   useEffect(() => {
-    if (!isAuthenticated()) {
-      router.push('/login');
+    if (!dataLoading && activeCompany && workspaces.length > 0 && environments.length > 0 && !urlParamsLoaded) {
+      const companyParam = searchParams.get('company');
+      const workspaceParam = searchParams.get('workspace');
+      const envParam = searchParams.get('env');
+      const diagramParam = searchParams.get('diagram');
+      const groupParam = searchParams.get('group');
+      
+      const applyUrlParams = async () => {
+        // TODO: Implementar cambio de compañía y workspace desde URL
+        // Por ahora solo manejamos ambiente y diagrama
+        
+        // Buscar ambiente por nombre
+        if (envParam) {
+          const targetEnv = environments.find(e => e.name.toLowerCase().replace(/\s+/g, '-') === envParam.toLowerCase());
+          if (targetEnv && targetEnv.id !== selectedEnvironment) {
+            await useNavigationStore.getState().handleEnvironmentChange(targetEnv.id);
+          }
+        }
+        
+        // Buscar diagrama por nombre (después de cambiar ambiente si es necesario)
+        if (diagramParam && diagramsFromStore.length > 0) {
+          const targetDiagram = diagramsFromStore.find(d => d.name.toLowerCase().replace(/\s+/g, '-') === diagramParam.toLowerCase());
+          if (targetDiagram && targetDiagram.id !== selectedDiagram) {
+            await useNavigationStore.getState().handleDiagramChange(targetDiagram.id);
+          }
+        }
+        
+        // Establecer el grupo expandido inicial si está en la URL
+        if (groupParam && currentDiagram) {
+          // Buscar el grupo por su label
+          const groupNode = currentDiagram.nodes?.find(n => 
+            n.type === 'group' && 
+            n.data?.label && 
+            typeof n.data.label === 'string' &&
+            n.data.label.toLowerCase().replace(/\s+/g, '-') === groupParam.toLowerCase()
+          );
+          if (groupNode) {
+            setInitialExpandedGroup(groupNode.id);
+          }
+        }
+        
+        // Marcar que ya se cargaron los parámetros de URL
+        setUrlParamsLoaded(true);
+      };
+      
+      applyUrlParams();
+    }
+  }, [dataLoading, activeCompany, workspaces, environments, searchParams, currentDiagram, selectedEnvironment, selectedDiagram, diagramsFromStore, urlParamsLoaded]);
+
+  // Actualizar URL cuando cambian compañía, workspace, ambiente o diagrama (pero solo después de que se cargaron los parámetros iniciales)
+  useEffect(() => {
+    if (!urlParamsLoaded || !activeCompany || !activeWorkspace) return;
+    
+    const selectedEnv = environments.find(e => e.id === selectedEnvironment);
+    const selectedDiag = diagramsFromStore.find(d => d.id === selectedDiagram);
+    
+    // Usar un timeout para evitar múltiples actualizaciones rápidas
+    const timeoutId = setTimeout(() => {
+      const currentParams = new URLSearchParams(window.location.search);
+      const companyParam = activeCompany.slug || activeCompany.name.toLowerCase().replace(/\s+/g, '-');
+      const workspaceParam = activeWorkspace.slug || activeWorkspace.name.toLowerCase().replace(/\s+/g, '-');
+      
+      // Verificar si realmente necesitamos actualizar algo
+      let needsUpdate = false;
+      
+      // Verificar compañía y workspace
+      if (currentParams.get('company') !== companyParam) {
+        currentParams.set('company', companyParam);
+        needsUpdate = true;
+      }
+      if (currentParams.get('workspace') !== workspaceParam) {
+        currentParams.set('workspace', workspaceParam);
+        needsUpdate = true;
+      }
+      
+      // Verificar ambiente
+      if (selectedEnv) {
+        const envParam = selectedEnv.name.toLowerCase().replace(/\s+/g, '-');
+        if (currentParams.get('env') !== envParam) {
+          currentParams.set('env', envParam);
+          needsUpdate = true;
+        }
+      } else if (currentParams.has('env')) {
+        currentParams.delete('env');
+        needsUpdate = true;
+      }
+      
+      // Verificar diagrama
+      if (selectedDiag) {
+        const diagramParam = selectedDiag.name.toLowerCase().replace(/\s+/g, '-');
+        if (currentParams.get('diagram') !== diagramParam) {
+          currentParams.set('diagram', diagramParam);
+          needsUpdate = true;
+        }
+      } else if (currentParams.has('diagram')) {
+        currentParams.delete('diagram');
+        needsUpdate = true;
+      }
+      
+      // Eliminar el parámetro group cuando cambia el diagrama
+      if (currentParams.has('group') && !selectedDiag) {
+        currentParams.delete('group');
+        needsUpdate = true;
+      }
+      
+      // Solo actualizar la URL si realmente hay cambios
+      if (needsUpdate) {
+        const newUrl = `${pathname}?${currentParams.toString()}`;
+        console.log('[Dashboard] Actualizando URL params:', {
+          from: window.location.search,
+          to: currentParams.toString(),
+          timestamp: new Date().toISOString()
+        });
+        router.replace(newUrl, { scroll: false });
+      }
+    }, 100); // Pequeño delay para evitar múltiples actualizaciones
+    
+    return () => clearTimeout(timeoutId);
+  }, [activeCompany, activeWorkspace, selectedEnvironment, selectedDiagram, environments, diagramsFromStore, pathname, router, urlParamsLoaded]);
+
+  const handleInternalSectionChange = (sectionString: string) => {
+    const section = sectionString as SidebarSectionKey;
+    if (VALID_SECTIONS.includes(section)) {
+      setActiveSectionInSidebar(section);
+      const currentParams = new URLSearchParams(searchParams); 
+      currentParams.set("section", section);
+      const search = currentParams.toString();
+      const query = search ? `?${search}` : "";
+      router.push(`${pathname}${query}`);
+    }
+  };
+  
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleSaveDiagramLocal = useCallback(async (data: { nodes: any[], edges: any[], viewport?: any }) => { 
+    if (!activeCompany || !selectedEnvironment || !selectedDiagram || !currentDiagram) {
+      message.error("No se puede guardar: falta información de compañía, ambiente o diagrama.");
       return;
     }
-    const currentUser = getCurrentUser();
-    setUser(currentUser);
-  }, [router]);
-
-  useEffect(() => {
-    const actualUserId = user?._id; 
-    if (!user || !actualUserId || user.usage_type === null) {
-      if (!user && isAuthenticated()) setLoading(true);
-      else setLoading(false);
-      return; 
-    }
     
-    async function setupPersonalSpaceAndLoadData() {
-      setLoading(true); setError(null);
-      try {
-        const personalCompany = await findPersonalCompany(user!); 
-        if (!personalCompany) {
-          setNeedsPersonalSpaceSetup(true); setLoading(false); return;
-        }
-        setActiveCompany(personalCompany); setIsPersonalSpace(true);
-        
-        const companyIdToUse = personalCompany._id; // Usar _id que está garantizado por companyService
-        const token = localStorage.getItem('token');
-        if (!token) {
-          message.error("Usuario no autenticado. Por favor, inicie sesión.");
-          localStorage.removeItem('token'); // Limpiar token
-          router.push('/login');
-          setLoading(false);
-          return;
-        }
-        const existingEnvs = await getEnvironments(companyIdToUse); 
-        const sandboxEnv = existingEnvs.find(env => env.name.toLowerCase() === "sandbox");
-
-        if (!sandboxEnv) {
-          const envPayload = { name: "Sandbox", description: "Ambiente personal de pruebas y desarrollo" };
-          const response = await fetch(`/api/v1/companies/${companyIdToUse}/environments`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'X-InfraUX-Company-ID': companyIdToUse
-            },
-            body: JSON.stringify(envPayload),
-          });
-          if (!response.ok) {
-            if (response.status === 401) {
-              message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
-              localStorage.removeItem('token');
-              router.push('/login');
-              setLoading(false);
-              return;
-            }
-            const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente Sandbox para espacio personal'}));
-            throw new Error(errorData.detail || 'Failed to create default Sandbox environment for personal space.');
-          }
-          message.info("Ambiente Sandbox creado automáticamente para el espacio personal.");
-        }
-        setNeedsPersonalSpaceSetup(false);
-        await loadCompanyOrPersonalSpaceData(personalCompany); 
-      } catch (e: unknown) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        setError(errorMessage || 'Error al configurar el espacio personal.');
-        message.error(errorMessage || 'Error al configurar el espacio personal.');
-      } finally { setLoading(false); }
-    }
-
-    async function loadCompanyData() {
-      setLoading(true); setError(null);
-      try {
-        const companies = await getCompanies();
-        if (companies.length > 0) {
-          const firstCompany = companies[0]; 
-          setActiveCompany(firstCompany); setIsPersonalSpace(false);
-          await loadCompanyOrPersonalSpaceData(firstCompany);
-        } else {
-          setActiveCompany(null); setEnvironments([]); setDiagrams([]); setSelectedEnvironment(null); setSelectedDiagram(null); setCurrentDiagram(null); 
-        }
-      } catch (e: unknown) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        setError(errorMessage || 'Error al cargar datos de compañía.');
-        message.error(errorMessage || 'Error al cargar datos de compañía.');
-      } finally { setLoading(false); }
-    }
+    // Debug: Log nodes before conversion
+    console.log('🔍 [SAVE DEBUG] Nodes before conversion:', data.nodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      parentId: n.parentId,
+      parentNode: n.parentNode
+    })));
     
-    if (user.usage_type === 'personal') setupPersonalSpaceAndLoadData();
-    else if (user.usage_type === 'company') loadCompanyData();
-    else setLoading(false);
-  }, [user, router]); 
-
-  async function findPersonalCompany(currentUser: User): Promise<Company | null> {
-    const currentUserId = currentUser._id;
-    if (!currentUser || !currentUserId) return null;
-    const companies = await getCompanies(); 
-    return companies.find(c => c.name === `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${currentUserId}`) || null;
-  }
-
-  async function handleCreatePersonalSpace() {
-    const userIdToUse = user?._id;
-    if (!user || !userIdToUse) { 
-      message.error("Información del usuario no disponible. No se puede crear el espacio personal."); setLoading(false); return;
-    }
-    setLoading(true);
-    try {
-      const personalCompanyName = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${userIdToUse}`;
-      let companyToUse = await findPersonalCompany(user!);
-      let companyIdToUse: string;
-
-      if (!companyToUse) {
-        const newCompany = await createCompany({ name: personalCompanyName, description: "Espacio personal automático" });
-        companyIdToUse = newCompany._id; // Usar _id garantizado
-        companyToUse = newCompany; 
-      } else {
-        companyIdToUse = companyToUse._id; // Usar _id garantizado
-      }
-      setActiveCompany(companyToUse); 
-      
-      const token = localStorage.getItem('token');
-      if (!token) {
-        message.error("Usuario no autenticado. Por favor, inicie sesión.");
-        localStorage.removeItem('token');
-        router.push('/login');
-        setLoading(false);
-        return;
-      }
-
-      const existingEnvs = await getEnvironments(companyIdToUse); 
-      const sandboxEnv = existingEnvs.find(env => env.name.toLowerCase() === "sandbox");
-
-      if (!sandboxEnv) {
-        const envPayload = { name: "Sandbox", description: "Ambiente personal de pruebas y desarrollo" };
-        const response = await fetch(`/api/v1/companies/${companyIdToUse}/environments`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'X-InfraUX-Company-ID': companyIdToUse
-          },
-          body: JSON.stringify(envPayload),
-        });
-        if (!response.ok) {
-          if (response.status === 401) {
-            message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
-            localStorage.removeItem('token');
-            router.push('/login');
-            setLoading(false);
-            return;
-          }
-          const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente Sandbox'}));
-          throw new Error(errorData.detail || 'Failed to create default Sandbox environment for personal space.');
-        }
-        message.info("Ambiente Sandbox creado para el espacio personal.");
-      }
-      
-      message.success("Espacio personal configurado. ¡Listo para empezar!");
-      setNeedsPersonalSpaceSetup(false);
-      const updatedUser = getCurrentUser(); 
-      if (updatedUser) { 
-        setUser(updatedUser); 
-      } else {
-        router.push('/login');
-      }
-    } catch (e: unknown) { 
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      message.error("Error al configurar espacio personal: " + errorMessage); 
-    } finally { setLoading(false); }
-  }
-
-  async function loadCompanyOrPersonalSpaceData(company: Company) {
-    const companyId = company._id; // Usar _id garantizado
-    const envs = await getEnvironments(companyId); 
-    setEnvironments(envs);
-
-    if (isPersonalSpace && envs.length === 0) {
-      const token = localStorage.getItem('token');
-      if (token && user) { 
-        try {
-          const envPayload = { name: "Sandbox", description: "Ambiente personal de pruebas y desarrollo" };
-          const response = await fetch(`/api/v1/companies/${companyId}/environments`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
-              'X-InfraUX-Company-ID': companyId 
-            },
-            body: JSON.stringify(envPayload),
-          });
-          if (!response.ok) {
-            if (response.status === 401) {
-              message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
-              localStorage.removeItem('token');
-              router.push('/login');
-              return; // Detener ejecución adicional
-            }
-            // Manejar otros errores si es necesario
-            console.error("No se pudo crear el ambiente Sandbox automáticamente para el espacio personal (error general).");
-            // Podrías lanzar un error aquí o manejarlo de otra forma
-            throw new Error('Error creando ambiente Sandbox para espacio personal.');
-          }
-          // Si la respuesta es OK, continuar
-          message.info("Ambiente Sandbox creado automáticamente.");
-          const updatedEnvs = await getEnvironments(companyId); 
-          setEnvironments(updatedEnvs);
-            if (updatedEnvs.length > 0) {
-              const defaultEnvId = updatedEnvs[0].id; 
-              setSelectedEnvironment(defaultEnvId);
-              const diags = await getDiagramsByEnvironment(companyId, defaultEnvId);
-              setDiagrams(diags);
-              if (diags.length > 0) {
-                setSelectedDiagram(diags[0].id);
-                const diagramData = await getDiagram(companyId, defaultEnvId, diags[0].id);
-                setCurrentDiagram(diagramData);
-              } else {
-                setCurrentDiagram(null); setSelectedDiagram(null);
-              }
-            }
-            return; 
-          // EL BLOQUE ELSE ANTERIOR SE ELIMINA YA QUE EL IF (!response.ok) MANEJA LOS ERRORES
-          // Y SI response.ok ES TRUE, EL CÓDIGO SIGUE DESPUÉS DEL IF.
-        } catch (creationError) { // Catch del try
-          console.error("Error al intentar crear ambiente Sandbox para espacio personal:", creationError);
-          // Considerar mostrar este error en la UI si es relevante
-          // Por ejemplo: setError((creationError as Error).message || 'Error creando Sandbox');
-        }
-      } // Fin if (token && user)
-    } // Fin if (isPersonalSpace && envs.length === 0)
-
-    // Si no se entró en el bloque anterior (o si falló y fue capturado),
-    // o si no es personalSpace, o si ya tenía ambientes, se continúa aquí.
-    if (envs.length > 0) {
-      const defaultEnvId = envs[0].id; 
-      setSelectedEnvironment(defaultEnvId);
-      const diags = await getDiagramsByEnvironment(companyId, defaultEnvId);
-      setDiagrams(diags);
-      if (diags.length > 0) {
-        setSelectedDiagram(diags[0].id);
-        const diagramData = await getDiagram(companyId, defaultEnvId, diags[0].id);
-        setCurrentDiagram(diagramData);
-      } else {
-        setCurrentDiagram(null); 
-        setSelectedDiagram(null);
-      }
-    } else {
-      setDiagrams([]); setSelectedDiagram(null); setCurrentDiagram(null);
-      setSelectedEnvironment(null);
-    }
-  }
-  
-  const handleEnvironmentChange = async (environmentId: string) => {
-    if (!activeCompany) return;
-    setSelectedEnvironment(environmentId); setLoading(true);
-    try {
-      const diags = await getDiagramsByEnvironment(activeCompany._id, environmentId); // Usar _id
-      setDiagrams(diags);
-      if (diags.length > 0) {
-        setSelectedDiagram(diags[0].id);
-        const diagramData = await getDiagram(activeCompany._id, environmentId, diags[0].id); // Usar _id
-        setCurrentDiagram(diagramData);
-      } else {
-        setCurrentDiagram(null); setSelectedDiagram(null);
-      }
-    } catch (e:unknown) { 
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      message.error("Error al cambiar de ambiente: " + errorMessage); 
-    }
-    finally { setLoading(false); }
-  };
-
-  const handleDiagramChange = async (diagramId: string) => {
-    if (!activeCompany || !selectedEnvironment) return;
-    setSelectedDiagram(diagramId); setLoading(true);
-    try {
-      const diagramData = await getDiagram(activeCompany._id, selectedEnvironment, diagramId); // Usar _id
-      setCurrentDiagram(diagramData);
-    } catch (e:unknown) { 
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      message.error("Error al cambiar de diagrama: " + errorMessage); 
-    }
-    finally { setLoading(false); }
-  };
-  
-  const handleSaveDiagram = useCallback(async (data: { nodes: ReactFlowNode[], edges: ReactFlowEdge[], viewport?: ReactFlowViewport }) => {
-    if (!activeCompany || !selectedEnvironment || !selectedDiagram || !currentDiagram) return;
     const customNodes = data.nodes.map(n => ({ 
-      id: n.id, 
-      type: n.type!, 
-      position: n.position, 
-      data: n.data, 
-      width: n.width, 
-      height: n.height, 
-      parentNode: n.parentId, 
-      style: n.style 
+      id: n.id, type: n.type!, position: n.position, data: n.data, 
+      width: n.width, height: n.height, parentNode: n.parentId, style: n.style 
     } as CustomNode));
-    const customEdges = data.edges.map(e => ({ id: e.id, source: e.source, target: e.target, type: e.type, animated: e.animated, label: e.label as string, data: e.data, style: e.style } as CustomEdge));
+    
+    // Debug: Log nodes after conversion
+    console.log('🔍 [SAVE DEBUG] Nodes after conversion:', customNodes.map(n => ({
+      id: n.id,
+      type: n.type,
+      position: n.position,
+      parentNode: n.parentNode
+    })));
+    
+    // Debug edges before conversion
+    console.log('🔍 [SAVE DEBUG] Raw edges before conversion:', data.edges.map(e => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+      data: e.data
+    })));
+    
+    const customEdges = data.edges.map(e => ({ 
+      id: e.id, source: e.source, target: e.target, type: e.type, 
+      animated: e.animated, label: e.label as string, data: e.data, style: e.style,
+      sourceHandle: e.sourceHandle, targetHandle: e.targetHandle 
+    } as CustomEdge));
+    
+    // Debug logging to trace save data
+    console.log('🔍 [SAVE DEBUG] Preparing to save diagram data:', {
+      diagramId: selectedDiagram,
+      nodeCount: customNodes.length,
+      edgeCount: customEdges.length,
+      edgesWithHandles: customEdges.map(e => ({
+        id: e.id,
+        sourceHandle: e.sourceHandle || 'NONE',
+        targetHandle: e.targetHandle || 'NONE'
+      })),
+      groupNodes: customNodes.filter(n => n.type === 'groupNode'),
+      childNodesInGroups: customNodes.filter(n => n.parentNode),
+      allNodesTypes: customNodes.map(n => ({ id: n.id, type: n.type, parentNode: n.parentNode }))
+    });
+    
+    const diagramUpdateData = { 
+      name: currentDiagram.name, 
+      description: currentDiagram.description, 
+      path: currentDiagram.path,
+      nodes: customNodes, 
+      edges: customEdges, 
+      viewport: data.viewport || currentDiagram.viewport
+    };
+    
+    console.log('🔍 [SAVE DEBUG] Full diagram update data:', diagramUpdateData);
+    console.log('📍 [VIEWPORT SAVE] Saving viewport:', data.viewport);
+    
     try {
-      await updateDiagram(activeCompany._id, selectedEnvironment, selectedDiagram, { // Usar _id
-        name: currentDiagram.name, description: currentDiagram.description, nodes: customNodes, edges: customEdges, viewport: data.viewport || currentDiagram.viewport
-      });
+      await updateDiagram(activeCompany._id, selectedEnvironment, selectedDiagram, diagramUpdateData);
       message.success("Diagrama guardado.");
     } catch (e:unknown) { 
       const errorMessage = e instanceof Error ? e.message : String(e);
@@ -608,358 +616,394 @@ export default function DashboardPage() {
     }
   }, [activeCompany, selectedEnvironment, selectedDiagram, currentDiagram]);
 
-  const handleCreateNewEnvironment = async () => {
-    if (!activeCompany || !newEnvironmentName.trim()) {
-      message.error("El nombre del ambiente es obligatorio."); return;
-    }
-    if (isPersonalSpace && environments.length >= 1) {
-      message.warning("El plan Starter solo permite 1 ambiente."); setNewEnvironmentModalVisible(false); return;
-    }
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        message.error("Usuario no autenticado.");
-        router.push('/login');
-        setLoading(false);
-        return;
-      }
-      const envPayload = {
-        name: newEnvironmentName,
-        description: newEnvironmentDescription,
-      };
-      const response = await fetch(`/api/v1/companies/${activeCompany._id}/environments`, { // Usar _id
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-InfraUX-Company-ID': activeCompany._id 
-        },
-        body: JSON.stringify(envPayload),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          message.error("Sesión inválida o expirada. Por favor, inicie sesión nuevamente.");
-          localStorage.removeItem('token');
-          router.push('/login');
-          setLoading(false);
-          return; 
-        }
-        const errorData = await response.json().catch(() => ({detail: 'Error creando ambiente'}));
-        throw new Error(errorData.detail || 'Failed to create environment via API');
-      }
-      const createdEnv = await response.json();
-
-      message.success("Ambiente creado.");
-      setNewEnvironmentName(''); setNewEnvironmentDescription(''); 
-      setNewEnvironmentModalVisible(false);
-      
-      const envs = await getEnvironments(activeCompany._id); // Usar _id
-      setEnvironments(envs);
-      const newEnv = envs.find(e => e.id === createdEnv.id);
-      if (newEnv) handleEnvironmentChange(newEnv.id);
-      else if (!selectedEnvironment && envs.length > 0) handleEnvironmentChange(envs[0].id);
-
-    } catch (e: unknown) { 
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      message.error("Error al crear ambiente: " + errorMessage); 
-    }
-    finally { setLoading(false); }
-  };
-
-  const handleCreateNewDiagram = async () => {
-    if (!activeCompany || !selectedEnvironment || !newDiagramName.trim()) {
-      message.error("Selecciona un ambiente y escribe un nombre para el diagrama."); return;
-    }
-    if (isPersonalSpace && diagrams.filter(d => !d.isFolder).length >= 3) {
-      message.warning("El plan Starter solo permite 3 diagramas."); setNewDiagramModalVisible(false); return;
-    }
-    setLoading(true);
-    try {
-      const newDiag = await createDiagramService(activeCompany._id, selectedEnvironment, { // Usar _id
-        name: newDiagramName, 
-        description: newDiagramDescription, 
-        path: newDiagramPath.trim() || undefined, 
-        nodes: [], 
-        edges: [], 
-        viewport: {x:0, y:0, zoom:1}
-      });
-      message.success("Diagrama creado.");
-      const diags = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); // Usar _id
-      setDiagrams(diags);
-      handleDiagramChange(newDiag.id);
-      
-      setNewDiagramName(''); setNewDiagramPath(''); setNewDiagramDescription('');
-      setNewDiagramModalVisible(false);
-    } catch (e: unknown) { 
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      message.error(`Error al crear diagrama: ` + errorMessage); 
-    } finally { setLoading(false); }
-  };
-
-  const showDeleteDiagramModal = (diagramId: string) => {
-    setDiagramToDeleteId(diagramId);
-    setDeleteDiagramModalVisible(true);
-  };
-
-  const handleDeleteDiagramConfirm = async () => {
-    if (!activeCompany || !selectedEnvironment || !diagramToDeleteId) {
-      message.error("No se pudo determinar qué diagrama eliminar.");
-      return;
-    }
-    setLoading(true);
-    try {
-      await deleteDiagramService(activeCompany._id, selectedEnvironment, diagramToDeleteId); // Usar _id
-      message.success("Diagrama eliminado.");
-      setDeleteDiagramModalVisible(false);
-      
-      const diags = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment); // Usar _id
-      setDiagrams(diags);
-
-      if (selectedDiagram === diagramToDeleteId) { 
-        if (diags.length > 0) {
-          handleDiagramChange(diags[0].id); 
-        } else {
-          setSelectedDiagram(null);
-          setCurrentDiagram(null);
-        }
-      }
-      setDiagramToDeleteId(null);
-    } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      message.error("Error al eliminar el diagrama: " + errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSectionChange = (sectionString: string) => {
-    const section = sectionString as SidebarSectionKey;
-    if (VALID_SECTIONS.includes(section)) {
-      setActiveSectionInSidebar(section);
-      const current = new URLSearchParams(Array.from(searchParams.entries()));
-      current.set("section", section);
-      const search = current.toString();
-      const query = search ? `?${search}` : "";
-      router.push(`${pathname}${query}`);
-    } else {
-      console.warn(`Intento de navegar a sección inválida: ${sectionString}`);
-    }
-  };
-
-
-  if (loading && !activeCompany && !error) { 
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900">
-        <Spin size="large" />
-        <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando dashboard...</p>
-      </div>
-    );
-  }
-  if (user?.usage_type === 'personal' && needsPersonalSpaceSetup) { 
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 p-8">
-        <div className="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl text-center max-w-md">
-          <ServerStackIcon className="h-16 w-16 text-electric-purple-500 mx-auto mb-6" />
-          <h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-3">Configura tu Espacio Personal</h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-8">
-            Para empezar a usar InfraUX, necesitamos configurar tu espacio de trabajo personal. 
-            Esto creará una compañía y un ambiente "Sandbox" por defecto para ti.
-          </p>
-          <Button type="primary" size="large" onClick={handleCreatePersonalSpace} loading={loading} className="bg-electric-purple-600 hover:bg-electric-purple-700 w-full">
-            {loading ? 'Configurando...' : 'Configurar Mi Espacio'}
-          </Button>
-          {error && <p className="text-red-500 mt-4">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-  if (user?.usage_type === 'company' && !activeCompany && !loading) { 
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900 p-8">
-        <div className="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl text-center max-w-md">
-          <UsersIconOutline className="h-16 w-16 text-electric-purple-500 mx-auto mb-6" />
-          <h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200 mb-3">Sin Compañías Asignadas</h2>
-          <p className="text-slate-600 dark:text-slate-400 mb-8">
-            No estás asignado a ninguna compañía. Por favor, contacta a un administrador para que te añada a una o crea una nueva si tienes permisos.
-          </p>
-          {error && <p className="text-red-500 mt-4">{error}</p>}
-        </div>
-      </div>
-    );
-  }
-
-  if ((user?.usage_type === 'company' && activeCompany) || (user?.usage_type === 'personal' && activeCompany && !needsPersonalSpaceSetup)) {
-    const companyDisplayName = isPersonalSpace ? "Espacio Personal" : activeCompany?.name || 'Compañía';
-    const sidebarSections = isPersonalSpace 
-      ? [
-          { key: 'diagrams', name: 'Diagramas', icon: DocumentDuplicateIconOutline, iconSolid: DocumentDuplicateIconSolid, color: 'sky', description: 'Visualiza y gestiona tus arquitecturas personales.' },
-          { key: 'credentials', name: 'Credenciales', icon: UserCircleIconOutline, iconSolid: UserCircleIconSolid, color: 'emerald', description: 'Conecta tus cuentas cloud para despliegues.' },
-          { key: 'environments', name: 'Ambientes', icon: ServerStackIcon, iconSolid: ServerStackIcon, color: 'teal', description: 'Gestiona tu ambiente Sandbox.' },
-          { key: 'deployments', name: 'Despliegues', icon: PlayCircleOutlined, iconSolid: PlayCircleIconSolid, color: 'violet', description: 'Administra tus despliegues personales.' },
-          { key: 'templates', name: 'Plantillas', icon: WrenchScrewdriverIconSolid, iconSolid: WrenchScrewdriverIconSolid, color: 'amber', description: 'Usa y gestiona plantillas de diagramas.' },
-          { key: 'settings', name: 'Configuración', icon: SettingOutlined, iconSolid: SettingOutlined, color: 'gray', description: 'Ajusta tu perfil y plan.' },
+  const memoizedResourceCategories = useMemo((): ResourceCategory[] => {
+    // Estructura basada en el ejemplo proporcionado por el usuario
+    // Los 'type' deben coincidir con los nodeTypes registrados en FlowEditor/NodeTypes.ts
+    // Los 'data' en cada item deben contener lo necesario para inicializar el nodo (provider, resourceType, label, etc.)
+    const categories: ResourceCategory[] = [
+      {
+        name: 'AWS - Almacenamiento', provider: 'aws',
+        items: [
+          { type: 'aws_s3_bucket', name: 'S3 Bucket', description: 'Almacenamiento de objetos', provider: 'aws', icon: <CloudIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 's3_bucket', category: 'storage', label: 'S3 Bucket' } },
+          { type: 'aws_rds_instance', name: 'RDS Instance', description: 'Base de datos relacional', provider: 'aws', icon: <CircleStackIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'rds_instance', category: 'database', label: 'RDS Instance' } },
+          { type: 'aws_dynamodb_table', name: 'DynamoDB Table', description: 'Base de datos NoSQL', provider: 'aws', icon: <TableCellsIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'dynamodb_table', category: 'database', label: 'DynamoDB Table' } },
+          { type: 'aws_elasticache_cluster', name: 'ElastiCache Cluster', description: 'Caché en memoria', provider: 'aws', icon: <BoltIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'elasticache_cluster', category: 'cache', label: 'ElastiCache' } },
+          { type: 'aws_redshift_cluster', name: 'Redshift Cluster', description: 'Almacén de datos', provider: 'aws', icon: <CircleStackIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'redshift_cluster', category: 'database', label: 'Redshift' } },
+          { type: 'aws_efs_file_system', name: 'EFS File System', description: 'Sistema de archivos elástico', provider: 'aws', icon: <FolderIconOutline className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'efs_file_system', category: 'storage', label: 'EFS' } },
         ]
-      : [ 
-          { key: 'diagrams', name: 'Diagramas', icon: DocumentDuplicateIconOutline, iconSolid: DocumentDuplicateIconSolid, color: 'blue', description: 'Visualiza y gestiona tus arquitecturas.' },
-          { key: 'credentials', name: 'Credenciales', icon: UserCircleIconOutline, iconSolid: UserCircleIconSolid, color: 'emerald', description: 'Conecta tus cuentas cloud.' },
-          { key: 'environments', name: 'Ambientes', icon: ServerStackIcon, iconSolid: ServerStackIcon, color: 'teal', description: 'Gestiona tus ambientes de despliegue.' }, 
-          { key: 'deployments', name: 'Despliegues', icon: PlayCircleOutlined, iconSolid: PlayCircleIconSolid, color: 'violet', description: 'Administra tus despliegues.' },
-          { key: 'settings', name: 'Ajustes Compañía', icon: SettingOutlined, iconSolid: SettingOutlined, color: 'gray', description: 'Configura los detalles de la compañía.' },
-          { key: 'team', name: 'Equipo', icon: UsersIconOutline, iconSolid: UsersIconSolid, color: 'orange', description: 'Gestiona miembros y permisos.' },
-        ];
+      },
+      {
+        name: 'AWS - Aplicación', provider: 'aws',
+        items: [
+          { type: 'aws_lambda_function', name: 'Lambda Function', description: 'Código serverless', provider: 'aws', icon: <CodeBracketIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'lambda_function', category: 'compute', label: 'Lambda' } },
+          { type: 'aws_api_gateway_rest_api', name: 'API Gateway (REST)', description: 'API REST/WebSocket', provider: 'aws', icon: <GlobeAltIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'api_gateway_rest_api', category: 'networking', label: 'API Gateway' } },
+          { type: 'aws_sqs_queue', name: 'SQS Queue', description: 'Cola de mensajes', provider: 'aws', icon: <RectangleStackIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'sqs_queue', category: 'application_integration', label: 'SQS Queue' } },
+          { type: 'aws_sns_topic', name: 'SNS Topic', description: 'Notificaciones push', provider: 'aws', icon: <ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'sns_topic', category: 'application_integration', label: 'SNS Topic' } },
+          { type: 'aws_cloudwatch_event_rule', name: 'EventBridge Rule', description: 'Orquestación de eventos', provider: 'aws', icon: <CalendarDaysIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'cloudwatch_event_rule', category: 'application_integration', label: 'EventBridge Rule' } },
+          { type: 'aws_sfn_state_machine', name: 'Step Functions', description: 'Flujos de trabajo serverless', provider: 'aws', icon: <AdjustmentsHorizontalIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'sfn_state_machine', category: 'application_integration', label: 'Step Functions' } },
+        ]
+      },
+      {
+        name: 'AWS - Cómputo', provider: 'aws',
+        items: [
+          { type: 'aws_ec2_instance', name: 'EC2 Instance', description: 'Máquina Virtual', provider: 'aws', icon: <ServerIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'ec2_instance', category: 'compute', label: 'EC2 Instance' } },
+          { type: 'aws_autoscaling_group', name: 'Auto Scaling Group', description: 'Grupo de Autoescalado', provider: 'aws', icon: <ServerStackIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'autoscaling_group', category: 'compute', label: 'Auto Scaling Group' } },
+          { type: 'aws_ecs_service', name: 'ECS Service', description: 'Servicio de Contenedores', provider: 'aws', icon: <CubeIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'ecs_service', category: 'compute', label: 'ECS Service' } },
+          { type: 'aws_eks_cluster', name: 'EKS Cluster', description: 'Cluster de Kubernetes', provider: 'aws', icon: <CpuChipIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'eks_cluster', category: 'compute', label: 'EKS Cluster' } },
+          { type: 'aws_elasticbeanstalk_environment', name: 'Elastic Beanstalk Env', description: 'Entorno PaaS', provider: 'aws', icon: <CloudIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'elasticbeanstalk_environment', category: 'compute', label: 'Elastic Beanstalk' } },
+        ]
+      },
+      {
+        name: 'AWS - Redes', provider: 'aws',
+        items: [
+          { type: 'aws_elbv2_load_balancer', name: 'Load Balancer', description: 'Balanceador (ALB/NLB)', provider: 'aws', icon: <ArrowsRightLeftIcon className="w-5 h-5" />, data: { provider: 'aws', resourceType: 'elbv2_load_balancer', category: 'networking', label: 'Load Balancer' } },
+        ]
+      },
+      {
+        name: 'Azure - Cómputo', provider: 'azure',
+        items: [
+          { type: 'azurerm_virtual_machine', name: 'Virtual Machine', description: 'Máquina virtual', provider: 'azure', icon: <ComputerDesktopIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'virtual_machine', category: 'compute', label: 'Virtual Machine' } },
+          { type: 'azurerm_linux_virtual_machine_scale_set', name: 'Linux VM Scale Set', description: 'Conjunto de escalado Linux', provider: 'azure', icon: <ServerStackIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'linux_virtual_machine_scale_set', category: 'compute', label: 'VM Scale Set' } },
+          { type: 'azurerm_kubernetes_cluster', name: 'AKS Cluster', description: 'Cluster de Kubernetes', provider: 'azure', icon: <CpuChipIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'kubernetes_cluster', category: 'compute', label: 'AKS Cluster' } },
+          { type: 'azurerm_linux_web_app', name: 'App Service (Linux)', description: 'Aplicación web PaaS', provider: 'azure', icon: <GlobeAltIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'linux_web_app', category: 'compute', label: 'App Service' } },
+          { type: 'azurerm_container_group', name: 'Container Instances', description: 'Grupo de Contenedores', provider: 'azure', icon: <CubeIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'container_group', category: 'compute', label: 'Container Instances' } },
+        ]
+      },
+      {
+        name: 'Azure - Almacenamiento', provider: 'azure',
+        items: [
+          { type: 'azurerm_storage_container', name: 'Storage Container (Blob)', description: 'Contenedor de Blob', provider: 'azure', icon: <ArchiveBoxIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'storage_container', category: 'storage', label: 'Blob Container' } },
+          { type: 'azurerm_cosmosdb_account', name: 'Cosmos DB Account', description: 'BD NoSQL multimodelo', provider: 'azure', icon: <CircleStackIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'cosmosdb_account', category: 'database', label: 'Cosmos DB' } },
+          { type: 'azurerm_mssql_database', name: 'SQL Database', description: 'Base de datos SQL', provider: 'azure', icon: <CircleStackIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'mssql_database', category: 'database', label: 'SQL Database' } },
+          { type: 'azurerm_storage_share', name: 'File Share', description: 'Recurso compartido de archivos', provider: 'azure', icon: <FolderIconOutline className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'storage_share', category: 'storage', label: 'File Share' } },
+        ]
+      },
+       {
+        name: 'Azure - Aplicación', provider: 'azure',
+        items: [
+          { type: 'azurerm_linux_function_app', name: 'Function App (Linux)', description: 'Funciones serverless', provider: 'azure', icon: <BoltIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'linux_function_app', category: 'compute', label: 'Function App' } }, 
+          { type: 'azurerm_api_management', name: 'API Management', description: 'Gestión de APIs', provider: 'azure', icon: <GlobeAltIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'api_management', category: 'networking', label: 'API Management' } },
+          { type: 'azurerm_servicebus_namespace', name: 'Service Bus Namespace', description: 'Mensajería Service Bus', provider: 'azure', icon: <ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'servicebus_namespace', category: 'application_integration', label: 'Service Bus' } },
+          { type: 'azurerm_eventgrid_topic', name: 'Event Grid Topic', description: 'Tema de Event Grid', provider: 'azure', icon: <RssIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'eventgrid_topic', category: 'application_integration', label: 'Event Grid Topic' } },
+          { type: 'azurerm_logic_app_workflow', name: 'Logic App Workflow', description: 'Flujo de trabajo Logic Apps', provider: 'azure', icon: <RectangleGroupIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'logic_app_workflow', category: 'application_integration', label: 'Logic App' } },
+          { type: 'azurerm_eventhub_namespace', name: 'Event Hubs Namespace', description: 'Streaming de eventos', provider: 'azure', icon: <BoltIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'eventhub_namespace', category: 'application_integration', label: 'Event Hubs' } },
+        ]
+      },
+      {
+        name: 'Azure - Redes', provider: 'azure',
+        items: [
+          { type: 'azurerm_virtual_network', name: 'Virtual Network', description: 'Red virtual privada', provider: 'azure', icon: <GlobeAltIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'virtual_network', category: 'networking', label: 'Virtual Network' } },
+          { type: 'azurerm_subnet', name: 'Subnet', description: 'Subred dentro de una VNet', provider: 'azure', icon: <RectangleStackIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'subnet', category: 'networking', label: 'Subnet' } },
+          { type: 'azurerm_network_security_group', name: 'Network Security Group', description: 'Reglas de seguridad', provider: 'azure', icon: <ShieldCheckIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'network_security_group', category: 'networking', label: 'NSG' } },
+          { type: 'azurerm_lb', name: 'Load Balancer', description: 'Balanceador de carga L4', provider: 'azure', icon: <ArrowsRightLeftIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'lb', category: 'networking', label: 'Load Balancer' } },
+          { type: 'azurerm_application_gateway', name: 'Application Gateway', description: 'Balanceador de carga L7', provider: 'azure', icon: <GlobeAltIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'application_gateway', category: 'networking', label: 'App Gateway' } },
+          { type: 'azurerm_firewall', name: 'Firewall', description: 'Firewall de red', provider: 'azure', icon: <ShieldCheckIcon className="w-5 h-5" />, data: { provider: 'azure', resourceType: 'firewall', category: 'networking', label: 'Firewall' } },
+        ]
+      },
+      {
+        name: 'GCP - Cómputo', provider: 'gcp',
+        items: [
+          { type: 'gcp_compute_instance', name: 'Compute Engine', description: 'Máquina virtual', provider: 'gcp', icon: <ServerIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'compute_instance', category: 'compute', label: 'Compute Engine' } },
+          { type: 'gcp_compute_disk', name: 'Compute Disk', description: 'Disco persistente', provider: 'gcp', icon: <ArchiveBoxIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'compute_disk', category: 'compute', label: 'Compute Disk' } },
+          { type: 'gcp_compute_instance_template', name: 'Instance Template', description: 'Plantilla de instancias', provider: 'gcp', icon: <RectangleStackIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'compute_instance_template', category: 'compute', label: 'Instance Template' } },
+          { type: 'gcp_compute_instance_group_manager', name: 'Instance Group', description: 'Grupo de instancias', provider: 'gcp', icon: <ServerStackIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'compute_instance_group_manager', category: 'compute', label: 'Instance Group' } },
+          { type: 'gcp_gke_cluster', name: 'GKE Cluster', description: 'Cluster de Kubernetes', provider: 'gcp', icon: <CpuChipIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'gke_cluster', category: 'compute', label: 'GKE Cluster' } },
+          { type: 'gcp_cloudrun_service', name: 'Cloud Run', description: 'Contenedores serverless', provider: 'gcp', icon: <CodeBracketIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'cloudrun_service', category: 'compute', label: 'Cloud Run' } },
+          { type: 'gcp_appengine_app', name: 'App Engine', description: 'Plataforma como servicio', provider: 'gcp', icon: <CloudIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'appengine_app', category: 'compute', label: 'App Engine' } },
+        ]
+      },
+      {
+        name: 'GCP - Redes', provider: 'gcp',
+        items: [
+          { type: 'gcp_compute_network', name: 'VPC Network', description: 'Red Virtual Privada', provider: 'gcp', icon: <GlobeAltIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'compute_network', category: 'networking', label: 'VPC Network' } },
+          { type: 'gcp_compute_firewall', name: 'Firewall Rule', description: 'Regla de firewall VPC', provider: 'gcp', icon: <ShieldCheckIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'compute_firewall', category: 'networking', label: 'Firewall Rule' } },
+          { type: 'gcp_compute_load_balancer', name: 'Load Balancer', description: 'Balanceador de carga', provider: 'gcp', icon: <ArrowsRightLeftIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'compute_load_balancer', category: 'networking', label: 'Load Balancer' } },
+        ]
+      },
+      {
+        name: 'GCP - Almacenamiento', provider: 'gcp',
+        items: [
+          { type: 'gcp_cloud_storage_bucket', name: 'Cloud Storage Bucket', description: 'Almacenamiento de objetos', provider: 'gcp', icon: <CloudIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'cloud_storage_bucket', category: 'storage', label: 'Storage Bucket' } },
+          { type: 'gcp_sql_instance', name: 'Cloud SQL Instance', description: 'Base de datos SQL', provider: 'gcp', icon: <CircleStackIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'sql_instance', category: 'database', label: 'Cloud SQL' } },
+          { type: 'gcp_bigquery_dataset', name: 'BigQuery Dataset', description: 'Dataset de BigQuery', provider: 'gcp', icon: <TableCellsIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'bigquery_dataset', category: 'database', label: 'BigQuery Dataset' } },
+          { type: 'gcp_firestore_database', name: 'Firestore Database', description: 'BD NoSQL (Nativo/Datastore)', provider: 'gcp', icon: <DocumentTextIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'firestore_database', category: 'database', label: 'Firestore' } }, 
+          { type: 'gcp_memorystore_instance', name: 'Memorystore Instance', description: 'Caché Redis/Memcached', provider: 'gcp', icon: <BoltIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'memorystore_instance', category: 'cache', label: 'Memorystore' } },
+          { type: 'gcp_filestore_instance', name: 'Filestore Instance', description: 'Almacenamiento de archivos NFS', provider: 'gcp', icon: <FolderIconOutline className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'filestore_instance', category: 'storage', label: 'Filestore' } },
+        ]
+      },
+      {
+        name: 'GCP - Aplicación', provider: 'gcp',
+        items: [
+          { type: 'gcp_cloudfunctions_function', name: 'Cloud Functions', description: 'Funciones serverless', provider: 'gcp', icon: <BoltIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'cloudfunctions_function', category: 'compute', label: 'Cloud Functions' } }, 
+          { type: 'gcp_api_gateway', name: 'API Gateway', description: 'API Gateway', provider: 'gcp', icon: <GlobeAltIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'api_gateway', category: 'networking', label: 'API Gateway' } }, 
+          { type: 'gcp_pubsub_topic', name: 'Pub/Sub Topic', description: 'Mensajería Pub/Sub', provider: 'gcp', icon: <ChatBubbleOvalLeftEllipsisIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'pubsub_topic', category: 'application_integration', label: 'Pub/Sub Topic' } }, 
+          { type: 'gcp_cloud_tasks_queue', name: 'Cloud Tasks Queue', description: 'Colas de tareas', provider: 'gcp', icon: <ListBulletIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'cloud_tasks_queue', category: 'application_integration', label: 'Cloud Tasks' } },
+          { type: 'gcp_workflows_workflow', name: 'Workflows', description: 'Flujos de trabajo', provider: 'gcp', icon: <RectangleGroupIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'workflows_workflow', category: 'application_integration', label: 'Workflows' } },
+          { type: 'gcp_eventarc_trigger', name: 'Eventarc Trigger', description: 'Orquestación de eventos', provider: 'gcp', icon: <RssIcon className="w-5 h-5" />, data: { provider: 'gcp', resourceType: 'eventarc_trigger', category: 'application_integration', label: 'Eventarc Trigger' } },
+        ]
+      },
+      {
+        name: 'Grupos y Áreas', provider: 'generic',
+        items: [
+          { type: 'group', name: 'Grupo', description: 'Agrupar varios elementos', provider: 'generic', icon: <RectangleGroupIcon className="w-5 h-5" />, data: { provider: 'generic', resourceType: 'group', category: 'layout', label: 'Grupo' } },
+          { type: 'areaNode', name: 'Área', description: 'Definir un área visual', provider: 'generic', icon: <CubeIcon className="w-5 h-5" />, data: { provider: 'generic', resourceType: 'areaNode', category: 'layout', label: 'Área' } },
+          { type: 'textNode', name: 'Texto', description: 'Añadir notas de texto', provider: 'generic', icon: <DocumentTextIcon className="w-5 h-5" />, data: { provider: 'generic', resourceType: 'textNode', category: 'annotation', label: 'Texto' } },
+        ]
+      }
+    ];
+    return categories;
+  }, []); // La dependencia vacía está bien si los tipos de recursos son estáticos
+
+
+  if (dataLoading && !activeCompany) { 
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850" style={{ height: 'calc(100vh - 5rem)' }}>
+        <Spin size="large" />
+        <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando datos...</p>
+      </div>
+    );
+  }
+  
+  if (dataError) { 
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 5rem)' }}>
+        <p className="text-red-500 p-4 bg-red-100 border border-red-300 rounded-md">{dataError}</p>
+      </div>
+    );
+  }
+
+  if (!activeCompany && !dataLoading) { 
+    return (
+        <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 5rem)' }}>
+            <Text>No se ha podido cargar la información de la compañía. Por favor, recarga o contacta a soporte.</Text>
+        </div>
+    );
+  }
+  
+  const companyDisplayName = isPersonalSpace ? "Espacio Personal" : activeCompany?.name || 'Compañía';
+  const sidebarSections = isPersonalSpace 
+    ? [
+        { key: 'diagrams', name: 'Diagramas', icon: DocumentDuplicateIconOutline, iconSolid: DocumentDuplicateIconSolid, color: 'sky', description: 'Visualiza y gestiona tus arquitecturas personales.' },
+        { key: 'credentials', name: 'Credenciales', icon: UserCircleIconOutline, iconSolid: UserCircleIconSolid, color: 'emerald', description: 'Conecta tus cuentas cloud para despliegues.' },
+        { key: 'environments', name: 'Ambientes', icon: ServerStackIcon, iconSolid: ServerStackIcon, color: 'teal', description: 'Gestiona tu ambiente Sandbox.' },
+        { key: 'deployments', name: 'Despliegues', icon: PlayCircleIconSolid, iconSolid: PlayCircleIconSolid, color: 'violet', description: 'Administra tus despliegues personales.' },
+        { key: 'settings', name: 'Configuración', icon: SettingOutlined, iconSolid: SettingOutlined, color: 'gray', description: 'Ajusta tu perfil y plan.' },
+      ]
+    : [ 
+        { key: 'diagrams', name: 'Diagramas', icon: DocumentDuplicateIconOutline, iconSolid: DocumentDuplicateIconSolid, color: 'blue', description: 'Visualiza y gestiona tus arquitecturas.' },
+        { key: 'credentials', name: 'Credenciales', icon: UserCircleIconOutline, iconSolid: UserCircleIconSolid, color: 'emerald', description: 'Conecta tus cuentas cloud.' },
+        { key: 'environments', name: 'Ambientes', icon: ServerStackIcon, iconSolid: ServerStackIcon, color: 'teal', description: 'Gestiona tus ambientes de despliegue.' }, 
+        { key: 'deployments', name: 'Despliegues', icon: PlayCircleIconSolid, iconSolid: PlayCircleIconSolid, color: 'violet', description: 'Administra tus despliegues.' },
+        { key: 'settings', name: 'Ajustes Compañía', icon: SettingOutlined, iconSolid: SettingOutlined, color: 'gray', description: 'Configura los detalles de la compañía.' },
+        { key: 'team', name: 'Equipo', icon: UsersIconOutline, iconSolid: UsersIconSolid, color: 'orange', description: 'Gestiona miembros y permisos.' },
+      ];
 
     return (
-      <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 3.5rem)' }}>
-        <CompanySidebar 
-          companyName={companyDisplayName} activeSection={activeSectionInSidebar} 
-          onSectionChange={handleSectionChange} 
-          isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
-          sections={sidebarSections} isPersonalSpace={isPersonalSpace}
-        />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          { activeSectionInSidebar === 'diagrams' && (selectedEnvironment || environments.length > 0 || isPersonalSpace) && ( 
-            <div className="bg-white dark:bg-slate-800 py-2 px-4 border-b border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between flex-shrink-0 h-16"> 
-              <div className="flex items-center gap-x-4">
-                {environments.length > 0 || isPersonalSpace ? (
-                  <div className="flex items-center h-[40px]"> 
-                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mr-2 self-center whitespace-nowrap">Ambiente:</span>
-                    <EnvironmentTreeSelect 
-                      environments={environments} value={selectedEnvironment ?? undefined} 
-                      onChange={handleEnvironmentChange} placeholder="Seleccionar Ambiente"
-                    />
-                    {!(isPersonalSpace && environments.length >= 1) && ( 
-                       <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewEnvironmentModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Ambiente" />
-                    )}
-                  </div>
-                ) : ( <Button type="primary" onClick={() => setNewEnvironmentModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Ambiente</Button> )}
-                {selectedEnvironment && (diagrams.length > 0 || isPersonalSpace) ? (
-                  <div className="flex items-center h-[40px]"> 
-                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400 mr-2 self-center whitespace-nowrap">Diagrama:</span>
-                    <DiagramTreeSelect 
-                      diagrams={diagrams} value={selectedDiagram ?? undefined} onChange={handleDiagramChange} 
-                      companyId={activeCompany._id} environmentId={selectedEnvironment} // Usar _id
-                      showDeleteButton={true} 
-                      onDeleteDiagram={(diagramId) => showDeleteDiagramModal(diagramId)} 
-                    />
-                     {!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >= 3) && (
-                        <Button type="text" icon={<AntPlusOutlined />} onClick={() => setNewDiagramModalVisible(true)} className="ml-2 text-electric-purple-600 hover:!bg-electric-purple-50 dark:hover:!bg-electric-purple-500/20 self-center" aria-label="Crear Nuevo Diagrama" />
-                      )}
-                  </div>
-                ) : selectedEnvironment ? ( <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Primer Diagrama</Button> ) : null}
+      <>
+        <Modal
+          open={isWelcomeModalVisible}
+          onCancel={() => {
+            setIsWelcomeModalVisible(false);
+            if (user && user._id && activeCompany) {
+              localStorage.setItem(`welcomeModalSeen_${user._id}_${activeCompany._id}`, 'true');
+            }
+          }}
+          footer={null}
+          centered
+          width={600}
+          closable={true}
+          className="welcome-modal"
+        >
+          <div className="p-2 text-center">
+            <SparklesIcon className="h-16 w-16 text-electric-purple-500 dark:text-electric-purple-400 mx-auto mb-5" />
+            <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100 mb-3">
+              ¡Bienvenido a <span className="font-extrabold">Infra</span><span className="text-emerald-green-600 dark:text-emerald-green-500">UX</span>!
+            </h2>
+            <p className="text-slate-600 dark:text-slate-300 mb-6 text-lg px-4">
+              Estás a punto de transformar la forma en que diseñas, despliegas y gestionas tu infraestructura cloud.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-left">
+              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg">
+                <h3 className="font-semibold text-electric-purple-600 dark:text-electric-purple-400 mb-1">Diseña Visualmente</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Crea arquitecturas complejas arrastrando y soltando componentes.</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Button icon={<EyeOutlined />} onClick={() => message.info("Función de Preview próximamente.")}>Preview</Button>
-                <Button type="primary" icon={<PlayCircleOutlined />} className="bg-emerald-green-600 hover:bg-emerald-green-700" onClick={() => message.info("Función de Run próximamente.")}>Run</Button>
+              <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-lg">
+                <h3 className="font-semibold text-emerald-green-600 dark:text-emerald-green-500 mb-1">Despliega con Confianza</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Genera código IaC y despliega directamente a tus proveedores cloud.</p>
               </div>
             </div>
-          )}
-          <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-auto" style={{ height: activeSectionInSidebar === 'diagrams' ? 'calc(100% - 4rem)' : '100%' }}> 
-            {loading && activeSectionInSidebar === 'diagrams' && <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>}
-            {!loading && activeSectionInSidebar === 'diagrams' && selectedDiagram && currentDiagram && activeCompany && ( 
-              <FlowEditor 
-                key={`${activeCompany._id}-${selectedEnvironment}-${selectedDiagram}`} 
-                companyId={activeCompany._id} 
-                environmentId={selectedEnvironment!} 
-                diagramId={selectedDiagram!} 
-                initialDiagram={currentDiagram} 
-                initialNodes={initialNodesForFlow} 
-                initialEdges={initialEdgesForFlow} 
-                onSave={handleSaveDiagram} 
-                nodeTypes={nodeTypes}
-                resourceCategories={resourceCategories} 
-              /> 
-            )}
-            {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && !selectedEnvironment && environments.length === 0 && ( <div className="flex items-center justify-center h-full p-10"><div className="text-center"><AntFolderIcon className="mx-auto text-5xl text-slate-400 mb-4" /><h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300">Sin Ambientes</h3><p className="text-slate-500 dark:text-slate-400 mt-2 mb-6">{isPersonalSpace ? "Tu espacio personal no tiene ambientes. " : "Esta compañía no tiene ambientes. "}Crea uno para empezar a organizar tus diagramas.</p>{!(isPersonalSpace && environments.length >=1) && <Button type="primary" onClick={() => setNewEnvironmentModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Ambiente</Button>}</div></div> )}
-            {!loading && activeSectionInSidebar === 'diagrams' && activeCompany && selectedEnvironment && diagrams.length === 0 && ( <div className="flex items-center justify-center h-full p-10"><div className="text-center"><DocumentDuplicateIconOutline className="mx-auto h-16 w-16 text-slate-400 mb-4" /><h3 className="text-xl font-semibold text-slate-700 dark:text-slate-300">Sin Diagramas</h3><p className="text-sm text-slate-500 dark:text-slate-400 mt-2 mb-6">Este ambiente no tiene diagramas. Crea uno para empezar a diseñar.</p>{!(isPersonalSpace && diagrams.filter(d => !d.isFolder).length >=3) && <Button type="primary" onClick={() => setNewDiagramModalVisible(true)} className="bg-electric-purple-600 hover:bg-electric-purple-700">Crear Diagrama</Button>}</div></div> )}
-            
-            {!loading && activeSectionInSidebar === 'credentials' && activeCompany && ( <CredentialsPage companyId={activeCompany._id} /> )}
-            {!loading && activeSectionInSidebar === 'environments' && activeCompany && activeCompany._id && ( <EnvironmentsPage companyId={activeCompany._id} isPersonalSpace={isPersonalSpace} /> )}
-            {!loading && activeSectionInSidebar === 'deployments' && activeCompany && ( <DeploymentsPage companyId={activeCompany._id} /> )}
-            {!loading && activeSectionInSidebar === 'templates' && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Plantillas</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de plantillas próximamente.</p></div> )}
-            {!loading && activeSectionInSidebar === 'settings' && activeCompany && ( <SettingsPage companyId={activeCompany._id} /> )}
-            {!loading && activeSectionInSidebar === 'team' && !isPersonalSpace && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Equipo</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de miembros del equipo (solo para planes de compañía).</p></div> )}
+            <Button 
+              type="primary" 
+              size="large" 
+              onClick={() => {
+                setIsWelcomeModalVisible(false);
+                if (user && user._id && activeCompany) {
+                  localStorage.setItem(`welcomeModalSeen_${user._id}_${activeCompany._id}`, 'true');
+                }
+                // Si es una compañía nueva, iniciar el flujo de onboarding
+                if (showOnboardingFlow) {
+                  setOnboardingStep(2); // Pasar al paso de crear ambiente
+                }
+              }}
+              className="bg-electric-purple-600 hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600"
+            >
+              {showOnboardingFlow ? 'Configurar mi Espacio' : 'Comenzar a Explorar'}
+            </Button>
           </div>
-        </div>
+        </Modal>
 
-        <Modal 
-          title="Crear Nuevo Ambiente" 
-          open={newEnvironmentModalVisible} 
-          onCancel={() => { setNewEnvironmentModalVisible(false); setNewEnvironmentName(''); setNewEnvironmentDescription(''); }} 
-          onOk={handleCreateNewEnvironment} 
-          confirmLoading={loading} 
-          okButtonProps={{disabled: newEnvironmentName.trim() === '' || (isPersonalSpace && environments.length >= 1) }}
-        >
-          <Input placeholder="Nombre del Ambiente (ej. Sandbox, Desarrollo)" value={newEnvironmentName} onChange={e => setNewEnvironmentName(e.target.value)} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
-          <Input.TextArea placeholder="Descripción del ambiente (opcional)" value={newEnvironmentDescription} onChange={e => setNewEnvironmentDescription(e.target.value)} rows={3} style={{ marginBottom: 16 }} disabled={isPersonalSpace && environments.length >= 1}/>
-          {isPersonalSpace && environments.length >= 1 && (
-            <p className="text-sm text-orange-600 mt-2">Los espacios personales solo pueden tener un ambiente ("Sandbox").</p>
+        <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 5rem)' }}>
+          {activeCompany && (
+            <CompanySidebar 
+              companyName={companyDisplayName} activeSection={activeSectionInSidebar} 
+              onSectionChange={handleInternalSectionChange} 
+              isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
+              sections={sidebarSections} isPersonalSpace={isPersonalSpace || false}
+            />
           )}
-        </Modal>
-        <Modal 
-          title="Crear Nuevo Diagrama"
-          open={newDiagramModalVisible} 
-          onCancel={() => { 
-            setNewDiagramModalVisible(false); 
-            setNewDiagramName(''); 
-            setNewDiagramPath(''); 
-            setNewDiagramDescription('');
-          }} 
-          onOk={handleCreateNewDiagram} 
-          confirmLoading={loading} 
-          okButtonProps={{disabled: newDiagramName.trim() === ''}}
-          destroyOnHidden 
-        >
-          <Input 
-            placeholder="Nombre del Diagrama*" 
-            value={newDiagramName} 
-            onChange={e => setNewDiagramName(e.target.value)} 
-            style={{ marginBottom: 16 }}
-          />
-          <Input 
-            placeholder="Directorio/Ruta (opcional, ej. devops/hpa)" 
-            value={newDiagramPath} 
-            onChange={e => setNewDiagramPath(e.target.value)} 
-            addonBefore={newDiagramPath ? <FolderIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" /> : null}
-            style={{ marginBottom: 8 }}
-          />
-          <Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: '0.75rem' }}>
-            Organiza tus diagramas en directorios. Usa "/" para crear subdirectorios. <br/>
-            Ejemplos: devops, infrastructure/aws, networks/security
-          </Text>
-          <Input.TextArea
-            placeholder="Descripción (opcional)"
-            value={newDiagramDescription}
-            onChange={e => setNewDiagramDescription(e.target.value)}
-            rows={3}
-          />
-        </Modal>
-        
-        <Modal
-          title="Confirmar Eliminación"
-          open={deleteDiagramModalVisible}
-          onOk={handleDeleteDiagramConfirm}
-          onCancel={() => { setDeleteDiagramModalVisible(false); setDiagramToDeleteId(null); }}
-          confirmLoading={loading}
-          okText="Eliminar"
-          cancelText="Cancelar"
-          okButtonProps={{ danger: true }}
-        >
-          <p>¿Estás seguro de que quieres eliminar este diagrama? Esta acción no se puede deshacer.</p>
-        </Modal>
-        
-      </div>
-    );
-  }
+          <div className="flex-1 flex flex-col overflow-hidden h-full">
+            {/* Subheader de acciones del diagrama */}
+            {currentDiagram && activeSectionInSidebar === 'diagrams' && <DiagramActionSubheader />}
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-900">
-      {error ? <p className="text-red-500 p-4 bg-red-100 border border-red-300 rounded-md">{error}</p> 
-             : <>
-                 <Spin size="large" />
-                 <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando dashboard...</p>
-               </>}
-    </div>
-  );
+            <div className="relative flex-1 bg-slate-100 dark:bg-slate-850 overflow-hidden">
+                {dataLoading && activeSectionInSidebar === 'diagrams' && !currentDiagram && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-900/50 z-10"><Spin size="large" /></div>
+                )}
+                
+                {activeSectionInSidebar === 'diagrams' && activeCompany && ( 
+                  <>
+                    {/* El FlowEditor ahora estará debajo del DiagramActionSubheader (si currentDiagram existe) */}
+                    {selectedEnvironment && selectedDiagram && currentDiagram && (
+                      <FlowEditor 
+                        key={`${activeCompany._id}-${selectedEnvironment}-${selectedDiagram}`} 
+                        companyId={activeCompany._id} 
+                        environmentId={selectedEnvironment} 
+                        diagramId={selectedDiagram} 
+                        initialDiagram={currentDiagram} 
+                        initialNodes={initialNodesForFlow} 
+                        initialEdges={initialEdgesForFlow} 
+                        initialViewport={currentDiagram.viewport}
+                        onSave={handleSaveDiagramLocal}
+                        nodeTypes={nodeTypes}
+                        resourceCategories={memoizedResourceCategories}
+                        initialExpandedGroupId={initialExpandedGroup}
+                        onGroupExpandedChange={(groupId: string | null) => {
+                          const currentParams = new URLSearchParams(searchParams);
+                          
+                          if (groupId) {
+                            // Buscar el label del grupo
+                            const groupNode = currentDiagram.nodes?.find(n => n.id === groupId);
+                            if (groupNode?.data?.label && typeof groupNode.data.label === 'string') {
+                              currentParams.set('group', groupNode.data.label.toLowerCase().replace(/\s+/g, '-'));
+                            }
+                          } else {
+                            // Si no hay grupo expandido, quitar el parámetro
+                            currentParams.delete('group');
+                          }
+                          
+                          const newUrl = `${pathname}?${currentParams.toString()}`;
+                          router.replace(newUrl);
+                        }}
+                      />
+                    )}
+                    {!selectedEnvironment && environments && environments.length === 0 && !dataLoading && ( 
+                      <div className="flex flex-col items-center justify-center h-full p-6 sm:p-10 text-center">
+                        {/* Card eliminada, contenido directamente sobre el fondo de la página */}
+                        {showOnboardingFlow && onboardingStep === 2 && (
+                          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 max-w-lg">
+                            <div className="flex items-center">
+                              <CheckOutlined className="text-green-500 mr-2" />
+                              <span className="text-slate-700 dark:text-slate-300">
+                                ✅ <strong>Workspace creado:</strong> Se creó automáticamente tu workspace principal
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        <FolderIconOutline className="mx-auto h-24 w-24 sm:h-28 sm:w-28 text-electric-purple-500 dark:text-electric-purple-400 mb-8" />
+                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">
+                          {showOnboardingFlow && onboardingStep === 2 ? 'Paso 2: Crea tu Primer Ambiente' : 'Define tu Primer Ambiente'}
+                        </h3>
+                        <p className="text-slate-500 dark:text-slate-400 mb-10 text-base sm:text-lg max-w-lg">
+                          {showOnboardingFlow && onboardingStep === 2 
+                            ? "Los ambientes te permiten separar tus recursos (dev, staging, producción). Comienza creando tu primer ambiente."
+                            : (isPersonalSpace ? "Tu espacio personal está listo. " : "Esta compañía aún no tiene ambientes. ") + "Crea un ambiente para empezar a diseñar diagramas y dar vida a tus ideas de infraestructura."
+                          }
+                        </p>
+                        <Button 
+                          type="primary" 
+                          size="large"
+                          onClick={() => {
+                            useNavigationStore.getState().setNewEnvironmentModalVisible(true);
+                            if (showOnboardingFlow) {
+                              setOnboardingStep(3);
+                            }
+                          }}
+                          className="bg-electric-purple-600 hover:bg-electric-purple-700 dark:bg-electric-purple-500 dark:hover:bg-electric-purple-600 px-8 py-3 text-base"
+                        >
+                          Crear Ambiente
+                        </Button>
+                      </div> 
+                    )}
+                    {selectedEnvironment && (!diagramsFromStore || diagramsFromStore.length === 0) && !dataLoading && ( 
+                      <div className="flex flex-col items-center justify-center h-full p-6 sm:p-10 text-center">
+                        {/* Card eliminada */}
+                        {showOnboardingFlow && onboardingStep === 3 && (
+                          <div className="mb-6 space-y-3 max-w-lg">
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <div className="flex items-center">
+                                <CheckOutlined className="text-green-500 mr-2" />
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  ✅ <strong>Workspace creado:</strong> Main Workspace
+                                </span>
+                              </div>
+                            </div>
+                            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                              <div className="flex items-center">
+                                <CheckOutlined className="text-green-500 mr-2" />
+                                <span className="text-slate-700 dark:text-slate-300">
+                                  ✅ <strong>Ambiente creado:</strong> {environments.find(e => e.id === selectedEnvironment)?.name || 'Ambiente'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <DocumentDuplicateIconOutline className="mx-auto h-24 w-24 sm:h-28 sm:w-28 text-emerald-green-500 dark:text-emerald-green-400 mb-8" />
+                        <h3 className="text-3xl sm:text-4xl font-semibold text-slate-700 dark:text-slate-200 mb-4">
+                          {showOnboardingFlow && onboardingStep === 3 ? 'Paso 3: Crea tu Primer Diagrama' : 'Crea tu Primer Diagrama'}
+                        </h3>
+                        <p className="text-slate-500 dark:text-slate-400 mb-10 text-base sm:text-lg max-w-lg">
+                          {showOnboardingFlow && onboardingStep === 3
+                            ? "¡Excelente! Ya tienes todo listo. Ahora crea tu primer diagrama para empezar a diseñar tu infraestructura visualmente."
+                            : "Este ambiente está listo. Comienza a visualizar tu infraestructura arrastrando componentes al lienzo."
+                          }
+                        </p>
+                        <Button 
+                          type="primary" 
+                          size="large"
+                          onClick={() => {
+                            useNavigationStore.getState().setNewDiagramModalVisible(true);
+                            if (showOnboardingFlow) {
+                              setShowOnboardingFlow(false); // Terminar el flujo de onboarding
+                            }
+                          }}
+                          className="bg-emerald-green-600 hover:bg-emerald-green-700 dark:bg-emerald-green-500 dark:hover:bg-emerald-green-600 px-8 py-3 text-base"
+                        >
+                          Crear Diagrama
+                        </Button>
+                      </div> 
+                    )}
+                  </>
+                )}
+                
+                {activeSectionInSidebar === 'credentials' && activeCompany && ( <CredentialsPage companyId={activeCompany._id} /> )}
+                {activeSectionInSidebar === 'environments' && activeCompany && activeCompany._id && ( <EnvironmentsPage companyId={activeCompany._id} isPersonalSpace={isPersonalSpace || false} /> )}
+                {activeSectionInSidebar === 'deployments' && activeCompany && ( <DeploymentsPage companyId={activeCompany._id} /> )}
+                {activeSectionInSidebar === 'templates' && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Plantillas</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de plantillas próximamente.</p></div> )}
+                {activeSectionInSidebar === 'settings' && activeCompany && ( <SettingsPage companyId={activeCompany._id} /> )}
+                {activeSectionInSidebar === 'team' && !isPersonalSpace && activeCompany && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Equipo</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de miembros del equipo (solo para planes de compañía).</p></div> )}
+              </div>
+            </div>
+        </div>
+      </>
+    );
 }
