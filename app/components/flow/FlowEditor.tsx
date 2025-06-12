@@ -12,7 +12,7 @@ import {
   // TrashIcon, // Movido a FlowCanvas
 } from '@heroicons/react/24/outline';
 import React from 'react';
-import { SelectedEdgeTypeProvider } from '@/app/contexts/SelectedEdgeTypeContext'; 
+import { SelectedEdgeTypeProvider } from '../../contexts/SelectedEdgeTypeContext';
 import { LogicalEdgeType, edgeTypeConfigs, CustomEdgeData } from '@/app/config/edgeConfig'; 
 import nodeTypesFromFile from '../nodes/NodeTypes'; 
 // import { NodeWithExecutionStatus } from '../../utils/customTypes'; // Movido a FlowCanvas
@@ -42,6 +42,8 @@ import { Toolbar } from './components/Toolbar';
 import { EditGroupModal } from './components/EditGroupModal';
 // import EdgeDeleteButton from './components/EdgeDeleteButton'; // Movido a FlowCanvas
 import FlowCanvas from './components/FlowCanvas';
+import GeneratedCodeModal from '../ui/GeneratedCodeModal';
+import { Modal, Tag, Divider } from 'antd';
 
 
 const { 
@@ -57,10 +59,18 @@ const {
   // SelectionMode, // Movido a FlowCanvas
 } = ReactFlowLibrary;
 
-type Edge = ReactFlowLibrary.Edge<CustomEdgeData>;
-type Node = ReactFlowLibrary.Node; 
-type Viewport = ReactFlowLibrary.Viewport;
-type ReactFlowNodeTypes = ReactFlowLibrary.NodeTypes;
+// Tipos temporales mientras resolvemos el problema con los tipos de reactflow
+type FlowNode = any;
+type FlowEdge = any;
+type FlowViewport = any;
+type FlowNodeTypes = any;
+type FlowNodeChange = any;
+type FlowEdgeChange = any;
+type FlowConnection = any;
+type FlowXYPosition = any;
+
+// Definir los tipos personalizados
+type CustomEdge = FlowEdge & { data: CustomEdgeData };
 
 const FlowEditorContent = ({ 
   initialNodes = [], 
@@ -71,6 +81,8 @@ const FlowEditorContent = ({
   nodeTypes: externalNodeTypes = {}, 
   edgeTypes,
   resourceCategories = [],
+  initialExpandedGroupId,
+  onGroupExpandedChange,
 }: FlowEditorProps): JSX.Element => {
   
   const memoizedNodeTypes = useMemo(() => {
@@ -96,18 +108,18 @@ const FlowEditorContent = ({
     edges,
     setEdges,
     onEdgesChange: onEdgesChangeInternal,
-  } = useFlowState({ initialNodes, initialEdges: initialEdges as Edge[] });
+  } = useFlowState({ initialNodes, initialEdges: initialEdges as CustomEdge[] });
 
   // Memoizar las funciones de manejo de estado para evitar recreaciones
-  const handleNodeChange = useCallback((changes: any) => {
+  const handleNodeChange = useCallback((changes: FlowNodeChange[]) => {
     onNodesChangeInternal(changes);
   }, [onNodesChangeInternal]);
 
-  const handleEdgeChange = useCallback((changes: any) => {
+  const handleEdgeChange = useCallback((changes: FlowEdgeChange[]) => {
     onEdgesChangeInternal(changes);
   }, [onEdgesChangeInternal]);
 
-  const handleConnect = useCallback((params: any) => {
+  const handleConnect = useCallback((params: FlowConnection) => {
     onConnectProp?.(params);
   }, [onConnectProp]);
 
@@ -115,6 +127,7 @@ const FlowEditorContent = ({
   const sidebarOpen = useEditorStore(useCallback(state => state.sidebarOpen, []));
   const setSidebarOpen = useEditorStore(useCallback(state => state.setSidebarOpen, []));
   const activeTool = useEditorStore(useCallback(state => state.activeTool, []));
+  const setActiveTool = useEditorStore(useCallback(state => state.setActiveTool, [])); // Obtener setActiveTool
   const contextMenu = useEditorStore(useCallback(state => state.contextMenu, []));
   const selectedEdge = useEditorStore(useCallback(state => state.selectedEdge, []));
   const setSelectedEdge = useEditorStore(useCallback(state => state.setSelectedEdge, []));
@@ -125,25 +138,88 @@ const FlowEditorContent = ({
   
   const [activeDrag, setActiveDrag] = useState<{ item: EditorResourceItem, offset: { x: number, y: number }, elementSize?: { width: number, height: number } } | null>(null);
   const [, setFocusedNodeId] = useState<string | null>(null); 
-  const [selectedNodes, setSelectedNodes] = useState<Node[]>([]); 
+  const [selectedNodes, setSelectedNodes] = useState<FlowNode[]>([]); 
   
-  const findGroupAtPosition = useCallback((pos:{x:number,y:number})=>reactFlowInstance.getNodes().find(n=>n.type==='group'&&!n.data?.isMinimized&&pos.x>=n.position.x&&pos.x<=n.position.x+(n.width||300)&&pos.y>=n.position.y&&pos.y<=n.position.y+(n.height||200)),[reactFlowInstance]);
+  const findGroupAtPosition = useCallback((pos:{x:number,y:number})=>reactFlowInstance.getNodes().find((n: FlowNode)=>n.type==='group'&&!n.data?.isMinimized&&pos.x>=n.position.x&&pos.x<=n.position.x+(n.width||300)&&pos.y>=n.position.y&&pos.y<=n.position.y+(n.height||200)),[reactFlowInstance]);
   
-  const lastViewportRef = useRef<Viewport | null>(null);
+  const lastViewportRef = useRef<FlowViewport | null>(null);
   
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false); 
+  const [singleNodePreviewVisible, setSingleNodePreviewVisible] = useState(false);
+  const [singleNodePreviewData, setSingleNodePreviewData] = useState<any>(null);
+  const viewportChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isInteractive, setIsInteractive] = useState(true);
+  const [generatedCodeModalVisible, setGeneratedCodeModalVisible] = useState(false);
+  const isUnmountingRef = useRef(false);
 
   const contextMenuActions = useContextMenuManager({ selectedNodes, setSelectedNodes });
   const groupManagementActions = useGroupManagement({ lastViewportRef });
   const toolbarActions = useToolbarHandler();
   const executionActions = useExecutionHandler({ setExecutionLogs });
-  const saveActions = useSaveHandler({ nodes, edges, onSave, expandedGroupId });
+  const saveActions = useSaveHandler({ nodes, edges, onSave, expandedGroupId, lastViewportRef });
+  
+  // Manejar cambios en el viewport
+  const handleViewportChange = useCallback((viewport?: FlowViewport) => {
+    if (!expandedGroupId && !isUnmountingRef.current) {
+      // Siempre actualizar el viewport actual
+      if (viewport) {
+        lastViewportRef.current = viewport;
+        console.log('📍 [VIEWPORT UPDATE] Viewport changed:', viewport);
+      }
+      
+      // Solo programar guardado si tenemos reactFlowInstance
+      if (reactFlowInstance) {
+        // Cancelar el timeout anterior si existe
+        if (viewportChangeTimeoutRef.current) {
+          clearTimeout(viewportChangeTimeoutRef.current);
+        }
+        
+        // Establecer un nuevo timeout para guardar después de 1 segundo
+        viewportChangeTimeoutRef.current = setTimeout(() => {
+          if (!isUnmountingRef.current && reactFlowInstance) {
+            // Capturar el viewport más reciente justo antes de guardar
+            const currentViewport = reactFlowInstance.getViewport();
+            lastViewportRef.current = currentViewport;
+            console.log('📍 [VIEWPORT SAVE TRIGGER] Saving with current viewport:', currentViewport);
+            saveActions.saveCurrentDiagramState();
+          }
+        }, 1000);
+      }
+    }
+  }, [expandedGroupId, reactFlowInstance, saveActions]);
+  
+  // Limpiar el timeout cuando el componente se desmonte y guardar el estado actual
+  useEffect(() => {
+    return () => {
+      isUnmountingRef.current = true;
+      console.log('📍 [VIEWPORT CLEANUP] Component unmounting');
+      if (viewportChangeTimeoutRef.current) {
+        clearTimeout(viewportChangeTimeoutRef.current);
+        // Solo guardar si había un cambio pendiente y un viewport válido
+        if (lastViewportRef.current && 
+            typeof lastViewportRef.current.x === 'number' && 
+            typeof lastViewportRef.current.y === 'number' && 
+            typeof lastViewportRef.current.zoom === 'number') {
+          console.log('📍 [VIEWPORT CLEANUP] Saving pending viewport changes');
+          saveActions.saveCurrentDiagramState();
+        }
+      }
+    };
+  }, []); // Vacío para evitar recreaciones
+  
+  // Efecto para guardar el viewport inicial cuando se carga
+  useEffect(() => {
+    if (initialViewport && reactFlowInstance) {
+      lastViewportRef.current = initialViewport;
+      console.log('📍 [VIEWPORT INIT] Setting initial viewport:', initialViewport);
+    }
+  }, [initialViewport, reactFlowInstance]);
   useKeyboardShortcuts({ 
     handleToolClick: toolbarActions.handleToolClick, 
     createEmptyGroup: groupManagementActions.createEmptyGroup 
   });
-  const areaDrawingActions = useAreaDrawing({ setNodes, activeTool });
+  const areaDrawingActions = useAreaDrawing({ setNodes, activeTool, setActiveTool }); // Pasar setActiveTool
 
 
   const {
@@ -177,17 +253,43 @@ const FlowEditorContent = ({
     handleExpandGroupView: groupManagementActions.handleExpandGroupView, 
   });
   
-  const onEdgeDelete = useCallback((edgeToDelete: Edge) => { onEdgesChangeInternal([{ id: edgeToDelete.id, type: 'remove' }]); setSelectedEdge(null); }, [onEdgesChangeInternal, setSelectedEdge]);
+  const onEdgeDelete = useCallback((edgeToDelete: CustomEdge) => { onEdgesChangeInternal([{ id: edgeToDelete.id, type: 'remove' }]); setSelectedEdge(null); }, [onEdgesChangeInternal, setSelectedEdge]);
 
   useEffect(() => {
-    const areaUpdate = (e: Event) => { const {nodeId,data} = (e as CustomEvent).detail; reactFlowInstance.setNodes(ns => ns.map(n => n.id === nodeId ? {...n, data:{...n.data, ...data}} : n)); };
-    window.addEventListener('updateAreaNode', areaUpdate as EventListener);
-    return () => { 
-      window.removeEventListener('updateAreaNode', areaUpdate as EventListener); 
+    const areaUpdate = (e: Event) => { 
+      const {nodeId,data} = (e as CustomEvent).detail; 
+      reactFlowInstance.setNodes((ns: FlowNode[]) => ns.map((n: FlowNode) => n.id === nodeId ? {...n, data:{...n.data, ...data}} : n)); 
     };
-  }, [reactFlowInstance]);
+    
+    // Listener para actualizar datos de nodos (desde IaCTemplatePanel)
+    const nodeDataUpdate = (e: Event) => {
+      const { nodeId, data } = (e as CustomEvent).detail;
+      console.log('📝 Updating node data:', nodeId, data);
+      
+      reactFlowInstance.setNodes((ns: FlowNode[]) => 
+        ns.map((n: FlowNode) => 
+          n.id === nodeId 
+            ? { ...n, data: { ...n.data, ...data } }
+            : n
+        )
+      );
+      
+      // Guardar automáticamente después de actualizar
+      setTimeout(() => {
+        saveActions.saveCurrentDiagramState();
+      }, 100);
+    };
+    
+    window.addEventListener('updateAreaNode', areaUpdate as EventListener);
+    window.addEventListener('updateNodeData', nodeDataUpdate as EventListener);
+    
+    return () => { 
+      window.removeEventListener('updateAreaNode', areaUpdate as EventListener);
+      window.removeEventListener('updateNodeData', nodeDataUpdate as EventListener);
+    };
+  }, [reactFlowInstance, saveActions]);
   
-  useOnSelectionChange({onChange:({nodes:sel})=>setSelectedNodes(sel)});
+  useOnSelectionChange({onChange:({nodes:sel}: {nodes: FlowNode[]})=>setSelectedNodes(sel)});
   useEffect(()=>{ const focus=(e:Event)=>{const{nodeId,isFocused}=(e as CustomEvent).detail;setFocusedNodeId(isFocused?nodeId:null);}; window.addEventListener('nodeGroupFocus',focus as EventListener); return()=>window.removeEventListener('nodeGroupFocus',focus as EventListener); },[]);
   
   useEffect(() => {
@@ -209,13 +311,26 @@ const FlowEditorContent = ({
 
   const handleCollapseGroup = useCallback((groupId: string) => {
     groupManagementActions.handleCollapseGroupView(groupId);
-  }, [groupManagementActions]); // Añadir groupManagementActions como dependencia
+    onGroupExpandedChange?.(null);
+  }, [groupManagementActions, onGroupExpandedChange]);
+
+  // Expandir grupo inicial si está especificado
+  useEffect(() => {
+    if (initialExpandedGroupId && nodes.length > 0) {
+      const groupExists = nodes.some((n: FlowNode) => n.id === initialExpandedGroupId && n.type === 'group');
+      if (groupExists) {
+        groupManagementActions.handleExpandGroupView(initialExpandedGroupId);
+        onGroupExpandedChange?.(initialExpandedGroupId);
+      }
+    }
+  }, [initialExpandedGroupId, nodes.length]); // Solo ejecutar cuando cambie initialExpandedGroupId o cuando se carguen los nodos
 
   useEffect(() => {
     const expandHandler = (event: Event) => {
       const customEvent = event as CustomEvent<{ groupId: string }>;
       if (customEvent.detail?.groupId) {
         groupManagementActions.handleExpandGroupView(customEvent.detail.groupId);
+        onGroupExpandedChange?.(customEvent.detail.groupId);
       }
     };
     const collapseHandler = (event: Event) => {
@@ -231,10 +346,88 @@ const FlowEditorContent = ({
       window.removeEventListener('expandGroupView', expandHandler);
       window.removeEventListener('collapseGroupView', collapseHandler);
     };
-  }, [groupManagementActions.handleExpandGroupView, handleCollapseGroup]);
+  }, [groupManagementActions.handleExpandGroupView, handleCollapseGroup, onGroupExpandedChange]);
   
-  useEffect(()=>{const h=()=>{ 
-  };window.addEventListener('showSingleNodePreview',h);return()=>window.removeEventListener('showSingleNodePreview',h);},[]); 
+  useEffect(() => {
+    const handleShowSingleNodePreview = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const previewData = customEvent.detail;
+      
+      setSingleNodePreviewData(previewData);
+      setSingleNodePreviewVisible(true);
+    };
+    
+    window.addEventListener('showSingleNodePreview', handleShowSingleNodePreview);
+    return () => window.removeEventListener('showSingleNodePreview', handleShowSingleNodePreview);
+  }, []);
+
+  // Listener para mostrar el modal de código generado
+  useEffect(() => {
+    const handleShowGeneratedCodeModal = () => {
+      setGeneratedCodeModalVisible(true);
+    };
+    
+    window.addEventListener('showGeneratedCodeModal', handleShowGeneratedCodeModal);
+    return () => window.removeEventListener('showGeneratedCodeModal', handleShowGeneratedCodeModal);
+  }, []);
+
+  // Listener para forzar guardado cuando se cambia de diagrama
+  useEffect(() => {
+    const handleForceSave = () => {
+      console.log('📍 [FLOW EDITOR] Evento forceSaveCurrentDiagram recibido, guardando estado actual');
+      // Capturar el viewport más reciente antes de guardar
+      if (reactFlowInstance && !isUnmountingRef.current) {
+        const currentViewport = reactFlowInstance.getViewport();
+        lastViewportRef.current = currentViewport;
+        console.log('📍 [FLOW EDITOR] Guardando con viewport:', currentViewport);
+        saveActions.saveCurrentDiagramState();
+      }
+    };
+    
+    window.addEventListener('forceSaveCurrentDiagram', handleForceSave);
+    return () => window.removeEventListener('forceSaveCurrentDiagram', handleForceSave);
+  }, [reactFlowInstance, saveActions]);
+
+  // Agregar listener para clicks en el rectángulo de selección
+  useEffect(() => {
+    const handleSelectionRectClick = (e: MouseEvent) => {
+      if (e.button === 2 && selectedNodes.length > 0) { // Click derecho y hay nodos seleccionados
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Disparar el evento del menú contextual para selección múltiple
+        const event = new CustomEvent('showMultipleSelectionMenu', {
+          detail: {
+            x: e.clientX,
+            y: e.clientY,
+            selectedNodes: selectedNodes,
+            selectedNodesCount: selectedNodes.length
+          }
+        });
+        window.dispatchEvent(event);
+      }
+    };
+
+    // Usar delegación de eventos para capturar clicks en el rectángulo de selección
+    const handleContextMenuCapture = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      console.log('[FlowEditor] Context menu capture:', target.className, selectedNodes.length);
+      
+      if (target.classList.contains('react-flow__nodesselection-rect') && selectedNodes.length > 0) {
+        console.log('[FlowEditor] Handling selection rect click');
+        handleSelectionRectClick(e);
+      }
+    };
+
+    // Agregar listener tanto en fase de captura como de burbuja
+    document.addEventListener('contextmenu', handleContextMenuCapture, true);
+    window.addEventListener('contextmenu', handleContextMenuCapture, true);
+    
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenuCapture, true);
+      window.removeEventListener('contextmenu', handleContextMenuCapture, true);
+    };
+  }, [selectedNodes]);
 
   const edgeToolbarIcons: Record<LogicalEdgeType, React.ElementType> = {
     [LogicalEdgeType.DEPENDS_ON]: ShareIcon,
@@ -258,7 +451,7 @@ const FlowEditorContent = ({
         onSaveChanges={handleGroupSave}
         mainNodeTypes={memoizedNodeTypes}
         mainEdgeTypes={memoizedEdgeTypes} 
-        initialViewport={nodes.find(n => n.id === expandedGroupId)?.data?.viewport}
+        initialViewport={nodes.find((n: FlowNode) => n.id === expandedGroupId)?.data?.viewport}
         edgeTypeConfigs={edgeTypeConfigs} 
         edgeToolbarIcons={edgeToolbarIcons} 
         resourceCategories={resourceCategories as EditorResourceCategory[]} 
@@ -277,6 +470,8 @@ const FlowEditorContent = ({
         onSaveDiagram={saveActions.saveCurrentDiagramState}
         onCreateEmptyGroup={() => groupManagementActions.createEmptyGroup()} 
         onToolClick={toolbarActions.handleToolClick}
+        isInteractive={isInteractive}
+        setIsInteractive={setIsInteractive}
       />
       <FlowCanvas
         initialViewport={initialViewport}
@@ -311,10 +506,133 @@ const FlowEditorContent = ({
         executionActions={executionActions}
         hideContextMenu={hideContextMenuFromStore}
         selectedNodes={selectedNodes}
+        onViewportChange={handleViewportChange}
+        isInteractive={isInteractive}
       />
       <div className={`fixed inset-y-0 right-0 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${showLogs ? 'translate-x-0' : 'translate-x-full'}`} style={{ width: '480px' }}>
-        <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} /* previewData={previewData} TS Error, and previewData state is commented */ />
+        <ExecutionLog isVisible={showLogs} logs={executionLogs} onClose={() => setShowLogs(false)} />
       </div>
+      
+      {/* Modal de Preview para Nodo Individual */}
+      <Modal
+        title={`Vista Previa de Cambios: ${singleNodePreviewData?.resource?.name || 'Recurso'}`}
+        open={singleNodePreviewVisible}
+        onCancel={() => setSingleNodePreviewVisible(false)}
+        footer={[
+          <button
+            key="cancel"
+            onClick={() => setSingleNodePreviewVisible(false)}
+            className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            Cancelar
+          </button>,
+          <button
+            key="apply"
+            onClick={() => {
+              setSingleNodePreviewVisible(false);
+              // Simular ejecución con logs
+              const mockLogs = [
+                'Iniciando proceso de aplicación de cambios...',
+                'Validando configuración...',
+                'Creando recursos...',
+                'Configurando dependencias...',
+                'Aplicando cambios de red...',
+                'Actualizando permisos...',
+                'Verificando estado...',
+                'Finalizando proceso...',
+                'Cambios aplicados exitosamente',
+                'Proceso completado'
+              ];
+              setExecutionLogs(mockLogs);
+              setShowLogs(true);
+            }}
+            className="px-4 py-2 ml-2 text-white bg-blue-600 rounded-md hover:bg-blue-700"
+          >
+            Aplicar
+          </button>
+        ]}
+        width={800}
+        styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
+      >
+        {singleNodePreviewData && (
+          <div className="space-y-4">
+            {/* Información del Recurso Principal */}
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Recurso Principal</h3>
+              <div className="bg-gray-50 p-4 rounded">
+                <p><strong>Nombre:</strong> {singleNodePreviewData.resource.name}</p>
+                <p><strong>Tipo:</strong> {singleNodePreviewData.resource.type}</p>
+                <p><strong>Proveedor:</strong> {singleNodePreviewData.resource.provider}</p>
+                <p><strong>Acción:</strong> <Tag color={singleNodePreviewData.action === 'create' ? 'green' : singleNodePreviewData.action === 'update' ? 'blue' : 'red'}>{singleNodePreviewData.action.toUpperCase()}</Tag></p>
+              </div>
+            </div>
+
+            {/* Cambios en Propiedades */}
+            {singleNodePreviewData.resource.changes?.properties && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Cambios en Propiedades</h3>
+                <div className="space-y-2">
+                  {Object.entries(singleNodePreviewData.resource.changes.properties).map(([key, change]: [string, any]) => (
+                    <div key={key} className="bg-gray-50 p-3 rounded">
+                      <p className="font-medium">{key}:</p>
+                      <div className="ml-4 text-sm">
+                        {change.action === 'create' && (
+                          <p className="text-green-600">+ {change.after}</p>
+                        )}
+                        {change.action === 'update' && (
+                          <>
+                            <p className="text-red-600 line-through">- {change.before}</p>
+                            <p className="text-green-600">+ {change.after}</p>
+                          </>
+                        )}
+                        {change.action === 'delete' && (
+                          <p className="text-red-600 line-through">- {change.before}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Divider />
+
+            {/* Dependencias */}
+            {singleNodePreviewData.dependencies && singleNodePreviewData.dependencies.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Recursos Dependientes ({singleNodePreviewData.dependencies.length})</h3>
+                <div className="space-y-2">
+                  {singleNodePreviewData.dependencies.map((dep: any, index: number) => (
+                    <div key={index} className="bg-gray-50 p-3 rounded">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">{dep.name}</p>
+                          <p className="text-sm text-gray-600">Tipo: {dep.type}</p>
+                        </div>
+                        <Tag color={dep.action === 'create' ? 'green' : dep.action === 'update' ? 'blue' : 'red'}>
+                          {dep.action.toUpperCase()}
+                        </Tag>
+                      </div>
+                      {dep.properties && Object.keys(dep.properties).length > 0 && (
+                        <div className="mt-2 text-sm">
+                          <p className="text-gray-500">Propiedades modificadas: {Object.keys(dep.properties).join(', ')}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+      
+      {/* Modal de Código Generado */}
+      <GeneratedCodeModal
+        visible={generatedCodeModalVisible}
+        onClose={() => setGeneratedCodeModalVisible(false)}
+        nodes={nodes}
+      />
     </div>
   );
 };

@@ -10,9 +10,18 @@ import {
   CHILD_NODE_HEIGHT 
 } from '../utils/constants';
 
+// Tipos temporales mientras resolvemos el problema con los tipos de reactflow
+type FlowNode = any;
+type FlowEdge = any;
+type FlowViewport = any;
+type FlowNodeTypes = any;
+type FlowEdgeTypes = any;
+type FlowConnection = any;
+type FlowXYPosition = any;
+
 interface UseContextMenuManagerProps {
-  selectedNodes: Node[];
-  setSelectedNodes: (nodes: Node[]) => void; 
+  selectedNodes: FlowNode[];
+  setSelectedNodes: (nodes: FlowNode[]) => void; 
 }
 
 // type ContextMenu = { // No se usa, se puede eliminar
@@ -39,7 +48,7 @@ export function useContextMenuManager({
     const { getNode, getNodes, setNodes } = reactFlowInstance;
     const grp = getNode(gid); 
     if(!grp || grp.data?.isMinimized) return; 
-    const children = getNodes().filter(n => n.parentId === gid); 
+    const children = getNodes().filter((n: FlowNode) => n.parentId === gid); 
     if(children.length === 0) return; 
     const grpW = (grp.style?.width as number) || MIN_EXPANDED_GROUP_WIDTH; 
     const hH = GROUP_HEADER_HEIGHT;
@@ -47,21 +56,41 @@ export function useContextMenuManager({
     const hM = CHILD_NODE_PADDING_X;
     const nS = 8; // nodeSpacing
     const availW = grpW - 2 * hM; 
-    const sorted = children.sort((a,b) => a.id.localeCompare(b.id)); 
-    setNodes(ns => ns.map(n => {
+    const sorted = children.sort((a: FlowNode, b: FlowNode) => a.id.localeCompare(b.id)); 
+    setNodes((ns: FlowNode[]) => ns.map((n: FlowNode) => {
       if(n.parentId !== gid) return n; 
-      const idx = sorted.findIndex(c => c.id === n.id); 
+      const idx = sorted.findIndex((c: FlowNode) => c.id === n.id); 
       const y = hH + vM + idx * (CHILD_NODE_HEIGHT + nS); 
       return {...n, position: {x: hM, y}, style: {...n.style, width: availW, height: CHILD_NODE_HEIGHT, transition: 'none'}, draggable: true, selectable: true};
     }));
   }, [reactFlowInstance]);
 
   const groupSelectedNodes = useCallback(()=>{
-    const { setNodes: rfSetNodes } = reactFlowInstance; // Eliminado getNodes de la desestructuración
-    if(selectedNodes.length < 2){ console.warn("Need >=2 nodes to group"); return; }
+    const { setNodes: rfSetNodes, getNodes } = reactFlowInstance;
+    
+    // Obtener nodos seleccionados directamente del reactFlowInstance
+    const currentSelectedNodes = getNodes().filter((n: FlowNode) => n.selected);
+    console.log('🔍 Current selected nodes from reactFlow:', currentSelectedNodes.length);
+    
+    if(currentSelectedNodes.length < 2){ 
+      console.warn("Need >=2 nodes to group"); 
+      return; 
+    }
+    
+    // Filtrar solo nodos de recursos (excluir notas, textos, áreas y grupos)
+    const utilityNodeTypes = ['areaNode', 'noteNode', 'textNode', 'group'];
+    const resourceNodes = currentSelectedNodes.filter((n: FlowNode) => !utilityNodeTypes.includes(n.type));
+    
+    if(resourceNodes.length < 2){ 
+      console.warn("Need at least 2 resource nodes to group"); 
+      return; 
+    }
+    
+    console.log('🔄 Grouping nodes:', resourceNodes.length);
+    
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     const provCounts:Record<string,number>={};
-    selectedNodes.forEach(n => {
+    resourceNodes.forEach((n: FlowNode) => {
       const w = n.width || 150, h = n.height || 80;
       minX = Math.min(minX, n.position.x);
       minY = Math.min(minY, n.position.y);
@@ -79,38 +108,70 @@ export function useContextMenuManager({
     minX -= pX; minY -= pVT; maxX += pX; maxY += pVB;
     const w = Math.max(MIN_EXPANDED_GROUP_WIDTH, maxX - minX), h = Math.max(MIN_EXPANDED_GROUP_HEIGHT, maxY - minY);
     const id = `group-${Date.now()}`;
-    const grp: Node = {id, type:'group', position:{x:minX, y:minY}, data:{label:'Grupo', provider: commonProv, isCollapsed:false, isMinimized: false}, style:{width:w, height:h}};
+    const grp: FlowNode = {
+      id, 
+      type:'group', 
+      position:{x:minX, y:minY}, 
+      data:{
+        label:'Nuevo Grupo', 
+        provider: commonProv, 
+        isCollapsed:false, 
+        isMinimized: false,
+        isExpandedView: false
+      }, 
+      style:{width:w, height:h},
+      width: w,
+      height: h
+    };
     
-    rfSetNodes(currentNodes => { // Usar currentNodes (parámetro de la función updater)
-      const updatedNodes = currentNodes.map(n => 
-        selectedNodes.some(s => s.id === n.id) ? 
-        {...n, parentId: id, extent:'parent' as const, position:{x: n.position.x - minX, y: n.position.y - minY}, selected: false} : 
+    rfSetNodes((currentNodes: FlowNode[]) => {
+      const updatedNodes = currentNodes.map((n: FlowNode) => 
+        resourceNodes.some((s: FlowNode) => s.id === n.id) ? 
+        {
+          ...n, 
+          parentId: id, 
+          extent:'parent' as const, 
+          position:{x: n.position.x - minX, y: n.position.y - minY}, 
+          selected: false,
+          hidden: true,
+          style: { 
+            ...n.style, 
+            visibility: 'hidden',
+            pointerEvents: 'none',
+            opacity: 0
+          }
+        } : 
         n
       );
       return applyNodeChanges([{type:'add', item: grp}], updatedNodes);
     });
+    
+    console.log('✅ Created group:', id);
     setTimeout(() => optimizeNodesInGroup(id), 50);
     hideContextMenu();
     return id;
-  }, [reactFlowInstance, selectedNodes, optimizeNodesInGroup, hideContextMenu]);
+  }, [reactFlowInstance, optimizeNodesInGroup, hideContextMenu]);
 
   const ungroupNodes = useCallback((groupIdToUngroup?: string) => {
     const { getNodes, setNodes: rfSetNodes } = reactFlowInstance;
     const currentNodes = getNodes();
-    let nodesToUpdate: Node[] = currentNodes;
+    
+    // Obtener nodos seleccionados directamente del reactFlowInstance
+    const currentSelectedNodes = currentNodes.filter((n: FlowNode) => n.selected);
+    
     let targetGroupIdsToProcess: string[] = [];
 
     if (groupIdToUngroup) {
         targetGroupIdsToProcess.push(groupIdToUngroup);
     } else {
-        const selectedGroupNodes = selectedNodes.filter(node => node.type === 'group');
-        const parentIdsOfSelectedChildren = [...new Set(selectedNodes.filter(node => node.parentId && currentNodes.find(pn => pn.id === node.parentId && pn.type === 'group')).map(node => node.parentId!))];
-        targetGroupIdsToProcess = [...new Set([...selectedGroupNodes.map(g => g.id), ...parentIdsOfSelectedChildren])];
+        const selectedGroupNodes = currentSelectedNodes.filter((node: FlowNode) => node.type === 'group');
+        const parentIdsOfSelectedChildren = [...new Set(currentSelectedNodes.filter((node: FlowNode) => node.parentId && currentNodes.find((pn: FlowNode) => pn.id === node.parentId && pn.type === 'group')).map((node: FlowNode) => node.parentId as string))];
+        targetGroupIdsToProcess = [...new Set([...selectedGroupNodes.map((g: FlowNode) => g.id), ...parentIdsOfSelectedChildren])];
 
         if (targetGroupIdsToProcess.length === 0) {
-            const nodesWithinAnyGroup = selectedNodes.filter(n => n.parentId && currentNodes.find(p => p.id === n.parentId && p.type === 'group'));
+            const nodesWithinAnyGroup = currentSelectedNodes.filter((n: FlowNode) => n.parentId && currentNodes.find((p: FlowNode) => p.id === n.parentId && p.type === 'group'));
             if (nodesWithinAnyGroup.length > 0) {
-                const parentIdsToUngroupFrom = [...new Set(nodesWithinAnyGroup.map(n => n.parentId!))];
+                const parentIdsToUngroupFrom = [...new Set(nodesWithinAnyGroup.map((n: FlowNode) => n.parentId as string))];
                 targetGroupIdsToProcess.push(...parentIdsToUngroupFrom);
                 targetGroupIdsToProcess = [...new Set(targetGroupIdsToProcess)]; 
             }
@@ -122,31 +183,81 @@ export function useContextMenuManager({
         hideContextMenu();
         return;
     }
+
+    console.log('🔄 Ungrouping groups:', targetGroupIdsToProcess);
     
-    nodesToUpdate = currentNodes.map(n => {
-        if (n.parentId && targetGroupIdsToProcess.includes(n.parentId)) {
-            const parentGroup = currentNodes.find(pg => pg.id === n.parentId);
-            if (parentGroup) {
-                return {
-                    ...n,
-                    parentId: undefined,
-                    extent: undefined,
-                    position: {
-                        x: (parentGroup.positionAbsolute?.x ?? parentGroup.position.x) + n.position.x,
-                        y: (parentGroup.positionAbsolute?.y ?? parentGroup.position.y) + n.position.y,
-                    },
-                    selected: false,
-                    hidden: false, 
-                };
-            }
+    // Crear un mapa para almacenar los grupos que vamos a eliminar
+    const groupsToDelete = new Map<string, FlowNode>();
+    targetGroupIdsToProcess.forEach(groupId => {
+        const group = currentNodes.find((n: FlowNode) => n.id === groupId);
+        if (group) {
+            groupsToDelete.set(groupId, group);
         }
-        return n;
-    }).filter(n => !targetGroupIdsToProcess.includes(n.id)); 
+    });
     
-    rfSetNodes(nodesToUpdate);
+    // Actualizar todos los nodos de una vez
+    const updatedNodes = currentNodes.map((n: FlowNode) => {
+        // Si es un nodo hijo de un grupo que vamos a desagrupar
+        if (n.parentId && groupsToDelete.has(n.parentId)) {
+            const parentGroup = groupsToDelete.get(n.parentId)!;
+            
+            // Calcular la posición absoluta del nodo
+            const parentX = parentGroup.positionAbsolute?.x ?? parentGroup.position.x;
+            const parentY = parentGroup.positionAbsolute?.y ?? parentGroup.position.y;
+            
+            // Usar las dimensiones por defecto estándar de los nodos
+            const defaultWidth = 150;
+            const defaultHeight = 80;
+            
+            return {
+                ...n,
+                parentId: undefined,
+                extent: undefined,
+                position: {
+                    x: parentX + n.position.x,
+                    y: parentY + n.position.y,
+                },
+                selected: false,
+                hidden: false,
+                // Eliminar width y height del nodo para que use las dimensiones del componente
+                width: undefined,
+                height: undefined,
+                style: {
+                    // Mantener el estilo original pero actualizar visibilidad
+                    ...n.style,
+                    visibility: 'visible',
+                    pointerEvents: 'auto',
+                    opacity: 1,
+                    // No forzar width/height en el style
+                    width: undefined,
+                    height: undefined,
+                },
+                draggable: true,
+                selectable: true,
+                connectable: true,
+                zIndex: (n.zIndex || 0) + 1, // Asegurar que estén por encima
+            };
+        }
+        
+        // Si es un grupo que vamos a eliminar, retornar null
+        if (groupsToDelete.has(n.id)) {
+            return null;
+        }
+        
+        // Otros nodos permanecen sin cambios
+        return n;
+    });
+    
+    // Filtrar los nodos nulos (los grupos eliminados)
+    const finalNodes = updatedNodes.filter((n: FlowNode | null) => n !== null) as FlowNode[];
+    
+    console.log('✅ Ungrouped nodes:', finalNodes.length);
+    
+    // Actualizar los nodos
+    rfSetNodes(finalNodes);
     setSelectedNodes([]); 
     hideContextMenu();
-  }, [reactFlowInstance, selectedNodes, setSelectedNodes, hideContextMenu]);
+  }, [reactFlowInstance, setSelectedNodes, hideContextMenu]);
 
   const handleDeleteNodeFromContextMenu = useCallback((nodeId: string) => {
     const { getNode, getNodes, setNodes: rfSetNodes, setEdges: rfSetEdges } = reactFlowInstance;
@@ -155,12 +266,12 @@ export function useContextMenuManager({
 
     let idsToDelete = [nodeId];
     if (nodeToDelete.type === 'group') { 
-      const childIds = getNodes().filter(n => n.parentId === nodeId).map(n => n.id);
+      const childIds = getNodes().filter((n: FlowNode) => n.parentId === nodeId).map((n: FlowNode) => n.id);
       idsToDelete = [...idsToDelete, ...childIds];
     }
 
-    rfSetNodes(nds => nds.filter(n => !idsToDelete.includes(n.id)));
-    rfSetEdges(eds => eds.filter(e => !idsToDelete.includes(e.source) && !idsToDelete.includes(e.target) && !idsToDelete.includes(nodeId))); 
+    rfSetNodes((nds: FlowNode[]) => nds.filter((n: FlowNode) => !idsToDelete.includes(n.id)));
+    rfSetEdges((eds: FlowEdge[]) => eds.filter((e: FlowEdge) => !idsToDelete.includes(e.source) && !idsToDelete.includes(e.target) && !idsToDelete.includes(nodeId))); 
     
     hideContextMenu();
     setSelectedEdge(null);
@@ -170,29 +281,33 @@ export function useContextMenuManager({
     const { getNodes, getEdges, setNodes: rfSetNodes, setEdges: rfSetEdges } = reactFlowInstance;
     const currentNodes = getNodes();
     const currentEdges = getEdges(); 
+    
+    // Obtener nodos seleccionados directamente del reactFlowInstance
+    const currentSelectedNodes = currentNodes.filter((n: FlowNode) => n.selected);
+    console.log('🗑️ Deleting nodes from reactFlow:', currentSelectedNodes.length);
 
-    const selectedNodeIds = selectedNodes.map(n => n.id);
-    const selectedEdgeObjects = currentEdges.filter(e => e.selected); 
-    const selectedEdgeIds = selectedEdgeObjects.map(e => e.id);
+    const selectedNodeIds = currentSelectedNodes.map((n: FlowNode) => n.id);
+    const selectedEdgeObjects = currentEdges.filter((e: FlowEdge) => e.selected); 
+    const selectedEdgeIds = selectedEdgeObjects.map((e: FlowEdge) => e.id);
 
     if (selectedNodeIds.length === 0 && selectedEdgeIds.length === 0) return;
 
     let allNodeIdsToDelete = [...selectedNodeIds];
     selectedNodeIds.forEach(nodeId => {
-      const node = currentNodes.find(n => n.id === nodeId);
+      const node = currentNodes.find((n: FlowNode) => n.id === nodeId);
       if (node?.type === 'group') {
-        const childIds = currentNodes.filter(n => n.parentId === nodeId).map(n => n.id);
+        const childIds = currentNodes.filter((n: FlowNode) => n.parentId === nodeId).map((n: FlowNode) => n.id);
         allNodeIdsToDelete = [...allNodeIdsToDelete, ...childIds];
       }
     });
     allNodeIdsToDelete = [...new Set(allNodeIdsToDelete)]; 
 
-    rfSetNodes(nds => nds.filter(n => !allNodeIdsToDelete.includes(n.id)));
-    rfSetEdges(eds => eds.filter(e => !selectedEdgeIds.includes(e.id) && !allNodeIdsToDelete.includes(e.source) && !allNodeIdsToDelete.includes(e.target)));
+    rfSetNodes((nds: FlowNode[]) => nds.filter((n: FlowNode) => !allNodeIdsToDelete.includes(n.id)));
+    rfSetEdges((eds: FlowEdge[]) => eds.filter((e: FlowEdge) => !selectedEdgeIds.includes(e.id) && !allNodeIdsToDelete.includes(e.source) && !allNodeIdsToDelete.includes(e.target)));
     
     setSelectedEdge(null); 
     hideContextMenu();
-  }, [reactFlowInstance, selectedNodes, setSelectedEdge, hideContextMenu]);
+  }, [reactFlowInstance, setSelectedEdge, hideContextMenu]);
 
   const startEditingGroupName = useCallback((id:string,lbl:string)=>{
     setEditingGroup({id,label:lbl});
@@ -212,24 +327,126 @@ export function useContextMenuManager({
     const { getNodes, setNodes: rfSetNodes } = reactFlowInstance;
     const currentNodes = getNodes();
     const selectedIds = new Set(ids);
-    const minZIndex = Math.min(...currentNodes.map(n => n.zIndex || 0));
-    rfSetNodes(currentNodes.map(n => selectedIds.has(n.id) ? {...n, zIndex: minZIndex -1 } : n) as Node[]);
+    const minZIndex = Math.min(...currentNodes.map((n: FlowNode) => n.zIndex || 0));
+    rfSetNodes(currentNodes.map((n: FlowNode) => selectedIds.has(n.id) ? {...n, zIndex: minZIndex -1 } : n));
     hideContextMenu();
   },[reactFlowInstance, hideContextMenu]);
 
-  const contextMenuActions = useMemo(() => ({
-    saveGroupName: (newName: string) => {
-      const updatedNodes = selectedNodes.map((node: Node) => ({
-        ...node,
-        data: { ...node.data, label: newName }
-      }));
-      setSelectedNodes(updatedNodes);
-      setEditingGroup(null);
-    },
-    hideContextMenu: () => {
-      setContextMenu({});
+  const duplicateNode = useCallback((nodeId: string) => {
+    const { getNode, setNodes: rfSetNodes } = reactFlowInstance;
+    const nodeToDuplicate = getNode(nodeId);
+    if (!nodeToDuplicate) return;
+
+    const newNode: FlowNode = {
+      ...nodeToDuplicate,
+      id: `${nodeToDuplicate.type}-duplicate-${Date.now()}`,
+      position: {
+        x: nodeToDuplicate.position.x + 50,
+        y: nodeToDuplicate.position.y + 50
+      },
+      selected: false,
+      // Si el nodo está dentro de un grupo, mantener el mismo parentId
+      parentId: nodeToDuplicate.parentId,
+      extent: nodeToDuplicate.extent,
+    };
+
+    console.log('📋 Duplicating node:', nodeId, 'as', newNode.id);
+    rfSetNodes((nds: FlowNode[]) => [...nds, newNode]);
+    hideContextMenu();
+  }, [reactFlowInstance, hideContextMenu]);
+
+  const duplicateSelectedNodes = useCallback(() => {
+    const { getNodes, setNodes: rfSetNodes } = reactFlowInstance;
+    
+    // Obtener nodos seleccionados directamente del reactFlowInstance
+    const currentNodes = getNodes();
+    const nodesToDuplicate = currentNodes.filter((n: FlowNode) => n.selected);
+    
+    if (nodesToDuplicate.length === 0) {
+      console.warn('No nodes selected to duplicate');
+      return;
     }
-  }), [selectedNodes, setSelectedNodes, setEditingGroup, setContextMenu]);
+    
+    console.log('📋 Starting duplication of nodes:', nodesToDuplicate.length);
+    
+    const newNodes: FlowNode[] = [];
+    const idMapping = new Map<string, string>(); // Mapear IDs antiguos a nuevos
+    
+    // Duplicar todos los nodos seleccionados
+    nodesToDuplicate.forEach((node: FlowNode) => {
+      const timestamp = Date.now() + Math.random(); // Asegurar IDs únicos
+      const newId = `${node.type}-duplicate-${Math.floor(timestamp)}`;
+      idMapping.set(node.id, newId);
+      
+      const newNode: FlowNode = {
+        ...node,
+        id: newId,
+        position: {
+          x: node.position.x + 50,
+          y: node.position.y + 50
+        },
+        selected: true, // Mantener seleccionados los nodos duplicados
+        data: { ...node.data }, // Clonar data
+        style: { ...node.style }, // Clonar style
+      };
+      
+      // Si el nodo es un hijo de un grupo, mantener el parentId si el grupo no está siendo duplicado
+      if (node.parentId && !nodesToDuplicate.some((n: FlowNode) => n.id === node.parentId)) {
+        // Mantener el mismo parentId
+        newNode.parentId = node.parentId;
+        newNode.extent = node.extent;
+        newNode.hidden = node.hidden;
+      } else if (node.parentId && nodesToDuplicate.some((n: FlowNode) => n.id === node.parentId)) {
+        // El padre también está siendo duplicado, actualizar después
+        newNode.parentId = undefined;
+      }
+      
+      newNodes.push(newNode);
+    });
+    
+    // Actualizar parentIds para los nodos que tienen padres duplicados
+    newNodes.forEach(newNode => {
+      const originalNode = nodesToDuplicate.find((n: FlowNode) => 
+        idMapping.get(n.id) === newNode.id
+      );
+      if (originalNode?.parentId && idMapping.has(originalNode.parentId)) {
+        newNode.parentId = idMapping.get(originalNode.parentId);
+        newNode.extent = 'parent' as const;
+        newNode.hidden = true;
+      }
+    });
+    
+    console.log('✅ Created duplicate nodes:', newNodes);
+    
+    // Actualizar los nodos
+    rfSetNodes((nds: FlowNode[]) => {
+      // Deseleccionar nodos originales
+      const updatedOriginals = nds.map((n: FlowNode) => 
+        nodesToDuplicate.some((orig: FlowNode) => orig.id === n.id) 
+          ? { ...n, selected: false }
+          : n
+      );
+      return [...updatedOriginals, ...newNodes];
+    });
+    
+    hideContextMenu();
+  }, [reactFlowInstance, hideContextMenu]);
+
+  const saveGroupName = useCallback((newName: string) => {
+    const { setNodes: rfSetNodes } = reactFlowInstance;
+    const editingGroupFromStore = useEditorStore.getState().editingGroup;
+    if (!editingGroupFromStore) return;
+    
+    rfSetNodes((ns: FlowNode[]) => 
+      ns.map((n: FlowNode) => 
+        n.id === editingGroupFromStore.id 
+          ? { ...n, data: { ...n.data, label: newName } } 
+          : n
+      )
+    );
+    setEditingGroup(null);
+    hideContextMenu();
+  }, [reactFlowInstance, setEditingGroup, hideContextMenu]);
 
   return {
     handleDeleteNodeFromContextMenu,
@@ -239,6 +456,11 @@ export function useContextMenuManager({
     optimizeNodesInGroup, 
     startEditingGroupName,
     moveNodesToBack,
-    ...contextMenuActions,
+    duplicateNode,
+    duplicateSelectedNodes,
+    saveGroupName,
+    hideContextMenu: () => {
+      setContextMenu({ visible: false, x: 0, y: 0, nodeId: null, nodeType: null, isPane: false });
+    },
   };
 }

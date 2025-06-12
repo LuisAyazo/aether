@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Modal, Input, Table, message, Space, Tooltip, Popconfirm, Alert, Spin } from 'antd';
+import { Button, Modal, Input, Table, message, Space, Tooltip, Popconfirm, Alert, Spin } from 'antd'; // Typography eliminado
 import { PlusOutlined, EditOutlined, DeleteOutlined, QuestionCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { FolderIcon } from '@heroicons/react/24/outline'; // Importar FolderIcon
 import { EnvironmentDefinition } from '@/app/types/deployments'; 
 import { useRouter } from 'next/navigation'; 
 
@@ -22,7 +23,7 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [editingEnvironment, setEditingEnvironment] = useState<EnvironmentDefinition | null>(null);
   
-  const [formValues, setFormValues] = useState<{ name: string; description?: string }>({ name: '' });
+  const [formValues, setFormValues] = useState<{ name: string; description?: string; path?: string }>({ name: '', path: '' });
 
   const fetchEnvironments = useCallback(async () => {
     console.log('EnvironmentsPage: fetchEnvironments INICIADO, companyId:', companyId); 
@@ -86,10 +87,10 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
   const handleOpenModal = (environment?: EnvironmentDefinition) => {
     if (environment) {
       setEditingEnvironment(environment);
-      setFormValues({ name: environment.name, description: environment.description });
+      setFormValues({ name: environment.name, description: environment.description, path: environment.path || '' });
     } else {
       setEditingEnvironment(null);
-      setFormValues({ name: '', description: '' });
+      setFormValues({ name: '', description: '', path: '' });
     }
     setIsModalVisible(true);
   };
@@ -97,7 +98,7 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
   const handleCancelModal = () => {
     setIsModalVisible(false);
     setEditingEnvironment(null);
-    setFormValues({ name: '', description: '' });
+    setFormValues({ name: '', description: '', path: '' });
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -111,19 +112,19 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
       return;
     }
 
-    if (isPersonalSpace && environments.length === 0 && formValues.name.trim().toLowerCase() !== 'sandbox') {
-        message.warning('Para espacios personales, el primer ambiente debe llamarse "Sandbox".');
-        return; 
-    }
+    // Ya no se fuerza el nombre "Sandbox" para el primer ambiente en espacios personales si se crea desde aquí.
+    // La creación automática del "Sandbox" ocurre en DashboardPage si no existe ninguno.
     if (isPersonalSpace && environments.length > 0 && !editingEnvironment) {
         message.error("Los espacios personales solo pueden tener un ambiente.");
         return;
     }
 
+    const trimmedPath = formValues.path?.trim();
     const payload = {
       company_id: companyId, 
       name: formValues.name.trim(),
-      description: formValues.description?.trim() || undefined,
+      description: formValues.description?.trim() || null, // Enviar null si está vacío
+      path: trimmedPath ? trimmedPath : null, // Enviar null si está vacío para que se actualice en la BD
     };
 
     setLoading(true);
@@ -223,6 +224,12 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
       sorter: (a: EnvironmentDefinition, b: EnvironmentDefinition) => a.name.localeCompare(b.name),
     },
     {
+      title: 'Directorio',
+      dataIndex: 'path',
+      key: 'path',
+      render: (text: string) => text || '-',
+    },
+    {
       title: 'Descripción',
       dataIndex: 'description',
       key: 'description',
@@ -238,7 +245,7 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
     {
       title: 'Acciones',
       key: 'actions',
-      render: (_: any, record: EnvironmentDefinition) => (
+      render: (_text: unknown, record: EnvironmentDefinition) => (
         <Space size="middle">
           <Tooltip title="Editar Ambiente">
             <Button icon={<EditOutlined />} onClick={() => handleOpenModal(record)} />
@@ -334,10 +341,21 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
           value={formValues.description}
           onChange={handleFormChange}
           rows={3}
+          style={{ marginBottom: 16 }}
         />
-         {isPersonalSpace && environments.length === 0 && !editingEnvironment && (
-            <p className="text-sm text-orange-500 mt-2">Para espacios personales, el primer ambiente debe llamarse "Sandbox".</p>
-        )}
+        <Input
+          name="path"
+          placeholder="Ruta del directorio (ej. frontend/equipo-a, opcional)"
+          value={formValues.path}
+          onChange={handleFormChange}
+          addonBefore={<FolderIcon className="w-4 h-4 text-gray-400 dark:text-slate-500" />}
+          style={{ marginBottom: 4 }}
+        />
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          Organiza tus ambientes en directorios. Usa "/" para crear subdirectorios. <br/>
+          Ejemplos: frontend, backend/servicios, data/analytics
+        </p>
+        {/* Mensaje eliminado: ya no se fuerza el nombre "Sandbox" aquí. */}
         {isPersonalSpace && environments.length > 0 && !editingEnvironment && (
             <p className="text-sm text-red-500 mt-2">Los espacios personales solo pueden tener un ambiente.</p>
         )}

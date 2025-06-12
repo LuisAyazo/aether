@@ -3,12 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building, User as UserIcon } from 'lucide-react'; // Iconos para los botones
+import { message } from 'antd'; // Importar message de antd
 import { getCurrentUser, getAuthToken, User } from '../../../services/authService'; // Ruta corregida y User importado de aquí
 
 // Necesitaríamos una función para actualizar las settings de uso
 // Esto podría estar en authService.ts o un nuevo userService.ts
 async function updateUserUsageSettings(usageType: 'personal' | 'company', token: string | null) {
-  if (!token) throw new Error('No autenticado');
+  if (!token) {
+    console.error("updateUserUsageSettings: No token provided.");
+    throw new Error('No autenticado');
+  }
+  console.log(`updateUserUsageSettings: Enviando usageType=${usageType} al backend.`);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   const response = await fetch(`${API_URL}/api/v1/auth/me/usage-settings`, {
@@ -17,14 +22,57 @@ async function updateUserUsageSettings(usageType: 'personal' | 'company', token:
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify({ usage_type: usageType }), // selected_company_id se manejará después si es 'company'
+    body: JSON.stringify({ usage_type: usageType }), 
   });
 
+  console.log(`updateUserUsageSettings: Respuesta del backend status=${response.status}`);
+  const responseData = await response.json(); // Leer JSON independientemente del status para logging
+
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.detail || 'Error al actualizar las preferencias de uso');
+    console.error("updateUserUsageSettings: Error del backend:", responseData);
+    throw new Error(responseData.detail || 'Error al actualizar las preferencias de uso');
   }
-  return response.json();
+  console.log("updateUserUsageSettings: Datos del usuario actualizados recibidos:", responseData);
+  return responseData;
+}
+
+async function saveOnboardingTrackingDetails(details: {
+  usage_type_selected: string | null;
+  how_heard: string | null;
+  iac_knowledge: string | null;
+  main_interests: string[];
+}, token: string | null) {
+  if (!token) {
+    console.error("saveOnboardingTrackingDetails: No token provided.");
+    // Considerar si lanzar un error o simplemente no hacer nada.
+    // Si el usuario no está autenticado, no debería poder llegar aquí.
+    return;
+  }
+  console.log("saveOnboardingTrackingDetails: Enviando datos de tracking:", details);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  try {
+    const response = await fetch(`${API_URL}/api/v1/auth/me/onboarding-extra-data`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(details),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: "Error desconocido al guardar datos de tracking." }));
+      console.error("saveOnboardingTrackingDetails: Error del backend:", errorData);
+      // No lanzar error aquí para no interrumpir el flujo principal si esto es solo para tracking.
+      // Se podría mostrar un mensaje no bloqueante.
+      message.error(`No se pudieron guardar los detalles adicionales del onboarding: ${errorData.detail}`);
+    } else {
+      const responseData = await response.json();
+      console.log("saveOnboardingTrackingDetails: Datos de tracking guardados exitosamente.", responseData);
+    }
+  } catch (error) {
+    console.error("saveOnboardingTrackingDetails: Excepción al llamar a la API.", error);
+    message.error("Error de red al guardar detalles adicionales del onboarding.");
+  }
 }
 
 
@@ -96,29 +144,48 @@ export default function SelectUsagePage() {
     setLoading('submit');
     setError(null);
     const token = getAuthToken();
+    console.log("handleSubmitOnboarding: Iniciando envío con usageType=", selectedUsageType);
 
     try {
-      // Aquí también se enviarían los datos de howHeard, iacKnowledge y mainInterests si el backend los soporta
-      // Por ahora, solo enviamos usageType
       const updatedUser = await updateUserUsageSettings(selectedUsageType, token);
-      // Podríamos añadir un segundo endpoint o modificar el existente para guardar los datos adicionales:
-      // Ejemplo: await saveAdditionalOnboardingData({ how_heard: howHeard, iac_knowledge: iacKnowledge, interests: mainInterests }, token);
+      console.log("handleSubmitOnboarding: Usuario actualizado desde API:", updatedUser);
       
       if (typeof window !== 'undefined' && updatedUser) {
          const existingUser = getCurrentUser();
          if (existingUser) {
             const newUserData = { ...existingUser, ...updatedUser };
+            console.log("handleSubmitOnboarding: Actualizando localStorage con newUserData:", newUserData);
             localStorage.setItem('user', JSON.stringify(newUserData));
-            setCurrentUser(newUserData); // Actualizar el estado local del usuario
+            setCurrentUser(newUserData); 
+         } else {
+            console.warn("handleSubmitOnboarding: No se encontró existingUser en localStorage para actualizar.");
          }
+         
+         // Guardar datos adicionales de tracking (no crítico para el flujo principal)
+         const trackingDetails = {
+           usage_type_selected: selectedUsageType,
+           how_heard: howHeard,
+           iac_knowledge: iacKnowledge,
+           main_interests: mainInterests
+         };
+         // Llamar sin await para no bloquear la redirección si la API de tracking falla
+         saveOnboardingTrackingDetails(trackingDetails, token).catch(e => {
+            console.warn("Error en segundo plano al guardar datos de tracking:", e);
+            // No es necesario notificar al usuario de este error si es solo para tracking interno.
+         });
+
+      } else {
+        console.warn("handleSubmitOnboarding: updatedUser no recibido o window no definido. No se guardarán datos de tracking.");
       }
 
+      console.log("handleSubmitOnboarding: Redirigiendo después de la actualización...");
       if (selectedUsageType === 'personal') {
         router.push('/dashboard');
-      } else {
-        router.push('/company/create');
+      } else { // company
+        router.push('/create-company'); // Corregir la ruta de redirección
       }
     } catch (err: unknown) {
+      console.error("handleSubmitOnboarding: Error durante el proceso.", err);
       if (err instanceof Error) {
         setError(err.message);
       } else {
@@ -126,6 +193,7 @@ export default function SelectUsagePage() {
       }
     } finally {
       setLoading(null);
+      console.log("handleSubmitOnboarding: Proceso finalizado.");
     }
   };
 

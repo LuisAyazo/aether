@@ -1,7 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { useReactFlow, NodeProps } from 'reactflow';
+import { useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import '@reactflow/node-resizer/dist/style.css';
+
+// Type aliases to work around ReactFlow TypeScript namespace issues
+type Node = any;
+type NodeProps = any;
 
 interface NoteNodeData {
   text: string;
@@ -21,7 +25,7 @@ const colorOptions = [
   { name: 'Blanco', value: '#FFFFFF', textColor: '#1F2937' },
 ];
 
-const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => {
+const NoteNode: React.FC<NodeProps> = ({ id, data, selected }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [text, setText] = useState(data.text);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -43,13 +47,13 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
     setIsEditing(false);
     
     // Update node data
-    reactFlow.setNodes((nodes) =>
-      nodes.map((node) =>
+    reactFlow.setNodes((nodes: Node[]) => // Tipar nodes como Node[]
+      nodes.map((node: Node) => // Tipar node como Node
         node.id === id
           ? {
               ...node,
               data: {
-                ...node.data,
+                ...(node.data as NoteNodeData), // Castear node.data a NoteNodeData
                 text,
                 backgroundColor,
                 textColor,
@@ -106,6 +110,7 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
         minWidth: '200px',
         minHeight: '100px',
         position: 'relative',
+        zIndex: 1000, // Cambiado a 1000 para asegurar que esté encima de AreaNode
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         cursor: isEditing ? 'text' : 'default',
         pointerEvents: 'auto',
@@ -115,6 +120,11 @@ const NoteNode: React.FC<NodeProps<NoteNodeData>> = ({ id, data, selected }) => 
         boxSizing: 'border-box'
       }}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={(e) => {
+        // Prevenir el menú contextual predeterminado del navegador
+        e.preventDefault();
+        // No detener la propagación para que ReactFlow pueda manejar el evento
+      }}
     >
       <NodeResizer
         isVisible={selected}

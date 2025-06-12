@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation'; 
+import { useParams, useRouter } from 'next/navigation'; 
+import Link from 'next/link';
+import { Dropdown, Avatar } from 'antd';
+import { 
+  UserOutlined, 
+  SettingOutlined, 
+  LogoutOutlined,
+  MailOutlined
+} from '@ant-design/icons';
 import { 
   // ChartBarIcon, // No usado en defaultCompanySections actualizado
   // KeyIcon, // No usado en defaultCompanySections actualizado
@@ -27,6 +35,8 @@ import {
   ServerStackIcon as ServerStackIconSolid,
   UsersIcon as UsersIconSolid
 } from '@heroicons/react/24/solid';
+import { logoutUser as authLogout } from '@/app/services/authService';
+import { useNavigationStore } from '@/app/hooks/useNavigationStore';
 
 export interface SidebarSection {
   key: string; 
@@ -109,7 +119,11 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   isPersonalSpace = false   
 }) => {
   const params = useParams();
+  const router = useRouter();
   const companyId = params.companyId as string;
+  
+  // Obtener el usuario del store
+  const user = useNavigationStore(state => state.user);
 
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(propIsCollapsed);
 
@@ -186,6 +200,18 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
 
   const companyHeaderTitle = isPersonalSpace ? "Espacio Personal" : companyName;
   const companyHeaderSubtitle = isPersonalSpace ? "Cuenta Personal" : "Empresa";
+
+  const handleLogout = () => {
+    authLogout();
+    router.push('/login');
+  };
+
+  const userMenuItems = [
+    { key: 'profile', icon: <UserOutlined />, label: <Link href="/dashboard?section=profile">Mi Perfil</Link> },
+    { key: 'settings', icon: <SettingOutlined />, label: <Link href="/dashboard?section=settings">Configuración</Link> },
+    { type: 'divider' as const },
+    { key: 'logout', icon: <LogoutOutlined />, label: 'Cerrar Sesión', onClick: handleLogout },
+  ];
 
   return (
     <div className={`bg-white dark:bg-slate-900 flex flex-col h-full transition-all duration-300 border-r border-slate-200 dark:border-slate-700 ${internalIsCollapsed ? 'w-20' : 'w-72'}`}>
@@ -290,22 +316,48 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
       </nav>
 
       {!internalIsCollapsed && (
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-700 rounded-lg p-4">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-1">
-              🚀 InfraUX Platform
-            </h3>
-            <p className="text-xs text-gray-600 dark:text-slate-400 mb-3">
-              Infraestructura visual simplificada
-            </p>
-            <div className="flex space-x-2">
-              <div className="flex-1 bg-slate-200 dark:bg-slate-600 rounded-full h-1">
-                <div className="bg-blue-500 dark:bg-blue-400 h-1 rounded-full" style={{ width: '75%' }}></div>
+        <div className="border-t border-slate-200 dark:border-slate-700">
+          <div className="p-4">
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-700 rounded-lg p-4">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-1">
+                🚀 InfraUX Platform
+              </h3>
+              <p className="text-xs text-gray-600 dark:text-slate-400 mb-3">
+                Infraestructura visual simplificada
+              </p>
+              <div className="flex space-x-2">
+                <div className="flex-1 bg-slate-200 dark:bg-slate-600 rounded-full h-1">
+                  <div className="bg-blue-500 dark:bg-blue-400 h-1 rounded-full" style={{ width: '75%' }}></div>
+                </div>
+                <span className="text-xs text-gray-500 dark:text-slate-400">75%</span>
               </div>
-              <span className="text-xs text-gray-500 dark:text-slate-400">75%</span>
+              <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Plan Pro</p>
             </div>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Plan Pro</p>
           </div>
+          
+          {/* Bloque de Usuario */}
+          {user && (
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700">
+              <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="topRight">
+                <a onClick={e => e.preventDefault()} className="flex items-center gap-3 cursor-pointer p-3 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                  <Avatar icon={<UserOutlined />} src={user.avatar_url || undefined} size="large" />
+                  <div className="flex flex-col items-start min-w-0 flex-1">
+                    {user.name && (
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate w-full">
+                        {user.name}
+                      </span>
+                    )}
+                    {user.email && (
+                      <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5 truncate w-full">
+                        <MailOutlined className="flex-shrink-0" />
+                        <span className="truncate">{user.email}</span>
+                      </span>
+                    )}
+                  </div>
+                </a>
+              </Dropdown>
+            </div>
+          )}
         </div>
       )}
     </div>

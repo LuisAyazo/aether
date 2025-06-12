@@ -18,6 +18,7 @@ import {
   ArrowsRightLeftIcon as LoadBalancerIcon, // Reutilizando para AWS ALB y Azure LB
   GlobeAltIcon as ApiGatewayIcon, // Usando GlobeAltIcon para API Gateway y Azure App Gateway
   RectangleStackIcon as SqsQueueIcon, // Usando RectangleStackIcon para SQS
+  ChatBubbleOvalLeftEllipsisIcon,
   ChatBubbleOvalLeftEllipsisIcon as SnsTopicIcon, // Usando para SNS
   CalendarDaysIcon as EventBridgeRuleIcon, // Usando para EventBridge
   AdjustmentsHorizontalIcon as SfnStateMachineIcon, // Usando para Step Functions
@@ -43,17 +44,27 @@ import {
   BoltIcon as AzureEventHubNamespaceIcon, // Reutilizando BoltIcon para Event Hubs
   GlobeAltIcon as AzureVirtualNetworkIcon, // Reutilizando para VNet
   ShieldCheckIcon as AzureNetworkSecurityGroupIcon, // Reutilizando para NSG
+  CubeIcon,
+  CalendarDaysIcon,
+  AdjustmentsHorizontalIcon,
+  ListBulletIcon,
+  RectangleGroupIcon,
+  RssIcon,
+  ComputerDesktopIcon,
+  ServerStackIcon,
+  ChartBarIcon,
   // GlobeAltIcon as AzureApplicationGatewayIcon, // Reutilizando para App Gateway
   // ShieldCheckIcon as AzureFirewallIcon // Reutilizando para Firewall
 } from '@heroicons/react/24/outline';
 import BaseResourceNode from './BaseResourceNode';
-import GroupNode from './GroupNode';
+import NodeGroup from './NodeGroup';
 import NoteNode from './NoteNode';
 import TextNode from './TextNode';
 import AreaNode from './AreaNode';
+import ResizableNode from './ResizableNode';
 
 // --- AWS Node Implementations ---
-export function EC2Node(props: NodeProps) {
+export function EC2Node(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -63,7 +74,7 @@ export function EC2Node(props: NodeProps) {
 }
 EC2Node.displayName = 'EC2Node';
 
-export function S3BucketNode(props: NodeProps) {
+export function S3BucketNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -73,7 +84,7 @@ export function S3BucketNode(props: NodeProps) {
 }
 S3BucketNode.displayName = 'S3BucketNode';
 
-export function LambdaFunctionNode(props: NodeProps) {
+export function LambdaFunctionNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -83,7 +94,7 @@ export function LambdaFunctionNode(props: NodeProps) {
 }
 LambdaFunctionNode.displayName = 'LambdaFunctionNode';
 
-export function RDSInstanceNode(props: NodeProps) {
+export function RDSInstanceNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -93,7 +104,7 @@ export function RDSInstanceNode(props: NodeProps) {
 }
 RDSInstanceNode.displayName = 'RDSInstanceNode';
 
-export function ApplicationLoadBalancerNode(props: NodeProps) {
+export function ApplicationLoadBalancerNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -103,7 +114,7 @@ export function ApplicationLoadBalancerNode(props: NodeProps) {
 }
 ApplicationLoadBalancerNode.displayName = 'ApplicationLoadBalancerNode';
 
-export function AutoScalingGroupNode(props: NodeProps) {
+export function AutoScalingGroupNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -113,7 +124,7 @@ export function AutoScalingGroupNode(props: NodeProps) {
 }
 AutoScalingGroupNode.displayName = 'AutoScalingGroupNode';
 
-export function ElasticBeanstalkEnvironmentNode(props: NodeProps) {
+export function ElasticBeanstalkEnvironmentNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -123,7 +134,7 @@ export function ElasticBeanstalkEnvironmentNode(props: NodeProps) {
 }
 ElasticBeanstalkEnvironmentNode.displayName = 'ElasticBeanstalkEnvironmentNode';
 
-export function ECSServiceNode(props: NodeProps) {
+export function ECSServiceNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -133,7 +144,7 @@ export function ECSServiceNode(props: NodeProps) {
 }
 ECSServiceNode.displayName = 'ECSServiceNode';
 
-export function EKSClusterNode(props: NodeProps) {
+export function EKSClusterNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -143,7 +154,7 @@ export function EKSClusterNode(props: NodeProps) {
 }
 EKSClusterNode.displayName = 'EKSClusterNode';
 
-export function DynamoDBTableNode(props: NodeProps) {
+export function DynamoDBTableNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -153,7 +164,7 @@ export function DynamoDBTableNode(props: NodeProps) {
 }
 DynamoDBTableNode.displayName = 'DynamoDBTableNode';
 
-export function ElastiCacheClusterNode(props: NodeProps) {
+export function ElastiCacheClusterNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -163,7 +174,7 @@ export function ElastiCacheClusterNode(props: NodeProps) {
 }
 ElastiCacheClusterNode.displayName = 'ElastiCacheClusterNode';
 
-export function RedshiftClusterNode(props: NodeProps) {
+export function RedshiftClusterNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -173,7 +184,7 @@ export function RedshiftClusterNode(props: NodeProps) {
 }
 RedshiftClusterNode.displayName = 'RedshiftClusterNode';
 
-export function EFSFileSystemNode(props: NodeProps) {
+export function EFSFileSystemNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -183,7 +194,7 @@ export function EFSFileSystemNode(props: NodeProps) {
 }
 EFSFileSystemNode.displayName = 'EFSFileSystemNode';
 
-export function ApiGatewayRestApiNode(props: NodeProps) {
+export function ApiGatewayRestApiNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -193,7 +204,7 @@ export function ApiGatewayRestApiNode(props: NodeProps) {
 }
 ApiGatewayRestApiNode.displayName = 'ApiGatewayRestApiNode';
 
-export function SqsQueueNode(props: NodeProps) {
+export function SqsQueueNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -203,7 +214,7 @@ export function SqsQueueNode(props: NodeProps) {
 }
 SqsQueueNode.displayName = 'SqsQueueNode';
 
-export function SnsTopicNode(props: NodeProps) {
+export function SnsTopicNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -213,7 +224,7 @@ export function SnsTopicNode(props: NodeProps) {
 }
 SnsTopicNode.displayName = 'SnsTopicNode';
 
-export function EventBridgeRuleNode(props: NodeProps) {
+export function EventBridgeRuleNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -223,7 +234,7 @@ export function EventBridgeRuleNode(props: NodeProps) {
 }
 EventBridgeRuleNode.displayName = 'EventBridgeRuleNode';
 
-export function SfnStateMachineNode(props: NodeProps) {
+export function SfnStateMachineNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -234,7 +245,7 @@ export function SfnStateMachineNode(props: NodeProps) {
 SfnStateMachineNode.displayName = 'SfnStateMachineNode';
 
 // --- GCP Node Implementations ---
-export function GcpCloudTasksQueueNode(props: NodeProps) {
+export function GcpCloudTasksQueueNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -244,7 +255,7 @@ export function GcpCloudTasksQueueNode(props: NodeProps) {
 }
 GcpCloudTasksQueueNode.displayName = 'GcpCloudTasksQueueNode';
 
-export function GcpWorkflowsWorkflowNode(props: NodeProps) {
+export function GcpWorkflowsWorkflowNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -254,7 +265,7 @@ export function GcpWorkflowsWorkflowNode(props: NodeProps) {
 }
 GcpWorkflowsWorkflowNode.displayName = 'GcpWorkflowsWorkflowNode';
 
-export function GcpEventarcTriggerNode(props: NodeProps) {
+export function GcpEventarcTriggerNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -264,7 +275,7 @@ export function GcpEventarcTriggerNode(props: NodeProps) {
 }
 GcpEventarcTriggerNode.displayName = 'GcpEventarcTriggerNode';
 
-export function ComputeEngineNode(props: NodeProps) {
+export function ComputeEngineNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -274,7 +285,7 @@ export function ComputeEngineNode(props: NodeProps) {
 }
 ComputeEngineNode.displayName = 'ComputeEngineNode';
 
-export function AppEngineNode(props: NodeProps) {
+export function AppEngineNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -284,7 +295,7 @@ export function AppEngineNode(props: NodeProps) {
 }
 AppEngineNode.displayName = 'AppEngineNode';
 
-export function GKENode(props: NodeProps) {
+export function GKENode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -294,7 +305,7 @@ export function GKENode(props: NodeProps) {
 }
 GKENode.displayName = 'GKENode';
 
-export function CloudRunNode(props: NodeProps) {
+export function CloudRunNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -304,7 +315,7 @@ export function CloudRunNode(props: NodeProps) {
 }
 CloudRunNode.displayName = 'CloudRunNode';
 
-export function CloudStorageNode(props: NodeProps) {
+export function CloudStorageNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -314,7 +325,7 @@ export function CloudStorageNode(props: NodeProps) {
 }
 CloudStorageNode.displayName = 'CloudStorageNode';
 
-export function CloudFunctionsNode(props: NodeProps) {
+export function CloudFunctionsNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -324,7 +335,7 @@ export function CloudFunctionsNode(props: NodeProps) {
 }
 CloudFunctionsNode.displayName = 'CloudFunctionsNode';
 
-export function CloudSQLNode(props: NodeProps) {
+export function CloudSQLNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -334,7 +345,7 @@ export function CloudSQLNode(props: NodeProps) {
 }
 CloudSQLNode.displayName = 'CloudSQLNode';
 
-export function InstanceGroupManagerNode(props: NodeProps) {
+export function InstanceGroupManagerNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -344,7 +355,7 @@ export function InstanceGroupManagerNode(props: NodeProps) {
 }
 InstanceGroupManagerNode.displayName = 'InstanceGroupManagerNode';
 
-export function ComputeDiskNode(props: NodeProps) {
+export function ComputeDiskNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -354,7 +365,7 @@ export function ComputeDiskNode(props: NodeProps) {
 }
 ComputeDiskNode.displayName = 'ComputeDiskNode';
 
-export function ComputeNetworkNode(props: NodeProps) {
+export function ComputeNetworkNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -364,7 +375,7 @@ export function ComputeNetworkNode(props: NodeProps) {
 }
 ComputeNetworkNode.displayName = 'ComputeNetworkNode';
 
-export function ComputeFirewallNode(props: NodeProps) {
+export function ComputeFirewallNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -374,7 +385,7 @@ export function ComputeFirewallNode(props: NodeProps) {
 }
 ComputeFirewallNode.displayName = 'ComputeFirewallNode';
 
-export function ComputeLoadBalancerNode(props: NodeProps) {
+export function ComputeLoadBalancerNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -384,7 +395,7 @@ export function ComputeLoadBalancerNode(props: NodeProps) {
 }
 ComputeLoadBalancerNode.displayName = 'ComputeLoadBalancerNode';
 
-export function ComputeInstanceTemplateNode(props: NodeProps) {
+export function ComputeInstanceTemplateNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -394,7 +405,7 @@ export function ComputeInstanceTemplateNode(props: NodeProps) {
 }
 ComputeInstanceTemplateNode.displayName = 'ComputeInstanceTemplateNode';
 
-export function BigQueryDatasetNode(props: NodeProps) {
+export function BigQueryDatasetNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -404,7 +415,7 @@ export function BigQueryDatasetNode(props: NodeProps) {
 }
 BigQueryDatasetNode.displayName = 'BigQueryDatasetNode';
 
-export function FirestoreDatabaseNode(props: NodeProps) {
+export function FirestoreDatabaseNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -414,7 +425,7 @@ export function FirestoreDatabaseNode(props: NodeProps) {
 }
 FirestoreDatabaseNode.displayName = 'FirestoreDatabaseNode';
 
-export function MemorystoreInstanceNode(props: NodeProps) {
+export function MemorystoreInstanceNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -424,7 +435,7 @@ export function MemorystoreInstanceNode(props: NodeProps) {
 }
 MemorystoreInstanceNode.displayName = 'MemorystoreInstanceNode';
 
-export function FilestoreInstanceNode(props: NodeProps) {
+export function FilestoreInstanceNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -435,7 +446,27 @@ export function FilestoreInstanceNode(props: NodeProps) {
 FilestoreInstanceNode.displayName = 'FilestoreInstanceNode';
 
 // --- Generic Node ---
-export function GenericNode(props: NodeProps) {
+export function GcpApiGatewayNode(props: any) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <GlobeAltIcon className="w-6 h-6 text-blue-600" />, label: props.data.label || 'API Gateway', resourceType: 'gcp_api_gateway' }}
+    />
+  );
+}
+GcpApiGatewayNode.displayName = 'GcpApiGatewayNode';
+
+export function GcpPubSubTopicNode(props: any) {
+  return (
+    <BaseResourceNode
+      {...props}
+      data={{ ...props.data, provider: 'gcp', icon: <ChatBubbleOvalLeftEllipsisIcon className="w-6 h-6 text-purple-600" />, label: props.data.label || 'Pub/Sub Topic', resourceType: 'gcp_pubsub_topic' }}
+    />
+  );
+}
+GcpPubSubTopicNode.displayName = 'GcpPubSubTopicNode';
+
+export function GenericNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -446,7 +477,7 @@ export function GenericNode(props: NodeProps) {
 GenericNode.displayName = 'GenericNode';
 
 // --- Azure Nodes ---
-export function AzureVMNode(props: NodeProps) {
+export function AzureVMNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -456,7 +487,7 @@ export function AzureVMNode(props: NodeProps) {
 }
 AzureVMNode.displayName = 'AzureVMNode';
 
-export function AzureBlobNode(props: NodeProps) {
+export function AzureBlobNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -466,7 +497,7 @@ export function AzureBlobNode(props: NodeProps) {
 }
 AzureBlobNode.displayName = 'AzureBlobNode';
 
-export function AzureCosmosNode(props: NodeProps) {
+export function AzureCosmosNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -476,7 +507,7 @@ export function AzureCosmosNode(props: NodeProps) {
 }
 AzureCosmosNode.displayName = 'AzureCosmosNode';
 
-export function AzureFunctionNode(props: NodeProps) {
+export function AzureFunctionNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -486,7 +517,7 @@ export function AzureFunctionNode(props: NodeProps) {
 }
 AzureFunctionNode.displayName = 'AzureFunctionNode';
 
-export function AzureVirtualMachineNode(props: NodeProps) {
+export function AzureVirtualMachineNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -496,7 +527,7 @@ export function AzureVirtualMachineNode(props: NodeProps) {
 }
 AzureVirtualMachineNode.displayName = 'AzureVirtualMachineNode';
 
-export function AzureLinuxVmssNode(props: NodeProps) {
+export function AzureLinuxVmssNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -506,7 +537,7 @@ export function AzureLinuxVmssNode(props: NodeProps) {
 }
 AzureLinuxVmssNode.displayName = 'AzureLinuxVmssNode';
 
-export function AzureAKSClusterNode(props: NodeProps) {
+export function AzureAKSClusterNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -516,7 +547,7 @@ export function AzureAKSClusterNode(props: NodeProps) {
 }
 AzureAKSClusterNode.displayName = 'AzureAKSClusterNode';
 
-export function AzureLinuxWebAppNode(props: NodeProps) {
+export function AzureLinuxWebAppNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -526,7 +557,7 @@ export function AzureLinuxWebAppNode(props: NodeProps) {
 }
 AzureLinuxWebAppNode.displayName = 'AzureLinuxWebAppNode';
 
-export function AzureContainerGroupNode(props: NodeProps) {
+export function AzureContainerGroupNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -536,7 +567,7 @@ export function AzureContainerGroupNode(props: NodeProps) {
 }
 AzureContainerGroupNode.displayName = 'AzureContainerGroupNode';
 
-export function AzureLinuxFunctionAppNode(props: NodeProps) {
+export function AzureLinuxFunctionAppNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -546,7 +577,7 @@ export function AzureLinuxFunctionAppNode(props: NodeProps) {
 }
 AzureLinuxFunctionAppNode.displayName = 'AzureLinuxFunctionAppNode';
 
-export function AzureStorageContainerNode(props: NodeProps) {
+export function AzureStorageContainerNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -556,7 +587,7 @@ export function AzureStorageContainerNode(props: NodeProps) {
 }
 AzureStorageContainerNode.displayName = 'AzureStorageContainerNode';
 
-export function AzureCosmosDbAccountNode(props: NodeProps) {
+export function AzureCosmosDbAccountNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -566,7 +597,7 @@ export function AzureCosmosDbAccountNode(props: NodeProps) {
 }
 AzureCosmosDbAccountNode.displayName = 'AzureCosmosDbAccountNode';
 
-export function AzureMsSqlDatabaseNode(props: NodeProps) {
+export function AzureMsSqlDatabaseNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -576,7 +607,7 @@ export function AzureMsSqlDatabaseNode(props: NodeProps) {
 }
 AzureMsSqlDatabaseNode.displayName = 'AzureMsSqlDatabaseNode';
 
-export function AzureRedisCacheNode(props: NodeProps) {
+export function AzureRedisCacheNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -586,7 +617,7 @@ export function AzureRedisCacheNode(props: NodeProps) {
 }
 AzureRedisCacheNode.displayName = 'AzureRedisCacheNode';
 
-export function AzureSynapseWorkspaceNode(props: NodeProps) {
+export function AzureSynapseWorkspaceNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -596,7 +627,7 @@ export function AzureSynapseWorkspaceNode(props: NodeProps) {
 }
 AzureSynapseWorkspaceNode.displayName = 'AzureSynapseWorkspaceNode';
 
-export function AzureStorageShareNode(props: NodeProps) {
+export function AzureStorageShareNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -606,7 +637,7 @@ export function AzureStorageShareNode(props: NodeProps) {
 }
 AzureStorageShareNode.displayName = 'AzureStorageShareNode';
 
-export function AzureApiManagementServiceNode(props: NodeProps) {
+export function AzureApiManagementServiceNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -616,7 +647,7 @@ export function AzureApiManagementServiceNode(props: NodeProps) {
 }
 AzureApiManagementServiceNode.displayName = 'AzureApiManagementServiceNode';
 
-export function AzureServiceBusNamespaceNode(props: NodeProps) {
+export function AzureServiceBusNamespaceNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -626,7 +657,7 @@ export function AzureServiceBusNamespaceNode(props: NodeProps) {
 }
 AzureServiceBusNamespaceNode.displayName = 'AzureServiceBusNamespaceNode';
 
-export function AzureEventGridTopicNode(props: NodeProps) {
+export function AzureEventGridTopicNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -636,7 +667,7 @@ export function AzureEventGridTopicNode(props: NodeProps) {
 }
 AzureEventGridTopicNode.displayName = 'AzureEventGridTopicNode';
 
-export function AzureLogicAppWorkflowNode(props: NodeProps) {
+export function AzureLogicAppWorkflowNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -646,7 +677,7 @@ export function AzureLogicAppWorkflowNode(props: NodeProps) {
 }
 AzureLogicAppWorkflowNode.displayName = 'AzureLogicAppWorkflowNode';
 
-export function AzureEventHubNamespaceNode(props: NodeProps) {
+export function AzureEventHubNamespaceNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -656,7 +687,7 @@ export function AzureEventHubNamespaceNode(props: NodeProps) {
 }
 AzureEventHubNamespaceNode.displayName = 'AzureEventHubNamespaceNode';
 
-export function AzureVirtualNetworkNode(props: NodeProps) {
+export function AzureVirtualNetworkNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -666,7 +697,7 @@ export function AzureVirtualNetworkNode(props: NodeProps) {
 }
 AzureVirtualNetworkNode.displayName = 'AzureVirtualNetworkNode';
 
-export function AzureSubnetNode(props: NodeProps) { 
+export function AzureSubnetNode(props: any) { 
   return (
     <BaseResourceNode
       {...props}
@@ -676,7 +707,7 @@ export function AzureSubnetNode(props: NodeProps) {
 }
 AzureSubnetNode.displayName = 'AzureSubnetNode';
 
-export function AzureNetworkSecurityGroupNode(props: NodeProps) {
+export function AzureNetworkSecurityGroupNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -686,7 +717,7 @@ export function AzureNetworkSecurityGroupNode(props: NodeProps) {
 }
 AzureNetworkSecurityGroupNode.displayName = 'AzureNetworkSecurityGroupNode';
 
-export function AzureLoadBalancerNode(props: NodeProps) {
+export function AzureLoadBalancerNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -696,7 +727,7 @@ export function AzureLoadBalancerNode(props: NodeProps) {
 }
 AzureLoadBalancerNode.displayName = 'AzureLoadBalancerNode';
 
-export function AzureApplicationGatewayNode(props: NodeProps) {
+export function AzureApplicationGatewayNode(props: any) {
   return (
     <BaseResourceNode
       {...props}
@@ -751,8 +782,8 @@ const nodeTypes = {
   gcp_compute_load_balancer: ComputeLoadBalancerNode,
   gcp_compute_instance_template: ComputeInstanceTemplateNode,
 
-  gcp_api_gateway: BaseResourceNode, 
-  gcp_pubsub_topic: BaseResourceNode,
+  gcp_api_gateway: GcpApiGatewayNode,
+  gcp_pubsub_topic: GcpPubSubTopicNode,
   
   // Fallbacks genéricos
   compute: ComputeEngineNode, 
@@ -792,7 +823,7 @@ const nodeTypes = {
   function: AzureFunctionNode, 
   
   // Group node
-  group: GroupNode,
+  group: NodeGroup,
   
   // Note and Text nodes
   noteNode: NoteNode,
@@ -800,6 +831,9 @@ const nodeTypes = {
   
   // Area node
   areaNode: AreaNode,
+
+  // Resizable node
+  resizableNode: ResizableNode,
 };
 
 export default nodeTypes;

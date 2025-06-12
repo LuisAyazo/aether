@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useReactFlow, Node, Edge, Viewport } from 'reactflow';
+import { useReactFlow } from 'reactflow';
 import { useEditorStore } from './useEditorStore';
 import { debounce } from 'lodash';
 
+// Type aliases to work around ReactFlow TypeScript issues
+type FlowNode = any;
+type FlowEdge = any;
+type FlowViewport = any;
+
 interface UseSaveHandlerProps {
-  nodes: Node[];
-  edges: Edge[];
-  onSave?: (diagramData: { nodes: Node[]; edges: Edge[]; viewport?: Viewport }) => void;
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+  onSave?: (diagramData: { nodes: FlowNode[]; edges: FlowEdge[]; viewport?: FlowViewport }) => void;
   expandedGroupId: string | null;
+  lastViewportRef?: React.MutableRefObject<FlowViewport | null>;
 }
 
 export function useSaveHandler({
@@ -15,6 +21,7 @@ export function useSaveHandler({
   edges,
   onSave,
   expandedGroupId,
+  lastViewportRef,
 }: UseSaveHandlerProps) {
   const reactFlowInstance = useReactFlow();
   const onSaveRef = useRef(onSave);
@@ -29,16 +36,22 @@ export function useSaveHandler({
 
   const saveCurrentDiagramState = useCallback(() => {
     if (reactFlowInstance && onSaveRef.current) {
-      const viewport = reactFlowInstance.getViewport();
+      // Usar el viewport de lastViewportRef si está disponible, sino obtenerlo de reactFlowInstance
+      const viewport = lastViewportRef?.current || reactFlowInstance.getViewport();
       const diagramDataToSave = {
         nodes,
         edges,
         viewport,
       };
       onSaveRef.current(diagramDataToSave);
-      console.log('[FlowEditor][useSaveHandler] Saving diagram. Nodes:', nodes.length, 'Edges:', edges.length);
+      console.log('📍 [VIEWPORT SAVE] Saving diagram state:', {
+        nodeCount: nodes.length, 
+        edgeCount: edges.length,
+        viewport: viewport,
+        source: lastViewportRef?.current ? 'lastViewportRef' : 'reactFlowInstance'
+      });
     }
-  }, [reactFlowInstance, nodes, edges, onSaveRef]);
+  }, [reactFlowInstance, nodes, edges, onSaveRef, lastViewportRef]);
 
   useEffect(() => {
     if (onSaveRef.current && reactFlowInstance && !isCanvasDragging) {
@@ -64,21 +77,7 @@ export function useSaveHandler({
     };
   }, [nodes, edges, reactFlowInstance, saveCurrentDiagramState, isCanvasDragging]);
 
-  useEffect(() => {
-    if (reactFlowInstance && onSaveRef.current) {
-      const handleViewportChange = () => {
-        if (!expandedGroupId) {
-          saveCurrentDiagramState();
-        }
-      };
-      const debouncedHandleViewportChange = debounce(handleViewportChange, 500);
-      
-      document.addEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
-      return () => {
-        document.removeEventListener('reactflow.viewportchange', debouncedHandleViewportChange);
-      };
-    }
-  }, [reactFlowInstance, saveCurrentDiagramState, expandedGroupId, onSaveRef]);
+  // Este efecto se maneja ahora directamente en FlowCanvas con onMove
 
   return {
     saveCurrentDiagramState, // Exportar para uso manual si es necesario (ej. Toolbar)

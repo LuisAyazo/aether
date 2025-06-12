@@ -1,6 +1,11 @@
 import { useCallback, useState, useEffect } from 'react';
-import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
+// import type { Node, NodeProps } from 'reactflow'; // Se definirán localmente
+import { Handle, Position, useReactFlow } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
+
+// Tipos workaround
+type Node<T = any> = any; // Hacer Node genérico opcionalmente si se usa así
+type NodeProps<T = any> = any; // Hacer NodeProps genérico opcionalmente si se usa así
 import '@reactflow/node-resizer/dist/style.css';
 import { 
   ArrowsPointingOutIcon, 
@@ -16,7 +21,7 @@ import {
   DocumentDuplicateIcon,
   PlayCircleIcon
 } from '@heroicons/react/24/outline';
-import { NodeData } from '../../utils/customTypes';
+import { NodeData } from '../../utils/customTypes'; // NodeData es una interfaz, no necesita 'type' aquí si se usa como valor en el futuro, pero como tipo está bien.
 import { message } from 'antd';
 
 // Add some CSS styles for double-click animation
@@ -39,7 +44,11 @@ if (typeof document !== 'undefined') {
   document.head.appendChild(styleElement);
 }
 
-interface BaseResourceNodeProps extends NodeProps<NodeData> {
+interface BaseResourceNodeProps extends NodeProps<NodeData> { // Revertir a NodeProps
+  // data ya está incluido en NodeProps<NodeData>, pero lo especificamos más aquí
+  // para añadir propiedades personalizadas. TypeScript debería unir esto.
+  // Si hay problemas, podríamos necesitar definir un tipo CustomNodeData que extienda NodeData
+  // y usar NodeProps<CustomNodeData>
   data: NodeData & {
     icon?: React.ReactNode;
     isCollapsed?: boolean;
@@ -49,12 +58,13 @@ interface BaseResourceNodeProps extends NodeProps<NodeData> {
   };
 }
 
-const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected }) => {
+const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected }) => { // Desestructurar directamente
   const [isCollapsed, setIsCollapsed] = useState(data.isCollapsed !== false);
   const [isFocused, setIsFocused] = useState(false);
   const [isListView, setIsListView] = useState(false);
   const [isResizable, setIsResizable] = useState(data.resizable !== false && data.userResized === true);
   const [isLocked, setIsLocked] = useState(false);
+  const [isHovered, setIsHovered] = useState(false); // Estado para el hover
   const reactFlowInstance = useReactFlow();
   
   // Color mapping based on cloud provider
@@ -79,15 +89,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
   // Efecto para verificar si el nodo está dentro de los límites del grupo padre
   useEffect(() => {
     if (data.parentNode) {
-      const parentNode = reactFlowInstance.getNode(data.parentNode);
-      const currentNode = reactFlowInstance.getNode(id);
+      const parentNode = reactFlowInstance.getNode(data.parentNode) as Node<NodeData> | undefined;  // Revertir a Node
+      const currentNode = reactFlowInstance.getNode(id) as Node<NodeData> | undefined; // Revertir a Node
       
-      if (parentNode && currentNode) {
-        const parentWidth = (parentNode.style?.width as number) || 200;
-        const parentHeight = (parentNode.style?.height as number) || 150;
+      if (parentNode && currentNode && currentNode.position) { // Asegurar que position exista
+        const parentWidth = (parentNode.style?.width as number) || (parentNode.width ?? 200);
+        const parentHeight = (parentNode.style?.height as number) || (parentNode.height ?? 150);
         
-        const nodeWidth = (currentNode.style?.width as number) || 100;
-        const nodeHeight = (currentNode.style?.height as number) || 50;
+        const nodeWidth = (currentNode.style?.width as number) || (currentNode.width ?? 100);
+        const nodeHeight = (currentNode.style?.height as number) || (currentNode.height ?? 50);
         
         let needsAdjustment = false;
         const newPos = { ...currentNode.position };
@@ -110,31 +120,31 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         }
         
         if (needsAdjustment) {
-          reactFlowInstance.setNodes(nds => 
-            nds.map(n => 
+          reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+            nds.map((n: Node<NodeData>) => // Revertir a Node
               n.id === id ? { ...n, position: newPos } : n
             )
           );
         }
 
         // También verificar si el padre está en modo colapsado
-        const parentData = parentNode.data;
-        if (parentData?.isCollapsed === true || parentData?.isMinimized === true) {
+        const parentData = parentNode.data; 
+        if (parentData?.isCollapsed === true) { 
           setIsListView(true);
         } else {
           setIsListView(false);
         }
       }
     }
-  }, [id, data.parentNode, reactFlowInstance]);
+  }, [id, data.parentNode, reactFlowInstance, data.isCollapsed]); // Añadido data.isCollapsed a las dependencias
   
   const toggleCollapse = (e: React.MouseEvent) => {
     e.stopPropagation(); // Evitar que el click llegue al nodo y lo seleccione
     setIsCollapsed(!isCollapsed);
     
     // También actualizar el estado en el nodo
-    reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+      nds.map((n: Node<NodeData>) => { // Revertir a Node
         if (n.id === id) {
           return {
             ...n,
@@ -156,8 +166,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     setIsResizable(newResizableState);
     
     // Update the node data and trigger an event for the parent group
-    reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+      nds.map((n: Node<NodeData>) => { // Revertir a Node
         if (n.id === id) {
           return {
             ...n,
@@ -220,16 +230,17 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     setIsListView(!isListView);
     
     // Actualizar el estilo del nodo
-    reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+      nds.map((n: Node<NodeData>) => { // Revertir a Node
         if (n.id === id) {
+          const currentStyle = n.style || {};
           return {
             ...n,
             className: !isListView ? 'list-node-item' : '',
             style: {
-              ...n.style,
-              height: !isListView ? 35 : n.style?.height || 50, 
-              width: !isListView ? 150 : n.style?.width || 100
+              ...currentStyle,
+              height: !isListView ? 35 : (currentStyle.height || 50), 
+              width: !isListView ? 150 : (currentStyle.width || 100)
             }
           };
         }
@@ -263,7 +274,9 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         resourceData: {
           label: data.label,
           provider: data.provider,
-          resourceType: data.resourceType
+          resourceType: data.resourceType,
+          // Include saved configuration if it exists
+          dynamicProperties: (data as any).dynamicProperties || {}
         }
       }
     });
@@ -428,8 +441,8 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     console.log(`${newLockedState ? 'Locking' : 'Unlocking'} node:`, id);
     
     // Update node data to reflect locked state
-    reactFlowInstance.setNodes(nds => 
-      nds.map(n => {
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => // Revertir a Node
+      nds.map((n: Node<NodeData>) => { // Revertir a Node
         if (n.id === id) {
           return {
             ...n,
@@ -481,7 +494,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     };
     
     // Add the duplicated node
-    reactFlowInstance.setNodes(nds => [...nds, duplicatedNode]);
+    reactFlowInstance.setNodes((nds: Node<NodeData>[]) => [...nds, duplicatedNode as Node<NodeData>]); // Revertir a Node
     
     // Dispatch event for duplicate action
     const event = new CustomEvent('nodeDuplicated', {
@@ -514,25 +527,9 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
           case 'toggleResizable':
             toggleResizable({ stopPropagation: () => {} } as React.MouseEvent);
             break;
-          case 'preview':
-            handlePreview({ stopPropagation: () => {} } as React.MouseEvent);
-            break;
-          case 'run':
-            handleRun({ stopPropagation: () => {} } as React.MouseEvent);
-            break;
-          case 'toggleLock':
-            handleLockToggle({ stopPropagation: () => {} } as React.MouseEvent);
-            break;
-          case 'duplicate':
-            handleDuplicate({ stopPropagation: () => {} } as React.MouseEvent);
-            break;
-          case 'openIaCPanel':
-            console.log('Opening IaC panel from action');
-            handleDoubleClick({ stopPropagation: () => {}, preventDefault: () => {} } as React.MouseEvent);
-            break;
           case 'deleteNode':
-            reactFlowInstance.setNodes(nodes => 
-              nodes.filter(node => node.id !== id)
+            reactFlowInstance.setNodes((nodes: Node<NodeData>[]) => // Revertir a Node
+              nodes.filter((node: Node<NodeData>) => node.id !== id) // Revertir a Node
             );
             break;
         }
@@ -544,32 +541,40 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
     return () => {
       document.removeEventListener('nodeAction', handleNodeAction as EventListener);
     };
-  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance, handleDoubleClick, handlePreview, handleRun, handleLockToggle, handleDuplicate]);
+  }, [id, toggleListView, toggleFocus, toggleCollapse, toggleResizable, reactFlowInstance]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
+    // Si hay múltiples nodos seleccionados, mostrar el menú de selección múltiple
+    const selectedNodes = reactFlowInstance.getNodes().filter((n: any) => n.selected);
+    const selectedNodesCount = selectedNodes.length;
+    
+    if (selectedNodesCount > 1) {
+      // Disparar el evento para mostrar el menú de selección múltiple
+      const event = new CustomEvent('showMultipleSelectionMenu', {
+        detail: {
+          x: e.clientX,
+          y: e.clientY,
+          selectedNodes: selectedNodes,
+          selectedNodesCount: selectedNodesCount
+        }
+      });
+      window.dispatchEvent(event);
+      return;
+    }
+    
     const menuItems = [
-      {
-        label: 'Preview',
-        icon: <EyeIcon className="w-4 h-4" />,
-        onClick: (e: React.MouseEvent) => handlePreview(e)
-      },
       {
         label: 'Run',
         icon: <PlayCircleIcon className="w-4 h-4" />,
         onClick: () => handleRun({ stopPropagation: () => {} } as React.MouseEvent)
       },
       {
-        label: isLocked ? 'Unlock' : 'Lock',
-        icon: isLocked ? <LockOpenIcon className="w-4 h-4" /> : <LockClosedIcon className="w-4 h-4" />,
-        onClick: () => handleLockToggle({ stopPropagation: () => {} } as React.MouseEvent)
-      },
-      {
-        label: 'Duplicate',
-        icon: <DocumentDuplicateIcon className="w-4 h-4" />,
-        onClick: () => handleDuplicate({ stopPropagation: () => {} } as React.MouseEvent)
+        label: 'Preview',
+        icon: <EyeIcon className="w-4 h-4" />,
+        onClick: () => handlePreview()
       },
       {
         label: 'Configuración',
@@ -582,7 +587,9 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
               resourceData: {
                 label: data.label,
                 provider: data.provider,
-                resourceType: data.resourceType
+                resourceType: data.resourceType,
+                // Include saved configuration if it exists
+                dynamicProperties: (data as any).dynamicProperties || {}
               }
             }
           });
@@ -591,24 +598,14 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         }
       },
       {
-        label: isListView ? 'Vista Normal' : 'Vista Lista',
-        icon: isListView ? <Squares2X2Icon className="w-4 h-4" /> : <ListBulletIcon className="w-4 h-4" />,
-        onClick: () => toggleListView({ stopPropagation: () => {} } as React.MouseEvent)
+        label: 'Duplicate',
+        icon: <DocumentDuplicateIcon className="w-4 h-4" />,
+        onClick: () => handleDuplicate({ stopPropagation: () => {} } as React.MouseEvent)
       },
       {
-        label: isFocused ? 'Quitar Foco' : 'Enfocar',
-        icon: isFocused ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />,
-        onClick: () => toggleFocus({ stopPropagation: () => {} } as React.MouseEvent)
-      },
-      {
-        label: isCollapsed ? 'Expandir' : 'Colapsar',
-        icon: isCollapsed ? <ArrowsPointingOutIcon className="w-4 h-4" /> : <ArrowsPointingInIcon className="w-4 h-4" />,
-        onClick: () => toggleCollapse({ stopPropagation: () => {} } as React.MouseEvent)
-      },
-      {
-        label: isResizable ? 'Desactivar Redimensionar' : 'Activar Redimensionar',
-        icon: <ArrowsPointingOutIcon className="w-4 h-4" />,
-        onClick: () => toggleResizable({ stopPropagation: () => {} } as React.MouseEvent)
+        label: isLocked ? 'Unlock' : 'Lock',
+        icon: isLocked ? <LockOpenIcon className="w-4 h-4" /> : <LockClosedIcon className="w-4 h-4" />,
+        onClick: () => handleLockToggle({ stopPropagation: () => {} } as React.MouseEvent)
       },
       {
         label: 'Eliminar',
@@ -626,10 +623,11 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       detail: {
         x: e.clientX,
         y: e.clientY,
-        items: menuItems
+        items: menuItems,
+        nodeId: id,
       }
     });
-    document.dispatchEvent(event);
+    window.dispatchEvent(event);
   }, [id, data, isListView, isFocused, isCollapsed, isResizable, isLocked, toggleListView, toggleFocus, toggleCollapse, toggleResizable, handlePreview, handleRun, handleLockToggle, handleDuplicate]);
 
   // Si estamos en vista de lista (modo compacto)
@@ -642,7 +640,7 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         data-resource-type={data.resourceType}
         style={{ 
           position: 'relative',
-          zIndex: 1000,
+          // zIndex: 2, // Se manejará a nivel de objeto nodo
           pointerEvents: 'auto'
         }}
         onDoubleClick={handleDoubleClick}
@@ -685,11 +683,13 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
       style={{
         boxShadow: selected ? 'none' : '0 2px 4px rgba(0,0,0,0.1)',
         position: 'relative',
-        zIndex: 1,
+        // zIndex: 2, // Se manejará a nivel de objeto nodo
         pointerEvents: 'auto'
       }}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       <div className="flex items-center gap-1 overflow-hidden">
         {data.icon && (
@@ -713,13 +713,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         position={Position.Top}
         id="top"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
+          width: '12px', // Aumentado
+          height: '12px', // Aumentado
+          background: '#555', // Color más suave
           border: '2px solid white',
           borderRadius: '50%',
-          top: -5,
-          zIndex: 2
+          top: -6, // Ajustado para el nuevo tamaño
+          zIndex: 2,
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       />
       <Handle
@@ -727,13 +729,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         position={Position.Bottom}
         id="bottom"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
+          width: '12px', // Aumentado
+          height: '12px', // Aumentado
+          background: '#555',
           border: '2px solid white',
           borderRadius: '50%',
-          bottom: -5,
-          zIndex: 2
+          bottom: -6, // Ajustado
+          zIndex: 2,
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       />
       <Handle
@@ -741,13 +745,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         position={Position.Left}
         id="left"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
+          width: '12px', // Aumentado
+          height: '12px', // Aumentado
+          background: '#555',
           border: '2px solid white',
           borderRadius: '50%',
-          left: -5,
-          zIndex: 2
+          left: -6, // Ajustado
+          zIndex: 2,
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       />
       <Handle
@@ -755,13 +761,15 @@ const BaseResourceNode: React.FC<BaseResourceNodeProps> = ({ id, data, selected 
         position={Position.Right}
         id="right"
         style={{
-          width: '10px',
-          height: '10px',
-          background: '#000',
+          width: '12px', // Aumentado
+          height: '12px', // Aumentado
+          background: '#555',
           border: '2px solid white',
           borderRadius: '50%',
-          right: -5,
-          zIndex: 2
+          right: -6, // Ajustado
+          zIndex: 2,
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.2s ease-in-out',
         }}
       />
     </div>

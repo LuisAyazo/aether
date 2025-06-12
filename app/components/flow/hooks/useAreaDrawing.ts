@@ -5,6 +5,7 @@ import type { ToolType as EditorToolType } from '../types/editorTypes';
 interface UseAreaDrawingProps {
   setNodes: (updater: (nodes: Node[]) => Node[]) => void;
   activeTool: EditorToolType | null;
+  setActiveTool: (tool: EditorToolType) => void; // Cambiado para no aceptar null, coincidiendo con useEditorStore
 }
 
 interface AreaRect {
@@ -14,7 +15,7 @@ interface AreaRect {
   height: number;
 }
 
-export function useAreaDrawing({ setNodes, activeTool }: UseAreaDrawingProps) {
+export function useAreaDrawing({ setNodes, activeTool, setActiveTool }: UseAreaDrawingProps) { // Añadir setActiveTool
   const reactFlowInstance = useReactFlow();
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
@@ -90,12 +91,12 @@ export function useAreaDrawing({ setNodes, activeTool }: UseAreaDrawingProps) {
       event.stopPropagation();
 
       if (currentRect.width > 20 && currentRect.height > 20) {
-        const newAreaNode: Node = {
+        const newAreaNode: any = { // Cambiado Node a any para evitar el error de tipo
           id: `area-${Date.now()}`,
           type: 'areaNode', 
           position: { x: currentRect.x, y: currentRect.y },
           data: {
-            backgroundColor: 'rgba(59, 130, 246, 0.1)', 
+            // backgroundColor se tomará del default en AreaNode.tsx
             borderColor: 'rgba(59, 130, 246, 0.5)', 
             borderWidth: 1,
             shape: 'rectangle', 
@@ -118,8 +119,9 @@ export function useAreaDrawing({ setNodes, activeTool }: UseAreaDrawingProps) {
       setStartPos(null);
       setCurrentRect(null);
       document.body.classList.remove('area-drawing-mode');
+      setActiveTool('select'); // Cambiar a la herramienta de selección
     },
-    [isDrawing, currentRect, reactFlowInstance, setNodes]
+    [isDrawing, currentRect, reactFlowInstance, setNodes, setActiveTool] // Añadir setActiveTool a las dependencias
   );
 
   return {

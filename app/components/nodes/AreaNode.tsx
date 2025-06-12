@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { NodeProps, NodeResizer } from 'reactflow';
-import { useReactFlow } from 'reactflow';
+import { NodeResizer, useReactFlow } from 'reactflow';
+
+// Type aliases to work around ReactFlow TypeScript namespace issues (consistent with other files in codebase)
+type Node = any;
+type NodeProps = any;
 
 interface AreaNodeData {
   label?: string;
@@ -9,6 +12,7 @@ interface AreaNodeData {
   borderWidth?: number;
   labelColor?: string;
   labelSize?: number;
+  parentId?: string;
 }
 
 const colorOptions = [
@@ -22,24 +26,64 @@ const colorOptions = [
   { name: 'Transparent', value: 'rgba(255, 255, 255, 0.1)' },
 ];
 
-export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>) {
+export default function AreaNode({ id, data, selected }: NodeProps) {
   const reactFlow = useReactFlow();
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editedLabel, setEditedLabel] = useState(data.label || 'Area');
   const labelInputRef = useRef<HTMLInputElement>(null);
+  const initialPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const initialSizeRef = useRef<{ width: number; height: number } | null>(null);
+  const isDraggingRef = useRef(false);
+
+  // Función para deseleccionar el área solo si hubo cambios
+  const deselectArea = useCallback(() => {
+    const node = reactFlow.getNode(id);
+    if (!node) return;
+
+    const hasPositionChanged = initialPositionRef.current && 
+      (node.position.x !== initialPositionRef.current.x || 
+       node.position.y !== initialPositionRef.current.y);
+
+    const hasSizeChanged = initialSizeRef.current && 
+      (node.width !== initialSizeRef.current.width || 
+       node.height !== initialSizeRef.current.height);
+
+    if (hasPositionChanged || hasSizeChanged) {
+      reactFlow.setNodes((nodes: Node[]) =>
+        nodes.map((node: Node) =>
+          node.id === id ? { ...node, selected: false } : node
+        )
+      );
+    }
+  }, [id, reactFlow]);
+
+  // Guardar posición y tamaño iniciales cuando se selecciona
+  useEffect(() => {
+    if (selected) {
+      const node = reactFlow.getNode(id);
+      if (node) {
+        initialPositionRef.current = { ...node.position };
+        initialSizeRef.current = { width: node.width || 0, height: node.height || 0 };
+      }
+    } else {
+      initialPositionRef.current = null;
+      initialSizeRef.current = null;
+    }
+  }, [selected, id, reactFlow]);
 
   const handleLabelSubmit = useCallback(() => {
     setIsEditingLabel(false);
     if (editedLabel !== data.label) {
-      reactFlow.setNodes(nodes =>
-        nodes.map(node =>
+      reactFlow.setNodes((nodes: Node[]) =>
+        nodes.map((node: Node) =>
           node.id === id
-            ? { ...node, data: { ...node.data, label: editedLabel } }
+            ? { ...node, data: { ...(node.data as AreaNodeData), label: editedLabel } }
             : node
         )
       );
+      deselectArea();
     }
-  }, [id, editedLabel, data.label, reactFlow]);
+  }, [id, editedLabel, data.label, reactFlow, deselectArea]);
 
   const handleLabelKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -51,14 +95,22 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
   }, [handleLabelSubmit, data.label]);
 
   const handleColorChange = useCallback((color: string) => {
-    reactFlow.setNodes(nodes =>
-      nodes.map(node =>
-        node.id === id
-          ? { ...node, data: { ...node.data, backgroundColor: color } }
-          : node
-      )
-    );
-  }, [id, reactFlow]);
+    if (color !== data.backgroundColor) {
+      reactFlow.setNodes((nodes: Node[]) =>
+        nodes.map((node: Node) =>
+          node.id === id
+            ? { ...node, data: { ...(node.data as AreaNodeData), backgroundColor: color } }
+            : node
+        )
+      );
+      deselectArea();
+    }
+  }, [id, data.backgroundColor, reactFlow, deselectArea]);
+
+  // Manejar el fin del redimensionamiento
+  const handleResizeEnd = useCallback(() => {
+    deselectArea();
+  }, [deselectArea]);
 
   useEffect(() => {
     if (isEditingLabel && labelInputRef.current) {
@@ -68,8 +120,8 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
   }, [isEditingLabel]);
 
   const getShapeStyles = () => ({
-    backgroundColor: data.backgroundColor || 'rgba(59, 130, 246, 0.5)',
-    border: `${data.borderWidth || 1}px solid ${data.borderColor || 'rgba(59, 130, 246, 0.8)'}`,
+    backgroundColor: data.backgroundColor || 'rgba(59, 130, 246, 0.1)', // Azul semitransparente por defecto
+    border: `${data.borderWidth || 1}px dashed ${data.borderColor || 'rgba(59, 130, 246, 0.5)'}`, // Borde azul discontinuo por defecto
     borderRadius: '8px',
     width: '100%',
     height: '100%',
@@ -86,27 +138,51 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
         position: 'relative',
         width: '100%',
         height: '100%',
-        zIndex: -1, // Asegura que el área esté detrás de otros nodos
+        zIndex: data.parentId ? -1 : -999, // Ajustar zIndex basado en si está en un grupo
+        pointerEvents: 'auto', // Permitir que el área reciba eventos para el arrastre de hijos
+      }}
+      onMouseDown={(e) => {
+        // Solo detener propagación para click izquierdo
+        if (e.button === 0) {
+          e.stopPropagation();
+          isDraggingRef.current = true;
+        }
+      }}
+      onMouseUp={(e) => {
+        // Solo detener propagación para click izquierdo
+        if (e.button === 0) {
+          e.stopPropagation();
+          if (isDraggingRef.current) {
+            isDraggingRef.current = false;
+            deselectArea();
+          }
+        }
+      }}
+      onContextMenu={(e) => {
+        // No detener la propagación del click derecho
+        // Permitir que el evento llegue a ReactFlow
       }}
     >
       <NodeResizer
         isVisible={selected}
         minWidth={100}
         minHeight={100}
+        onResizeEnd={handleResizeEnd}
         lineStyle={{
           borderColor: data.borderColor || '#3b82f6',
           borderWidth: data.borderWidth || 1,
           opacity: 0.5
         }}
         handleStyle={{
-          backgroundColor: data.borderColor || '#3b82f6',
-          width: '6px',
-          height: '6px',
-          border: '1px solid white',
-          borderRadius: '50%',
+          backgroundColor: 'white',
+          width: '16px',
+          height: '16px',
+          border: '2px solid #3b82f6',
+          borderRadius: '0', // Cuadrado, sin redondeo
           transform: 'translate(-50%, -50%)',
-          opacity: 0.8,
+          opacity: 0.9,
           zIndex: 10,
+          pointerEvents: 'auto',
         }}
       />
 
@@ -123,6 +199,7 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           cursor: 'pointer',
           userSelect: 'none',
+          pointerEvents: 'auto', // Permitir clics en la etiqueta
         }}
         onClick={() => setIsEditingLabel(true)}
       >
@@ -170,6 +247,7 @@ export default function AreaNode({ id, data, selected }: NodeProps<AreaNodeData>
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             border: '1px solid #d1d5db',
             zIndex: 1000,
+            pointerEvents: 'auto', // Permitir clics en el selector de color
           }}
         >
           {colorOptions.map((color) => (
