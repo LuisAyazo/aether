@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureLinuxFunctionAppFields } from './linuxFunctionAppFields';
 import { generateAzureLinuxFunctionAppTemplates } from './linuxFunctionAppTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const ApplicationStackSchema = z.object({
   node_version: z.string().optional(),

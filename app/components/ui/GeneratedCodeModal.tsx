@@ -22,8 +22,8 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Node } from '@/app/services/diagramService';
-import { getResourceConfig } from '@/app/config/schemas';
+import type { Node } from "../../services/diagramService";
+import { getResourceConfig } from "../../config/schemas";
 
 interface GeneratedCodeModalProps {
   visible: boolean;

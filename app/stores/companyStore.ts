@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { companyService } from '@/app/services/companyService';
+import { companyService } from "../services/companyService";
 
 export interface Company {
   _id: string; // MongoDB style ID used in existing code

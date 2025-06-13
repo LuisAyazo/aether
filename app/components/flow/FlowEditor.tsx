@@ -13,7 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import React from 'react';
 import { SelectedEdgeTypeProvider } from '../../contexts/SelectedEdgeTypeContext';
-import { LogicalEdgeType, edgeTypeConfigs, CustomEdgeData } from '@/app/config/edgeConfig'; 
+import { LogicalEdgeType, edgeTypeConfigs, CustomEdgeData } from '../../config/edgeConfig';
 import nodeTypesFromFile from '../nodes/NodeTypes'; 
 // import { NodeWithExecutionStatus } from '../../utils/customTypes'; // Movido a FlowCanvas
 import ExecutionLog from './ExecutionLog';

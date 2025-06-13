@@ -1,9 +1,11 @@
 import { renderHook, act } from '@testing-library/react';
-import { useNavigationStore } from '@/app/hooks/useNavigationStore';
+import { useNavigationStore } from "../../../../app/hooks/useNavigationStore";
 import { vi, describe, beforeEach, it, expect } from 'vitest';
-import * as dashboardService from '@/app/services/dashboardService';
 
-vi.mock('@/app/services/dashboardService');
+// Los mocks ya están configurados en setup.ts
+// Solo necesitamos obtener las funciones mockeadas
+const authService = vi.mocked(await import("../../../../app/services/authService"));
+const dashboardService = vi.mocked(await import("../../../../app/services/dashboardService"));
 
 describe('useNavigationStore', () => {
   beforeEach(() => {
@@ -27,9 +29,16 @@ describe('useNavigationStore', () => {
   });
 
   it('loads dashboard data successfully', async () => {
+    const mockUser = {
+      _id: 'user-1',
+      id: 'user-1',
+      email: 'test@example.com',
+      name: 'Test User'
+    };
+
     const mockDashboardData = {
-      companies: [{ 
-        _id: '1', 
+      companies: [{
+        _id: '1',
         id: '1',
         name: 'Test Company',
         role: 'owner' as const,
@@ -43,7 +52,9 @@ describe('useNavigationStore', () => {
       active_workspace_id: 'ws-1'
     };
 
-    vi.mocked(dashboardService.dashboardService.getInitialDashboardData).mockResolvedValue(mockDashboardData);
+    // Mock getCurrentUser para devolver un usuario
+    authService.getCurrentUser.mockReturnValue(mockUser);
+    dashboardService.dashboardService.getInitialDashboardData.mockResolvedValue(mockDashboardData);
 
     const { result } = renderHook(() => useNavigationStore());
     
@@ -53,6 +64,7 @@ describe('useNavigationStore', () => {
 
     await vi.waitFor(() => {
       expect(result.current.dataLoading).toBe(false);
+      expect(result.current.user).toEqual(mockUser);
       expect(result.current.activeCompany).toEqual(mockDashboardData.companies[0]);
       expect(result.current.environments).toEqual(mockDashboardData.environments);
     });

@@ -1,4 +1,4 @@
-import { FieldConfig } from '@/app/types/resourceConfig';
+import { FieldConfig } from "../../../../../types/resourceConfig";
 
 export const azureEventHubNamespaceFields: FieldConfig[] = [
   {

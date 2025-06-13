@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FieldConfig, ResourceValues, CodeTemplate } from '@/app/types/resourceConfig';
+import { FieldConfig, ResourceValues, CodeTemplate } from "../../../../types/resourceConfig";
 import { awsS3BucketFields } from './bucketFields';
 import { generateAWSS3BucketTemplates } from './bucketTemplates';
 

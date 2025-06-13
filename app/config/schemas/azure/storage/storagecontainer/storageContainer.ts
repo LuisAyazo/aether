@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureStorageContainerFields } from './storageContainerFields';
 import { generateAzureStorageContainerTemplates } from './storageContainerTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureStorageContainerSchema = z.object({
   name: z.string().min(3, "El nombre del contenedor debe tener al menos 3 caracteres.").max(63, "El nombre del contenedor no puede exceder los 63 caracteres.").regex(/^[a-z0-9][a-z0-9-]*$/, "El nombre del contenedor solo puede contener letras minúsculas, números y guiones, y debe comenzar y terminar con una letra o número."),

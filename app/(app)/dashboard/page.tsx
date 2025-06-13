@@ -177,16 +177,22 @@ export default function DashboardPage() {
   }, [currentDiagram]);
   
   useEffect(() => {
-    // Verificar si hay token de autenticación
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
+    // Verificar autenticación con Supabase
+    const checkAuth = async () => {
+      const { isAuthenticatedAsync } = await import('../../services/authService');
+      const isAuth = await isAuthenticatedAsync();
+      
+      if (!isAuth) {
+        router.push('/login');
+        return;
+      }
+      
+      if (!user && !dataLoading) {
+        fetchInitialUser();
+      }
+    };
     
-    if (!user && !dataLoading) {
-      fetchInitialUser(); 
-    }
+    checkAuth();
   }, [user, dataLoading, fetchInitialUser, router]);
 
   useEffect(() => {
@@ -527,10 +533,13 @@ export default function DashboardPage() {
   
   // Eliminado - no mostrar pantalla de error completa que oculte el sidebar
 
-  if (!activeCompany && !dataLoading) { 
+  if (!activeCompany && !dataLoading) {
+    // Si no hay compañía activa y no está cargando, redirigir al login
+    router.push('/login');
     return (
         <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 3.5rem)' }}>
-            <Text>No se ha podido cargar la información de la compañía. Por favor, recarga o contacta a soporte.</Text>
+            <Spin size="large" />
+            <p className="mt-3 text-slate-600 dark:text-slate-400">Redirigiendo al login...</p>
         </div>
     );
   }

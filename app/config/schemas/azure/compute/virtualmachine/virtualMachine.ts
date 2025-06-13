@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureVirtualMachineFields } from './virtualMachineFields';
 import { generateAzureVirtualMachineTemplates } from './virtualMachineTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const OsDiskSchema = z.object({
   caching: z.enum(['ReadWrite', 'ReadOnly', 'None']),

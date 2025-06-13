@@ -16,8 +16,8 @@ type Edge = any;
 type XYPosition = any;
 import { useEditorStore } from './useEditorStore';
 // import { shallow } from 'zustand/shallow'; // No se usará shallow aquí
-import { useSelectedEdgeType } from '@/app/contexts/SelectedEdgeTypeContext';
-import { LogicalEdgeType, getEdgeConfig, CustomEdgeData } from '@/app/config/edgeConfig';
+import { useSelectedEdgeType } from '../../../contexts/SelectedEdgeTypeContext';
+import { LogicalEdgeType, getEdgeConfig, CustomEdgeData } from '../../../config/edgeConfig';
 import type { ContextMenu, ResourceItem } from '../types/editorTypes'; // ToolType no se usa directamente aquí
 import { 
   GROUP_HEADER_HEIGHT, 

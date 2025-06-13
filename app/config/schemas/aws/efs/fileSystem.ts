@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { awsEfsFileSystemFields } from './fileSystemFields';
 import { generateAWSEfsFileSystemTemplates } from './fileSystemTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig'; // Añadido CodeTemplate
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig"; // Añadido CodeTemplate
 
 // Define el esquema Zod para la configuración de un EFS File System
 export const AWSEfsFileSystemSchema = z.object({

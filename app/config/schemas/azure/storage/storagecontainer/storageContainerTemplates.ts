@@ -1,5 +1,5 @@
 import { AzureStorageContainerConfig } from './storageContainer'; // Asumiremos que este tipo se definirá en storageContainer.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../../types/resourceConfig";
 
 const parseKeyValueString = (kvString?: string): Record<string, string> => {
   if (!kvString) return {};

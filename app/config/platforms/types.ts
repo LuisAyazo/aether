@@ -1,4 +1,4 @@
-import { Deployment } from '@/app/types/deployments';
+import { Deployment } from "../../types/deployments";
 
 export interface PlatformFormField {
   name: string;

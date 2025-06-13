@@ -2,7 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/app/lib/supabase';
+import { supabase } from "../../lib/supabase";
+import { fetchAndUpdateCurrentUser } from "../../services/authService";
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -15,10 +16,30 @@ export default function AuthCallback() {
       console.log('[AUTH CALLBACK] Current URL:', window.location.href);
       
       try {
-        // Check if there's an error in the URL (from OAuth provider)
+        // Check URL parameters for email confirmation or errors
         const urlParams = new URLSearchParams(window.location.hash.substring(1));
+        const searchParams = new URLSearchParams(window.location.search);
         const error = urlParams.get('error');
         const errorDescription = urlParams.get('error_description');
+        const type = searchParams.get('type');
+        const mode = searchParams.get('mode');
+        const code = searchParams.get('code');
+        
+        // Log all parameters for debugging
+        console.log('[AUTH CALLBACK] URL hash params:', Object.fromEntries(urlParams));
+        console.log('[AUTH CALLBACK] URL search params:', Object.fromEntries(searchParams));
+        console.log('[AUTH CALLBACK] Has code:', !!code);
+        
+        // Check if this is an email confirmation callback
+        // Supabase may use different parameter names
+        if (type === 'email' || type === 'signup' || type === 'email_confirmation' ||
+            mode === 'email' || mode === 'signup' ||
+            (urlParams.has('type') && urlParams.get('type') === 'email')) {
+          console.log('[AUTH CALLBACK] Email confirmation detected via type/mode');
+          // Redirect to login with confirmation message
+          router.push('/login?confirmed=true');
+          return;
+        }
         
         if (error) {
           console.error('[AUTH CALLBACK] OAuth error:', error, errorDescription);
@@ -32,6 +53,50 @@ export default function AuthCallback() {
         
         // Get the session - Supabase should have handled the code exchange automatically
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        // Check if we have a code but no existing session - this is likely an email confirmation
+        if (code && !session) {
+          console.log('[AUTH CALLBACK] Has code but no session - email confirmation flow');
+          
+          // Check if there's already a user logged in before the code exchange
+          const { data: { user: existingUser } } = await supabase.auth.getUser();
+          const hadExistingUser = !!existingUser;
+          
+          // Try to exchange the code for a session (email confirmation)
+          try {
+            const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            
+            if (!exchangeError && exchangeData?.session) {
+              console.log('[AUTH CALLBACK] Code exchanged successfully');
+              
+              // If there was no existing user before, this is a new email confirmation
+              if (!hadExistingUser) {
+                console.log('[AUTH CALLBACK] Email confirmation detected - signing out and redirecting to login');
+                // Clear the session since this is just email confirmation
+                await supabase.auth.signOut();
+                router.push('/login?confirmed=true');
+                return;
+              }
+              // Otherwise, continue with normal auth flow
+            } else if (exchangeError) {
+              console.error('[AUTH CALLBACK] Error exchanging code:', exchangeError);
+              // If code exchange fails, redirect to login
+              router.push('/login?error=invalid_code');
+              return;
+            }
+          } catch (err) {
+            console.error('[AUTH CALLBACK] Error in code exchange:', err);
+            router.push('/login?error=exchange_failed');
+            return;
+          }
+        }
+        
+        // If there's no session and no error, it might be an email confirmation
+        if (!session && !sessionError && !error) {
+          console.log('[AUTH CALLBACK] No session but no error - likely email confirmation');
+          router.push('/login?confirmed=true');
+          return;
+        }
         
         if (sessionError) {
           console.error('[AUTH CALLBACK] Error getting session:', sessionError);
@@ -71,12 +136,31 @@ export default function AuthCallback() {
           localStorage.setItem('user', JSON.stringify(userData));
           localStorage.setItem('token', session.access_token); // Store token for backward compatibility
           
-          console.log('[AUTH CALLBACK] User data stored, redirecting to dashboard...');
+          console.log('[AUTH CALLBACK] User data stored, fetching complete profile...');
           
-          // Small delay to ensure everything is saved
-          setTimeout(() => {
-            router.push('/dashboard');
-          }, 100);
+          // Fetch complete user profile with onboarding status
+          const completeUser = await fetchAndUpdateCurrentUser();
+          
+          if (completeUser) {
+            console.log('[AUTH CALLBACK] Complete user profile:', {
+              email: completeUser.email,
+              onboarding_completed: completeUser.onboarding_completed,
+              usage_type: completeUser.usage_type
+            });
+            
+            // Check onboarding status
+            if (completeUser.onboarding_completed !== true || completeUser.usage_type === null) {
+              console.log('[AUTH CALLBACK] User needs onboarding, redirecting to onboarding...');
+              router.push('/onboarding/select-usage');
+            } else {
+              console.log('[AUTH CALLBACK] User completed onboarding, redirecting to home...');
+              router.push('/'); // Home page will handle the rest
+            }
+          } else {
+            // If we couldn't fetch the profile, redirect to home and let it handle the logic
+            console.log('[AUTH CALLBACK] Could not fetch complete profile, redirecting to home...');
+            router.push('/');
+          }
         } else {
           // No session found
           console.log('[AUTH CALLBACK] No session found, redirecting to login...');

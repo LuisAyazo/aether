@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { awsSnsTopicFields } from './topicFields';
 import { generateAWSSnsTopicTemplates } from './topicTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig";
 
 // Define el esquema Zod para la configuración de un SNS Topic
 export const AWSSnsTopicSchema = z.object({

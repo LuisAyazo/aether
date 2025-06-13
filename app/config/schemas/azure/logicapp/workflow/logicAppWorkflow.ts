@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureLogicAppWorkflowFields } from './logicAppWorkflowFields';
 import { generateAzureLogicAppWorkflowTemplates } from './logicAppWorkflowTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 // Helper para validar JSON
 const jsonString = z.string().refine((data) => {

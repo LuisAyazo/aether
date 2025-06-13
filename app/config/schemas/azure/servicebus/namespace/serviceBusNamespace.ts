@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureServiceBusNamespaceFields } from './serviceBusNamespaceFields';
 import { generateAzureServiceBusNamespaceTemplates } from './serviceBusNamespaceTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureServiceBusNamespaceSchema = z.object({
   name: z.string().min(6, "El nombre debe tener al menos 6 caracteres.").max(50, "El nombre no puede exceder los 50 caracteres.").regex(/^[a-zA-Z][a-zA-Z0-9-]*$/, "Nombre inválido para Service Bus Namespace."),

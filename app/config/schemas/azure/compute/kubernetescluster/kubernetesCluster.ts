@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureKubernetesClusterFields } from './kubernetesClusterFields';
 import { generateAzureKubernetesClusterTemplates } from './kubernetesClusterTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const DefaultNodePoolSchema = z.object({
   name: z.string().min(1),

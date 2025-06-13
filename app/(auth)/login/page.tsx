@@ -33,6 +33,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
 
   const registrationSuccess = searchParams.get('registered') === 'true';
+  const emailConfirmed = searchParams.get('confirmed') === 'true';
   const authError = searchParams.get('error');
   const sessionExpired = searchParams.get('session_expired') === 'true';
 
@@ -54,11 +55,92 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
+    // Validate email before sending
+    if (!email || !email.trim()) {
+      setError('Por favor ingresa tu correo electrónico');
+      setLoading(false);
+      return;
+    }
+    
+    if (!password) {
+      setError('Por favor ingresa tu contraseña');
+      setLoading(false);
+      return;
+    }
+    
+    console.log('[LOGIN PAGE] Attempting login with email:', email);
+    
     try {
-      const data = await loginUser(email, password);
+      const data = await loginUser(email.trim(), password);
       saveAuthData(data);
-      router.push('/dashboard');
+      
+      // Check if user needs onboarding or company creation
+      if (data.user) {
+        // Import getAuthTokenAsync dynamically to avoid circular dependencies
+        const { getAuthTokenAsync } = await import('../../services/authService');
+        
+        // Check if user has companies (could be an invited user)
+        try {
+          const token = await getAuthTokenAsync();
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+          const companiesResponse = await fetch(`${API_URL}/api/v1/auth/me/companies`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          
+          if (companiesResponse.ok) {
+            const companiesData = await companiesResponse.json();
+            console.log('[LOGIN PAGE] User companies:', companiesData);
+            
+            // If user has companies but first_company_created is false, they're an invited member
+            if (companiesData.count > 0 && !data.user.first_company_created) {
+              console.log('[LOGIN PAGE] User is invited member, updating first_company_created');
+              
+              // Update the user profile
+              const updateResponse = await fetch(`${API_URL}/api/v1/auth/me/usage-settings`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  usage_type: 'company'
+                }),
+              });
+              
+              if (updateResponse.ok) {
+                const updatedUser = await updateResponse.json();
+                data.user = { ...data.user, ...updatedUser };
+                saveAuthData({ ...data, user: data.user });
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[LOGIN PAGE] Error checking user companies:', error);
+        }
+        
+        // Now redirect based on updated user state
+        if (!data.user.onboarding_completed) {
+          // If user has companies, they can skip onboarding
+          if (data.user.first_company_created) {
+            console.log('[LOGIN PAGE] Invited user, skipping onboarding, redirecting to dashboard');
+            router.push('/dashboard');
+          } else {
+            console.log('[LOGIN PAGE] New user needs onboarding, redirecting...');
+            router.push('/onboarding/select-usage');
+          }
+        } else if (!data.user.first_company_created) {
+          console.log('[LOGIN PAGE] User needs to create first company, redirecting to onboarding...');
+          router.push('/onboarding/select-usage');
+        } else {
+          console.log('[LOGIN PAGE] User ready for dashboard, redirecting...');
+          router.push('/dashboard');
+        }
+      }
     } catch (err: any) {
+      console.error('[LOGIN PAGE] Login error:', err);
       setError(err.message || 'Error al iniciar sesión. Verifique sus credenciales.');
     } finally {
       setLoading(false);
@@ -111,6 +193,12 @@ export default function LoginPage() {
             <div className="mb-6 bg-emerald-green-50 border border-emerald-green-300 text-emerald-green-700 dark:bg-emerald-green-900/50 dark:border-emerald-green-700 dark:text-emerald-green-200 px-4 py-3 rounded-md relative animate-fade-in" style={{ animationDelay: '0.1s' }} role="alert">
               <strong className="font-bold">¡Registro exitoso!</strong>
               <span className="block sm:inline"> Ahora puedes iniciar sesión.</span>
+            </div>
+          )}
+          {emailConfirmed && (
+            <div className="mb-6 bg-emerald-green-50 border border-emerald-green-300 text-emerald-green-700 dark:bg-emerald-green-900/50 dark:border-emerald-green-700 dark:text-emerald-green-200 px-4 py-3 rounded-md relative animate-fade-in" style={{ animationDelay: '0.1s' }} role="alert">
+              <strong className="font-bold">¡Correo confirmado!</strong>
+              <span className="block sm:inline"> Tu cuenta ha sido verificada. Ya puedes iniciar sesión.</span>
             </div>
           )}
           {error && (

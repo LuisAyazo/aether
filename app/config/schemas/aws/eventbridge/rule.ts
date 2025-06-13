@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { awsEventBridgeRuleFields } from './ruleFields';
 import { generateAWSEventBridgeRuleTemplates } from './ruleTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig";
 
 // Define el esquema Zod para la configuración de una EventBridge Rule
 export const AWSEventBridgeRuleSchema = z.object({

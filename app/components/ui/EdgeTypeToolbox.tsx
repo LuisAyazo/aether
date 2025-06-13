@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { Button, Tooltip } from 'antd';
-import { useSelectedEdgeType } from '@/app/contexts/SelectedEdgeTypeContext';
-import { LogicalEdgeType, edgeTypeConfigs, EdgeTypeConfig } from '@/app/config/edgeConfig';
+import { useSelectedEdgeType } from "../../contexts/SelectedEdgeTypeContext";
+import { LogicalEdgeType, edgeTypeConfigs, EdgeTypeConfig } from "../../config/edgeConfig";
 import { 
   ShareIcon, 
   BoltIcon,

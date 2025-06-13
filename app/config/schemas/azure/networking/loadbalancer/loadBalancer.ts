@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureLoadBalancerFields } from './loadBalancerFields';
 import { generateAzureLoadBalancerTemplates } from './loadBalancerTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureLoadBalancerSchema = z.object({
   name: z.string().min(1, "El nombre es obligatorio.").max(80),

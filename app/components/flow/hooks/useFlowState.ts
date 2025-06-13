@@ -5,7 +5,7 @@ import {
   Node,
   Edge,
 } from 'reactflow';
-import type { CustomEdgeData } from '@/app/config/edgeConfig';
+import type { CustomEdgeData } from "../../../config/edgeConfig";
 // Asegúrate de que FlowNode y FlowEdge se importen correctamente si usas alias, o usa Node y Edge directamente.
 // Por consistencia con editorTypes.ts, usaremos Node y Edge de reactflow.
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { setupServer } from 'msw/node';
 import { rest } from 'msw';
-import { dashboardService } from '@/app/services/dashboardService';
+import { dashboardService } from "../../../app/services/dashboardService";
 
 const server = setupServer(
   rest.get('/api/v1/dashboard/initial-load', (req, res, ctx) => {

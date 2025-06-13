@@ -1,5 +1,5 @@
 import { GCPCloudTasksQueueConfig } from './queue'; // Asumiremos que este tipo se definirá en queue.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 // Helper para formatear bloques anidados opcionales
 const formatOptionalBlock = (condition: any, blockName: string, fields: string): string => {

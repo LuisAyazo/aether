@@ -1,5 +1,5 @@
 import { GCPFilestoreInstanceConfig } from './filestoreInstance'; // Asumiremos que este tipo se definirá en filestoreInstance.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 export function generateGCPFilestoreInstanceTemplates(config: GCPFilestoreInstanceConfig): CodeTemplate {
   const resourceName = config.name.replace(/-/g, '_');

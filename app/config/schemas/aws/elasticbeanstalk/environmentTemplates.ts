@@ -1,5 +1,5 @@
 import { AWSElasticBeanstalkEnvironmentConfig } from './environment'; // Asumiremos que este tipo se definirá en environment.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 // Helper function to parse tags from string "Key1=Value1,Key2=Value2" to object
 const parseTagsString = (tagsString?: string): Record<string, string> => {

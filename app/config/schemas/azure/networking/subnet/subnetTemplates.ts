@@ -1,5 +1,5 @@
 import { AzureSubnetConfig } from './subnet'; // Asumiremos que este tipo se definirá en subnet.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../../types/resourceConfig";
 
 const formatListForTerraform = (inputString?: string): string => {
   if (!inputString) return '[]';

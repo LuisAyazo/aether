@@ -1,5 +1,5 @@
 import { AWSLambdaFunctionConfig } from './function'; // Asumiremos que este tipo se definirá en function.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 // Helper function to parse key-value string "K1=V1,K2=V2" to object
 const parseKeyValueString = (kvString?: string): Record<string, string> => {

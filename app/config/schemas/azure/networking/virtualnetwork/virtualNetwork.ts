@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureVirtualNetworkFields } from './virtualNetworkFields';
 import { generateAzureVirtualNetworkTemplates } from './virtualNetworkTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 // Expresión regular para validar CIDR IPv4
 const cidrRegex = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))$/;

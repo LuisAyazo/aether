@@ -1,5 +1,5 @@
 import { GCPAppEngineAppConfig } from './app'; // Asumiremos que este tipo se definirá en app.ts
-import { CodeTemplate } from '@/app/types/resourceConfig'; // Usar alias
+import { CodeTemplate } from "../../../../types/resourceConfig"; // Usar alias
 
 export function generateGCPAppEngineAppTemplates(config: GCPAppEngineAppConfig): CodeTemplate {
   // El nombre del recurso Terraform para google_app_engine_application es usualmente fijo o basado en el proyecto.

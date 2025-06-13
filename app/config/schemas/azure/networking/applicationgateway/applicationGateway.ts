@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureApplicationGatewayFields } from './applicationGatewayFields';
 import { generateAzureApplicationGatewayTemplates } from './applicationGatewayTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const SkuNameEnum = z.enum([
   'Standard_Small', 'Standard_Medium', 'Standard_Large', 

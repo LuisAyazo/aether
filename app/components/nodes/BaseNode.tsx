@@ -1,5 +1,5 @@
 import { NodeProps } from 'reactflow';
-import { NodeExecutionState } from '@/app/utils/customTypes';
+import { NodeExecutionState } from "../../utils/customTypes";
 
 const getStateColor = (state: NodeExecutionState): string => {
   switch (state) {

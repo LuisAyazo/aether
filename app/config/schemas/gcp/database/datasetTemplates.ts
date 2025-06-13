@@ -1,5 +1,5 @@
 import { GCPBigQueryDatasetConfig } from './dataset'; // Asumiremos que este tipo se definirá en dataset.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 export function generateGCPBigQueryDatasetTemplates(config: GCPBigQueryDatasetConfig): CodeTemplate {
   const resourceName = config.dataset_id.replace(/-/g, '_');

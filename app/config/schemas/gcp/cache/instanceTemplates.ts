@@ -1,5 +1,5 @@
 import { GCPMemorystoreInstanceConfig } from './instance'; // Asumiremos que este tipo se definirá en instance.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 export function generateGCPMemorystoreInstanceTemplates(config: GCPMemorystoreInstanceConfig): CodeTemplate {
   const resourceName = config.name.replace(/-/g, '_');

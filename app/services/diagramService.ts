@@ -291,7 +291,7 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
   const token = await getAuthTokenAsync();
   try {
     // Get current workspace from the navigation store
-    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
     const currentWorkspaceId = navStore.activeWorkspace?.id;
     
     if (!currentWorkspaceId) {
@@ -367,7 +367,7 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
   
   try {
     // Get current workspace from the navigation store
-    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
     const currentWorkspaceId = navStore.activeWorkspace?.id;
     
     if (!currentWorkspaceId) {
@@ -432,7 +432,7 @@ export const createDiagram = async (companyId: string, environmentId: string, di
   
   try {
     // Get current workspace from the navigation store
-    const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+    const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
     const currentWorkspaceId = navStore.activeWorkspace?.id;
     
     if (!currentWorkspaceId) {
@@ -535,7 +535,7 @@ export const updateDiagram = async (
   }
 
   // Get current workspace from the navigation store
-  const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+  const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
   const currentWorkspaceId = navStore.activeWorkspace?.id;
   
   if (!currentWorkspaceId) {
@@ -617,7 +617,7 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
   const token = await getAuthTokenAsync();
   
   // Get current workspace from the navigation store
-  const navStore = (await import('@/app/hooks/useNavigationStore')).useNavigationStore.getState();
+  const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
   const currentWorkspaceId = navStore.activeWorkspace?.id;
   
   if (!currentWorkspaceId) {

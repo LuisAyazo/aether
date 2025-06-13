@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureSynapseWorkspaceFields } from './synapseWorkspaceFields';
 import { generateAzureSynapseWorkspaceTemplates } from './synapseWorkspaceTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureSynapseWorkspaceSchema = z.object({
   name: z.string().min(1, "El nombre del workspace es obligatorio.").regex(/^[a-zA-Z0-9]+$/, "El nombre solo puede contener letras y números."),

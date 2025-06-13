@@ -1,5 +1,5 @@
 import { AzureApplicationGatewayConfig } from './applicationGateway';
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../../types/resourceConfig";
 
 const parseKeyValueString = (kvString?: string): Record<string, string> => {
   if (!kvString) return {};

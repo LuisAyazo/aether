@@ -1,5 +1,5 @@
 import { GCPGkeClusterConfig } from './cluster'; // Asumiremos que este tipo se definirá en cluster.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 export function generateGCPGkeClusterTemplates(config: GCPGkeClusterConfig): CodeTemplate {
   const resourceName = config.name.replace(/-/g, '_'); // Pulumi y a veces Terraform prefieren snake_case para nombres de variables/recursos

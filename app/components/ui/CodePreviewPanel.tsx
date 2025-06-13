@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Tabs, Select, Button, Space, Alert, Badge, Tooltip, Switch } from 'antd';
 import { CodeOutlined, EyeOutlined, CopyOutlined, DownloadOutlined, CheckOutlined } from '@ant-design/icons';
-import { IaCCodeService } from '@/app/services/iacCodeService';
+import { IaCCodeService } from "../../services/iacCodeService";
 import type { Node } from 'reactflow';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism';

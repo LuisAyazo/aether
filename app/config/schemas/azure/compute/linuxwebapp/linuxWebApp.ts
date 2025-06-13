@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureLinuxWebAppFields } from './linuxWebAppFields';
 import { generateAzureLinuxWebAppTemplates } from './linuxWebAppTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const SiteConfigSchema = z.object({
   linux_fx_version: z.string().optional(),

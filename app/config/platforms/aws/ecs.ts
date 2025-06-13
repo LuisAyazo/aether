@@ -1,5 +1,5 @@
 import { PlatformConfig } from '../types';
-import { Deployment } from '@/app/types/deployments'; // Necesario para Deployment['provider'] y Deployment['platform']
+import { Deployment } from "../../../types/deployments"; // Necesario para Deployment['provider'] y Deployment['platform']
 
 export const ecsPlatformConfig: PlatformConfig = {
   provider: 'aws',

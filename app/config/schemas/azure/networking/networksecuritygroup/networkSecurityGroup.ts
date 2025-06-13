@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureNetworkSecurityGroupFields } from './networkSecurityGroupFields';
 import { generateAzureNetworkSecurityGroupTemplates } from './networkSecurityGroupTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureNetworkSecurityGroupSchema = z.object({
   name: z.string().min(1, "El nombre es obligatorio.").max(80),

@@ -1,5 +1,5 @@
 import { GCPCloudFunctionConfig } from './function'; // Asumiremos que este tipo se definirá en function.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 export function generateGCPCloudFunctionTemplates(config: GCPCloudFunctionConfig): CodeTemplate {
   const resourceName = config.name.replace(/-/g, '_');

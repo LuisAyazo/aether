@@ -17,7 +17,7 @@ import {
   MailOutlined // Añadido para el correo del usuario
 } from '@ant-design/icons';
 import { logoutUser as authLogout } from '../services/authService';
-import { useNavigationStore } from '@/app/hooks/useNavigationStore'; 
+import { useNavigationStore } from '../hooks/useNavigationStore';
 import type { Environment } from '../services/diagramService';
 import EnvironmentTreeSelect from "./ui/EnvironmentTreeSelect";
 import DiagramTreeSelect from "./ui/DiagramTreeSelect"; 

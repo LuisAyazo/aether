@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { awsSfnStateMachineFields } from './stateMachineFields';
 import { generateAWSSfnStateMachineTemplates } from './stateMachineTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig";
 
 const defaultDefinition = JSON.stringify({
   Comment: "A simple minimal example of the Amazon States Language",

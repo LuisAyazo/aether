@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureFirewallFields } from './firewallFields';
 import { generateAzureFirewallTemplates } from './firewallTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const SkuNameEnum = z.enum(['AZFW_VNet', 'AZFW_Hub']);
 const SkuTierEnum = z.enum(['Standard', 'Premium', 'Basic']); // Basic es más nuevo

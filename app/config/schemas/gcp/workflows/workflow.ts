@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { gcpWorkflowsWorkflowFields } from './workflowFields';
 import { generateGCPWorkflowsWorkflowTemplates } from './workflowTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig";
 
 const defaultSourceContents = `# Simple workflow that logs a message
 main:

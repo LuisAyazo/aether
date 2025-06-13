@@ -1,5 +1,5 @@
 import { AzureLoadBalancerConfig } from './loadBalancer'; // Asumiremos que este tipo se definirá en loadBalancer.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../../types/resourceConfig";
 
 const parseKeyValueString = (kvString?: string): Record<string, string> => {
   if (!kvString) return {};

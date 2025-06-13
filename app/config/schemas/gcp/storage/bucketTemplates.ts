@@ -1,5 +1,5 @@
 import { GCPStorageBucketConfig } from './bucket'; // Asumiremos que este tipo se definirá en bucket.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 export function generateGCPStorageBucketTemplates(config: GCPStorageBucketConfig): CodeTemplate {
   const resourceName = config.name.replace(/-/g, '_');

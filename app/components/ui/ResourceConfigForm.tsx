@@ -1,5 +1,5 @@
 import React from 'react';
-import { ResourceConfigFormProps, FieldConfig, ResourceValues } from '@/app/types/resourceConfig';
+import { ResourceConfigFormProps, FieldConfig, ResourceValues } from "../../types/resourceConfig";
 
 const ResourceConfigForm: React.FC<ResourceConfigFormProps> = ({
   provider,

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureMsSqlDatabaseFields } from './mssqlDatabaseFields';
 import { generateAzureMsSqlDatabaseTemplates } from './mssqlDatabaseTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureMsSqlDatabaseSchema = z.object({
   name: z.string().min(1, "El nombre de la base de datos es obligatorio."),

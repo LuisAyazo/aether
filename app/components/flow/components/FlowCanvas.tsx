@@ -12,7 +12,7 @@ import {
   MinusCircleIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline';
-import { CustomEdgeData } from '@/app/config/edgeConfig';
+import { CustomEdgeData } from "../../../config/edgeConfig";
 import { ResourceCategory, ResourceItem } from '../types/editorTypes';
 import { NodeWithExecutionStatus } from '../../../utils/customTypes'; // Para executionActions
 // import { useEditorStore } from '../hooks/useEditorStore'; // Para hideContextMenu - Se pasa como prop

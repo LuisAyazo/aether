@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building, User as UserIcon } from 'lucide-react'; // Iconos para los botones
 import { message } from 'antd'; // Importar message de antd
-import { getCurrentUser, getAuthToken, User } from '../../../services/authService'; // Ruta corregida y User importado de aquí
+import { getCurrentUser, getAuthTokenAsync, User } from '../../../services/authService'; // Ruta corregida y User importado de aquí
 
 // Necesitaríamos una función para actualizar las settings de uso
 // Esto podría estar en authService.ts o un nuevo userService.ts
@@ -89,18 +89,30 @@ export default function SelectUsagePage() {
 
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (user) {
-      setCurrentUser(user);
-      // Si ya tiene un usage_type, no debería estar en esta página, redirigir.
-      // (Esta lógica también podría estar en un HOC o en el layout de la app)
-      if (user.usage_type) {
-        router.replace('/dashboard'); // O a la página de compañía si es relevante
+    const checkAuth = async () => {
+      const user = getCurrentUser();
+      
+      // Verificar también si hay sesión activa en Supabase
+      const { isAuthenticatedAsync } = await import('../../../services/authService');
+      const hasSession = await isAuthenticatedAsync();
+      
+      if (!user || !hasSession) {
+        // No hay usuario o sesión, redirigir a login
+        console.log('[ONBOARDING] No user or session found, redirecting to login');
+        router.replace('/login');
+        return;
       }
-    } else {
-      // Si no hay usuario, redirigir a login
-      router.replace('/login');
-    }
+      
+      setCurrentUser(user);
+      
+      // Si ya tiene un usage_type, no debería estar en esta página
+      if (user.usage_type) {
+        console.log('[ONBOARDING] User already has usage_type, redirecting to dashboard');
+        router.replace('/dashboard');
+      }
+    };
+    
+    checkAuth();
   }, [router]);
 
   const handleSelectUsage = async (usageType: 'personal' | 'company') => {
@@ -143,10 +155,13 @@ export default function SelectUsagePage() {
     }
     setLoading('submit');
     setError(null);
-    const token = getAuthToken();
-    console.log("handleSubmitOnboarding: Iniciando envío con usageType=", selectedUsageType);
-
+    
     try {
+      // Obtener el token de forma asíncrona
+      const token = await getAuthTokenAsync();
+      console.log("handleSubmitOnboarding: Token obtenido:", token ? "Sí" : "No");
+      console.log("handleSubmitOnboarding: Iniciando envío con usageType=", selectedUsageType);
+      
       const updatedUser = await updateUserUsageSettings(selectedUsageType, token);
       console.log("handleSubmitOnboarding: Usuario actualizado desde API:", updatedUser);
       
@@ -158,7 +173,7 @@ export default function SelectUsagePage() {
             newUserData = { ...existingUser, ...updatedUser };
             console.log("handleSubmitOnboarding: Actualizando localStorage con newUserData:", newUserData);
             localStorage.setItem('user', JSON.stringify(newUserData));
-            setCurrentUser(newUserData); 
+            setCurrentUser(newUserData);
          } else {
             console.warn("handleSubmitOnboarding: No se encontró existingUser en localStorage para actualizar.");
          }
@@ -171,7 +186,8 @@ export default function SelectUsagePage() {
            main_interests: mainInterests
          };
          // Llamar sin await para no bloquear la redirección si la API de tracking falla
-         saveOnboardingTrackingDetails(trackingDetails, token).catch(e => {
+         const trackingToken = await getAuthTokenAsync();
+         saveOnboardingTrackingDetails(trackingDetails, trackingToken).catch(e => {
             console.warn("Error en segundo plano al guardar datos de tracking:", e);
             // No es necesario notificar al usuario de este error si es solo para tracking interno.
          });
@@ -180,10 +196,45 @@ export default function SelectUsagePage() {
         console.warn("handleSubmitOnboarding: updatedUser no recibido o window no definido. No se guardarán datos de tracking.");
       }
 
+      // Si el usuario seleccionó uso personal, crear su espacio personal
+      if (selectedUsageType === 'personal') {
+        console.log("handleSubmitOnboarding: Creando espacio personal...");
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        
+        try {
+          const createSpaceResponse = await fetch(`${API_URL}/api/v1/companies/create-personal-space`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          
+          if (!createSpaceResponse.ok) {
+            const errorData = await createSpaceResponse.json();
+            console.error("handleSubmitOnboarding: Error creando espacio personal:", errorData);
+            // No bloquear el flujo, el usuario puede crear la compañía después
+          } else {
+            const spaceData = await createSpaceResponse.json();
+            console.log("handleSubmitOnboarding: Espacio personal creado:", spaceData);
+          }
+        } catch (spaceError) {
+          console.error("handleSubmitOnboarding: Error al crear espacio personal:", spaceError);
+          // No bloquear el flujo
+        }
+      }
+
       console.log("handleSubmitOnboarding: Redirigiendo después de la actualización...");
-      // Siempre redirigir al dashboard
-      // El dashboard se encargará de verificar si el usuario necesita crear una compañía
-      router.push('/dashboard');
+      
+      // Redirigir según el tipo de uso seleccionado
+      if (selectedUsageType === 'company') {
+        // Si seleccionó company, redirigir a crear compañía (página existente)
+        console.log("handleSubmitOnboarding: Usuario seleccionó company, redirigiendo a crear compañía...");
+        router.push('/create-company');
+      } else {
+        // Si seleccionó personal y ya se creó el espacio, ir al dashboard
+        router.push('/dashboard');
+      }
     } catch (err: unknown) {
       console.error("handleSubmitOnboarding: Error durante el proceso.", err);
       if (err instanceof Error) {

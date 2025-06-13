@@ -1,5 +1,5 @@
 import { GCPCloudRunServiceConfig } from './service'; // Asumiremos que este tipo se definirá en service.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 export function generateGCPCloudRunServiceTemplates(config: GCPCloudRunServiceConfig): CodeTemplate {
   const resourceName = config.name.replace(/-/g, '_');

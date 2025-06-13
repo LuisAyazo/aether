@@ -1,6 +1,6 @@
 // import type { JSX } from 'react'; // No se usa
-// import type { CustomEdgeData } from '@/app/config/edgeConfig'; // Ya no se usa directamente
-import type { Diagram } from '@/app/services/diagramService';
+// import type { CustomEdgeData } from "../../../config/edgeConfig"; // Ya no se usa directamente
+import type { Diagram } from "../../../services/diagramService";
 
 // Usaremos 'any' para los tipos de React Flow como workaround debido a problemas de declaración de módulo
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

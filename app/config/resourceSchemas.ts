@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ResourceFieldConfigs, Provider, ResourceType } from '@/app/types/resourceConfig';
+import { ResourceFieldConfigs, Provider, ResourceType } from "../types/resourceConfig";
 
 // Esquemas base para campos comunes
 const baseSchema = z.object({

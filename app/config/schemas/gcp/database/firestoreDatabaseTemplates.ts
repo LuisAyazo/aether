@@ -1,5 +1,5 @@
 import { GCPFirestoreDatabaseConfig } from './firestoreDatabase'; // Asumiremos que este tipo se definirá en firestoreDatabase.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 export function generateGCPFirestoreDatabaseTemplates(config: GCPFirestoreDatabaseConfig): CodeTemplate {
   // El nombre del recurso en Terraform para google_firestore_database es usualmente fijo o basado en el proyecto.

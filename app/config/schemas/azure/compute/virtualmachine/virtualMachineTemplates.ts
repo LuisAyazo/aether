@@ -1,5 +1,5 @@
 import { AzureVirtualMachineConfig } from './virtualMachine'; // Asumiremos que este tipo se definirá en virtualMachine.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../../types/resourceConfig";
 
 // Helper function to parse key-value string "Key1=Value1,Key2=Value2" to object
 const parseKeyValueString = (kvString?: string): Record<string, string> => {

@@ -1,5 +1,5 @@
 import { AzureServiceBusNamespaceConfig } from './serviceBusNamespace'; // Asumiremos que este tipo se definirá en serviceBusNamespace.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../../types/resourceConfig";
 
 const parseKeyValueString = (kvString?: string): Record<string, string> => {
   if (!kvString) return {};

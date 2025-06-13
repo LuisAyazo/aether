@@ -31,9 +31,9 @@ import {
   DeploymentStrategyType,
   type DeploymentStrategy, 
   type SemanticVersionRule
-} from '@/app/types/deployments';
-import { platformConfig } from '@/app/config/platforms';
-import { getAuthToken } from '@/app/services/authService';
+} from '../../types/deployments';
+import { platformConfig } from '../../config/platforms';
+import { getAuthToken } from "../../services/authService";
 
 const statusConfig = {
   running: { color: 'text-green-600 bg-green-50', icon: CheckCircleIcon, label: 'Ejecutándose' },

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { awsSqsQueueFields } from './queueFields';
 import { generateAWSSqsQueueTemplates } from './queueTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig";
 
 // Define el esquema Zod para la configuración de una SQS Queue
 export const AWSSqsQueueSchema = z.object({

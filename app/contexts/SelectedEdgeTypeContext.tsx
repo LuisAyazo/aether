@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useState, useContext, ReactNode, Dispatch, SetStateAction } from 'react';
-import { LogicalEdgeType } from '@/app/config/edgeConfig'; // Asegúrate que la ruta sea correcta
+import { LogicalEdgeType } from "../config/edgeConfig"; // Asegúrate que la ruta sea correcta
 
 interface SelectedEdgeTypeContextProps {
   selectedLogicalType: LogicalEdgeType | null;

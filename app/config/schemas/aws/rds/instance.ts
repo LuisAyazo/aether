@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FieldConfig, ResourceValues, CodeTemplate } from '@/app/types/resourceConfig';
+import { FieldConfig, ResourceValues, CodeTemplate } from "../../../../types/resourceConfig";
 import { awsRdsInstanceFields } from './instanceFields';
 import { generateAWSRDSInstanceTemplates } from './instanceTemplates';
 

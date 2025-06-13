@@ -21,8 +21,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { useReactFlow } from 'reactflow';
 import { useEditorStore } from '../hooks/useEditorStore';
-import { useSelectedEdgeType } from '@/app/contexts/SelectedEdgeTypeContext';
-import { LogicalEdgeType, edgeTypeConfigs, EdgeTypeConfig } from '@/app/config/edgeConfig'; // Corregido EdgeConfig a EdgeTypeConfig
+import { useSelectedEdgeType } from '../../../contexts/SelectedEdgeTypeContext';
+import { LogicalEdgeType, edgeTypeConfigs, EdgeTypeConfig } from '../../../config/edgeConfig'; // Corregido EdgeConfig a EdgeTypeConfig
 import type { ToolType as EditorToolType } from '../types/editorTypes'; // Corregido EditorToolType a ToolType
 
 interface ToolbarProps {

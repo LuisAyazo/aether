@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { gcpCloudTasksQueueFields } from './queueFields';
 import { generateGCPCloudTasksQueueTemplates } from './queueTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig";
 
 // Esquema para rate_limits (opcional)
 const RateLimitsSchema = z.object({

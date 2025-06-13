@@ -1,8 +1,8 @@
-import { api } from '@/app/lib/api';
-import { type Company } from '@/app/stores/companyStore';
+import { api } from "../lib/api";
+import { type Company } from "../stores/companyStore";
 
 // Re-export Company type from store
-export { type Company } from '@/app/stores/companyStore';
+export { type Company } from "../stores/companyStore";
 
 // Constant for personal space naming
 export const PERSONAL_SPACE_COMPANY_NAME_PREFIX = 'Personal Space - ';

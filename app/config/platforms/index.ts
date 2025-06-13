@@ -1,5 +1,5 @@
 import { PlatformConfig } from './types';
-import { Deployment } from '@/app/types/deployments';
+import { Deployment } from "../../types/deployments";
 
 import { ecsPlatformConfig } from './aws/ecs';
 import { fargatePlatformConfig } from './aws/fargate';

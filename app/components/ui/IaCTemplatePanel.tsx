@@ -4,12 +4,12 @@ import SidePanel from './SidePanel';
 import ResourceConfigForm from './ResourceConfigForm';
 import CodeBlock from './CodeBlock';
 import SmartBehaviorPanel from './SmartBehaviorPanel';
-import { ResourceValues, ResourceType } from '@/app/types/resourceConfig';
+import { ResourceValues, ResourceType } from "../../types/resourceConfig";
 import { 
   getResourceConfig, 
   // validateResourceConfig, // No se usa directamente aquí, se usa el schema.parse
   SupportedProvider 
-} from '@/app/config/schemas';
+} from "../../config/schemas";
 import { 
   DocumentDuplicateIcon, 
   CheckIcon, 

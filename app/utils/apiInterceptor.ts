@@ -1,4 +1,4 @@
-import { logoutUser } from '@/app/services/authService';
+import { logoutUser } from "../services/authService";
 
 /**
  * Global API interceptor to handle common error scenarios

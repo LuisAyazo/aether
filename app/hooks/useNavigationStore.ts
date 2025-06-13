@@ -1,30 +1,30 @@
 import { create } from 'zustand';
 import { message, Modal } from 'antd'; // Modal importado
 // import type { Viewport } from 'reactflow'; // Ya no se usa directamente debido al workaround con 'any'
-import type { User } from '@/app/services/authService';
-import type { Company } from '@/app/services/companyService';
-import { 
-  Environment, 
+import type { User } from "../services/authService";
+import type { Company } from "../services/companyService";
+import {
+  Environment,
   Diagram,
   Node as DiagramNode, // Renombrar para claridad si es necesario, o usar el tipo específico de nodo del servicio
-} from '@/app/services/diagramService'; 
-import { 
+} from "../services/diagramService";
+import {
   getCurrentUser,
   logoutUser,
-} from '@/app/services/authService';
-import { 
-  getEnvironments, 
-  getDiagramsByEnvironment, 
-  getDiagram, 
+} from "../services/authService";
+import {
+  getEnvironments,
+  getDiagramsByEnvironment,
+  getDiagram,
   createDiagram as createDiagramServiceAPICall,
   createEnvironment as createEnvironmentServiceAPICall,
   deleteEnvironment as deleteEnvironmentServiceAPICall,
   deleteDiagram as deleteDiagramServiceAPICall,
   updateDiagram as updateDiagramServiceAPICall // Añadir updateDiagram
-} from '@/app/services/diagramService';
-import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '@/app/services/companyService'; // Importar servicio de compañía
-import { dashboardService } from '@/app/services/dashboardService'; // Importar servicio de dashboard optimizado
-import { cacheService, CACHE_KEYS } from '@/app/services/cacheService'; // Importar servicio de caché
+} from "../services/diagramService";
+import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from "../services/companyService"; // Importar servicio de compañía
+import { dashboardService } from "../services/dashboardService"; // Importar servicio de dashboard optimizado
+import { cacheService, CACHE_KEYS } from "../services/cacheService"; // Importar servicio de caché
 
 // Tipos para el historial y previsualización
 interface VersionHistoryItem {

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Edge } from 'reactflow';
-import type { CustomEdgeData } from '@/app/config/edgeConfig';
+import type { CustomEdgeData } from "../../../config/edgeConfig";
 import type { ContextMenu, ToolType } from '../types/editorTypes';
 
 // Definición del estado y las acciones del store

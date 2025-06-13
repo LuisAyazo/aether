@@ -1,5 +1,5 @@
 // Servicio para manejar la autenticación de usuarios con Supabase
-import { supabase } from '@/app/lib/supabase';
+import { supabase } from "../lib/supabase";
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
 export interface User {
@@ -13,6 +13,7 @@ export interface User {
   workspace_id?: string;
   company_id?: string;
   onboarding_completed?: boolean;
+  first_company_created?: boolean;
 }
 
 export interface AuthResponse {
@@ -42,7 +43,8 @@ function convertSupabaseUser(supabaseUser: SupabaseUser, profile?: any): User {
     avatar_url: profile?.avatar_url || supabaseUser.user_metadata?.avatar_url,
     workspace_id: profile?.workspace_id,
     company_id: profile?.company_id,
-    onboarding_completed: profile?.onboarding_completed || false
+    onboarding_completed: profile?.onboarding_completed || false,
+    first_company_created: profile?.first_company_created || false
   };
 }
 
@@ -150,12 +152,17 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
     }
 
     // Supabase login
+    console.log('[AUTH SERVICE] Attempting login with email:', email);
+    console.log('[AUTH SERVICE] Email length:', email.length);
+    console.log('[AUTH SERVICE] Email trimmed:', email.trim());
+    
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(), // Ensure no whitespace
       password,
     });
 
     if (error) {
+      console.error('[AUTH SERVICE] Supabase login error:', error);
       throw new Error(error.message);
     }
 
@@ -332,9 +339,14 @@ export async function logoutUser() {
       });
     }
     
-    // Reset company store
-    const { useCompanyStore } = await import('@/app/stores/companyStore');
-    useCompanyStore.getState().reset();
+    // Reset company store (if available)
+    try {
+      const { useCompanyStore } = await import('../stores/companyStore');
+      useCompanyStore.getState().reset();
+    } catch (error) {
+      // Company store not available, skip reset
+      console.warn('Company store not available:', error);
+    }
     
     // Redirect to login
     window.location.href = '/login?session_expired=true';

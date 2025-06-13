@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { gcpEventarcTriggerFields } from './triggerFields';
 import { generateGCPEventarcTriggerTemplates } from './triggerTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig";
 
 const MatchingCriterionSchema = z.object({
   attribute: z.string().min(1),

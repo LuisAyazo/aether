@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Modal, Input, Table, message, Space, Tooltip, Popconfirm, Alert, Spin } from 'antd'; // Typography eliminado
 import { PlusOutlined, EditOutlined, DeleteOutlined, QuestionCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { FolderIcon } from '@heroicons/react/24/outline'; // Importar FolderIcon
-import { EnvironmentDefinition } from '@/app/types/deployments'; 
+import { EnvironmentDefinition } from "../../types/deployments"; 
 import { useRouter } from 'next/navigation'; 
 
 interface EnvironmentsPageProps {

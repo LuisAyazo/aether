@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureSubnetFields } from './subnetFields';
 import { generateAzureSubnetTemplates } from './subnetTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const cidrRegex = /^([0-9]{1,3}\.){3}[0-9]{1,3}(\/([0-9]|[1-2][0-9]|3[0-2]))$/;
 const serviceEndpointListRegex = /^([a-zA-Z0-9\.]+)(,([a-zA-Z0-9\.]+))*$/; // Simplificado

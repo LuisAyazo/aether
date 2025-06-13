@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FieldConfig, ResourceValues, CodeTemplate } from '@/app/types/resourceConfig'; // Usar alias
+import { FieldConfig, ResourceValues, CodeTemplate } from "../../../../types/resourceConfig"; // Usar alias
 import { appEngineAppFields } from './appFields';
 import { generateGCPAppEngineAppTemplates } from './appTemplates';
 

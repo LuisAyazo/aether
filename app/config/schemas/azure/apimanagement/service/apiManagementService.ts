@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureApiManagementServiceFields } from './apiManagementServiceFields';
 import { generateAzureApiManagementServiceTemplates } from './apiManagementServiceTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureApiManagementServiceSchema = z.object({
   name: z.string().min(1, "El nombre del servicio es obligatorio.").regex(/^[a-zA-Z][a-zA-Z0-9-]{0,49}$/, "Nombre inválido para API Management Service."),

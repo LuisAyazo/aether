@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FieldConfig, ResourceValues, CodeTemplate } from '@/app/types/resourceConfig';
+import { FieldConfig, ResourceValues, CodeTemplate } from "../../../../types/resourceConfig";
 import { awsElasticBeanstalkEnvironmentFields } from './environmentFields';
 import { generateAWSElasticBeanstalkEnvironmentTemplates } from './environmentTemplates';
 

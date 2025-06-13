@@ -1,4 +1,4 @@
-import { getAuthToken, logoutUser } from './authService';
+import { getAuthTokenAsync, logoutUser } from './authService';
 import { cacheService, CACHE_KEYS, CACHE_TTL } from './cacheService';
 import { singletonRequests } from '../utils/singletonRequests';
 
@@ -14,8 +14,8 @@ export interface DashboardData {
 }
 
 class DashboardService {
-  private getHeaders(): HeadersInit {
-    const token = getAuthToken();
+  private async getHeaders(): Promise<HeadersInit> {
+    const token = await getAuthTokenAsync();
     return {
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : '',
@@ -24,7 +24,7 @@ class DashboardService {
 
   async getInitialDashboardData(forceRefresh: boolean = false): Promise<DashboardData> {
     // Create a unique cache key per user
-    const token = getAuthToken();
+    const token = await getAuthTokenAsync();
     if (!token) {
       console.error('[DashboardService] No authentication token available');
       throw new Error('No authentication token available');
@@ -56,7 +56,7 @@ class DashboardService {
         console.log('🚀 Loading dashboard data with single RPC call...');
         const startTime = performance.now();
         
-        const headers = this.getHeaders();
+        const headers = await this.getHeaders();
         console.log('[DashboardService] Request headers:', headers);
         
         const response = await fetch(`${API_BASE_URL}/api/v1/dashboard/initial-load`, {
@@ -108,7 +108,7 @@ class DashboardService {
       const response = await fetch(
         `${API_BASE_URL}/api/v1/dashboard/workspace/${workspaceId}/data?environment_id=${environmentId}`, 
         {
-          headers: this.getHeaders(),
+          headers: await this.getHeaders(),
         }
       );
 

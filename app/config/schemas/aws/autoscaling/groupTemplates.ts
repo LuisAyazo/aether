@@ -1,5 +1,5 @@
 import { AWSAutoScalingGroupConfig } from './group'; // Asumiremos que este tipo se definirá en group.ts
-import { CodeTemplate } from '@/app/types/resourceConfig';
+import { CodeTemplate } from "../../../../types/resourceConfig";
 
 // Helper function to parse tags from string "K1=V1,propagate_at_launch=true;K2=V2,propagate_at_launch=false"
 interface ParsedTag {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureCosmosDbAccountFields } from './cosmosDbAccountFields';
 import { generateAzureCosmosDbAccountTemplates } from './cosmosDbAccountTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const ConsistencyPolicySchema = z.object({
   consistency_level: z.enum(['BoundedStaleness', 'ConsistentPrefix', 'Eventual', 'Session', 'Strong']),

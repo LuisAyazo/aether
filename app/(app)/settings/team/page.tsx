@@ -2,16 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/app/components/ui/card'
-import { Button } from '@/app/components/ui/button'
-import { Input } from '@/app/components/ui/input'
-import { Label } from '@/app/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/app/components/ui/select'
-import { useNavigationStore } from '@/app/hooks/useNavigationStore'
-import { companyService, type CompanyMember } from '@/app/services/companyService'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card'
+import { Button } from '../../../components/ui/button'
+import { Input } from '../../../components/ui/input'
+import { Label } from '../../../components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select'
+import { useNavigationStore } from '../../../hooks/useNavigationStore'
+import { companyService, type CompanyMember } from '../../../services/companyService'
 import { toast } from 'sonner'
-import { Badge } from '@/app/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/app/components/ui/avatar'
+import { Badge } from '../../../components/ui/badge'
+import { Avatar, AvatarFallback } from '../../../components/ui/avatar'
 import { UserPlus, Settings, Users, Mail, Shield, Trash2, Crown, Zap, UserCheck, Lock, ArrowRight, Check } from 'lucide-react'
 import {
   AlertDialog,
@@ -22,7 +22,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/app/components/ui/alert-dialog'
+} from '../../../components/ui/alert-dialog'
 
 export default function TeamSettingsPage() {
   console.log('[TeamSettingsPage] Component mounted');

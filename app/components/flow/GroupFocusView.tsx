@@ -22,7 +22,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import nodeTypesFromFile from '../nodes/NodeTypes'; 
-import { LogicalEdgeType, EdgeTypeConfig } from '@/app/config/edgeConfig'; 
+import { LogicalEdgeType, EdgeTypeConfig } from '../../config/edgeConfig';
 import { ResourceItem, ResourceCategory } from './types/editorTypes'; 
 import { 
   SquaresPlusIcon, 

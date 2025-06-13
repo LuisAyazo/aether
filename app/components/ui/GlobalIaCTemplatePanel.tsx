@@ -5,7 +5,7 @@ import React from 'react';
 const { useState, useEffect } = React; // Acceder a useState y useEffect desde el objeto React
 import { createPortal } from 'react-dom';
 import IaCTemplatePanel from './IaCTemplatePanel';
-import { ResourceType } from '@/app/types/resourceConfig';
+import { ResourceType } from "../../types/resourceConfig";
 
 interface ResourceData {
   label: string;

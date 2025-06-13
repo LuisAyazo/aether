@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureStorageShareFields } from './storageShareFields';
 import { generateAzureStorageShareTemplates } from './storageShareTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureStorageShareSchema = z.object({
   name: z.string().min(3).max(63).regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Nombre inválido para File Share."),

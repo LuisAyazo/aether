@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureEventHubNamespaceFields } from './eventHubNamespaceFields';
 import { generateAzureEventHubNamespaceTemplates } from './eventHubNamespaceTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 export const AzureEventHubNamespaceSchema = z.object({
   name: z.string().min(6, "El nombre debe tener entre 6 y 50 caracteres.").max(50).regex(/^[a-zA-Z0-9-]+$/, "Nombre inválido."),

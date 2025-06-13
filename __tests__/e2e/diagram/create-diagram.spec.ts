@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsUser, createTestCompany, cleanupTestData } from '../helpers/test-utils';
+import { loginAsUser, createTestCompany, cleanupTestData } from '@/__tests__/e2e/helpers/test-utils';
 
 test.describe('Diagram Creation Flow', () => {
   let companyId: string;

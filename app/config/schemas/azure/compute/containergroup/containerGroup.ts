@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { azureContainerGroupFields } from './containerGroupFields';
 import { generateAzureContainerGroupTemplates } from './containerGroupTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../../types/resourceConfig";
 
 const ContainerSchema = z.object({
   name: z.string().min(1),

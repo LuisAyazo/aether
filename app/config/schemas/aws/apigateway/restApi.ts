@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { awsApiGatewayRestApiFields } from './restApiFields';
 import { generateAWSApiGatewayRestApiTemplates } from './restApiTemplates';
-import { ResourceSchema, ResourceTemplate, CodeTemplate } from '@/app/types/resourceConfig';
+import { ResourceSchema, ResourceTemplate, CodeTemplate } from "../../../../types/resourceConfig";
 // Asumimos que formatInputs no es crucial por ahora o se manejará de otra forma.
-// import { formatInputs } from '@/app/lib/utils'; 
+// import { formatInputs } from "../../../../lib/utils"; 
 
 // Define el esquema Zod para la configuración de una API Gateway REST API
 export const AWSApiGatewayRestApiSchema = z.object({
