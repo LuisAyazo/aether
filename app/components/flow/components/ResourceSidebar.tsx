@@ -34,24 +34,25 @@ export function ResourceSidebar({ resourceCategories, onDragStartSidebar }: Reso
     .filter(category => category.items.length > 0);
 
   return (
-    <Panel 
-      position="top-right" 
+    <Panel
+      position="top-right"
+      className="resource-sidebar-panel"
       style={{
-        width:'360px', 
-        background:'rgba(255,255,255,0.9)', 
-        padding:'0', 
-        borderRadius:'12px 0 0 12px', 
+        width:'360px',
+        background:'rgba(255,255,255,0.9)',
+        padding:'0',
+        borderRadius:'12px 0 0 12px',
         height:'calc(100vh - 7.5rem)', // Ajustar según la altura del header de la app principal
-        overflow:'hidden', 
-        boxShadow:'0 4px 20px rgba(0,0,0,0.15)', 
-        display:'flex', 
+        overflow:'hidden',
+        boxShadow:'0 4px 20px rgba(0,0,0,0.15)',
+        display:'flex',
         flexDirection:'column',
         position:'fixed', // Asegurar que sea fixed para que no afecte el layout del canvas
         top:'calc(3.5rem + 20px)', // Asumiendo que el header principal es 3.5rem y hay un padding de 20px
         right:'0px',
         zIndex:999, // Un z-index menor que el menú contextual o modales si es necesario
         transform:'none',
-        transition:'transform 0.3s ease-out, opacity 0.3s ease-out, width 0.3s ease-out',
+        transition:'transform 0.3s ease-out, opacity 0.3s ease-out, width 0.3s ease-out, right 0.3s ease-out',
         backdropFilter:'blur(10px)'
       }}
     >
@@ -100,7 +101,7 @@ export function ResourceSidebar({ resourceCategories, onDragStartSidebar }: Reso
                     onMouseOut={e=>{e.currentTarget.style.backgroundColor='transparent'}}
                   >
                     <div style={{minWidth:'24px',display:'flex',alignItems:'center',justifyContent:'center',marginRight:'8px'}}>
-                      {item.icon ? React.cloneElement(item.icon,{className:'w-5 h-5 text-gray-500'}) : <ServerIcon className="w-5 h-5 text-gray-400"/>}
+                      {item.icon && React.isValidElement(item.icon) ? React.cloneElement(item.icon,{className:'w-5 h-5 text-gray-500'}) : <ServerIcon className="w-5 h-5 text-gray-400"/>}
                     </div>
                     <div style={{flex:1}}>
                       <span style={{fontWeight:'500'}}>{item.name}</span>

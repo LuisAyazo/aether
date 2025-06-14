@@ -47,7 +47,6 @@ export default function Navigation() {
   const [formCreateEnv] = Form.useForm(); 
   const [formCreateDiag] = Form.useForm(); 
 
-  const [generatedCodeModalVisible, setGeneratedCodeModalVisible] = useState(false);
 
 const user = useNavigationStore(state => state.user);
 const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
@@ -89,6 +88,9 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
   // Handler para actualizar path de diagrama (D&D)
   const handleUpdateDiagramPath = useNavigationStore(state => state.handleUpdateDiagramPath);
 
+  const generatedCodeModalVisible = useNavigationStore(state => state.generatedCodeModalVisible);
+  const setGeneratedCodeModalVisible = useNavigationStore(state => state.setGeneratedCodeModalVisible);
+  const generateCodeAndShowModal = useNavigationStore(state => state.generateCodeAndShowModal);
   const historyModalVisible = useNavigationStore(state => state.historyModalVisible);
   const setHistoryModalVisible = useNavigationStore(state => state.setHistoryModalVisible);
   const versionHistory = useNavigationStore(state => state.versionHistory);
@@ -279,7 +281,7 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
                     <Tooltip title="Ver Código Generado para el Diagrama Completo">
                       <Button
                         icon={<CodeOutlined />}
-                        onClick={() => setGeneratedCodeModalVisible(true)}
+                        onClick={generateCodeAndShowModal}
                         type="primary"
                         className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md hover:shadow-lg transition-all"
                       >

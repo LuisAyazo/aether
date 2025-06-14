@@ -124,41 +124,184 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
 }) => {
   const params = useParams();
   const router = useRouter();
-  const companyId = params.companyId as string;
   
   // Obtener datos del store
   const user = useNavigationStore(state => state.user);
   const userCompanies = useNavigationStore(state => state.userCompanies);
   const activeCompany = useNavigationStore(state => state.activeCompany);
   const setActiveCompanyAndLoadData = useNavigationStore(state => state.setActiveCompanyAndLoadData);
+  
+  // Usar el companyId del activeCompany en lugar de params
+  const companyId = activeCompany?._id || activeCompany?.id || '';
+  
+  // Debug para ver qué está pasando con el companyId
+  console.log('🔍 DEBUG CompanySidebar - activeCompany:', activeCompany);
+  console.log('🔍 DEBUG CompanySidebar - companyId:', companyId);
 
   const [internalIsCollapsed, setInternalIsCollapsed] = useState(propIsCollapsed);
   const [companySelectorOpen, setCompanySelectorOpen] = useState(false);
+  const [wasCollapsedBeforeLivePreview, setWasCollapsedBeforeLivePreview] = useState<boolean | null>(null);
 
+  // Debug inicial
+  console.log('🚀 DEBUG CompanySidebar - Montando componente:', {
+    companyId,
+    propIsCollapsed,
+    companyName,
+    isPersonalSpace
+  });
+
+  // Cargar el estado inicial desde localStorage
   useEffect(() => {
-    if (typeof window !== 'undefined' && companyId) { 
-      const savedState = localStorage.getItem(`companySidebarCollapsed_${companyId}`);
-      if (savedState !== null) {
-        try {
-          setInternalIsCollapsed(JSON.parse(savedState));
-        } catch (e) {
-          console.error("Error parsing companySidebarCollapsed from localStorage", e);
+    if (typeof window !== 'undefined' && companyId) {
+      console.log('🔍 DEBUG CompanySidebar - Cargando estado inicial:', {
+        companyId,
+        allLocalStorageKeys: Object.keys(localStorage).filter(k => k.includes('companySidebar'))
+      });
+      
+      // Primero verificar si está colapsado por Live Preview
+      const wasCollapsedByLivePreview = localStorage.getItem(`companySidebarCollapsedByLivePreview_${companyId}`);
+      
+      console.log('🔍 DEBUG CompanySidebar - Estado Live Preview:', {
+        key: `companySidebarCollapsedByLivePreview_${companyId}`,
+        value: wasCollapsedByLivePreview
+      });
+      
+      if (wasCollapsedByLivePreview === 'true') {
+        // Si fue colapsado por Live Preview, mantenerlo colapsado
+        console.log('✅ DEBUG CompanySidebar - Manteniendo colapsado por Live Preview');
+        setInternalIsCollapsed(true);
+      } else {
+        // Si no, cargar el estado normal guardado
+        const savedState = localStorage.getItem(`companySidebarCollapsed_${companyId}`);
+        console.log('🔍 DEBUG CompanySidebar - Estado normal guardado:', {
+          key: `companySidebarCollapsed_${companyId}`,
+          value: savedState,
+          parsedValue: savedState ? JSON.parse(savedState) : null
+        });
+        
+        if (savedState !== null) {
+          try {
+            const collapsed = JSON.parse(savedState);
+            setInternalIsCollapsed(collapsed);
+            console.log('✅ DEBUG CompanySidebar - Estado cargado:', collapsed);
+          } catch (e) {
+            console.error("❌ Error parsing companySidebarCollapsed from localStorage", e);
+          }
         }
       }
     }
-  }, [companyId]); 
+  }, [companyId]);
 
+  // Escuchar cambios en el estado del Live Preview
+  useEffect(() => {
+    const handleLivePreviewChange = (event: CustomEvent) => {
+      const { isActive } = event.detail;
+      
+      if (isActive) {
+        // Guardar el estado actual antes de colapsar
+        setWasCollapsedBeforeLivePreview(internalIsCollapsed);
+        // Colapsar el sidebar cuando se activa Live Preview
+        setInternalIsCollapsed(true);
+        // Guardar en localStorage que está colapsado por Live Preview
+        if (typeof window !== 'undefined' && companyId) {
+          localStorage.setItem(`companySidebarCollapsedByLivePreview_${companyId}`, 'true');
+        }
+      } else {
+        // Cuando se desactiva Live Preview
+        if (typeof window !== 'undefined' && companyId) {
+          const wasCollapsedByLivePreview = localStorage.getItem(`companySidebarCollapsedByLivePreview_${companyId}`);
+          
+          if (wasCollapsedByLivePreview === 'true') {
+            // Remover la marca de Live Preview
+            localStorage.removeItem(`companySidebarCollapsedByLivePreview_${companyId}`);
+            
+            // Restaurar el estado anterior si no fue modificado manualmente
+            if (wasCollapsedBeforeLivePreview !== null) {
+              setInternalIsCollapsed(wasCollapsedBeforeLivePreview);
+              // Guardar el estado restaurado
+              localStorage.setItem(`companySidebarCollapsed_${companyId}`, JSON.stringify(wasCollapsedBeforeLivePreview));
+            }
+          }
+        }
+        setWasCollapsedBeforeLivePreview(null);
+      }
+    };
+
+    window.addEventListener('livePreviewStateChanged', handleLivePreviewChange as EventListener);
+    
+    // Verificar el estado inicial del Live Preview
+    if (typeof window !== 'undefined' && companyId) {
+      const isLivePreviewActive = document.body.hasAttribute('data-live-preview-active');
+      const wasCollapsedByLivePreview = localStorage.getItem(`companySidebarCollapsedByLivePreview_${companyId}`);
+      
+      if (isLivePreviewActive && wasCollapsedByLivePreview === 'true') {
+        setInternalIsCollapsed(true);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('livePreviewStateChanged', handleLivePreviewChange as EventListener);
+    };
+  }, [companyId, internalIsCollapsed, wasCollapsedBeforeLivePreview]);
+
+  // Guardar el estado en localStorage cuando cambia (pero solo si no es por Live Preview)
   useEffect(() => {
     if (typeof window !== 'undefined' && companyId) {
-      localStorage.setItem(`companySidebarCollapsed_${companyId}`, JSON.stringify(internalIsCollapsed));
+      // Solo guardar si no está siendo controlado por Live Preview
+      const wasCollapsedByLivePreview = localStorage.getItem(`companySidebarCollapsedByLivePreview_${companyId}`);
+      
+      console.log('🔍 DEBUG CompanySidebar - Guardando estado:', {
+        companyId,
+        internalIsCollapsed,
+        wasCollapsedByLivePreview,
+        willSave: wasCollapsedByLivePreview !== 'true'
+      });
+      
+      if (wasCollapsedByLivePreview !== 'true') {
+        const key = `companySidebarCollapsed_${companyId}`;
+        localStorage.setItem(key, JSON.stringify(internalIsCollapsed));
+        console.log('✅ DEBUG CompanySidebar - Estado guardado en localStorage:', {
+          key,
+          value: internalIsCollapsed
+        });
+      } else {
+        console.log('⚠️ DEBUG CompanySidebar - No se guarda porque está controlado por Live Preview');
+      }
     }
   }, [internalIsCollapsed, companyId]);
 
   const handleToggleCollapse = () => {
     const newState = !internalIsCollapsed;
-    setInternalIsCollapsed(newState); 
+    console.log('🔍 DEBUG CompanySidebar - Toggle clicked:', {
+      currentState: internalIsCollapsed,
+      newState,
+      companyId
+    });
+    
+    setInternalIsCollapsed(newState);
+    
+    if (typeof window !== 'undefined' && companyId) {
+      const isLivePreviewActive = document.body.hasAttribute('data-live-preview-active');
+      
+      if (isLivePreviewActive) {
+        // Si el usuario colapsa/expande manualmente durante Live Preview,
+        // actualizar el estado que se restaurará
+        setWasCollapsedBeforeLivePreview(newState);
+        // Remover la marca de que fue colapsado por Live Preview ya que el usuario tomó control manual
+        localStorage.removeItem(`companySidebarCollapsedByLivePreview_${companyId}`);
+      }
+      
+      // Siempre guardar el estado actual cuando el usuario hace click manual
+      const key = `companySidebarCollapsed_${companyId}`;
+      localStorage.setItem(key, JSON.stringify(newState));
+      console.log('✅ DEBUG CompanySidebar - Estado guardado manualmente:', {
+        key,
+        value: newState
+      });
+    }
+    
     if (onToggleCollapse) {
-      onToggleCollapse(); 
+      onToggleCollapse();
     }
   };
 

@@ -83,6 +83,7 @@ export default function DashboardPage() {
   const dataLoading = useNavigationStore(state => state.dataLoading);
   const dataError = useNavigationStore(state => state.dataError);
   const authInitialized = useNavigationStore(state => state.authInitialized);
+  const updateCurrentDiagramInMemory = useNavigationStore(state => state.updateCurrentDiagramInMemory);
   
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -90,7 +91,7 @@ export default function DashboardPage() {
   const fetchCurrentWorkspaceEnvironments = useNavigationStore(state => state.fetchCurrentWorkspaceEnvironments);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const convertToReactFlowNodes = (customNodes: CustomNode[]): any[] => { 
+  const convertToReactFlowNodes = (customNodes: CustomNode[]): any[] => {
     console.log('🔍 [LOAD DEBUG] Converting nodes from backend:', customNodes.map(n => ({
       id: n.id,
       type: n.type,
@@ -607,11 +608,14 @@ export default function DashboardPage() {
 
         <div className="flex bg-slate-50 dark:bg-slate-900" style={{ height: 'calc(100vh - 5rem)' }}>
           {activeCompany && (
-            <CompanySidebar 
-              companyName={companyDisplayName} activeSection={activeSectionInSidebar} 
-              onSectionChange={handleInternalSectionChange} 
-              isCollapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} 
-              sections={sidebarSections} isPersonalSpace={isPersonalSpace || false}
+            <CompanySidebar
+              companyName={companyDisplayName}
+              activeSection={activeSectionInSidebar}
+              onSectionChange={handleInternalSectionChange}
+              isCollapsed={sidebarCollapsed}
+              onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+              sections={sidebarSections}
+              isPersonalSpace={isPersonalSpace || false}
             />
           )}
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -651,6 +655,7 @@ export default function DashboardPage() {
                         initialEdges={initialEdgesForFlow} 
                         initialViewport={currentDiagram.viewport}
                         onSave={handleSaveDiagramLocal}
+                        onUpdateInMemory={updateCurrentDiagramInMemory}
                         nodeTypes={nodeTypesImport}
                         resourceCategories={memoizedResourceCategories}
                         initialExpandedGroupId={initialExpandedGroup}

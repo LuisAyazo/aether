@@ -1,14 +1,15 @@
 import { create } from 'zustand';
-import { message, Modal } from 'antd'; // Modal importado
-// import type { Viewport } from 'reactflow'; // Ya no se usa directamente debido al workaround con 'any'
+import { message, Modal } from 'antd';
 import type { User } from "../services/authService";
 import type { Company } from "../services/companyService";
 import {
   Environment,
   Diagram,
-  Node as DiagramNode, // Renombrar para claridad si es necesario, o usar el tipo específico de nodo del servicio
+  Node as DiagramNode,
+  Edge as DiagramEdge,
 } from "../services/diagramService";
 import { Workspace } from '../services/workspaceService';
+import { getResourceConfig, SupportedProvider } from '../config/schemas';
 import {
   getCurrentUser,
   logoutUser,
@@ -21,13 +22,16 @@ import {
   createEnvironment as createEnvironmentServiceAPICall,
   deleteEnvironment as deleteEnvironmentServiceAPICall,
   deleteDiagram as deleteDiagramServiceAPICall,
-  updateDiagram as updateDiagramServiceAPICall // Añadir updateDiagram
+  updateDiagram as updateDiagramServiceAPICall
 } from "../services/diagramService";
-import { PERSONAL_SPACE_COMPANY_NAME_PREFIX } from "../services/companyService"; // Importar servicio de compañía
-import { dashboardService } from "../services/dashboardService"; // Importar servicio de dashboard optimizado
-import { cacheService, CACHE_KEYS } from "../services/cacheService"; // Importar servicio de caché
+import { PERSONAL_SPACE_COMPANY_NAME_PREFIX } from "../services/companyService";
+import { dashboardService } from "../services/dashboardService";
+import { cacheService, CACHE_KEYS } from "../services/cacheService";
 
-// Tipos para el historial y previsualización
+// Tipos de ReactFlow
+type FlowEdge = any;
+type FlowViewport = { x: number; y: number; zoom: number };
+
 interface VersionHistoryItem {
   id: string;
   timestamp: string;
@@ -51,7 +55,6 @@ interface PreviewData {
 }
 
 export interface NavigationStoreState {
-  // Estados para modales de acciones del header
   historyModalVisible: boolean;
   versionHistory: VersionHistoryItem[];
   rollbackModalVisible: boolean;
@@ -64,24 +67,29 @@ export interface NavigationStoreState {
   selectedTargetEnvironment?: string;
   destroyModalVisible: boolean;
   destroyConfirmationText: string;
-  
-  // Estados globales
+  isGeneratingCode: boolean;
+  generatedCode: Record<string, string>;
+  generatedCodeModalVisible: boolean;
+  // Nuevos estados para live preview
+  isLivePreviewEnabled: boolean;
+  isCodeGenerating: boolean;
+  lastCodeGenerationTimestamp: number;
+  codeGenerationDebounceTimer: NodeJS.Timeout | null;
+  flowChangeListeners: (() => void)[];
   user: User | null;
-  userCompanies: Company[]; 
+  userCompanies: Company[];
   activeCompany: Company | null;
   isPersonalSpace: boolean;
-  workspaces: Workspace[]; // Agregar workspaces
-  activeWorkspace: Workspace | null; // Workspace activo
+  workspaces: Workspace[];
+  activeWorkspace: Workspace | null;
   environments: Environment[];
-  diagrams: Diagram[]; 
+  diagrams: Diagram[];
   selectedEnvironment: string | null;
   selectedDiagram: string | null;
-  currentDiagram: Diagram | null; 
+  currentDiagram: Diagram | null;
   dataLoading: boolean;
   dataError: string | null;
   authInitialized: boolean;
-
-  // Estados para modales de creación
   newEnvironmentModalVisible: boolean;
   newEnvironmentName: string;
   newEnvironmentDescription: string;
@@ -90,8 +98,6 @@ export interface NavigationStoreState {
   newDiagramName: string;
   newDiagramDescription: string;
   newDiagramPath: string;
-  
-  // Acciones para modales del header
   setHistoryModalVisible: (visible: boolean) => void;
   setVersionHistory: (history: VersionHistoryItem[]) => void;
   handleHistory: () => Promise<void>;
@@ -115,33 +121,33 @@ export interface NavigationStoreState {
   setDestroyConfirmationText: (text: string) => void;
   handleDestroy: () => void;
   handleDestroyConfirm: () => Promise<void>;
-
-  // Acciones globales
+  generateCodeAndShowModal: () => Promise<void>;
+  setGeneratedCodeModalVisible: (visible: boolean) => void;
+  // Nuevas acciones para live preview
+  setLivePreviewEnabled: (enabled: boolean) => void;
+  regenerateCodeDebounced: () => void;
+  subscribeToFlowChanges: () => void;
+  unsubscribeFromFlowChanges: () => void;
   fetchInitialUser: () => Promise<void>;
   initializeAppLogic: () => Promise<void>;
   setActiveCompanyAndLoadData: (company: Company, isPersonal: boolean) => Promise<void>;
   fetchCurrentWorkspaceEnvironments: () => Promise<void>;
   handleEnvironmentChange: (environmentId: string) => Promise<void>;
   handleDiagramChange: (diagramId: string) => Promise<void>;
-
-  // Acciones para modales de creación
   setNewEnvironmentModalVisible: (visible: boolean) => void;
   setNewEnvironmentName: (name: string) => void;
   setNewEnvironmentDescription: (description: string) => void;
   setNewEnvironmentPath: (path: string) => void;
-  handleCreateNewEnvironment: () => Promise<void>; 
+  handleCreateNewEnvironment: () => Promise<void>;
   setNewDiagramModalVisible: (visible: boolean) => void;
   setNewDiagramName: (name: string) => void;
   setNewDiagramDescription: (description: string) => void;
   setNewDiagramPath: (path: string) => void;
   handleCreateNewDiagram: () => Promise<void>;
-
-  // Acciones para eliminar
   handleDeleteEnvironment: (environmentId: string) => Promise<void>;
   handleDeleteDiagram: (diagramId: string) => Promise<void>;
-
-  // Acción para actualizar path de diagrama (Drag and Drop)
   handleUpdateDiagramPath: (diagramId: string, newPath: string | null) => Promise<void>;
+  updateCurrentDiagramInMemory: (data: { nodes: DiagramNode[]; edges: FlowEdge[]; viewport?: FlowViewport }) => void;
 }
 
 export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
@@ -157,22 +163,29 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
   selectedTargetEnvironment: undefined,
   destroyModalVisible: false,
   destroyConfirmationText: '',
-
+  isGeneratingCode: false,
+  generatedCode: {},
+  generatedCodeModalVisible: false,
+  // Nuevos estados para live preview
+  isLivePreviewEnabled: false,
+  isCodeGenerating: false,
+  lastCodeGenerationTimestamp: 0,
+  codeGenerationDebounceTimer: null,
+  flowChangeListeners: [],
   user: null,
-  userCompanies: [], 
+  userCompanies: [],
   activeCompany: null,
   isPersonalSpace: false,
-  workspaces: [], // Inicializar workspaces
-  activeWorkspace: null, // Inicializar workspace activo
+  workspaces: [],
+  activeWorkspace: null,
   environments: [],
   diagrams: [],
   selectedEnvironment: null,
   selectedDiagram: null,
   currentDiagram: null,
-  dataLoading: false, // Iniciar en false para permitir la primera carga
+  dataLoading: false,
   dataError: null,
   authInitialized: false,
-
   newEnvironmentModalVisible: false,
   newEnvironmentName: '',
   newEnvironmentDescription: '',
@@ -181,7 +194,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
   newDiagramName: '',
   newDiagramDescription: '',
   newDiagramPath: '',
-
   setHistoryModalVisible: (visible) => set({ historyModalVisible: visible }),
   setVersionHistory: (history) => set({ versionHistory: history }),
   handleHistory: async () => {
@@ -197,7 +209,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     ];
     set({ versionHistory: mockHistory, historyModalVisible: true, dataLoading: false });
   },
-
   setRollbackModalVisible: (visible) => set({ rollbackModalVisible: visible }),
   setSelectedVersion: (versionId) => set({ selectedVersion: versionId }),
   handleRollback: async () => {
@@ -216,13 +227,11 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     }
     set({ dataLoading: false });
   },
-
   setVersionsModalVisible: (visible) => set({ versionsModalVisible: visible }),
   handleVersions: async () => {
     if (get().versionHistory.length === 0) await get().handleHistory();
     set({ versionsModalVisible: true });
   },
-
   setPreviewModalVisible: (visible) => set({ previewModalVisible: visible }),
   setPreviewData: (data) => set({ previewData: data }),
   handlePreview: async () => {
@@ -243,7 +252,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     };
     set({ previewData: mockPreview, previewModalVisible: true, dataLoading: false });
   },
-
   setRunModalVisible: (visible) => set({ runModalVisible: visible }),
   handleRun: () => {
     if (!get().currentDiagram) { message.info("No hay diagrama seleccionado para ejecutar."); return; }
@@ -255,7 +263,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     message.success('Diagrama desplegado (simulado).');
     set({ runModalVisible: false, previewData: { resourcesToCreate: [], resourcesToUpdate: [], resourcesToDelete: [] }, dataLoading: false });
   },
-  
   setPromoteModalVisible: (visible) => set({ promoteModalVisible: visible }),
   setSelectedTargetEnvironment: (envId) => set({ selectedTargetEnvironment: envId }),
   handlePromote: () => {
@@ -284,7 +291,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       set({ dataLoading: false }); 
     }
   },
-
   setDestroyModalVisible: (visible) => set({ destroyModalVisible: visible }),
   setDestroyConfirmationText: (text) => set({ destroyConfirmationText: text }),
   handleDestroy: () => {
@@ -312,70 +318,580 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       set({ dataLoading: false });
     }
   },
+  generateCodeAndShowModal: async () => {
+    set({ isGeneratingCode: true, isCodeGenerating: true, generatedCode: {}, generatedCodeModalVisible: true });
 
+    try {
+      // Intentar obtener datos frescos con reintentos
+      let freshDiagramData;
+      let retries = 3;
+      let lastError;
+
+      while (retries > 0) {
+        try {
+          freshDiagramData = await new Promise<{ nodes: DiagramNode[]; edges: FlowEdge[]; viewport?: FlowViewport }>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error("Timeout: No se recibió la actualización del diagrama."));
+            }, 1000); // Aumentar timeout a 1 segundo
+
+            const event = new CustomEvent('forceRequestDiagramData', {
+              detail: {
+                resolve: (data: { nodes: DiagramNode[]; edges: FlowEdge[]; viewport?: FlowViewport }) => {
+                  clearTimeout(timeout);
+                  resolve(data);
+                },
+                reject: (error: Error) => {
+                  clearTimeout(timeout);
+                  reject(error);
+                }
+              }
+            });
+            window.dispatchEvent(event);
+          });
+          
+          // Si obtenemos datos, salir del loop
+          if (freshDiagramData && (freshDiagramData.nodes.length > 0 || retries === 1)) {
+            break;
+          }
+        } catch (error) {
+          lastError = error;
+          retries--;
+          if (retries > 0) {
+            // Esperar un poco antes de reintentar
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+        }
+      }
+
+      // Usar los datos obtenidos o fallback al estado actual
+      let diagramData = freshDiagramData;
+      
+      if (!diagramData) {
+        // Fallback: usar datos del estado actual si están disponibles
+        const currentDiagram = get().currentDiagram;
+        if (currentDiagram && currentDiagram.nodes) {
+          console.warn("Usando datos del diagrama desde el estado (fallback)");
+          diagramData = {
+            nodes: currentDiagram.nodes,
+            edges: currentDiagram.edges || [],
+            viewport: currentDiagram.viewport
+          };
+        } else {
+          throw lastError || new Error("No se pudieron obtener los datos del diagrama y no hay datos en el estado");
+        }
+      }
+
+      get().updateCurrentDiagramInMemory(diagramData);
+      
+      // Actualizar timestamp de última generación
+      set({ lastCodeGenerationTimestamp: Date.now() });
+      
+      const nodes = diagramData.nodes || [];
+
+      // Detección simple de nodos de recursos
+      const utilityTypes = ['areaNode', 'noteNode', 'textNode', 'group'];
+      const resourceNodes = nodes.filter((node: any) => {
+        const nodeType = node.type || '';
+        const isUtility = utilityTypes.includes(nodeType);
+        
+        if (isUtility || !node.data) return false;
+        
+        // Un nodo es un recurso si tiene provider válido
+        const hasValidProvider = node.data.provider && node.data.provider !== 'generic';
+        
+        return hasValidProvider;
+      });
+
+      if (resourceNodes.length === 0) {
+        set({
+          isGeneratingCode: false,
+          isCodeGenerating: false,
+          generatedCode: {
+            'terraform-main': '// No hay nodos de recursos para generar código.',
+            'pulumi-main': '// No hay nodos de recursos para generar código.',
+            'ansible-main': '# No hay nodos de recursos para generar código.',
+            'cloudformation-main': '{}',
+          },
+        });
+        return;
+      }
+
+      const generateTerraformMain = async () => {
+        const providers = [...new Set(resourceNodes.map((n: any) => n.data?.provider))].filter(Boolean);
+        let content = `terraform {\n  required_providers {\n${providers.map(p => `    ${p} = {\n      source = "hashicorp/${p}"\n      version = "~> 5.0"\n    }`).join('\n')}\n  }\n}\n\n`;
+        content += providers.map(p => `provider "${p}" {\n  # Configuración para ${p}\n  region = "us-east-1" # Cambiar según tu región\n}`).join('\n\n') + '\n\n';
+
+        // Generar recursos con la configuración real
+        for (const node of resourceNodes) {
+          const resourceName = String(node.data?.label || node.id || 'resource').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const properties = node.data?.dynamicProperties || node.data?.properties || {};
+          const hasProperties = Object.keys(properties).length > 0;
+          
+          content += `# ${node.data?.label || node.id}\n`;
+          content += `# Descripción: ${node.data?.description || 'Sin descripción'}\n`;
+          content += `resource "${node.type}" "${resourceName}" {\n`;
+          
+          if (hasProperties) {
+            for (const [key, value] of Object.entries(properties)) {
+              content += `  ${key} = ${JSON.stringify(value)}\n`;
+            }
+          } else {
+            content += `  # No hay propiedades configuradas\n`;
+            content += `  # Haz doble click en el nodo para configurarlo\n`;
+            
+            // Agregar propiedades mínimas según el tipo de recurso
+            if (node.type === 'aws_s3_bucket') {
+              content += `  bucket = "${resourceName}-bucket"\n`;
+            } else if (node.type === 'aws_redshift_cluster') {
+              content += `  cluster_identifier = "${resourceName}"\n`;
+              content += `  node_type         = "dc2.large"\n`;
+              content += `  master_username   = "admin"\n`;
+              content += `  master_password   = "CHANGE_ME" # Cambiar por una contraseña segura\n`;
+            } else if (node.type === 'aws_elasticache_cluster') {
+              content += `  cluster_id           = "${resourceName}"\n`;
+              content += `  engine               = "redis"\n`;
+              content += `  node_type            = "cache.t3.micro"\n`;
+              content += `  num_cache_nodes      = 1\n`;
+            } else if (node.type === 'aws_rds_instance') {
+              content += `  identifier     = "${resourceName}"\n`;
+              content += `  engine         = "postgres"\n`;
+              content += `  engine_version = "15.4"\n`;
+              content += `  instance_class = "db.t3.micro"\n`;
+              content += `  username       = "admin"\n`;
+              content += `  password       = "CHANGE_ME" # Cambiar por una contraseña segura\n`;
+            }
+          }
+          
+          content += `}\n\n`;
+        }
+        
+        return content;
+      };
+
+      const generatePulumiMain = async () => {
+        const providers = [...new Set(resourceNodes.map((n: any) => n.data?.provider))].filter(Boolean);
+        let content = `import * as pulumi from "@pulumi/pulumi";\n${providers.map(p => `import * as ${p} from "@pulumi/${p}";`).join('\n')}\n\n`;
+        content += `// Configuración del proyecto\n`;
+        content += `const config = new pulumi.Config();\n`;
+        content += `const environment = config.get("environment") || "dev";\n\n`;
+        
+        // Generar recursos con la configuración real
+        for (const node of resourceNodes) {
+          const resourceName = String(node.data?.label || node.id || 'resource').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const resourceClassName = node.type.split('_').slice(1).map((part: string) =>
+            part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+          ).join('');
+          const properties = node.data?.dynamicProperties || node.data?.properties || {};
+          const hasProperties = Object.keys(properties).length > 0;
+          
+          content += `// ${node.data?.label || node.id}\n`;
+          content += `// ${node.data?.description || 'Sin descripción'}\n`;
+          content += `const ${resourceName} = new ${node.data?.provider}.${resourceClassName}("${resourceName}", {\n`;
+          
+          if (hasProperties) {
+            const propEntries = Object.entries(properties);
+            for (let i = 0; i < propEntries.length; i++) {
+              const [key, value] = propEntries[i];
+              content += `  ${key}: ${JSON.stringify(value)}`;
+              if (i < propEntries.length - 1) content += ',';
+              content += '\n';
+            }
+          } else {
+            content += `  // No hay propiedades configuradas\n`;
+            content += `  // Haz doble click en el nodo para configurarlo\n`;
+            
+            // Agregar propiedades mínimas según el tipo de recurso
+            if (node.type === 'aws_s3_bucket') {
+              content += `  bucket: "${resourceName}-bucket",\n`;
+            } else if (node.type === 'aws_redshift_cluster') {
+              content += `  clusterIdentifier: "${resourceName}",\n`;
+              content += `  nodeType: "dc2.large",\n`;
+              content += `  masterUsername: "admin",\n`;
+              content += `  masterPassword: "CHANGE_ME", // Cambiar por una contraseña segura\n`;
+            } else if (node.type === 'aws_elasticache_cluster') {
+              content += `  clusterId: "${resourceName}",\n`;
+              content += `  engine: "redis",\n`;
+              content += `  nodeType: "cache.t3.micro",\n`;
+              content += `  numCacheNodes: 1,\n`;
+            } else if (node.type === 'aws_rds_instance') {
+              content += `  identifier: "${resourceName}",\n`;
+              content += `  engine: "postgres",\n`;
+              content += `  engineVersion: "15.4",\n`;
+              content += `  instanceClass: "db.t3.micro",\n`;
+              content += `  username: "admin",\n`;
+              content += `  password: "CHANGE_ME", // Cambiar por una contraseña segura\n`;
+            }
+          }
+          
+          content += `});\n\n`;
+        }
+        
+        // Exportar outputs
+        content += `// Exportar outputs\n`;
+        for (const node of resourceNodes) {
+          const resourceName = String(node.data?.label || node.id || 'resource').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          content += `export const ${resourceName}Id = ${resourceName}.id;\n`;
+        }
+        
+        return content;
+      };
+
+      const generateAnsiblePlaybook = async () => {
+        let content = `---\n- name: InfraUX Infrastructure Playbook\n`;
+        content += `  hosts: localhost\n`;
+        content += `  connection: local\n`;
+        content += `  gather_facts: yes\n\n`;
+        content += `  vars:\n`;
+        content += `    environment: "{{ env | default('dev') }}"\n`;
+        content += `    region: "{{ aws_region | default('us-east-1') }}"\n\n`;
+        content += `  tasks:\n`;
+        
+        // Generar tareas para cada recurso
+        for (const node of resourceNodes) {
+          const resourceName = String(node.data?.label || node.id || 'resource').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const properties = node.data?.dynamicProperties || node.data?.properties || {};
+          
+          content += `    # ${node.data?.label || node.id}\n`;
+          content += `    # ${node.data?.description || 'Sin descripción'}\n`;
+          
+          if (node.type === 'aws_s3_bucket') {
+            content += `    - name: Create S3 bucket - ${resourceName}\n`;
+            content += `      amazon.aws.s3_bucket:\n`;
+            content += `        name: "${resourceName}-bucket"\n`;
+            content += `        state: present\n`;
+            content += `        region: "{{ region }}"\n`;
+            if (Object.keys(properties).length > 0) {
+              for (const [key, value] of Object.entries(properties)) {
+                content += `        ${key}: ${JSON.stringify(value)}\n`;
+              }
+            }
+          } else if (node.type === 'aws_redshift_cluster') {
+            content += `    - name: Create Redshift cluster - ${resourceName}\n`;
+            content += `      amazon.aws.redshift:\n`;
+            content += `        identifier: "${resourceName}"\n`;
+            content += `        node_type: "dc2.large"\n`;
+            content += `        username: "admin"\n`;
+            content += `        password: "{{ redshift_password }}"\n`;
+            content += `        state: present\n`;
+          } else if (node.type === 'aws_elasticache_cluster') {
+            content += `    - name: Create ElastiCache cluster - ${resourceName}\n`;
+            content += `      amazon.aws.elasticache:\n`;
+            content += `        name: "${resourceName}"\n`;
+            content += `        engine: "redis"\n`;
+            content += `        node_type: "cache.t3.micro"\n`;
+            content += `        num_nodes: 1\n`;
+            content += `        state: present\n`;
+          } else if (node.type === 'aws_rds_instance') {
+            content += `    - name: Create RDS instance - ${resourceName}\n`;
+            content += `      amazon.aws.rds_instance:\n`;
+            content += `        db_instance_identifier: "${resourceName}"\n`;
+            content += `        engine: "postgres"\n`;
+            content += `        engine_version: "15.4"\n`;
+            content += `        instance_class: "db.t3.micro"\n`;
+            content += `        master_username: "admin"\n`;
+            content += `        master_user_password: "{{ rds_password }}"\n`;
+            content += `        state: present\n`;
+          } else {
+            content += `    - name: Create resource - ${resourceName}\n`;
+            content += `      debug:\n`;
+            content += `        msg: "Recurso ${node.type} no tiene plantilla Ansible específica"\n`;
+          }
+          
+          content += `\n`;
+        }
+        
+        return content;
+      };
+
+      const generateCloudFormationTemplate = async () => {
+        const { currentDiagram } = get();
+        const template: any = {
+          AWSTemplateFormatVersion: '2010-09-09',
+          Description: `InfraUX CloudFormation template for diagram: ${currentDiagram?.name || 'Infrastructure'}`,
+          Parameters: {
+            Environment: {
+              Type: 'String',
+              Default: 'dev',
+              Description: 'Environment name'
+            }
+          },
+          Resources: {}
+        };
+
+        // Generar recursos
+        for (const node of resourceNodes) {
+          const resourceName = String(node.data?.label || node.id || 'Resource')
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .replace(/^[0-9]/, 'R$&'); // CloudFormation no permite nombres que empiecen con número
+          const properties = node.data?.dynamicProperties || node.data?.properties || {};
+          
+          if (node.type === 'aws_s3_bucket') {
+            template.Resources[resourceName] = {
+              Type: 'AWS::S3::Bucket',
+              Properties: {
+                BucketName: { 'Fn::Sub': `${resourceName.toLowerCase()}-\${Environment}-\${AWS::AccountId}` },
+                ...properties
+              }
+            };
+          } else if (node.type === 'aws_redshift_cluster') {
+            template.Resources[resourceName] = {
+              Type: 'AWS::Redshift::Cluster',
+              Properties: {
+                ClusterIdentifier: { 'Fn::Sub': `${resourceName.toLowerCase()}-\${Environment}` },
+                NodeType: 'dc2.large',
+                MasterUsername: 'admin',
+                MasterUserPassword: { Ref: `${resourceName}Password` },
+                ClusterType: 'single-node',
+                DBName: 'mydb',
+                ...properties
+              }
+            };
+            // Agregar parámetro para la contraseña
+            template.Parameters[`${resourceName}Password`] = {
+              Type: 'String',
+              NoEcho: true,
+              Description: `Password for ${resourceName} Redshift cluster`
+            };
+          } else if (node.type === 'aws_elasticache_cluster') {
+            template.Resources[resourceName] = {
+              Type: 'AWS::ElastiCache::CacheCluster',
+              Properties: {
+                CacheNodeType: 'cache.t3.micro',
+                Engine: 'redis',
+                NumCacheNodes: 1,
+                ...properties
+              }
+            };
+          } else if (node.type === 'aws_rds_instance') {
+            template.Resources[resourceName] = {
+              Type: 'AWS::RDS::DBInstance',
+              Properties: {
+                DBInstanceIdentifier: { 'Fn::Sub': `${resourceName.toLowerCase()}-\${Environment}` },
+                DBInstanceClass: 'db.t3.micro',
+                Engine: 'postgres',
+                EngineVersion: '15.4',
+                MasterUsername: 'admin',
+                MasterUserPassword: { Ref: `${resourceName}Password` },
+                AllocatedStorage: '20',
+                ...properties
+              }
+            };
+            // Agregar parámetro para la contraseña
+            template.Parameters[`${resourceName}Password`] = {
+              Type: 'String',
+              NoEcho: true,
+              Description: `Password for ${resourceName} RDS instance`
+            };
+          }
+        }
+
+        // Agregar outputs
+        template.Outputs = {};
+        for (const node of resourceNodes) {
+          const resourceName = String(node.data?.label || node.id || 'Resource')
+            .replace(/[^a-zA-Z0-9]/g, '')
+            .replace(/^[0-9]/, 'R$&');
+          
+          template.Outputs[`${resourceName}Id`] = {
+            Description: `ID of ${node.data?.label || node.id}`,
+            Value: { Ref: resourceName }
+          };
+        }
+
+        return JSON.stringify(template, null, 2);
+      };
+
+      const [terraformMain, pulumiMain, ansibleMain, cloudformationMain] = await Promise.all([
+        generateTerraformMain(),
+        generatePulumiMain(),
+        generateAnsiblePlaybook(),
+        generateCloudFormationTemplate(),
+      ]);
+
+      set({
+        generatedCode: {
+          'terraform-main': terraformMain,
+          'pulumi-main': pulumiMain,
+          'ansible-main': ansibleMain,
+          'cloudformation-main': cloudformationMain,
+        },
+        isGeneratingCode: false,
+        isCodeGenerating: false,
+      });
+
+    } catch (error) {
+      console.error("Error al obtener los datos del diagrama:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      message.error(errorMessage);
+      set({
+        generatedCode: {
+          'terraform-main': `# Error generando código: ${errorMessage}`,
+          'pulumi-main': `// Error generando código: ${errorMessage}`,
+          'ansible-main': `# Error generando código: ${errorMessage}`,
+          'cloudformation-main': `/* Error generando código: ${errorMessage} */`,
+        },
+        isGeneratingCode: false,
+        isCodeGenerating: false,
+        generatedCodeModalVisible: true,
+      });
+    }
+  },
+  setGeneratedCodeModalVisible: (visible) => set({ generatedCodeModalVisible: visible }),
+  // Nuevas acciones para live preview
+  setLivePreviewEnabled: (enabled) => {
+    const state = get();
+    set({ isLivePreviewEnabled: enabled });
+    
+    console.log('🔍 DEBUG Store - setLivePreviewEnabled:', {
+      enabled,
+      activeCompany: state.activeCompany,
+      companyId: state.activeCompany?._id || state.activeCompany?.id
+    });
+    
+    // Guardar estado en localStorage
+    if (typeof window !== 'undefined') {
+      const companyId = state.activeCompany?._id || state.activeCompany?.id;
+      if (companyId) {
+        const key = `livePreviewEnabled_${companyId}`;
+        localStorage.setItem(key, JSON.stringify(enabled));
+        console.log('✅ DEBUG Store - Live Preview guardado en localStorage:', {
+          key,
+          value: enabled,
+          allLivePreviewKeys: Object.keys(localStorage).filter(k => k.includes('livePreviewEnabled'))
+        });
+      } else {
+        console.log('⚠️ DEBUG Store - No se puede guardar Live Preview: no hay companyId');
+      }
+      
+      // Emitir evento para que otros componentes se enteren
+      const event = new CustomEvent('livePreviewStateChanged', {
+        detail: { isActive: enabled }
+      });
+      window.dispatchEvent(event);
+      console.log('📢 DEBUG Store - Evento livePreviewStateChanged emitido:', enabled);
+      
+      // Actualizar atributo en el body para CSS
+      if (enabled) {
+        document.body.setAttribute('data-live-preview-active', 'true');
+      } else {
+        document.body.removeAttribute('data-live-preview-active');
+      }
+    }
+    
+    if (enabled && state.generatedCodeModalVisible) {
+      // Suscribirse a cambios cuando se activa
+      get().subscribeToFlowChanges();
+    } else {
+      // Desuscribirse cuando se desactiva
+      get().unsubscribeFromFlowChanges();
+    }
+  },
+  
+  regenerateCodeDebounced: () => {
+    const state = get();
+    
+    // Cancelar el timer anterior si existe
+    if (state.codeGenerationDebounceTimer) {
+      clearTimeout(state.codeGenerationDebounceTimer);
+    }
+    
+    // Crear nuevo timer con debounce de 500ms
+    const timer = setTimeout(async () => {
+      if (state.isLivePreviewEnabled && state.generatedCodeModalVisible) {
+        await get().generateCodeAndShowModal();
+      }
+    }, 500);
+    
+    set({ codeGenerationDebounceTimer: timer });
+  },
+  
+  subscribeToFlowChanges: () => {
+    const handleFlowChange = () => {
+      const state = get();
+      if (state.isLivePreviewEnabled && state.generatedCodeModalVisible) {
+        get().regenerateCodeDebounced();
+      }
+    };
+    
+    // Listeners para cambios en el diagrama
+    const listeners = [
+      () => window.addEventListener('flowNodesChanged', handleFlowChange),
+      () => window.addEventListener('flowEdgesChanged', handleFlowChange),
+      () => window.addEventListener('updateNodeData', handleFlowChange),
+    ];
+    
+    // Activar todos los listeners
+    listeners.forEach(addListener => addListener());
+    
+    // Guardar referencias para poder removerlos después
+    set({ flowChangeListeners: listeners });
+  },
+  
+  unsubscribeFromFlowChanges: () => {
+    const state = get();
+    
+    // Cancelar cualquier regeneración pendiente
+    if (state.codeGenerationDebounceTimer) {
+      clearTimeout(state.codeGenerationDebounceTimer);
+      set({ codeGenerationDebounceTimer: null });
+    }
+    
+    // Remover listeners
+    const handleFlowChange = () => {
+      const state = get();
+      if (state.isLivePreviewEnabled && state.generatedCodeModalVisible) {
+        get().regenerateCodeDebounced();
+      }
+    };
+    
+    window.removeEventListener('flowNodesChanged', handleFlowChange);
+    window.removeEventListener('flowEdgesChanged', handleFlowChange);
+    window.removeEventListener('updateNodeData', handleFlowChange);
+    
+    set({ flowChangeListeners: [] });
+  },
   fetchInitialUser: async () => {
     const state = get();
     if (state.authInitialized) {
-      console.log('[NavStore] fetchInitialUser: Auth ya inicializado, saltando.');
       return;
     }
     if (state.dataLoading) {
-      console.log('[NavStore] fetchInitialUser: Ya está cargando, saltando...');
       return;
     }
-
     set({ dataLoading: true });
-
     try {
-      console.log('[NavStore] fetchInitialUser: Obteniendo usuario...');
       let currentUser = getCurrentUser();
       if (!currentUser) {
         const { getCurrentUserAsync } = await import('../services/authService');
         currentUser = await getCurrentUserAsync();
       }
-      console.log('[NavStore] fetchInitialUser: Usuario obtenido:', currentUser);
       set({ user: currentUser });
-
       if (currentUser) {
-        console.log('[NavStore] fetchInitialUser: Usuario existe, llamando a initializeAppLogic.');
         await get().initializeAppLogic();
       }
     } catch (error) {
       console.error('[NavStore] fetchInitialUser: Error:', error);
       set({ dataError: 'Error al obtener usuario' });
     } finally {
-      console.log('[NavStore] fetchInitialUser: Auth check finalizado.');
       set({ authInitialized: true, dataLoading: false });
     }
   },
-
   initializeAppLogic: async () => {
     const state = get();
     const user = state.user;
-
-    console.log('[NavStore] initializeAppLogic: START');
-
     if (!user?._id) {
       console.error('[NavStore] initializeAppLogic: Aborting, no user in store.');
       set({ dataLoading: false, dataError: "No se pudo inicializar: Usuario no encontrado." });
       return;
     }
-
-    console.log(`[NavStore] initializeAppLogic: Proceeding for user ${user._id}`);
     set({ dataLoading: true, dataError: null });
-
     try {
-      console.log('[NavStore] initializeAppLogic: Calling dashboardService.getInitialDashboardData...');
       const dashboardData = await dashboardService.getInitialDashboardData();
-      console.log('[NavStore] initializeAppLogic: Received data from backend:', dashboardData);
-
       const { companies, workspaces, environments, recent_diagrams, active_company_id, active_workspace_id } = dashboardData;
       set({ userCompanies: companies || [] });
-
       if (companies && companies.length > 0) {
         let companyToSelect = companies.find(c => c._id === active_company_id || c.id === active_company_id);
         let isPersonal = false;
-
         if (!companyToSelect) {
           const personalSpaceName = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${user.name || user.email}`;
           companyToSelect = companies.find((c: Company) => c.name === personalSpaceName);
@@ -385,9 +901,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
           companyToSelect = companies[0];
           isPersonal = companyToSelect.name.startsWith(PERSONAL_SPACE_COMPANY_NAME_PREFIX);
         }
-        
-        console.log('[NavStore] initializeAppLogic: Selected company:', companyToSelect?.name);
-        
         let activeWorkspace = null;
         if (active_workspace_id && workspaces) {
           activeWorkspace = workspaces.find(w => w.id === active_workspace_id || w._id === active_workspace_id);
@@ -395,7 +908,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
         if (!activeWorkspace && workspaces && workspaces.length > 0) {
           activeWorkspace = workspaces[0];
         }
-
         set({
           activeCompany: companyToSelect,
           isPersonalSpace: isPersonal,
@@ -407,12 +919,10 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
           selectedDiagram: recent_diagrams?.[0]?.id || null,
           currentDiagram: recent_diagrams?.[0] || null,
         });
-
         if (recent_diagrams?.[0]?.id && (!recent_diagrams[0].nodes || !recent_diagrams[0].edges)) {
           await get().handleDiagramChange(recent_diagrams[0].id);
         }
       } else {
-        console.log('[NavStore] initializeAppLogic: No companies found for user.');
         set({ activeCompany: null });
       }
     } catch (error) {
@@ -424,13 +934,10 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       message.error(`Error crítico al cargar datos: ${errorMsg}`);
       set({ dataError: errorMsg, userCompanies: [] });
     } finally {
-      console.log('[NavStore] initializeAppLogic: FINISHED.');
       set({ dataLoading: false });
     }
   },
-  
   setActiveCompanyAndLoadData: async (company, isPersonal) => {
-    console.log('[NavStore] setActiveCompanyAndLoadData: Estableciendo compañía activa:', company, 'Es personal:', isPersonal);
     set({ 
       activeCompany: company, 
       isPersonalSpace: isPersonal, 
@@ -446,111 +953,80 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       const { workspaces } = get();
       const companyWorkspaces = workspaces.filter(w => w.company_id === company.id);
       const activeWorkspace = companyWorkspaces.find(w => w.is_default) || companyWorkspaces[0] || null;
-      
-      console.log(`[NavStore] setActiveCompanyAndLoadData: Workspace activo para la compañía "${company.name}" es:`, activeWorkspace?.id);
-
       if (activeWorkspace) {
         set({ activeWorkspace });
         await get().fetchCurrentWorkspaceEnvironments();
       } else {
-        console.warn(`[NavStore] setActiveCompanyAndLoadData: No se encontró workspace activo para la compañía ${company.id}.`);
         set({ workspaces: [], activeWorkspace: null, environments: [], dataLoading: false });
       }
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error(`[NavStore] setActiveCompanyAndLoadData: Error cargando datos de compañía: ${errorMsg}`);
       message.error("Error cargando datos de la compañía: " + errorMsg);
       set({ dataError: errorMsg, dataLoading: false });
     }
   },
-
   fetchCurrentWorkspaceEnvironments: async () => {
     const { activeWorkspace } = get();
     if (!activeWorkspace) {
-      console.log('[NavStore] fetchCurrentWorkspaceEnvironments: No active workspace, skipping fetch.');
       return;
     }
-    console.log(`[NavStore] fetchCurrentWorkspaceEnvironments: Fetching environments for workspace ${activeWorkspace.id}`);
     set({ dataLoading: true });
     try {
-      const envs = await getEnvironments(activeWorkspace.id, true); // Force refresh
-      console.log(`[NavStore] fetchCurrentWorkspaceEnvironments: Received ${envs.length} environments.`);
+      const envs = await getEnvironments(activeWorkspace.id, true);
       set({ environments: envs, dataLoading: false, dataError: null });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error(`[NavStore] fetchCurrentWorkspaceEnvironments: Error: ${errorMsg}`);
       set({ dataError: errorMsg, dataLoading: false });
     }
   },
-
   handleEnvironmentChange: async (environmentId) => {
     const { activeCompany } = get();
     if (!activeCompany) { 
-      console.warn('[NavStore] handleEnvironmentChange: No hay compañía activa.');
       set({dataLoading: false}); return; 
     } 
-    console.log(`[NavStore] handleEnvironmentChange: Cambiando a ambiente ID: ${environmentId} para compañía ID: ${activeCompany._id}`);
     set({ selectedEnvironment: environmentId, dataLoading: true, diagrams: [], selectedDiagram: null, currentDiagram: null });
     try {
       const { activeWorkspace } = get();
       if (!activeWorkspace) {
-        console.warn('[NavStore] handleEnvironmentChange: No hay workspace activo.');
         set({dataLoading: false}); return;
       }
       const diags = await getDiagramsByEnvironment(activeWorkspace.id, environmentId);
-      console.log('[NavStore] handleEnvironmentChange: Diagramas obtenidos:', diags);
       set({ diagrams: diags });
       if (diags.length > 0) {
         const defaultDiagId = diags[0].id;
-        console.log('[NavStore] handleEnvironmentChange: Estableciendo diagrama por defecto ID:', defaultDiagId);
         await get().handleDiagramChange(defaultDiagId); 
       } else {
-        console.log('[NavStore] handleEnvironmentChange: No hay diagramas en este ambiente.');
         set({ dataLoading: false }); 
       }
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error(`[NavStore] handleEnvironmentChange: Error al cambiar de ambiente: ${errorMsg}`);
       message.error("Error al cambiar de ambiente: " + errorMsg);
       set({ dataError: errorMsg, dataLoading: false });
     }
   },
-
   handleDiagramChange: async (diagramId) => {
     const { activeCompany, selectedEnvironment, selectedDiagram, currentDiagram } = get();
     if (!activeCompany || !selectedEnvironment) { 
-      console.warn('[NavStore] handleDiagramChange: No hay compañía activa o ambiente seleccionado.');
       set({dataLoading: false}); return; 
     }
-    
-    // Si estamos cambiando desde otro diagrama, emitir evento para forzar guardado
     if (selectedDiagram && selectedDiagram !== diagramId && currentDiagram) {
-      console.log('[NavStore] handleDiagramChange: Emitiendo evento para guardar viewport del diagrama actual');
-      // Emitir evento personalizado para que FlowEditor guarde inmediatamente
       window.dispatchEvent(new CustomEvent('forceSaveCurrentDiagram'));
-      // Dar tiempo para que se complete el guardado
       await new Promise(resolve => setTimeout(resolve, 100));
     }
-    
-    console.log(`[NavStore] handleDiagramChange: Cambiando a diagrama ID: ${diagramId} en ambiente ID: ${selectedEnvironment}`);
     set({ selectedDiagram: diagramId, dataLoading: true });
     try {
       const { activeWorkspace } = get();
       if (!activeWorkspace) {
-        console.warn('[NavStore] handleDiagramChange: No hay workspace activo.');
         set({dataLoading: false}); return;
       }
       const diagramData = await getDiagram(activeWorkspace.id, selectedEnvironment, diagramId);
-      console.log('[NavStore] handleDiagramChange: Datos del diagrama obtenidos:', diagramData);
       set({ currentDiagram: diagramData, dataLoading: false });
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error(`[NavStore] handleDiagramChange: Error al cambiar de diagrama: ${errorMsg}`);
       message.error("Error al cambiar de diagrama: " + errorMsg);
       set({ dataError: errorMsg, dataLoading: false, currentDiagram: null });
     }
   },
-
   setNewEnvironmentModalVisible: (visible) => set({ newEnvironmentModalVisible: visible }),
   setNewEnvironmentName: (name) => set({ newEnvironmentName: name }),
   setNewEnvironmentDescription: (description) => set({ newEnvironmentDescription: description }),
@@ -569,15 +1045,10 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       const environmentPayload = {
         name: newEnvironmentName,
         description: newEnvironmentDescription, 
-        path: newEnvironmentPath.trim() || undefined, // Enviar undefined si está vacío para que el backend lo omita si es opcional        
+        path: newEnvironmentPath.trim() || undefined,
       };
-      
       const createdEnv = await createEnvironmentServiceAPICall(activeWorkspace.id, environmentPayload);
       message.success(`Ambiente "${createdEnv.name}" creado exitosamente.`);
-      
-      // La invalidación de caché y el refresh ahora se hacen en el servicio
-      
-      // Refrescar la lista de ambientes (forzar actualización)
       const updatedEnvs = await getEnvironments(activeWorkspace.id, true);
       set({
         environments: updatedEnvs,
@@ -587,22 +1058,15 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
         newEnvironmentModalVisible: false, 
         dataLoading: false 
       });
-      
-      // Si este es el primer ambiente creado, seleccionarlo automáticamente
       if (updatedEnvs.length === 1 || (createdEnv && !get().selectedEnvironment)) {
         await get().handleEnvironmentChange(createdEnv.id);
-      } else if (createdEnv) { // Si ya había otros, simplemente refrescar la lista pero no cambiar la selección actual
-         // Opcional: si se quiere seleccionar el nuevo ambiente siempre:
-         // await get().handleEnvironmentChange(createdEnv.id);
       }
-
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       message.error(`Error al crear ambiente: ${errorMsg}`);
       set({ dataError: errorMsg, dataLoading: false });
     }
   },
-
   setNewDiagramModalVisible: (visible) => set({ newDiagramModalVisible: visible }),
   setNewDiagramName: (name) => set({ newDiagramName: name }),
   setNewDiagramDescription: (description) => set({ newDiagramDescription: description }),
@@ -625,18 +1089,13 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
         path: newDiagramPath.trim() || undefined, 
         nodes: [], 
         edges: [], 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        viewport: {x:0, y:0, zoom:1} as any 
+        viewport: {x:0, y:0, zoom:1}
       });
       message.success("Diagrama creado.");
-      
-      // Invalidar caché de diagramas
       cacheService.clear(CACHE_KEYS.DIAGRAMS(activeCompany._id, selectedEnvironment));
-      
       const currentDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment, true); 
       set({ diagrams: currentDiagrams, dataLoading: false }); 
       await get().handleDiagramChange(newDiag.id);
-      
       set({ newDiagramName: '', newDiagramPath: '', newDiagramDescription: '', newDiagramModalVisible: false });
     } catch (e: unknown) { 
       const errorMsg = e instanceof Error ? e.message : String(e);
@@ -644,7 +1103,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       set({ dataError: errorMsg, dataLoading: false });
     }
   },
-
   handleDeleteEnvironment: async (environmentId: string) => {
     const { activeCompany, selectedEnvironment, handleEnvironmentChange } = get();
     if (!activeCompany?._id) {
@@ -664,30 +1122,23 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
           if (!activeWorkspace) throw new Error("No hay workspace activo");
           await deleteEnvironmentServiceAPICall(activeWorkspace.id, environmentId);
           message.success("Ambiente eliminado exitosamente.");
-          // Refrescar la lista de ambientes
           const updatedEnvs = await getEnvironments(activeWorkspace.id, true);
           set({ environments: updatedEnvs, dataLoading: false });
-
-          if (selectedEnvironment === environmentId) { // Si el ambiente eliminado era el seleccionado
+          if (selectedEnvironment === environmentId) {
             set({ selectedEnvironment: null, diagrams: [], selectedDiagram: null, currentDiagram: null });
             if (updatedEnvs.length > 0) {
-              await handleEnvironmentChange(updatedEnvs[0].id); // Seleccionar el primero de la nueva lista
+              await handleEnvironmentChange(updatedEnvs[0].id);
             }
           } else if (updatedEnvs.length > 0 && !get().selectedEnvironment) {
-            // Si no había ninguno seleccionado y ahora hay, seleccionar el primero
              await handleEnvironmentChange(updatedEnvs[0].id);
           }
-
       } catch (error) {
         console.error('[NavStore] handleEnvironmentChange: Error al cambiar de ambiente:', error);
         set({ dataLoading: false });
-        // NO lanzar el error para que el UI no se bloquee
-        // throw error;
       }
       },
     });
   },
-
   handleDeleteDiagram: async (diagramId: string) => {
     const { activeCompany, selectedEnvironment, selectedDiagram, handleDiagramChange, handleEnvironmentChange } = get();
     if (!activeCompany?._id || !selectedEnvironment) {
@@ -707,24 +1158,18 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
           if (!activeWorkspace) throw new Error("No hay workspace activo");
           await deleteDiagramServiceAPICall(activeWorkspace.id, selectedEnvironment, diagramId);
           message.success("Diagrama eliminado exitosamente.");
-          
-          // Refrescar la lista de diagramas para el ambiente actual
           const updatedDiagrams = await getDiagramsByEnvironment(activeWorkspace.id, selectedEnvironment, true);
           set({ diagrams: updatedDiagrams, dataLoading: false });
-
-          if (selectedDiagram === diagramId) { // Si el diagrama eliminado era el seleccionado
+          if (selectedDiagram === diagramId) {
             set({ selectedDiagram: null, currentDiagram: null });
             if (updatedDiagrams.length > 0) {
-              await handleDiagramChange(updatedDiagrams[0].id); // Seleccionar el primero de la nueva lista
+              await handleDiagramChange(updatedDiagrams[0].id);
             } else {
-              // No quedan diagramas, se podría refrescar el ambiente para mostrar el estado vacío
               await handleEnvironmentChange(selectedEnvironment);
             }
           } else if (updatedDiagrams.length > 0 && !get().selectedDiagram) {
-            // Si no había ninguno seleccionado y ahora hay, seleccionar el primero
             await handleDiagramChange(updatedDiagrams[0].id);
           }
-          
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : String(error);
           message.error(`Error al eliminar diagrama: ${errorMsg}`);
@@ -733,7 +1178,6 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       },
     });
   },
-
   handleUpdateDiagramPath: async (diagramId: string, newPath: string | null) => {
     const { activeCompany, selectedEnvironment } = get();
     if (!activeCompany?._id || !selectedEnvironment) {
@@ -742,45 +1186,54 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     }
     set({ dataLoading: true });
     try {
-      // El backend espera `null` si el path se elimina (raíz), o una string.
-      // Para TypeScript, construimos el payload condicionalmente
       const updatePayload: { path?: string } = {};
       const pathForState: string | undefined = newPath === null ? undefined : (newPath.trim() === '' ? undefined : newPath.trim());
-      
       if (newPath === null || newPath.trim() === '') {
-        // Si es null o vacío, enviamos un objeto con path explícitamente como any para forzar null
         const { activeWorkspace } = get();
         if (!activeWorkspace) throw new Error("No hay workspace activo");
         await updateDiagramServiceAPICall(activeWorkspace.id, selectedEnvironment, diagramId, { path: undefined });
       } else {
-        // Si hay un path válido, lo enviamos normalmente
         const { activeWorkspace } = get();
         if (!activeWorkspace) throw new Error("No hay workspace activo");
         updatePayload.path = newPath.trim();
         await updateDiagramServiceAPICall(activeWorkspace.id, selectedEnvironment, diagramId, updatePayload);
       }
-      
       message.success("Diagrama movido exitosamente.");
-
-      // Refrescar la lista de diagramas para el ambiente actual
       const { activeWorkspace } = get();
       if (!activeWorkspace) throw new Error("No hay workspace activo");
       const updatedDiagrams = await getDiagramsByEnvironment(activeWorkspace.id, selectedEnvironment, true);
-      
       set(state => ({
         diagrams: updatedDiagrams,
         dataLoading: false,
-        // Actualizar el currentDiagram si es el que se movió
         currentDiagram: state.currentDiagram?.id === diagramId 
           ? { ...state.currentDiagram, path: pathForState } 
           : state.currentDiagram
       }));
-      
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       message.error(`Error al mover el diagrama: ${errorMsg}`);
       set({ dataError: errorMsg, dataLoading: false });
-      throw error; // Re-lanzar para que el componente que llama pueda manejarlo si es necesario
+      throw error;
     }
+  },
+  updateCurrentDiagramInMemory: (data) => {
+    set(state => {
+      if (!state.currentDiagram) {
+        console.warn("[Store] updateCurrentDiagramInMemory: No hay diagrama actual para actualizar.");
+        return {};
+      }
+      const newViewport = data.viewport && typeof data.viewport.x === 'number'
+                        ? data.viewport
+                        : state.currentDiagram.viewport;
+      return {
+        currentDiagram: {
+          ...state.currentDiagram,
+          nodes: data.nodes,
+          edges: data.edges,
+          viewport: newViewport,
+        }
+      };
+    });
+    console.log('[Store] updateCurrentDiagramInMemory: Diagrama actualizado en memoria.');
   },
 }));

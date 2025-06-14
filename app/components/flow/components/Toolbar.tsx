@@ -18,12 +18,15 @@ import {
   ArrowsPointingInIcon,
   LockClosedIcon,
   LockOpenIcon,
+  CodeBracketIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 import { useReactFlow } from 'reactflow';
 import { useEditorStore } from '../hooks/useEditorStore';
 import { useSelectedEdgeType } from '../../../contexts/SelectedEdgeTypeContext';
 import { LogicalEdgeType, edgeTypeConfigs, EdgeTypeConfig } from '../../../config/edgeConfig'; // Corregido EdgeConfig a EdgeTypeConfig
 import type { ToolType as EditorToolType } from '../types/editorTypes'; // Corregido EditorToolType a ToolType
+import { useNavigationStore } from '../../../stores/useNavigationStore';
 
 interface ToolbarProps {
   onSaveDiagram: () => void;
@@ -50,6 +53,9 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInte
   const reactFlowInstance = useReactFlow();
   const { setNodes } = reactFlowInstance;
   const { selectedLogicalType, setSelectedLogicalType } = useSelectedEdgeType();
+  
+  // Estado para Live Preview
+  const { isLivePreviewEnabled, setLivePreviewEnabled, generateCodeAndShowModal } = useNavigationStore();
 
   // Funciones de control del canvas
   const handleZoomIn = useCallback(() => {
@@ -206,8 +212,58 @@ export function Toolbar({ onSaveDiagram, onCreateEmptyGroup, onToolClick, isInte
 
       <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-6 mx-1' : 'h-px w-full my-1'}`}></div>
 
-      <Tooltip 
-        title="Acercar" 
+      {/* Botón de Live Preview */}
+      <Tooltip
+        title={isLivePreviewEnabled ? "Live Preview activo - Click para desactivar" : "Activar Live Preview de código"}
+        placement="bottom"
+        mouseEnterDelay={0}
+        styles={{
+          root: {
+            backgroundColor: 'black',
+            color: 'white',
+            fontSize: '12px'
+          }
+        }}
+        color="black"
+      >
+        <button
+          onClick={() => {
+            if (!isLivePreviewEnabled) {
+              // Activar Live Preview y generar código
+              setLivePreviewEnabled(true);
+              generateCodeAndShowModal();
+            } else {
+              // Desactivar Live Preview
+              setLivePreviewEnabled(false);
+            }
+          }}
+          className={`relative p-2 rounded-lg transition-all duration-300 ${
+            isLivePreviewEnabled
+              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+              : 'bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 hover:from-purple-200 hover:to-pink-200 border border-purple-300'
+          }`}
+          style={{
+            minWidth: toolbarLayout === 'horizontal' ? '120px' : 'auto',
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <CodeBracketIcon className="w-5 h-5" />
+            {toolbarLayout === 'horizontal' && (
+              <span className="text-xs font-semibold">
+                {isLivePreviewEnabled ? 'Live ON' : 'Live Code'}
+              </span>
+            )}
+            {isLivePreviewEnabled && (
+              <SparklesIcon className="w-4 h-4 absolute -top-1 -right-1 animate-pulse" />
+            )}
+          </div>
+        </button>
+      </Tooltip>
+
+      <div className={`bg-gray-300 ${toolbarLayout === 'horizontal' ? 'w-px h-6 mx-1' : 'h-px w-full my-1'}`}></div>
+
+      <Tooltip
+        title="Acercar"
         placement="bottom"
         mouseEnterDelay={0}
         styles={{ 

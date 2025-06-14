@@ -20,10 +20,15 @@ import ExecutionLog from './ExecutionLog';
 import GroupFocusView from './GroupFocusView'; 
 
 import { 
-  FlowEditorProps, 
   ResourceCategory as EditorResourceCategory,
   ResourceItem as EditorResourceItem,
+  FlowEditorProps as EditorFlowEditorProps,
 } from './types/editorTypes';
+import { Node as DiagramNode, Edge as DiagramEdge } from '../../services/diagramService';
+// Importar tipos de ReactFlow directamente
+type FlowNode = ReactFlowLibrary.Node;
+type FlowEdge = ReactFlowLibrary.Edge;
+type FlowViewport = ReactFlowLibrary.Viewport;
 import { useFlowState } from './hooks/useFlowState';
 import { useEditorStore } from './hooks/useEditorStore';
 // import { shallow } from 'zustand/shallow'; // Se eliminará shallow, usando selectores individuales
@@ -42,7 +47,6 @@ import { Toolbar } from './components/Toolbar';
 import { EditGroupModal } from './components/EditGroupModal';
 // import EdgeDeleteButton from './components/EdgeDeleteButton'; // Movido a FlowCanvas
 import FlowCanvas from './components/FlowCanvas';
-import GeneratedCodeModal from '../ui/GeneratedCodeModal';
 import { Modal, Tag, Divider } from 'antd';
 
 
@@ -59,31 +63,50 @@ const {
   // SelectionMode, // Movido a FlowCanvas
 } = ReactFlowLibrary;
 
-// Tipos temporales mientras resolvemos el problema con los tipos de reactflow
-type FlowNode = any;
-type FlowEdge = any;
-type FlowViewport = any;
-type FlowNodeTypes = any;
-type FlowNodeChange = any;
-type FlowEdgeChange = any;
-type FlowConnection = any;
-type FlowXYPosition = any;
 
 // Definir los tipos personalizados
 type CustomEdge = FlowEdge & { data: CustomEdgeData };
 
-const FlowEditorContent = ({ 
-  initialNodes = [], 
+interface PropertyChange {
+  action: 'create' | 'update' | 'delete';
+  before?: unknown;
+  after?: unknown;
+}
+
+interface DependencyResource {
+  name: string;
+  type: string;
+  action: 'create' | 'update' | 'delete';
+  properties?: Record<string, unknown>;
+}
+
+interface SingleNodePreviewData {
+  resource: {
+    name: string;
+    type: string;
+    provider: string;
+    changes?: {
+      properties?: Record<string, PropertyChange>;
+    };
+  };
+  action: 'create' | 'update' | 'delete';
+  dependencies?: DependencyResource[];
+}
+
+interface FlowEditorContentProps extends EditorFlowEditorProps {}
+
+const FlowEditorContent = ({
+  initialNodes = [],
   initialEdges = [],
   initialViewport,
-  onConnectProp, 
+  onConnectProp,
   onSave,
-  nodeTypes: externalNodeTypes = {}, 
+  nodeTypes: externalNodeTypes = {},
   edgeTypes,
   resourceCategories = [],
   initialExpandedGroupId,
   onGroupExpandedChange,
-}: FlowEditorProps): JSX.Element => {
+}: FlowEditorContentProps): JSX.Element => {
   
   const memoizedNodeTypes = useMemo(() => {
     const baseTypes = { ...nodeTypesFromFile };
@@ -110,18 +133,21 @@ const FlowEditorContent = ({
     onEdgesChange: onEdgesChangeInternal,
   } = useFlowState({ initialNodes, initialEdges: initialEdges as CustomEdge[] });
 
-  // Memoizar las funciones de manejo de estado para evitar recreaciones
-  const handleNodeChange = useCallback((changes: FlowNodeChange[]) => {
+  // Wrapper para emitir evento cuando cambien los nodos
+  const onNodesChangeWithEvent = useCallback((changes: any[]) => {
     onNodesChangeInternal(changes);
+    
+    // Emitir evento de cambio de nodos con un pequeño delay para asegurar que el estado se actualice
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('flowNodesChanged', {
+        detail: {
+          changes,
+          timestamp: Date.now()
+        }
+      }));
+    }, 50);
   }, [onNodesChangeInternal]);
 
-  const handleEdgeChange = useCallback((changes: FlowEdgeChange[]) => {
-    onEdgesChangeInternal(changes);
-  }, [onEdgesChangeInternal]);
-
-  const handleConnect = useCallback((params: FlowConnection) => {
-    onConnectProp?.(params);
-  }, [onConnectProp]);
 
   // Seleccionar cada pieza del estado individualmente usando useCallback para evitar recreaciones
   const sidebarOpen = useEditorStore(useCallback(state => state.sidebarOpen, []));
@@ -147,10 +173,9 @@ const FlowEditorContent = ({
   const [executionLogs, setExecutionLogs] = useState<string[]>([]);
   const [showLogs, setShowLogs] = useState(false); 
   const [singleNodePreviewVisible, setSingleNodePreviewVisible] = useState(false);
-  const [singleNodePreviewData, setSingleNodePreviewData] = useState<any>(null);
+  const [singleNodePreviewData, setSingleNodePreviewData] = useState<SingleNodePreviewData | null>(null);
   const viewportChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isInteractive, setIsInteractive] = useState(true);
-  const [generatedCodeModalVisible, setGeneratedCodeModalVisible] = useState(false);
   const isUnmountingRef = useRef(false);
 
   const contextMenuActions = useContextMenuManager({ selectedNodes, setSelectedNodes });
@@ -266,13 +291,22 @@ const FlowEditorContent = ({
       const { nodeId, data } = (e as CustomEvent).detail;
       console.log('📝 Updating node data:', nodeId, data);
       
-      reactFlowInstance.setNodes((ns: FlowNode[]) => 
-        ns.map((n: FlowNode) => 
-          n.id === nodeId 
+      reactFlowInstance.setNodes((ns: FlowNode[]) =>
+        ns.map((n: FlowNode) =>
+          n.id === nodeId
             ? { ...n, data: { ...n.data, ...data } }
             : n
         )
       );
+      
+      // Emitir evento de cambio de nodos
+      window.dispatchEvent(new CustomEvent('flowNodesChanged', {
+        detail: {
+          nodeId,
+          data,
+          timestamp: Date.now()
+        }
+      }));
       
       // Guardar automáticamente después de actualizar
       setTimeout(() => {
@@ -361,32 +395,82 @@ const FlowEditorContent = ({
     return () => window.removeEventListener('showSingleNodePreview', handleShowSingleNodePreview);
   }, []);
 
-  // Listener para mostrar el modal de código generado
+  // Listener para responder a la solicitud de datos del diagrama
   useEffect(() => {
-    const handleShowGeneratedCodeModal = () => {
-      setGeneratedCodeModalVisible(true);
-    };
-    
-    window.addEventListener('showGeneratedCodeModal', handleShowGeneratedCodeModal);
-    return () => window.removeEventListener('showGeneratedCodeModal', handleShowGeneratedCodeModal);
-  }, []);
+    const handleRequestData = (event: Event) => {
+      const { detail } = event as CustomEvent;
+      
+      // Si no hay instancia de ReactFlow, intentar usar los datos del estado local
+      if (!reactFlowInstance) {
+        console.warn('⚠️ [FlowEditor] ReactFlow instance not ready, using state data');
+        
+        // Usar los datos del estado local si están disponibles
+        if (nodes && edges) {
+          const diagramNodes: DiagramNode[] = nodes.map((n: FlowNode) => ({
+            id: n.id,
+            type: n.type!,
+            position: n.position,
+            data: n.data,
+            width: n.width,
+            height: n.height,
+            parentNode: n.parentId,
+            style: n.style,
+          }));
 
-  // Listener para forzar guardado cuando se cambia de diagrama
-  useEffect(() => {
-    const handleForceSave = () => {
-      console.log('📍 [FLOW EDITOR] Evento forceSaveCurrentDiagram recibido, guardando estado actual');
-      // Capturar el viewport más reciente antes de guardar
-      if (reactFlowInstance && !isUnmountingRef.current) {
-        const currentViewport = reactFlowInstance.getViewport();
-        lastViewportRef.current = currentViewport;
-        console.log('📍 [FLOW EDITOR] Guardando con viewport:', currentViewport);
-        saveActions.saveCurrentDiagramState();
+          detail.resolve({
+            nodes: diagramNodes,
+            edges: edges,
+            viewport: lastViewportRef.current || { x: 0, y: 0, zoom: 1 },
+          });
+          return;
+        } else {
+          detail.reject(new Error("React Flow instance not available and no state data."));
+          return;
+        }
+      }
+      
+      if (!isUnmountingRef.current) {
+        try {
+          // Obtener los datos más recientes directamente del store interno
+          const currentNodes = reactFlowInstance.getNodes();
+          const currentEdges = reactFlowInstance.getEdges();
+          const currentViewport = reactFlowInstance.getViewport();
+
+          console.log('📊 [FlowEditor] Providing diagram data from instance:', {
+            nodesCount: currentNodes.length,
+            edgesCount: currentEdges.length,
+            viewport: currentViewport,
+            timestamp: Date.now()
+          });
+
+          const diagramNodes: DiagramNode[] = currentNodes.map((n: FlowNode) => ({
+            id: n.id,
+            type: n.type!,
+            position: n.position,
+            data: n.data,
+            width: n.width,
+            height: n.height,
+            parentNode: n.parentId,
+            style: n.style,
+          }));
+
+          detail.resolve({
+            nodes: diagramNodes,
+            edges: currentEdges,
+            viewport: currentViewport,
+          });
+        } catch (error) {
+          console.error('❌ [FlowEditor] Error providing diagram data:', error);
+          detail.reject(error);
+        }
+      } else {
+        detail.reject(new Error("Component is unmounting."));
       }
     };
-    
-    window.addEventListener('forceSaveCurrentDiagram', handleForceSave);
-    return () => window.removeEventListener('forceSaveCurrentDiagram', handleForceSave);
-  }, [reactFlowInstance, saveActions]);
+
+    window.addEventListener('forceRequestDiagramData', handleRequestData);
+    return () => window.removeEventListener('forceRequestDiagramData', handleRequestData);
+  }, [reactFlowInstance, nodes, edges]);
 
   // Agregar listener para clicks en el rectángulo de selección
   useEffect(() => {
@@ -479,7 +563,7 @@ const FlowEditorContent = ({
         edges={edges}
         nodeTypes={memoizedNodeTypes}
         edgeTypes={memoizedEdgeTypes}
-        onNodesChange={onNodesChangeInternal}
+        onNodesChange={onNodesChangeWithEvent}
         onEdgesChange={onEdgesChangeInternal}
         onConnect={onConnectInternal}
         onPaneClick={handlePaneClick}
@@ -572,21 +656,21 @@ const FlowEditorContent = ({
               <div>
                 <h3 className="text-lg font-semibold mb-2">Cambios en Propiedades</h3>
                 <div className="space-y-2">
-                  {Object.entries(singleNodePreviewData.resource.changes.properties).map(([key, change]: [string, any]) => (
+                  {Object.entries(singleNodePreviewData.resource.changes.properties).map(([key, change]: [string, PropertyChange]) => (
                     <div key={key} className="bg-gray-50 p-3 rounded">
                       <p className="font-medium">{key}:</p>
                       <div className="ml-4 text-sm">
                         {change.action === 'create' && (
-                          <p className="text-green-600">+ {change.after}</p>
+                          <p className="text-green-600">+ {String(change.after)}</p>
                         )}
                         {change.action === 'update' && (
                           <>
-                            <p className="text-red-600 line-through">- {change.before}</p>
-                            <p className="text-green-600">+ {change.after}</p>
+                            <p className="text-red-600 line-through">- {String(change.before)}</p>
+                            <p className="text-green-600">+ {String(change.after)}</p>
                           </>
                         )}
                         {change.action === 'delete' && (
-                          <p className="text-red-600 line-through">- {change.before}</p>
+                          <p className="text-red-600 line-through">- {String(change.before)}</p>
                         )}
                       </div>
                     </div>
@@ -602,7 +686,7 @@ const FlowEditorContent = ({
               <div>
                 <h3 className="text-lg font-semibold mb-2">Recursos Dependientes ({singleNodePreviewData.dependencies.length})</h3>
                 <div className="space-y-2">
-                  {singleNodePreviewData.dependencies.map((dep: any, index: number) => (
+                  {singleNodePreviewData.dependencies.map((dep: DependencyResource, index: number) => (
                     <div key={index} className="bg-gray-50 p-3 rounded">
                       <div className="flex items-center justify-between">
                         <div>
@@ -627,17 +711,11 @@ const FlowEditorContent = ({
         )}
       </Modal>
       
-      {/* Modal de Código Generado */}
-      <GeneratedCodeModal
-        visible={generatedCodeModalVisible}
-        onClose={() => setGeneratedCodeModalVisible(false)}
-        nodes={nodes}
-      />
     </div>
   );
 };
 
-const FlowEditor: React.FC<FlowEditorProps> = (props) => {
+const FlowEditor: React.FC<EditorFlowEditorProps> = (props) => {
   return (
     <ReactFlowProvider>
       <SelectedEdgeTypeProvider>
