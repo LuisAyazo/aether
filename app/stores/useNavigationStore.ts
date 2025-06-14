@@ -120,6 +120,7 @@ export interface NavigationStoreState {
   fetchInitialUser: () => Promise<void>;
   initializeAppLogic: () => Promise<void>;
   setActiveCompanyAndLoadData: (company: Company, isPersonal: boolean) => Promise<void>;
+  fetchCurrentWorkspaceEnvironments: () => Promise<void>;
   handleEnvironmentChange: (environmentId: string) => Promise<void>;
   handleDiagramChange: (diagramId: string) => Promise<void>;
 
@@ -442,22 +443,42 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       currentDiagram: null 
     });
     try {
-      console.log('[NavStore] setActiveCompanyAndLoadData: Obteniendo ambientes para compañía ID:', company._id);
-      const envs = await getEnvironments(company._id);
-      console.log('[NavStore] setActiveCompanyAndLoadData: Ambientes obtenidos:', envs);
-      set({ environments: envs });
-      if (envs.length > 0) {
-        const defaultEnvId = envs[0].id;
-        console.log('[NavStore] setActiveCompanyAndLoadData: Estableciendo ambiente por defecto ID:', defaultEnvId);
-        await get().handleEnvironmentChange(defaultEnvId); 
+      const { workspaces } = get();
+      const companyWorkspaces = workspaces.filter(w => w.company_id === company.id);
+      const activeWorkspace = companyWorkspaces.find(w => w.is_default) || companyWorkspaces[0] || null;
+      
+      console.log(`[NavStore] setActiveCompanyAndLoadData: Workspace activo para la compañía "${company.name}" es:`, activeWorkspace?.id);
+
+      if (activeWorkspace) {
+        set({ activeWorkspace });
+        await get().fetchCurrentWorkspaceEnvironments();
       } else {
-        console.log('[NavStore] setActiveCompanyAndLoadData: No hay ambientes, finalizando carga.');
-        set({ dataLoading: false }); 
+        console.warn(`[NavStore] setActiveCompanyAndLoadData: No se encontró workspace activo para la compañía ${company.id}.`);
+        set({ workspaces: [], activeWorkspace: null, environments: [], dataLoading: false });
       }
     } catch (e: unknown) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       console.error(`[NavStore] setActiveCompanyAndLoadData: Error cargando datos de compañía: ${errorMsg}`);
       message.error("Error cargando datos de la compañía: " + errorMsg);
+      set({ dataError: errorMsg, dataLoading: false });
+    }
+  },
+
+  fetchCurrentWorkspaceEnvironments: async () => {
+    const { activeWorkspace } = get();
+    if (!activeWorkspace) {
+      console.log('[NavStore] fetchCurrentWorkspaceEnvironments: No active workspace, skipping fetch.');
+      return;
+    }
+    console.log(`[NavStore] fetchCurrentWorkspaceEnvironments: Fetching environments for workspace ${activeWorkspace.id}`);
+    set({ dataLoading: true });
+    try {
+      const envs = await getEnvironments(activeWorkspace.id, true); // Force refresh
+      console.log(`[NavStore] fetchCurrentWorkspaceEnvironments: Received ${envs.length} environments.`);
+      set({ environments: envs, dataLoading: false, dataError: null });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[NavStore] fetchCurrentWorkspaceEnvironments: Error: ${errorMsg}`);
       set({ dataError: errorMsg, dataLoading: false });
     }
   },
@@ -471,7 +492,12 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     console.log(`[NavStore] handleEnvironmentChange: Cambiando a ambiente ID: ${environmentId} para compañía ID: ${activeCompany._id}`);
     set({ selectedEnvironment: environmentId, dataLoading: true, diagrams: [], selectedDiagram: null, currentDiagram: null });
     try {
-      const diags = await getDiagramsByEnvironment(activeCompany._id, environmentId);
+      const { activeWorkspace } = get();
+      if (!activeWorkspace) {
+        console.warn('[NavStore] handleEnvironmentChange: No hay workspace activo.');
+        set({dataLoading: false}); return;
+      }
+      const diags = await getDiagramsByEnvironment(activeWorkspace.id, environmentId);
       console.log('[NavStore] handleEnvironmentChange: Diagramas obtenidos:', diags);
       set({ diagrams: diags });
       if (diags.length > 0) {
@@ -509,7 +535,12 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     console.log(`[NavStore] handleDiagramChange: Cambiando a diagrama ID: ${diagramId} en ambiente ID: ${selectedEnvironment}`);
     set({ selectedDiagram: diagramId, dataLoading: true });
     try {
-      const diagramData = await getDiagram(activeCompany._id, selectedEnvironment, diagramId);
+      const { activeWorkspace } = get();
+      if (!activeWorkspace) {
+        console.warn('[NavStore] handleDiagramChange: No hay workspace activo.');
+        set({dataLoading: false}); return;
+      }
+      const diagramData = await getDiagram(activeWorkspace.id, selectedEnvironment, diagramId);
       console.log('[NavStore] handleDiagramChange: Datos del diagrama obtenidos:', diagramData);
       set({ currentDiagram: diagramData, dataLoading: false });
     } catch (e: unknown) {
@@ -525,9 +556,9 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
   setNewEnvironmentDescription: (description) => set({ newEnvironmentDescription: description }),
   setNewEnvironmentPath: (path) => set({ newEnvironmentPath: path }),
   handleCreateNewEnvironment: async () => {
-    const { activeCompany, newEnvironmentName, newEnvironmentDescription, newEnvironmentPath, isPersonalSpace, environments: currentEnvs } = get();
-    if (!activeCompany || !newEnvironmentName.trim()) {
-      message.error("El nombre del ambiente es obligatorio."); return;
+    const { activeWorkspace, newEnvironmentName, newEnvironmentDescription, newEnvironmentPath, isPersonalSpace, environments: currentEnvs } = get();
+    if (!activeWorkspace || !newEnvironmentName.trim()) {
+      message.error("Selecciona un workspace y escribe un nombre para el ambiente."); return;
     }
     if (isPersonalSpace && currentEnvs.length >= 1) { 
       message.warning("El plan Starter solo permite 1 ambiente."); 
@@ -541,16 +572,15 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
         path: newEnvironmentPath.trim() || undefined, // Enviar undefined si está vacío para que el backend lo omita si es opcional        
       };
       
-      const createdEnv = await createEnvironmentServiceAPICall(activeCompany._id, environmentPayload);
+      const createdEnv = await createEnvironmentServiceAPICall(activeWorkspace.id, environmentPayload);
       message.success(`Ambiente "${createdEnv.name}" creado exitosamente.`);
       
-      // Invalidar caché de ambientes
-      cacheService.clear(CACHE_KEYS.ENVIRONMENTS(activeCompany._id));
+      // La invalidación de caché y el refresh ahora se hacen en el servicio
       
       // Refrescar la lista de ambientes (forzar actualización)
-      const updatedEnvs = await getEnvironments(activeCompany._id, true); 
-      set({ 
-        environments: updatedEnvs, 
+      const updatedEnvs = await getEnvironments(activeWorkspace.id, true);
+      set({
+        environments: updatedEnvs,
         newEnvironmentName: '', 
         newEnvironmentDescription: '', 
         newEnvironmentPath: '', 
@@ -630,10 +660,12 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       onOk: async () => {
         set({ dataLoading: true });
         try {
-          await deleteEnvironmentServiceAPICall(activeCompany._id, environmentId);
+          const { activeWorkspace } = get();
+          if (!activeWorkspace) throw new Error("No hay workspace activo");
+          await deleteEnvironmentServiceAPICall(activeWorkspace.id, environmentId);
           message.success("Ambiente eliminado exitosamente.");
           // Refrescar la lista de ambientes
-          const updatedEnvs = await getEnvironments(activeCompany._id);
+          const updatedEnvs = await getEnvironments(activeWorkspace.id, true);
           set({ environments: updatedEnvs, dataLoading: false });
 
           if (selectedEnvironment === environmentId) { // Si el ambiente eliminado era el seleccionado
@@ -671,11 +703,13 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       onOk: async () => {
         set({ dataLoading: true });
         try {
-          await deleteDiagramServiceAPICall(activeCompany._id, selectedEnvironment, diagramId);
+          const { activeWorkspace } = get();
+          if (!activeWorkspace) throw new Error("No hay workspace activo");
+          await deleteDiagramServiceAPICall(activeWorkspace.id, selectedEnvironment, diagramId);
           message.success("Diagrama eliminado exitosamente.");
           
           // Refrescar la lista de diagramas para el ambiente actual
-          const updatedDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment);
+          const updatedDiagrams = await getDiagramsByEnvironment(activeWorkspace.id, selectedEnvironment, true);
           set({ diagrams: updatedDiagrams, dataLoading: false });
 
           if (selectedDiagram === diagramId) { // Si el diagrama eliminado era el seleccionado
@@ -715,17 +749,23 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       
       if (newPath === null || newPath.trim() === '') {
         // Si es null o vacío, enviamos un objeto con path explícitamente como any para forzar null
-        await updateDiagramServiceAPICall(activeCompany._id, selectedEnvironment, diagramId, { path: null as any });
+        const { activeWorkspace } = get();
+        if (!activeWorkspace) throw new Error("No hay workspace activo");
+        await updateDiagramServiceAPICall(activeWorkspace.id, selectedEnvironment, diagramId, { path: undefined });
       } else {
         // Si hay un path válido, lo enviamos normalmente
+        const { activeWorkspace } = get();
+        if (!activeWorkspace) throw new Error("No hay workspace activo");
         updatePayload.path = newPath.trim();
-        await updateDiagramServiceAPICall(activeCompany._id, selectedEnvironment, diagramId, updatePayload);
+        await updateDiagramServiceAPICall(activeWorkspace.id, selectedEnvironment, diagramId, updatePayload);
       }
       
       message.success("Diagrama movido exitosamente.");
 
       // Refrescar la lista de diagramas para el ambiente actual
-      const updatedDiagrams = await getDiagramsByEnvironment(activeCompany._id, selectedEnvironment);
+      const { activeWorkspace } = get();
+      if (!activeWorkspace) throw new Error("No hay workspace activo");
+      const updatedDiagrams = await getDiagramsByEnvironment(activeWorkspace.id, selectedEnvironment, true);
       
       set(state => ({
         diagrams: updatedDiagrams,

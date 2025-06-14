@@ -10,7 +10,7 @@ interface CacheEntry<T> {
 }
 
 class CacheService {
-  private cache: Map<string, CacheEntry<any>> = new Map();
+  private cache: Map<string, CacheEntry<unknown>> = new Map();
   private defaultTTL = 5 * 60 * 1000; // 5 minutes default
 
   /**
@@ -95,7 +95,7 @@ export const CACHE_KEYS = {
   DASHBOARD_DATA: 'dashboard_data',
   USER_COMPANIES: 'user_companies',
   WORKSPACES: (companyId: string) => `workspaces_${companyId}`,
-  ENVIRONMENTS: (companyId: string) => `environments_${companyId}`,
+  ENVIRONMENTS: (workspaceId: string) => `environments_${workspaceId}`,
   DIAGRAMS: (companyId: string, envId: string) => `diagrams_${companyId}_${envId}`,
   DIAGRAM: (companyId: string, envId: string, diagramId: string) => `diagram_${companyId}_${envId}_${diagramId}`,
 } as const;

@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { useNavigationStore } from "../../../../app/hooks/useNavigationStore";
+import { useNavigationStore } from "../../../../app/stores/useNavigationStore";
 import { vi, describe, beforeEach, it, expect } from 'vitest';
 
 // Los mocks ya están configurados en setup.ts

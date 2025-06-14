@@ -1,90 +1,35 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Modal, Input, Table, message, Space, Tooltip, Popconfirm, Alert, Spin } from 'antd'; // Typography eliminado
+import React, { useState } from 'react';
+import { Button, Modal, Input, Table, message, Space, Tooltip, Popconfirm, Alert, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, QuestionCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { FolderIcon } from '@heroicons/react/24/outline'; // Importar FolderIcon
-import { EnvironmentDefinition } from "../../types/deployments"; 
-import { useRouter } from 'next/navigation'; 
+import { FolderIcon } from '@heroicons/react/24/outline';
+
+import { useNavigationStore } from '../../stores/useNavigationStore';
+import { Environment, updateEnvironment, createEnvironment } from '../../services/diagramService';
 
 interface EnvironmentsPageProps {
-  companyId: string;
-  isPersonalSpace?: boolean; 
+  workspaceId: string;
+  isPersonalSpace?: boolean;
 }
 
 const { TextArea } = Input;
 
-export default function EnvironmentsPage({ companyId, isPersonalSpace }: EnvironmentsPageProps) { 
-  console.log('EnvironmentsPage: COMPONENTE MONTADO/ACTUALIZADO. companyId prop:', companyId, 'isPersonalSpace:', isPersonalSpace); 
-  const router = useRouter(); 
-  const [environments, setEnvironments] = useState<EnvironmentDefinition[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+export default function EnvironmentsPage({ workspaceId, isPersonalSpace }: EnvironmentsPageProps) {
+  const {
+    environments,
+    dataLoading: loading,
+    dataError: fetchError,
+    handleDeleteEnvironment,
+    fetchCurrentWorkspaceEnvironments,
+  } = useNavigationStore();
+
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
-  const [editingEnvironment, setEditingEnvironment] = useState<EnvironmentDefinition | null>(null);
-  
+  const [editingEnvironment, setEditingEnvironment] = useState<Environment | null>(null);
   const [formValues, setFormValues] = useState<{ name: string; description?: string; path?: string }>({ name: '', path: '' });
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const fetchEnvironments = useCallback(async () => {
-    console.log('EnvironmentsPage: fetchEnvironments INICIADO, companyId:', companyId); 
-    setLoading(true);
-    setFetchError(null); 
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        message.error("Usuario no autenticado. Por favor, inicie sesión.");
-        setLoading(false);
-        router.push('/login'); 
-        return;
-      }
-      const response = await fetch(`/api/v1/companies/${companyId}/environments`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          message.error("Sesión expirada o inválida. Por favor, inicie sesión de nuevo.");
-          router.push('/login');
-        } else {
-          const errorData = await response.json().catch(() => ({ detail: 'Failed to fetch environments and could not parse error response.' }));
-          const detail = errorData.detail || 'Failed to fetch environments';
-          setFetchError(detail); 
-          throw new Error(detail);
-        }
-        return; 
-      }
-      const data: EnvironmentDefinition[] = await response.json();
-      console.log('EnvironmentsPage: fetchEnvironments DATOS RECIBIDOS:', data); 
-      setEnvironments(data);
-    } catch (error) {
-      console.error("Error fetching environments:", error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      message.error(`Error al cargar los ambientes: ${errorMessage}`);
-      setFetchError(errorMessage); 
-    } finally {
-      console.log('EnvironmentsPage: fetchEnvironments finally, antes de setLoading(false). Estado actual de loading:', loading);
-      setLoading(false);
-      console.log('EnvironmentsPage: fetchEnvironments finally, después de setLoading(false).');
-    }
-  }, [companyId, router]); 
-
-  useEffect(() => {
-    console.log('EnvironmentsPage: useEffect para fetchEnvironments. companyId:', companyId); 
-    if (companyId) {
-      console.log('EnvironmentsPage: useEffect - companyId es válido, llamando a fetchEnvironments.'); 
-      fetchEnvironments();
-    } else {
-      console.log('EnvironmentsPage: useEffect - companyId NO es válido, NO se llama a fetchEnvironments.'); 
-      setLoading(false); 
-    }
-  }, [companyId, fetchEnvironments]);
-
-  useEffect(() => {
-    console.log('EnvironmentsPage: Estado environments actualizado:', environments);
-  }, [environments]);
-
-  const handleOpenModal = (environment?: EnvironmentDefinition) => {
+  const handleOpenModal = (environment?: Environment) => {
     if (environment) {
       setEditingEnvironment(environment);
       setFormValues({ name: environment.name, description: environment.description, path: environment.path || '' });
@@ -112,108 +57,41 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
       return;
     }
 
-    // Ya no se fuerza el nombre "Sandbox" para el primer ambiente en espacios personales si se crea desde aquí.
-    // La creación automática del "Sandbox" ocurre en DashboardPage si no existe ninguno.
     if (isPersonalSpace && environments.length > 0 && !editingEnvironment) {
-        message.error("Los espacios personales solo pueden tener un ambiente.");
-        return;
+      message.error("Los espacios personales solo pueden tener un ambiente.");
+      return;
     }
 
-    const trimmedPath = formValues.path?.trim();
-    const payload = {
-      company_id: companyId, 
+    const basePayload = {
       name: formValues.name.trim(),
-      description: formValues.description?.trim() || null, // Enviar null si está vacío
-      path: trimmedPath ? trimmedPath : null, // Enviar null si está vacío para que se actualice en la BD
+      description: formValues.description?.trim() || '',
+      path: formValues.path?.trim() || '',
     };
 
-    setLoading(true);
+    setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        message.error("Usuario no autenticado. Por favor, inicie sesión.");
-        setLoading(false);
-        router.push('/login');
-        return;
-      }
-
-      let response;
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      };
-
       if (editingEnvironment) {
-        response = await fetch(`/api/v1/companies/${companyId}/environments/${editingEnvironment.id}`, {
-          method: 'PUT',
-          headers: headers,
-          body: JSON.stringify(payload), 
-        });
+        await updateEnvironment(workspaceId, editingEnvironment.id, basePayload);
+        message.success(`Ambiente actualizado exitosamente.`);
       } else {
-        response = await fetch(`/api/v1/companies/${companyId}/environments`, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(payload), 
-        });
+        await createEnvironment(workspaceId, basePayload);
+        message.success(`Ambiente "${basePayload.name}" creado exitosamente.`);
       }
 
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          message.error("Sesión expirada o inválida. Por favor, inicie sesión de nuevo.");
-          router.push('/login');
-        } else {
-          const errorData = await response.json().catch(() => ({ detail: `Failed to ${editingEnvironment ? 'update' : 'create'} environment and could not parse error.` }));
-          throw new Error(errorData.detail || `Failed to ${editingEnvironment ? 'update' : 'create'} environment`);
-        }
-        return;
-      }
-      
-      message.success(`Ambiente ${editingEnvironment ? 'actualizado' : 'creado'} exitosamente.`);
-      fetchEnvironments(); 
+      await fetchCurrentWorkspaceEnvironments();
       handleCancelModal();
 
     } catch (error) {
       console.error("Error submitting environment:", error);
-      message.error(`Error al ${editingEnvironment ? 'actualizar' : 'crear'} el ambiente: ${error instanceof Error ? error.message : String(error)}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      message.error(`Error al ${editingEnvironment ? 'actualizar' : 'crear'} el ambiente: ${errorMessage}`);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (envId: string) => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        message.error("Usuario no autenticado. Por favor, inicie sesión.");
-        setLoading(false);
-        router.push('/login');
-        return;
-      }
-      const response = await fetch(`/api/v1/companies/${companyId}/environments/${envId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          message.error("Sesión expirada o inválida. Por favor, inicie sesión de nuevo.");
-          router.push('/login');
-        } else {
-          const errorData = await response.json().catch(() => ({ detail: 'Failed to delete environment and could not parse error.' }));
-          throw new Error(errorData.detail || 'Failed to delete environment');
-        }
-        return;
-      }
-      message.success("Ambiente eliminado exitosamente.");
-      fetchEnvironments();
-    } catch (error) {
-      console.error("Error deleting environment:", error);
-      message.error(`Error al eliminar el ambiente: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setLoading(false);
-    }
+    await handleDeleteEnvironment(envId);
   };
 
   const columns = [
@@ -221,7 +99,7 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
       title: 'Nombre',
       dataIndex: 'name',
       key: 'name',
-      sorter: (a: EnvironmentDefinition, b: EnvironmentDefinition) => a.name.localeCompare(b.name),
+      sorter: (a: Environment, b: Environment) => a.name.localeCompare(b.name),
     },
     {
       title: 'Directorio',
@@ -240,12 +118,12 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
       dataIndex: 'created_at',
       key: 'created_at',
       render: (text: string) => new Date(text).toLocaleDateString(),
-      sorter: (a: EnvironmentDefinition, b: EnvironmentDefinition) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      sorter: (a: Environment, b: Environment) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     },
     {
       title: 'Acciones',
       key: 'actions',
-      render: (_text: unknown, record: EnvironmentDefinition) => (
+      render: (_text: unknown, record: Environment) => (
         <Space size="middle">
           <Tooltip title="Editar Ambiente">
             <Button icon={<EditOutlined />} onClick={() => handleOpenModal(record)} />
@@ -257,7 +135,7 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
             okText="Sí, eliminar"
             cancelText="Cancelar"
             icon={<QuestionCircleOutlined style={{ color: 'red' }} />}
-            disabled={isPersonalSpace && record.name.toLowerCase() === 'sandbox'} 
+            disabled={isPersonalSpace && record.name.toLowerCase() === 'sandbox'}
           >
             <Tooltip title={isPersonalSpace && record.name.toLowerCase() === 'sandbox' ? "El ambiente Sandbox no se puede eliminar en espacios personales" : "Eliminar Ambiente"}>
               <Button icon={<DeleteOutlined />} danger disabled={isPersonalSpace && record.name.toLowerCase() === 'sandbox'} />
@@ -287,7 +165,7 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
           showIcon
           icon={<ExclamationCircleOutlined />}
           action={
-            <Button type="primary" onClick={fetchEnvironments}>
+            <Button type="primary" onClick={fetchCurrentWorkspaceEnvironments}>
               Reintentar
             </Button>
           }
@@ -300,11 +178,11 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
     <div className="p-6 bg-white dark:bg-slate-900 shadow-md rounded-lg h-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Gestión de Ambientes</h1>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
           onClick={() => handleOpenModal()}
-          disabled={!!(isPersonalSpace && environments.length >= 1)} 
+          disabled={!!(isPersonalSpace && environments.length >= 1)}
         >
           Crear Ambiente
         </Button>
@@ -322,10 +200,10 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
         open={isModalVisible}
         onOk={handleSubmit}
         onCancel={handleCancelModal}
-        confirmLoading={loading}
+        confirmLoading={isSubmitting}
         okText={editingEnvironment ? "Guardar Cambios" : "Crear"}
         cancelText="Cancelar"
-        okButtonProps={{disabled: !formValues.name.trim() || !!(isPersonalSpace && environments.length > 0 && !editingEnvironment) }}
+        okButtonProps={{disabled: !formValues.name.trim() || !!(isPersonalSpace && environments.length > 0 && !editingEnvironment) || isSubmitting }}
       >
         <Input
           name="name"
@@ -333,7 +211,7 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
           value={formValues.name}
           onChange={handleFormChange}
           style={{ marginBottom: 16 }}
-          disabled={!!(editingEnvironment && isPersonalSpace && editingEnvironment.name.toLowerCase() === 'sandbox')} 
+          disabled={!!(editingEnvironment && isPersonalSpace && editingEnvironment.name.toLowerCase() === 'sandbox')}
         />
         <TextArea
           name="description"
@@ -355,7 +233,6 @@ export default function EnvironmentsPage({ companyId, isPersonalSpace }: Environ
           Organiza tus ambientes en directorios. Usa "/" para crear subdirectorios. <br/>
           Ejemplos: frontend, backend/servicios, data/analytics
         </p>
-        {/* Mensaje eliminado: ya no se fuerza el nombre "Sandbox" aquí. */}
         {isPersonalSpace && environments.length > 0 && !editingEnvironment && (
             <p className="text-sm text-red-500 mt-2">Los espacios personales solo pueden tener un ambiente.</p>
         )}

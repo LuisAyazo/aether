@@ -17,7 +17,7 @@ import {
   MailOutlined // Añadido para el correo del usuario
 } from '@ant-design/icons';
 import { logoutUser as authLogout } from '../services/authService';
-import { useNavigationStore } from '../hooks/useNavigationStore';
+import { useNavigationStore } from '../stores/useNavigationStore';
 import type { Environment } from '../services/diagramService';
 import EnvironmentTreeSelect from "./ui/EnvironmentTreeSelect";
 import DiagramTreeSelect from "./ui/DiagramTreeSelect"; 
@@ -223,8 +223,6 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
                           onChange={onEnvChange}
                           environments={environments}
                           className="min-w-[180px] md:min-w-[200px]"
-                          onDeleteEnvironment={handleDeleteEnvironment}
-                          showDeleteButton={true}
                         />
                       </>
                     )}

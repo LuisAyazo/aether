@@ -53,7 +53,7 @@ import DiagramActionSubheader from '../../components/ui/DiagramActionSubheader';
 import TeamSettingsPage from '../settings/team/page';
 
 import { Node as CustomNode, Edge as CustomEdge } from '../../services/diagramService';
-import { useNavigationStore } from '../../hooks/useNavigationStore';
+import { useNavigationStore } from '../../stores/useNavigationStore';
 import { updateDiagram } from '../../services/diagramService';
 
 import nodeTypesImport from '../../components/nodes/NodeTypes';
@@ -74,6 +74,7 @@ export default function DashboardPage() {
   const user = useNavigationStore(state => state.user);
   const activeCompany = useNavigationStore(state => state.activeCompany);
   const isPersonalSpace = useNavigationStore(state => state.isPersonalSpace);
+  const activeWorkspace = useNavigationStore(state => state.activeWorkspace);
   const environments = useNavigationStore(state => state.environments);
   const diagramsFromStore = useNavigationStore(state => state.diagrams);
   const selectedEnvironment = useNavigationStore(state => state.selectedEnvironment);
@@ -86,6 +87,7 @@ export default function DashboardPage() {
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState<boolean>(false);
+  const fetchCurrentWorkspaceEnvironments = useNavigationStore(state => state.fetchCurrentWorkspaceEnvironments);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const convertToReactFlowNodes = (customNodes: CustomNode[]): any[] => { 
@@ -198,6 +200,13 @@ export default function DashboardPage() {
       setActiveSectionInSidebar('diagrams');
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (activeSectionInSidebar === 'environments' && activeWorkspace) {
+      console.log('[DashboardPage] Environments section is active, fetching environments for workspace:', activeWorkspace.id);
+      fetchCurrentWorkspaceEnvironments();
+    }
+  }, [activeSectionInSidebar, activeWorkspace, fetchCurrentWorkspaceEnvironments]);
 
   // Estado para el grupo expandido inicial
   const [initialExpandedGroup, setInitialExpandedGroup] = useState<string | null>(null);
@@ -710,7 +719,7 @@ export default function DashboardPage() {
                 )}
                 
                 {activeSectionInSidebar === 'credentials' && activeCompany && ( <CredentialsPage companyId={activeCompany._id} /> )}
-                {activeSectionInSidebar === 'environments' && activeCompany && activeCompany._id && ( <EnvironmentsPage companyId={activeCompany._id} isPersonalSpace={isPersonalSpace || false} /> )}
+                {activeSectionInSidebar === 'environments' && activeWorkspace && ( <EnvironmentsPage workspaceId={activeWorkspace.id} isPersonalSpace={isPersonalSpace || false} /> )}
                 {activeSectionInSidebar === 'deployments' && activeCompany && ( <DeploymentsPage companyId={activeCompany._id} /> )}
                 {activeSectionInSidebar === 'templates' && ( <div className="p-8 text-center"><h2 className="text-2xl font-semibold text-slate-800 dark:text-slate-200">Plantillas</h2><p className="text-slate-600 dark:text-slate-400 mt-2">Gestión de plantillas próximamente.</p></div> )}
                 {activeSectionInSidebar === 'settings' && activeCompany && ( <SettingsPage companyId={activeCompany._id} /> )}

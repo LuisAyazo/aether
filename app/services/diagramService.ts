@@ -93,193 +93,138 @@ export interface Environment {
 }
 
 // Funciones relacionadas con ambientes
-export const getEnvironments = async (companyId: string, forceRefresh: boolean = false): Promise<Environment[]> => {
-  if (!isAuthenticated()) {
-    throw new Error('Usuario no autenticado');
+export const getEnvironments = async (workspaceId: string, forceRefresh: boolean = false): Promise<Environment[]> => {
+  if (!isAuthenticated()) throw new Error('Usuario no autenticado');
+  if (!workspaceId) {
+    console.error('[getEnvironments] workspaceId es inválido');
+    return [];
   }
 
-  // Verificar que companyId no sea undefined o null
-  if (!companyId) {
-    console.error('Error: companyId es undefined o null en getEnvironments');
-    throw new Error('ID de compañía no válido en getEnvironments');
-  }
-
-  // Check cache first unless force refresh
-  const cacheKey = CACHE_KEYS.ENVIRONMENTS(companyId);
+  const cacheKey = CACHE_KEYS.ENVIRONMENTS(workspaceId);
   if (!forceRefresh) {
     const cachedData = cacheService.get<Environment[]>(cacheKey);
     if (cachedData) {
-      console.log('📦 Environments loaded from cache');
+      console.log(`[getEnvironments] 📦 Usando cache para workspace ${workspaceId}`);
       return cachedData;
     }
   }
 
   const token = await getAuthTokenAsync();
-  // API_BASE_URL es http://localhost:8000/api
-  // El backend espera /api/v1/companies/...
-  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments`;
-  
+  const url = `${API_BASE_URL}/v1/workspaces/${workspaceId}/environments`;
+  console.log(`[getEnvironments] 🚚 Fetching desde ${url}`);
+
   try {
-    const response = await fetch(correctApiUrl, {
+    const response = await fetch(url, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
     });
 
-    // Si el error es 404, el endpoint no existe en el backend
-    if (response.status === 404) {
-      console.error('El endpoint para obtener ambientes no está disponible en el backend');
-      throw new Error('El servicio para obtener ambientes no está disponible. Contacta al administrador del sistema.');
-    }
-
     if (!response.ok) {
-      if (response.status === 401) {
-        // Redirigir a login si no está autorizado
-        localStorage.removeItem('token'); // Limpiar token potencialmente inválido
-        window.location.href = '/login?session_expired=true';
-        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
-      }
-      let errorDetail = 'Error obteniendo ambientes';
-      try {
-        const errorData = await response.json();
-        errorDetail = errorData.detail || errorData.message || `Error ${response.status} del servidor.`;
-      } catch (parseError) {
-        // Si el cuerpo del error no es JSON o está vacío
-        console.warn('Could not parse error response in getEnvironments:', parseError);
-        errorDetail = `Error ${response.status}: ${response.statusText}. No se pudo obtener más detalle del error.`;
-      }
-      console.error(`Error en la respuesta de getEnvironments: ${errorDetail}`);
-      throw new Error(errorDetail);
+      const errorText = await response.text();
+      console.error(`[getEnvironments] Error ${response.status}: ${errorText}`);
+      throw new Error(`Error obteniendo ambientes: ${response.statusText}`);
     }
 
-    // Devolver los ambientes del backend
-    const backendEnvironments = await response.json();
-    console.log(`Recibidos ${backendEnvironments.length} ambientes del backend`);
-    
-    // Cache the data
-    cacheService.set(cacheKey, backendEnvironments, CACHE_TTL.ENVIRONMENTS);
-    
-    return backendEnvironments;
+    const environments = await response.json();
+    console.log(`[getEnvironments] ✅ Recibidos ${environments.length} ambientes`);
+    cacheService.set(cacheKey, environments, CACHE_TTL.ENVIRONMENTS);
+    return environments;
   } catch (error) {
-    console.error('Error en getEnvironments:', error);
+    console.error('[getEnvironments] Excepción:', error);
     throw error;
   }
 };
 
-export const createEnvironment = async (companyId: string, environmentData: { name: string; description?: string; path?: string }): Promise<Environment> => {
-  if (!isAuthenticated()) {
-    throw new Error('Usuario no autenticado');
-  }
+export const createEnvironment = async (workspaceId: string, environmentData: { name: string; description?: string; path?: string }): Promise<Environment> => {
+  if (!isAuthenticated()) throw new Error('Usuario no autenticado');
+  if (!workspaceId) throw new Error('Workspace ID es requerido para crear un ambiente');
 
   const token = await getAuthTokenAsync();
-  
+  const url = `${API_BASE_URL}/v1/workspaces/${workspaceId}/environments`;
+  console.log(`[createEnvironment] 🚚 POST hacia ${url}`, environmentData);
+
   try {
-    console.log(`Intentando crear ambiente para compañía ${companyId}:`, environmentData);
-    
-    // Crear el ambiente usando el endpoint del backend
-    // API_BASE_URL es http://localhost:8000/api
-    // El backend espera /api/v1/companies/...
-    const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments`;
-    console.log('URL para crear ambiente:', correctApiUrl); // Log para depurar URL
-    const response = await fetch(correctApiUrl, {
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({
-        name: environmentData.name,
-        description: environmentData.description,
-        path: environmentData.path,
-        company_id: companyId // Añadir company_id al cuerpo
-        // is_active y diagrams no se envían, el backend debe asignarles valores por defecto si es necesario.
+        ...environmentData,
+        workspace_id: workspaceId,
       })
     });
 
-    if (response.status === 404) {
-      console.error('El endpoint para crear ambientes no está disponible en el backend');
-      throw new Error('El servicio para crear ambientes no está disponible en el backend. Contacta al administrador del sistema.');
-    }
-
     if (!response.ok) {
-      if (response.status === 401) {
-        localStorage.removeItem('token');
-        window.location.href = '/login?session_expired=true';
-        throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
-      }
-      const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-      console.error('Error al crear ambiente:', errorData);
-      throw new Error(errorData.detail || 'Error creando ambiente');
+      const errorData = await response.json().catch(() => ({ detail: 'Error desconocido al crear ambiente' }));
+      console.error('[createEnvironment] Error en respuesta:', errorData);
+      throw new Error(errorData.detail || 'No se pudo crear el ambiente');
     }
 
-    const data = await response.json();
-    console.log('Ambiente creado exitosamente:', data);
-    return data;
-  } catch (error: unknown) {
-    console.error('Error en createEnvironment:', error);
+    const newEnvironment = await response.json();
+    console.log('[createEnvironment] ✅ Ambiente creado:', newEnvironment);
+
+    // Invalidar cache para que la próxima llamada a getEnvironments traiga la lista actualizada
+    const cacheKey = CACHE_KEYS.ENVIRONMENTS(workspaceId);
+    cacheService.clear(cacheKey);
+    console.log(`[createEnvironment] 🧹 Cache invalidado para ${cacheKey}`);
+
+    return newEnvironment;
+  } catch (error) {
+    console.error('[createEnvironment] Excepción:', error);
     throw error;
   }
 };
 
-export const updateEnvironment = async (companyId: string, environmentId: string, environmentData: { name: string; description?: string; path?: string; is_active: boolean }): Promise<Environment> => {
-  if (!isAuthenticated()) {
-    throw new Error('Usuario no autenticado');
-  }
+export const updateEnvironment = async (workspaceId: string, environmentId: string, environmentData: Partial<Environment>): Promise<Environment> => {
+  if (!isAuthenticated()) throw new Error('Usuario no autenticado');
+  if (!workspaceId || !environmentId) throw new Error('Workspace ID y Environment ID son requeridos');
 
   const token = await getAuthTokenAsync();
-  // API_BASE_URL es http://localhost:8000/api
-  // El backend espera /api/v1/companies/...
-  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
-  const response = await fetch(correctApiUrl, {
+  const url = `${API_BASE_URL}/v1/workspaces/${workspaceId}/environments/${environmentId}`;
+  console.log(`[updateEnvironment] 🚚 PUT hacia ${url}`, environmentData);
+
+  const response = await fetch(url, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify(environmentData)
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login?session_expired=true';
-      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
-    }
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({ detail: 'Error desconocido al actualizar' }));
+    console.error('[updateEnvironment] Error en respuesta:', errorData);
     throw new Error(errorData.detail || 'Error actualizando ambiente');
   }
 
-  return await response.json() as Environment;
+  const updatedEnvironment = await response.json();
+  console.log('[updateEnvironment] ✅ Ambiente actualizado:', updatedEnvironment);
+
+  // Invalidar cache
+  cacheService.clear(CACHE_KEYS.ENVIRONMENTS(workspaceId));
+  
+  return updatedEnvironment;
 };
 
-export const deleteEnvironment = async (companyId: string, environmentId: string): Promise<void> => {
-  if (!isAuthenticated()) {
-    throw new Error('Usuario no autenticado');
-  }
+export const deleteEnvironment = async (workspaceId: string, environmentId: string): Promise<void> => {
+  if (!isAuthenticated()) throw new Error('Usuario no autenticado');
+  if (!workspaceId || !environmentId) throw new Error('Workspace ID y Environment ID son requeridos');
 
   const token = await getAuthTokenAsync();
-  // API_BASE_URL es http://localhost:8000/api
-  // El backend espera /api/v1/companies/...
-  const correctApiUrl = `${API_BASE_URL}/v1/companies/${companyId}/environments/${environmentId}`;
-  const response = await fetch(correctApiUrl, {
+  const url = `${API_BASE_URL}/v1/workspaces/${workspaceId}/environments/${environmentId}`;
+  console.log(`[deleteEnvironment] 🚚 DELETE hacia ${url}`);
+
+  const response = await fetch(url, {
     method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    }
+    headers: { 'Authorization': `Bearer ${token}` }
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login?session_expired=true';
-      throw new Error('Sesión expirada o inválida. Por favor, inicie sesión nuevamente.');
-    }
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({ detail: 'Error desconocido al eliminar' }));
+    console.error('[deleteEnvironment] Error en respuesta:', errorData);
     throw new Error(errorData.detail || 'Error eliminando ambiente');
   }
+
+  console.log('[deleteEnvironment] ✅ Ambiente eliminado');
+  // Invalidar cache
+  cacheService.clear(CACHE_KEYS.ENVIRONMENTS(workspaceId));
 };
 
 // Funciones relacionadas con diagramas asociados a ambientes
@@ -291,7 +236,7 @@ export const getDiagramsByEnvironment = async (companyId: string, environmentId:
   const token = await getAuthTokenAsync();
   try {
     // Get current workspace from the navigation store
-    const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
+    const navStore = (await import('../stores/useNavigationStore')).useNavigationStore.getState();
     const currentWorkspaceId = navStore.activeWorkspace?.id;
     
     if (!currentWorkspaceId) {
@@ -367,7 +312,7 @@ export const getDiagram = async (companyId: string, environmentId: string, diagr
   
   try {
     // Get current workspace from the navigation store
-    const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
+    const navStore = (await import('../stores/useNavigationStore')).useNavigationStore.getState();
     const currentWorkspaceId = navStore.activeWorkspace?.id;
     
     if (!currentWorkspaceId) {
@@ -432,7 +377,7 @@ export const createDiagram = async (companyId: string, environmentId: string, di
   
   try {
     // Get current workspace from the navigation store
-    const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
+    const navStore = (await import('../stores/useNavigationStore')).useNavigationStore.getState();
     const currentWorkspaceId = navStore.activeWorkspace?.id;
     
     if (!currentWorkspaceId) {
@@ -535,7 +480,7 @@ export const updateDiagram = async (
   }
 
   // Get current workspace from the navigation store
-  const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
+  const navStore = (await import('../stores/useNavigationStore')).useNavigationStore.getState();
   const currentWorkspaceId = navStore.activeWorkspace?.id;
   
   if (!currentWorkspaceId) {
@@ -617,7 +562,7 @@ export const deleteDiagram = async (companyId: string, environmentId: string, di
   const token = await getAuthTokenAsync();
   
   // Get current workspace from the navigation store
-  const navStore = (await import('../hooks/useNavigationStore')).useNavigationStore.getState();
+  const navStore = (await import('../stores/useNavigationStore')).useNavigationStore.getState();
   const currentWorkspaceId = navStore.activeWorkspace?.id;
   
   if (!currentWorkspaceId) {

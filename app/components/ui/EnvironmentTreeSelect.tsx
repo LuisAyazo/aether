@@ -1,34 +1,34 @@
-import React, { useState, useRef, useEffect, KeyboardEvent, MouseEvent, useMemo } from 'react'; // useMemo importado
+import React, { useState, useRef, useEffect, KeyboardEvent, MouseEvent, useMemo } from 'react';
 import { Input, Button, Tooltip } from 'antd';
 import { FolderOutlined, DatabaseOutlined, CaretDownOutlined, CaretRightOutlined, CheckCircleOutlined, PauseCircleOutlined, PlusOutlined, FolderAddOutlined, DeleteOutlined } from '@ant-design/icons';
-import styles from './EnvironmentTreeSelect.module.css'; 
-import { Environment } from '../../services/diagramService'; 
+import styles from './EnvironmentTreeSelect.module.css';
+import { Environment } from '../../services/diagramService';
 
 interface TreeNode {
-  type: 'group' | 'root'; 
-  name?: string; 
-  fullPath: string; 
-  children: { [key: string]: TreeNode }; 
-  environments: Environment[]; 
+  type: 'group' | 'root';
+  name?: string;
+  fullPath: string;
+  children: { [key: string]: TreeNode };
+  environments: Environment[];
 }
 
 interface EnvironmentTreeSelectProps {
   environments: Environment[];
-  value?: string; 
+  value?: string;
   onChange: (environmentId: string) => void;
   placeholder?: string;
-  selectedDirectory?: string; 
+  selectedDirectory?: string;
   onDirectoryChange?: (directoryPath: string) => void;
-  onCreateDirectory?: (fullDirectoryPath: string) => void; 
+  onCreateDirectory?: (fullDirectoryPath: string) => void;
   onDeleteEnvironment?: (environmentId: string) => void;
-  mode?: 'select' | 'directory'; 
+  mode?: 'select' | 'directory';
   showDeleteButton?: boolean;
   className?: string;
 }
 
-export default function EnvironmentTreeSelect({ 
-  environments, 
-  value, 
+export default function EnvironmentTreeSelect({
+  environments,
+  value,
   onChange,
   placeholder = 'Selecciona un ambiente',
   selectedDirectory,
@@ -45,91 +45,51 @@ export default function EnvironmentTreeSelect({
   const selectorRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedItem, setSelectedItem] = useState<Environment | null>(null);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set([''])); 
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['']));
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
-  
+
   const [showNewDirectoryInputForPath, setShowNewDirectoryInputForPath] = useState<string | null>(null);
   const [newDirectoryName, setNewDirectoryName] = useState('');
 
   const buildEnvironmentTree = (environmentItems: Environment[]): TreeNode => {
-    const sortedEnvironments = [...environmentItems].sort((a, b) => {
-      const pathA = a.path || '';
-      const pathB = b.path || '';
-      if (pathA !== pathB) {
-        return pathA.localeCompare(pathB);
+    const root: TreeNode = { type: 'root', fullPath: '', children: {}, environments: [] };
+
+    environmentItems.forEach(env => {
+      const path = env.path || '';
+      const parts = path.split('/').filter(p => p);
+      
+      if (parts.length === 0) {
+        root.environments.push(env);
+        return;
       }
-      return a.name.localeCompare(b.name);
-    });
 
-    const rootTree: TreeNode = { type: 'root', fullPath: '', children: {}, environments: [] };
-    
-    const groups: { [key: string]: Environment[] } = {};
-    const rootEnvironments: Environment[] = [];
-
-    sortedEnvironments.forEach(env => {
-      const path = env.path?.trim() || '';
-      if (!path) {
-        rootEnvironments.push(env);
-      } else {
-        const pathParts = path.split('/');
-        const groupName = pathParts[0];
-        if (!groups[groupName]) {
-          groups[groupName] = [];
+      let currentNode = root;
+      let currentPath = '';
+      parts.forEach(part => {
+        currentPath = currentPath ? `${currentPath}/${part}` : part;
+        if (!currentNode.children[part]) {
+          currentNode.children[part] = {
+            type: 'group',
+            name: part,
+            fullPath: currentPath,
+            children: {},
+            environments: []
+          };
         }
-        groups[groupName].push(env);
-      }
+        currentNode = currentNode.children[part];
+      });
+      currentNode.environments.push(env);
     });
 
-    rootTree.environments.push(...rootEnvironments);
-
-    Object.entries(groups).forEach(([groupName, envsInGroup]) => {
-      if (envsInGroup.length > 0) {
-        const groupNode: TreeNode = {
-          type: 'group',
-          name: groupName,
-          fullPath: groupName, 
-          children: {},
-          environments: []
-        };
-
-        envsInGroup.forEach(env => {
-          const path = env.path?.trim() || ''; 
-          const pathParts = path.split('/');
-
-          if (pathParts.length > 1) { 
-            let currentNode = groupNode;
-            for (let i = 1; i < pathParts.length; i++) {
-              const segmentName = pathParts[i];
-              const subPath = pathParts.slice(0, i + 1).join('/');
-              
-              if (!currentNode.children[segmentName]) {
-                currentNode.children[segmentName] = {
-                  type: 'group',
-                  name: segmentName,
-                  fullPath: subPath,
-                  children: {},
-                  environments: []
-                };
-              }
-              currentNode = currentNode.children[segmentName];
-            }
-            currentNode.environments.push(env); 
-          } else {
-            groupNode.environments.push(env);
-          }
-        });
-        rootTree.children[groupName] = groupNode;
-      }
-    });
-    return rootTree;
+    return root;
   };
-  
-  const treeStructure = useMemo(() => buildEnvironmentTree(environments), [environments]); // Memoizado
+
+  const treeStructure = useMemo(() => buildEnvironmentTree(environments), [environments]);
 
   useEffect(() => {
     if (value && mode === 'select') {
       const findEnv = (items: Environment[]): Environment | null => items.find(e => e.id === value) || null;
-      
+
       const searchInNode = (node: TreeNode): Environment | null => {
         let found = findEnv(node.environments);
         if (found) return found;
@@ -143,7 +103,7 @@ export default function EnvironmentTreeSelect({
     } else {
       setSelectedItem(null);
     }
-  }, [value, mode, treeStructure]); // treeStructure en dependencias
+  }, [value, mode, treeStructure]);
 
   const filterTreeNode = (node: TreeNode, searchQuery: string): TreeNode | null => {
     if (!searchQuery) return node;
@@ -158,7 +118,7 @@ export default function EnvironmentTreeSelect({
     let hasMatchingChildren = false;
     Object.entries(node.children).forEach(([key, childNode]) => {
       const filteredChild = filterTreeNode(childNode, searchQuery);
-      if (filteredChild) { // Si el hijo (o sus descendientes) tiene coincidencias
+      if (filteredChild) {
         children[key] = filteredChild;
         hasMatchingChildren = true;
       }
@@ -170,17 +130,17 @@ export default function EnvironmentTreeSelect({
     return null;
   };
 
-  const filteredTree = useMemo(() => filterTreeNode(treeStructure, searchText), [treeStructure, searchText]); // Memoizado
+  const filteredTree = useMemo(() => filterTreeNode(treeStructure, searchText), [treeStructure, searchText]);
 
   useEffect(() => {
     if (searchText && filteredTree) {
-      const newExpandedPaths = new Set<string>(['']); 
+      const newExpandedPaths = new Set<string>(['']);
       const expandMatching = (node: TreeNode, _currentPath: string) => {
         if (node.environments.length > 0 && node.fullPath !== '') {
            newExpandedPaths.add(node.fullPath);
         }
         Object.values(node.children).forEach(child => {
-          if (child.fullPath) { 
+          if (child.fullPath) {
             const childContainsMatches = (n: TreeNode): boolean => {
                 if (n.environments.length > 0) return true;
                 return Object.values(n.children).some(c => childContainsMatches(c));
@@ -192,8 +152,8 @@ export default function EnvironmentTreeSelect({
           }
         });
       };
-      if (filteredTree) expandMatching(filteredTree, ''); // Asegurar que filteredTree no sea null
-      setExpandedGroups(newExpandedPaths); // Corregido a setExpandedGroups
+      if (filteredTree) expandMatching(filteredTree, '');
+      setExpandedGroups(newExpandedPaths);
     }
   }, [searchText, filteredTree]);
 
@@ -213,7 +173,7 @@ export default function EnvironmentTreeSelect({
       setSearchText('');
     }
   };
-  
+
   const handleCreateNewDirectorySubmit = (parentPath: string) => {
     if (newDirectoryName.trim() && onCreateDirectory) {
       const fullPath = parentPath ? `${parentPath}/${newDirectoryName.trim()}` : newDirectoryName.trim();
@@ -233,7 +193,7 @@ export default function EnvironmentTreeSelect({
   };
 
   useEffect(() => {
-    const handleClickOutside = (event: globalThis.MouseEvent) => { 
+    const handleClickOutside = (event: globalThis.MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
           selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -263,7 +223,7 @@ export default function EnvironmentTreeSelect({
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') setIsOpen(false);
   };
-  
+
   const getEnvironmentStatusIcon = (environment: Environment) => {
     return environment.is_active ? (
       <CheckCircleOutlined className="text-green-500" />
@@ -282,13 +242,13 @@ export default function EnvironmentTreeSelect({
 
   const EnvironmentTreeRecursive = ({ node, level = 0 }: { node: TreeNode, level?: number }) => {
     if (!node) return null;
-    const isExpanded = node.fullPath !== '' ? expandedGroups.has(node.fullPath) : true; 
-    const indentSize = level * 16; 
+    const isExpanded = node.fullPath !== '' ? expandedGroups.has(node.fullPath) : true;
+    const indentSize = level * 16;
 
     return (
       <>
         {node.type === 'group' && node.name && (
-          <div 
+          <div
             className={`${styles.groupHeader} ${mode === 'directory' && selectedDirectory === node.fullPath ? styles.selectedDirectory : ''} bg-yellow-50 dark:bg-yellow-700/30 hover:bg-yellow-100 dark:hover:bg-yellow-600/40`}
             style={{ paddingLeft: `${indentSize}px` }}
             onClick={(e) => {
@@ -339,7 +299,7 @@ export default function EnvironmentTreeSelect({
                   {getEnvironmentStatusIcon(env)}
                   {showDeleteButton && onDeleteEnvironment && (
                     <Tooltip title="Eliminar ambiente">
-                      <DeleteOutlined 
+                      <DeleteOutlined
                         className="text-gray-400 hover:text-red-500 ml-3 cursor-pointer"
                         onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDeleteEnvironment(env.id); }}
                       />
@@ -372,11 +332,11 @@ export default function EnvironmentTreeSelect({
       </>
     );
   };
-  
+
   const getDisplayValue = () => {
     if (mode === 'directory') {
-      return selectedDirectory ? 
-        <div className="flex items-center"><FolderOutlined className="mr-2 text-gray-500" />{selectedDirectory}</div> : 
+      return selectedDirectory ?
+        <div className="flex items-center"><FolderOutlined className="mr-2 text-gray-500" />{selectedDirectory}</div> :
         <span className="text-gray-400">{placeholder}</span>;
     }
     if (!selectedItem) return <span className="text-gray-400">{placeholder}</span>;
@@ -399,20 +359,20 @@ export default function EnvironmentTreeSelect({
 
   return (
     <div className={`${styles.container} ${className}`}>
-      <div 
+      <div
         ref={selectorRef}
         className={`${styles.selector} ${isOpen ? styles.active : ''} flex items-center`}
         onClick={() => setIsOpen(!isOpen)}
       >
         {getDisplayValue()}
       </div>
-      
+
       {isOpen && (
-        <div 
+        <div
           ref={dropdownRef}
-          className={styles.dropdown} 
-          style={{ 
-            position: 'fixed', 
+          className={styles.dropdown}
+          style={{
+            position: 'fixed',
             zIndex: 999999,
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
@@ -431,8 +391,8 @@ export default function EnvironmentTreeSelect({
               onClick={(e) => e.stopPropagation()}
             />
           </div>
-          {mode === 'directory' && onCreateDirectory && !searchText && ( 
-             <div 
+          {mode === 'directory' && onCreateDirectory && !searchText && (
+             <div
                 className="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm text-gray-600 dark:text-gray-300"
                 onClick={(e: React.MouseEvent) => { e.stopPropagation(); setShowNewDirectoryInputForPath(''); setNewDirectoryName(''); }}
               >

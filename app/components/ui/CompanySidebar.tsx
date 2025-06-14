@@ -39,7 +39,7 @@ import {
 } from '@heroicons/react/24/solid';
 import { ChevronDownIcon } from '@heroicons/react/20/solid';
 import { logoutUser as authLogout } from '../../services/authService';
-import { useNavigationStore } from '../../hooks/useNavigationStore';
+import { useNavigationStore } from '../../stores/useNavigationStore';
 import { PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../../services/companyService';
 
 export interface SidebarSection {

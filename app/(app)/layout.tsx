@@ -6,7 +6,7 @@ import Navigation from "../components/Navigation"; // Este será nuestro MainHea
 import { isAuthenticated, saveAuthData } from '../services/authService'; // getCurrentUser se usará desde el store
 import { User } from '../services/authService';
 // import { useEditorStore } from '../components/flow/hooks/useEditorStore'; // Ya no se usa para estos datos
-import { useNavigationStore } from '../hooks/useNavigationStore'; // Importar el nuevo store
+import { useNavigationStore } from '../stores/useNavigationStore'; // Importar el nuevo store
 // import { getCompanies, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../services/companyService'; // Se manejará en el store
 
 // Import the API interceptor to handle 401 errors globally

@@ -17,7 +17,7 @@ import {
   RobotOutlined,
   BookOutlined,
 } from '@ant-design/icons';
-import { useNavigationStore } from "../../hooks/useNavigationStore";
+import { useNavigationStore } from "../../stores/useNavigationStore";
 
 // Importar los nuevos módulos
 import MonitoringPage from './MonitoringPage';

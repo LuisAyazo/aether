@@ -3,12 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock navigation store first
 const mockNavigationStore = {
   getState: vi.fn(() => ({
-    activeWorkspace: { id: 'workspace-123' },
+    activeWorkspace: { id: 'workspace-123' } as { id: string } | null,
     activeCompany: { id: 'company-123' }
   }))
 };
 
-vi.mock('@/hooks/useNavigationStore', () => ({
+vi.mock('@/stores/useNavigationStore', () => ({
   useNavigationStore: mockNavigationStore
 }));
 
@@ -22,17 +22,18 @@ vi.mock('@/services/authService', () => ({
 }));
 
 // Mock cache service
+const mockCacheService = {
+  get: vi.fn(),
+  set: vi.fn(),
+  clear: vi.fn(),
+  clearAll: vi.fn(),
+};
 vi.mock('@/services/cacheService', () => ({
-  cacheService: {
-    get: vi.fn(),
-    set: vi.fn(),
-    clear: vi.fn(),
-    clearAll: vi.fn()
-  },
+  cacheService: mockCacheService,
   CACHE_KEYS: {
-    ENVIRONMENTS: (companyId: string) => `environments_${companyId}`,
-    DIAGRAMS: (companyId: string, envId: string) => `diagrams_${companyId}_${envId}`,
-    DIAGRAM: (companyId: string, envId: string, diagramId: string) => `diagram_${companyId}_${envId}_${diagramId}`
+    ENVIRONMENTS: (workspaceId: string) => `environments_${workspaceId}`,
+    DIAGRAMS: (workspaceId: string, envId: string) => `diagrams_${workspaceId}_${envId}`,
+    DIAGRAM: (workspaceId: string, envId: string, diagramId: string) => `diagram_${workspaceId}_${envId}_${diagramId}`
   },
   CACHE_TTL: {
     ENVIRONMENTS: 300000,
@@ -47,9 +48,6 @@ global.fetch = mockFetch;
 
 // Now import the service after all mocks are set up
 import * as diagramService from "../../../../app/services/diagramService";
-import { cacheService } from "../../../../app/services/cacheService";
-
-const mockCacheService = cacheService;
 
 describe('diagramService', () => {
   const mockEnvironment: diagramService.Environment = {
@@ -120,11 +118,11 @@ describe('diagramService', () => {
           json: async () => mockEnvironments
         });
 
-        const result = await diagramService.getEnvironments('company-123');
+        const result = await diagramService.getEnvironments('workspace-123');
 
         expect(result).toEqual(mockEnvironments);
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/v1/companies/company-123/environments'),
+          expect.stringContaining('/api/v1/workspaces/workspace-123/environments'),
           expect.objectContaining({
             method: 'GET',
             headers: {
@@ -139,12 +137,12 @@ describe('diagramService', () => {
         const cachedEnvironments = [mockEnvironment];
         mockCacheService.get.mockReturnValue(cachedEnvironments);
 
-        const result = await diagramService.getEnvironments('company-123');
+        const result = await diagramService.getEnvironments('workspace-123');
 
         expect(result).toEqual(cachedEnvironments);
         expect(mockFetch).not.toHaveBeenCalled();
         expect(mockCacheService.get).toHaveBeenCalledWith(
-          expect.stringContaining('company-123')
+          expect.stringContaining('workspace-123')
         );
       });
 
@@ -159,7 +157,7 @@ describe('diagramService', () => {
           json: async () => freshEnvironments
         });
 
-        const result = await diagramService.getEnvironments('company-123', true);
+        const result = await diagramService.getEnvironments('workspace-123', true);
 
         expect(result).toEqual(freshEnvironments);
         expect(mockFetch).toHaveBeenCalled();
@@ -174,7 +172,7 @@ describe('diagramService', () => {
         const originalLocation = window.location.href;
         
         await expect(
-          diagramService.getEnvironments('company-123')
+          diagramService.getEnvironments('workspace-123')
         ).rejects.toThrow('Sesión expirada');
 
         expect(localStorage.removeItem).toHaveBeenCalledWith('token');
@@ -189,14 +187,14 @@ describe('diagramService', () => {
         });
 
         await expect(
-          diagramService.getEnvironments('company-123')
+          diagramService.getEnvironments('workspace-123')
         ).rejects.toThrow('servicio para obtener ambientes no está disponible');
       });
 
       it('should throw error when companyId is invalid', async () => {
         await expect(
           diagramService.getEnvironments('')
-        ).rejects.toThrow('ID de compañía no válido');
+        ).rejects.toThrow('workspaceId es inválido');
       });
     });
 
@@ -214,11 +212,11 @@ describe('diagramService', () => {
           path: '/prod'
         };
 
-        const result = await diagramService.createEnvironment('company-123', newEnvironment);
+        const result = await diagramService.createEnvironment('workspace-123', newEnvironment);
 
         expect(result).toEqual(mockEnvironment);
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/v1/companies/company-123/environments'),
+          expect.stringContaining('/api/v1/workspaces/workspace-123/environments'),
           expect.objectContaining({
             method: 'POST',
             headers: {
@@ -227,7 +225,7 @@ describe('diagramService', () => {
             },
             body: JSON.stringify({
               ...newEnvironment,
-              company_id: 'company-123'
+              workspace_id: 'workspace-123'
             })
           })
         );
@@ -241,7 +239,7 @@ describe('diagramService', () => {
         });
 
         await expect(
-          diagramService.createEnvironment('company-123', { name: 'Prod' })
+          diagramService.createEnvironment('workspace-123', { name: 'Prod' })
         ).rejects.toThrow('Environment name already exists');
       });
     });
@@ -262,14 +260,14 @@ describe('diagramService', () => {
         };
 
         const result = await diagramService.updateEnvironment(
-          'company-123',
+          'workspace-123',
           'env-123',
           updateData
         );
 
         expect(result).toEqual(updatedEnvironment);
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/v1/companies/company-123/environments/env-123'),
+          expect.stringContaining('/api/v1/workspaces/workspace-123/environments/env-123'),
           expect.objectContaining({
             method: 'PUT',
             body: JSON.stringify(updateData)
@@ -285,10 +283,10 @@ describe('diagramService', () => {
           status: 204
         });
 
-        await diagramService.deleteEnvironment('company-123', 'env-123');
+        await diagramService.deleteEnvironment('workspace-123', 'env-123');
 
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/v1/companies/company-123/environments/env-123'),
+          expect.stringContaining('/api/v1/workspaces/workspace-123/environments/env-123'),
           expect.objectContaining({
             method: 'DELETE'
           })
@@ -340,7 +338,7 @@ describe('diagramService', () => {
 
       it('should handle no workspace selected', async () => {
         mockNavigationStore.getState.mockReturnValue({
-          activeWorkspace: null as any,
+          activeWorkspace: null,
           activeCompany: { id: 'company-123' }
         });
 
