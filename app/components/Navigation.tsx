@@ -488,11 +488,7 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
         <Input placeholder={currentDiagram?.name || "Nombre del diagrama"} value={destroyConfirmationText} onChange={(e) => setDestroyConfirmationText(e.target.value)} />
       </Modal>
 
-      <GeneratedCodeModal
-        visible={generatedCodeModalVisible}
-        onClose={() => setGeneratedCodeModalVisible(false)}
-        nodes={currentDiagram?.nodes || []}
-      />
+      <GeneratedCodeModal />
     </>
   );
 }

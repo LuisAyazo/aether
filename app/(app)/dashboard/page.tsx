@@ -86,7 +86,23 @@ export default function DashboardPage() {
   const updateCurrentDiagramInMemory = useNavigationStore(state => state.updateCurrentDiagramInMemory);
   
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  
+  // Inicializar el estado del sidebar desde localStorage
+  const getInitialSidebarState = () => {
+    if (typeof window !== 'undefined' && activeCompany) {
+      const savedState = localStorage.getItem(`companySidebarCollapsed_${activeCompany._id}`);
+      if (savedState !== null) {
+        try {
+          return JSON.parse(savedState);
+        } catch (e) {
+          console.error("Error parsing saved sidebar state", e);
+        }
+      }
+    }
+    return false;
+  };
+  
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(getInitialSidebarState);
   const [isWelcomeModalVisible, setIsWelcomeModalVisible] = useState<boolean>(false);
   const fetchCurrentWorkspaceEnvironments = useNavigationStore(state => state.fetchCurrentWorkspaceEnvironments);
 
@@ -209,6 +225,21 @@ export default function DashboardPage() {
     }
   }, [activeSectionInSidebar, activeWorkspace, fetchCurrentWorkspaceEnvironments]);
 
+  // Efecto para actualizar el estado del sidebar cuando cambia la compañía
+  useEffect(() => {
+    if (activeCompany) {
+      const savedState = localStorage.getItem(`companySidebarCollapsed_${activeCompany._id}`);
+      if (savedState !== null) {
+        try {
+          const isCollapsed = JSON.parse(savedState);
+          setSidebarCollapsed(isCollapsed);
+        } catch (e) {
+          console.error("Error parsing saved sidebar state", e);
+        }
+      }
+    }
+  }, [activeCompany]);
+
   // Estado para el grupo expandido inicial
   const [initialExpandedGroup, setInitialExpandedGroup] = useState<string | null>(null);
 
@@ -268,15 +299,21 @@ export default function DashboardPage() {
     const selectedEnv = environments.find(e => e.id === selectedEnvironment);
     const selectedDiag = diagramsFromStore.find(d => d.id === selectedDiagram);
     
-    if (selectedEnv && selectedDiag) {
+    if (selectedEnv && selectedDiag && activeCompany) {
       // Usar un timeout para evitar múltiples actualizaciones rápidas
       const timeoutId = setTimeout(() => {
         const currentParams = new URLSearchParams(window.location.search);
         const envParam = selectedEnv.name.toLowerCase().replace(/\s+/g, '-');
         const diagramParam = selectedDiag.name.toLowerCase().replace(/\s+/g, '-');
         
+        // Agregar el slug de la compañía a los parámetros
+        const companySlug = activeCompany.slug || activeCompany.name.toLowerCase().replace(/\s+/g, '-');
+        
         // Solo actualizar si realmente cambió
-        if (currentParams.get('env') !== envParam || currentParams.get('diagram') !== diagramParam) {
+        if (currentParams.get('env') !== envParam ||
+            currentParams.get('diagram') !== diagramParam ||
+            currentParams.get('company') !== companySlug) {
+          currentParams.set('company', companySlug);
           currentParams.set('env', envParam);
           currentParams.set('diagram', diagramParam);
           
@@ -292,7 +329,7 @@ export default function DashboardPage() {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [selectedEnvironment, selectedDiagram, environments, diagramsFromStore, pathname, router, urlParamsLoaded]);
+  }, [selectedEnvironment, selectedDiagram, environments, diagramsFromStore, pathname, router, urlParamsLoaded, activeCompany]);
 
   const handleInternalSectionChange = (sectionString: string) => {
     console.log('[Dashboard] handleInternalSectionChange called with:', sectionString);
@@ -613,7 +650,14 @@ export default function DashboardPage() {
               activeSection={activeSectionInSidebar}
               onSectionChange={handleInternalSectionChange}
               isCollapsed={sidebarCollapsed}
-              onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+              onToggleCollapse={() => {
+                const newState = !sidebarCollapsed;
+                setSidebarCollapsed(newState);
+                // Guardar en localStorage
+                if (activeCompany) {
+                  localStorage.setItem(`companySidebarCollapsed_${activeCompany._id}`, JSON.stringify(newState));
+                }
+              }}
               sections={sidebarSections}
               isPersonalSpace={isPersonalSpace || false}
             />

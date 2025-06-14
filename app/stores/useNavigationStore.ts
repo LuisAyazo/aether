@@ -76,6 +76,7 @@ export interface NavigationStoreState {
   lastCodeGenerationTimestamp: number;
   codeGenerationDebounceTimer: NodeJS.Timeout | null;
   flowChangeListeners: (() => void)[];
+  _shouldOpenLivePreviewModal?: boolean; // Temporal para abrir el modal después de cargar
   user: User | null;
   userCompanies: Company[];
   activeCompany: Company | null;
@@ -759,6 +760,18 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
           value: enabled,
           allLivePreviewKeys: Object.keys(localStorage).filter(k => k.includes('livePreviewEnabled'))
         });
+        
+        // Verificar que se guardó correctamente
+        try {
+          const savedValue = localStorage.getItem(key);
+          console.log('🔍 DEBUG Store - Verificación inmediata del Live Preview:', {
+            key,
+            savedValue,
+            parsedValue: savedValue ? JSON.parse(savedValue) : null
+          });
+        } catch (e) {
+          console.error('❌ Error verificando el guardado del Live Preview:', e);
+        }
       } else {
         console.log('⚠️ DEBUG Store - No se puede guardar Live Preview: no hay companyId');
       }
@@ -922,6 +935,35 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
         if (recent_diagrams?.[0]?.id && (!recent_diagrams[0].nodes || !recent_diagrams[0].edges)) {
           await get().handleDiagramChange(recent_diagrams[0].id);
         }
+        
+        // Verificar si el Live Preview estaba activo para esta compañía
+        if (typeof window !== 'undefined' && companyToSelect) {
+          const companyId = companyToSelect._id || companyToSelect.id;
+          const livePreviewKey = `livePreviewEnabled_${companyId}`;
+          const savedLivePreviewState = localStorage.getItem(livePreviewKey);
+          
+          console.log('🔍 DEBUG Store - Verificando Live Preview en initializeAppLogic:', {
+            companyId,
+            livePreviewKey,
+            savedValue: savedLivePreviewState,
+            currentDiagram: get().currentDiagram?.id
+          });
+          
+          if (savedLivePreviewState !== null) {
+            try {
+              const isEnabled = JSON.parse(savedLivePreviewState);
+              if (isEnabled && get().currentDiagram) {
+                console.log('🚀 DEBUG Store - Live Preview estaba activo, abriendo modal automáticamente...');
+                // Esperar un poco para asegurar que todo esté cargado
+                setTimeout(() => {
+                  get().generateCodeAndShowModal();
+                }, 1000);
+              }
+            } catch (e) {
+              console.error('❌ Error verificando Live Preview en initializeAppLogic:', e);
+            }
+          }
+        }
       } else {
         set({ activeCompany: null });
       }
@@ -938,17 +980,51 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
     }
   },
   setActiveCompanyAndLoadData: async (company, isPersonal) => {
-    set({ 
-      activeCompany: company, 
-      isPersonalSpace: isPersonal, 
-      dataLoading: true, 
-      dataError: null, 
-      environments: [], 
-      diagrams: [], 
-      selectedEnvironment: null, 
-      selectedDiagram: null, 
-      currentDiagram: null 
+    set({
+      activeCompany: company,
+      isPersonalSpace: isPersonal,
+      dataLoading: true,
+      dataError: null,
+      environments: [],
+      diagrams: [],
+      selectedEnvironment: null,
+      selectedDiagram: null,
+      currentDiagram: null
     });
+    
+    // Cargar el estado del Live Preview para la nueva compañía
+    if (typeof window !== 'undefined') {
+      const companyId = company?._id || company?.id;
+      if (companyId) {
+        const livePreviewKey = `livePreviewEnabled_${companyId}`;
+        const savedLivePreviewState = localStorage.getItem(livePreviewKey);
+        
+        console.log('🔍 DEBUG Store - Cargando Live Preview para nueva compañía:', {
+          companyId,
+          livePreviewKey,
+          savedValue: savedLivePreviewState,
+          parsedValue: savedLivePreviewState ? JSON.parse(savedLivePreviewState) : null
+        });
+        
+        if (savedLivePreviewState !== null) {
+          try {
+            const isEnabled = JSON.parse(savedLivePreviewState);
+            set({ isLivePreviewEnabled: isEnabled });
+            console.log('✅ DEBUG Store - Live Preview cargado para compañía:', isEnabled);
+            
+            // Si el Live Preview estaba activo, programar la apertura del modal
+            if (isEnabled) {
+              console.log('📋 DEBUG Store - Live Preview estaba activo, programando apertura del modal...');
+              // Guardar en una variable temporal para abrir el modal después
+              set({ _shouldOpenLivePreviewModal: true });
+            }
+          } catch (e) {
+            console.error('❌ Error cargando Live Preview para compañía:', e);
+          }
+        }
+      }
+    }
+    
     try {
       const { workspaces } = get();
       const companyWorkspaces = workspaces.filter(w => w.company_id === company.id);
@@ -956,6 +1032,17 @@ export const useNavigationStore = create<NavigationStoreState>((set, get) => ({
       if (activeWorkspace) {
         set({ activeWorkspace });
         await get().fetchCurrentWorkspaceEnvironments();
+        
+        // Después de cargar los ambientes y diagramas, verificar si debemos abrir el Live Preview
+        const state = get();
+        if (state._shouldOpenLivePreviewModal && state.currentDiagram) {
+          console.log('🚀 DEBUG Store - Abriendo modal de Live Preview automáticamente...');
+          // Esperar un poco para asegurar que todo esté cargado
+          setTimeout(() => {
+            get().generateCodeAndShowModal();
+            set({ _shouldOpenLivePreviewModal: false });
+          }, 500);
+        }
       } else {
         set({ workspaces: [], activeWorkspace: null, environments: [], dataLoading: false });
       }

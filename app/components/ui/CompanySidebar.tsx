@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation'; 
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Dropdown, Avatar, Popover, message } from 'antd';
 import { 
@@ -124,6 +124,7 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
 }) => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   // Obtener datos del store
   const user = useNavigationStore(state => state.user);
@@ -131,16 +132,53 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
   const activeCompany = useNavigationStore(state => state.activeCompany);
   const setActiveCompanyAndLoadData = useNavigationStore(state => state.setActiveCompanyAndLoadData);
   
-  // Usar el companyId del activeCompany en lugar de params
+  // Obtener el slug de la compañía desde la URL si está disponible
+  const companySlugFromUrl = searchParams.get('company');
+  
+  // Si hay un slug en la URL y no coincide con la compañía activa, buscar y cambiar
+  useEffect(() => {
+    if (companySlugFromUrl && userCompanies.length > 0) {
+      const companyFromSlug = userCompanies.find(c =>
+        c.slug === companySlugFromUrl ||
+        c.name.toLowerCase().replace(/\s+/g, '-') === companySlugFromUrl
+      );
+      
+      if (companyFromSlug && (!activeCompany || activeCompany._id !== companyFromSlug._id)) {
+        console.log('🔄 DEBUG CompanySidebar - Cambiando a compañía desde URL:', companyFromSlug);
+        const isPersonal = companyFromSlug.name.startsWith(PERSONAL_SPACE_COMPANY_NAME_PREFIX);
+        setActiveCompanyAndLoadData(companyFromSlug, isPersonal);
+      }
+    }
+  }, [companySlugFromUrl, userCompanies, activeCompany, setActiveCompanyAndLoadData]);
+  
+  // Usar el companyId del activeCompany
   const companyId = activeCompany?._id || activeCompany?.id || '';
   
   // Debug para ver qué está pasando con el companyId
   console.log('🔍 DEBUG CompanySidebar - activeCompany:', activeCompany);
   console.log('🔍 DEBUG CompanySidebar - companyId:', companyId);
+  console.log('🔍 DEBUG CompanySidebar - companySlugFromUrl:', companySlugFromUrl);
 
-  const [internalIsCollapsed, setInternalIsCollapsed] = useState(propIsCollapsed);
+  // Inicializar el estado desde localStorage si está disponible
+  const getInitialCollapsedState = () => {
+    if (typeof window !== 'undefined' && companyId) {
+      const savedState = localStorage.getItem(`companySidebarCollapsed_${companyId}`);
+      if (savedState !== null) {
+        try {
+          return JSON.parse(savedState);
+        } catch (e) {
+          console.error("Error parsing saved state", e);
+        }
+      }
+    }
+    return propIsCollapsed;
+  };
+  
+  const [internalIsCollapsed, setInternalIsCollapsed] = useState(getInitialCollapsedState);
   const [companySelectorOpen, setCompanySelectorOpen] = useState(false);
   const [wasCollapsedBeforeLivePreview, setWasCollapsedBeforeLivePreview] = useState<boolean | null>(null);
+  const hasInitializedRef = useRef(false);
+  const isFirstRender = useRef(true);
 
   // Debug inicial
   console.log('🚀 DEBUG CompanySidebar - Montando componente:', {
@@ -150,10 +188,10 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
     isPersonalSpace
   });
 
-  // Cargar el estado inicial desde localStorage
+  // Cargar el estado inicial desde localStorage solo si cambia el companyId
   useEffect(() => {
-    if (typeof window !== 'undefined' && companyId) {
-      console.log('🔍 DEBUG CompanySidebar - Cargando estado inicial:', {
+    if (typeof window !== 'undefined' && companyId && !isFirstRender.current) {
+      console.log('🔍 DEBUG CompanySidebar - Cargando estado para nueva compañía:', {
         companyId,
         allLocalStorageKeys: Object.keys(localStorage).filter(k => k.includes('companySidebar'))
       });
@@ -183,12 +221,16 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
           try {
             const collapsed = JSON.parse(savedState);
             setInternalIsCollapsed(collapsed);
-            console.log('✅ DEBUG CompanySidebar - Estado cargado:', collapsed);
+            console.log('✅ DEBUG CompanySidebar - Estado cargado para nueva compañía:', collapsed);
           } catch (e) {
             console.error("❌ Error parsing companySidebarCollapsed from localStorage", e);
           }
         }
       }
+    }
+    
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
     }
   }, [companyId]);
 
@@ -202,8 +244,10 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
         setWasCollapsedBeforeLivePreview(internalIsCollapsed);
         // Colapsar el sidebar cuando se activa Live Preview
         setInternalIsCollapsed(true);
-        // Guardar en localStorage que está colapsado por Live Preview
+        // Guardar en localStorage con la misma clave
         if (typeof window !== 'undefined' && companyId) {
+          localStorage.setItem(`companySidebarCollapsed_${companyId}`, 'true');
+          // Marcar que fue colapsado por Live Preview
           localStorage.setItem(`companySidebarCollapsedByLivePreview_${companyId}`, 'true');
         }
       } else {
@@ -244,31 +288,8 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
     };
   }, [companyId, internalIsCollapsed, wasCollapsedBeforeLivePreview]);
 
-  // Guardar el estado en localStorage cuando cambia (pero solo si no es por Live Preview)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && companyId) {
-      // Solo guardar si no está siendo controlado por Live Preview
-      const wasCollapsedByLivePreview = localStorage.getItem(`companySidebarCollapsedByLivePreview_${companyId}`);
-      
-      console.log('🔍 DEBUG CompanySidebar - Guardando estado:', {
-        companyId,
-        internalIsCollapsed,
-        wasCollapsedByLivePreview,
-        willSave: wasCollapsedByLivePreview !== 'true'
-      });
-      
-      if (wasCollapsedByLivePreview !== 'true') {
-        const key = `companySidebarCollapsed_${companyId}`;
-        localStorage.setItem(key, JSON.stringify(internalIsCollapsed));
-        console.log('✅ DEBUG CompanySidebar - Estado guardado en localStorage:', {
-          key,
-          value: internalIsCollapsed
-        });
-      } else {
-        console.log('⚠️ DEBUG CompanySidebar - No se guarda porque está controlado por Live Preview');
-      }
-    }
-  }, [internalIsCollapsed, companyId]);
+  // NO guardar automáticamente en cada cambio de estado
+  // Solo guardar cuando el usuario hace una acción manual
 
   const handleToggleCollapse = () => {
     const newState = !internalIsCollapsed;
@@ -296,8 +317,22 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
       localStorage.setItem(key, JSON.stringify(newState));
       console.log('✅ DEBUG CompanySidebar - Estado guardado manualmente:', {
         key,
-        value: newState
+        value: newState,
+        allKeys: Object.keys(localStorage).filter(k => k.includes('companySidebar'))
       });
+      
+      // Forzar una actualización del localStorage
+      try {
+        // Verificar que se guardó correctamente
+        const savedValue = localStorage.getItem(key);
+        console.log('🔍 DEBUG CompanySidebar - Verificación inmediata:', {
+          key,
+          savedValue,
+          parsedValue: savedValue ? JSON.parse(savedValue) : null
+        });
+      } catch (e) {
+        console.error('❌ Error verificando el guardado:', e);
+      }
     }
     
     if (onToggleCollapse) {

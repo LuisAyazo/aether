@@ -71,24 +71,30 @@ const GeneratedCodeModal: React.FC = () => {
 
   // Cargar el estado del Live Preview desde localStorage al montar
   useEffect(() => {
+    console.log('🔍 DEBUG GeneratedCodeModal - useEffect triggered:', {
+      visible,
+      hasInitialized,
+      isLivePreviewEnabled
+    });
+    
     if (visible) {
       const { activeCompany } = useNavigationStore.getState();
       const companyId = activeCompany?._id || activeCompany?.id;
       
-      console.log('🔍 DEBUG - Cargando estado del Live Preview:', {
+      console.log('🔍 DEBUG GeneratedCodeModal - Cargando estado del Live Preview:', {
         visible,
         hasInitialized,
         activeCompany,
         companyId,
         currentLivePreviewEnabled: isLivePreviewEnabled,
-        allLocalStorageKeys: typeof window !== 'undefined' ? Object.keys(localStorage) : []
+        allLocalStorageKeys: typeof window !== 'undefined' ? Object.keys(localStorage).filter(k => k.includes('livePreview') || k.includes('companySidebar')) : []
       });
       
       if (companyId && typeof window !== 'undefined') {
         const key = `livePreviewEnabled_${companyId}`;
         const savedLivePreviewState = localStorage.getItem(key);
         
-        console.log('🔍 DEBUG - Estado guardado en localStorage:', {
+        console.log('🔍 DEBUG GeneratedCodeModal - Estado guardado en localStorage:', {
           key,
           savedValue: savedLivePreviewState,
           parsedValue: savedLivePreviewState ? JSON.parse(savedLivePreviewState) : null,
@@ -98,29 +104,33 @@ const GeneratedCodeModal: React.FC = () => {
         if (savedLivePreviewState !== null) {
           try {
             const isEnabled = JSON.parse(savedLivePreviewState);
-            console.log('🔍 DEBUG - Aplicando estado del Live Preview:', {
+            console.log('🔍 DEBUG GeneratedCodeModal - Aplicando estado del Live Preview:', {
               isEnabled,
               currentState: isLivePreviewEnabled,
               willUpdate: isEnabled !== isLivePreviewEnabled
             });
             
             // Siempre aplicar el estado guardado cuando se abre el modal
-            if (isEnabled && !isLivePreviewEnabled) {
-              console.log('✅ DEBUG - Activando Live Preview desde localStorage');
-              setLivePreviewEnabled(true);
-            } else if (!isEnabled && isLivePreviewEnabled) {
-              console.log('✅ DEBUG - Desactivando Live Preview desde localStorage');
-              setLivePreviewEnabled(false);
+            if (isEnabled !== isLivePreviewEnabled) {
+              console.log(`✅ DEBUG GeneratedCodeModal - ${isEnabled ? 'Activando' : 'Desactivando'} Live Preview desde localStorage`);
+              setLivePreviewEnabled(isEnabled);
+            } else {
+              console.log('ℹ️ DEBUG GeneratedCodeModal - Estado ya está sincronizado');
             }
           } catch (e) {
             console.error("❌ Error parsing livePreviewEnabled from localStorage", e);
           }
         } else {
-          console.log('⚠️ DEBUG - No hay estado guardado del Live Preview para esta compañía');
+          console.log('⚠️ DEBUG GeneratedCodeModal - No hay estado guardado del Live Preview para esta compañía');
+          // Si no hay estado guardado, guardar el estado actual
+          localStorage.setItem(key, JSON.stringify(isLivePreviewEnabled));
+          console.log('💾 DEBUG GeneratedCodeModal - Guardando estado inicial del Live Preview:', isLivePreviewEnabled);
         }
       } else {
-        console.log('⚠️ DEBUG - No se puede cargar estado: companyId no disponible o window undefined');
+        console.log('⚠️ DEBUG GeneratedCodeModal - No se puede cargar estado: companyId no disponible o window undefined');
       }
+    } else {
+      console.log('ℹ️ DEBUG GeneratedCodeModal - Modal no visible, saltando carga de estado');
     }
   }, [visible]); // Removemos las dependencias para que se ejecute cada vez que se abre el modal
 
