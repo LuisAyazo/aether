@@ -75,7 +75,7 @@ export function CompanySelector() {
 
   const handleCreateCompany = () => {
     setOpen(false);
-    router.push('/create-company');
+    router.push('/company/create');
   };
 
   const getCompanyInitials = (name: string) => {

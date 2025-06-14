@@ -364,7 +364,7 @@ describe('CompanySelector', () => {
       const createButton = screen.getByText('Create New Company');
       await user.click(createButton);
 
-      expect(mockRouter.push).toHaveBeenCalledWith('/create-company');
+      expect(mockRouter.push).toHaveBeenCalledWith('/company/create');
     });
   });
 

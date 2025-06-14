@@ -1,15 +1,49 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from "../../lib/supabase";
 import { fetchAndUpdateCurrentUser } from "../../services/authService";
+import { AuthDebugger, interceptRouter } from "../../lib/auth-debug";
 
 export default function AuthCallback() {
-  const router = useRouter();
+  const router = interceptRouter(useRouter());
+  const [loadingMessage, setLoadingMessage] = useState('Procesando autenticación...');
+  const [loadingStep, setLoadingStep] = useState(0);
+
+  // Mensajes de carga progresivos
+  const loadingMessages = [
+    'Procesando autenticación...',
+    'Verificando credenciales...',
+    'Obteniendo información del usuario...',
+    'Preparando tu espacio de trabajo...',
+    'Casi listo...'
+  ];
+
+  useEffect(() => {
+    // Cambiar mensaje cada 2 segundos
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => {
+        const next = prev + 1;
+        if (next < loadingMessages.length) {
+          setLoadingMessage(loadingMessages[next]);
+          return next;
+        }
+        return prev;
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const handleCallback = async () => {
+      AuthDebugger.log('AuthCallback', 'start', {
+        url: window.location.href,
+        hash: window.location.hash,
+        search: window.location.search
+      });
+      
       console.log('[AUTH CALLBACK] Starting auth callback handler...');
       
       // Log the current URL
@@ -47,9 +81,6 @@ export default function AuthCallback() {
           router.push('/login?error=oauth_error');
           return;
         }
-        
-        // Wait a bit for Supabase to process the callback
-        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Get the session - Supabase should have handled the code exchange automatically
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -120,6 +151,11 @@ export default function AuthCallback() {
 
         if (session) {
           // Successful authentication
+          AuthDebugger.log('AuthCallback', 'session-found', {
+            userId: session.user?.id,
+            email: session.user?.email
+          });
+          
           console.log('[AUTH CALLBACK] Auth successful, storing user data...');
           
           // Store user data in localStorage for quick access
@@ -136,12 +172,19 @@ export default function AuthCallback() {
           localStorage.setItem('user', JSON.stringify(userData));
           localStorage.setItem('token', session.access_token); // Store token for backward compatibility
           
+          AuthDebugger.log('AuthCallback', 'user-stored', userData);
           console.log('[AUTH CALLBACK] User data stored, fetching complete profile...');
           
           // Fetch complete user profile with onboarding status
           const completeUser = await fetchAndUpdateCurrentUser();
           
           if (completeUser) {
+            AuthDebugger.log('AuthCallback', 'profile-fetched', {
+              email: completeUser.email,
+              onboarding_completed: completeUser.onboarding_completed,
+              usage_type: completeUser.usage_type
+            });
+            
             console.log('[AUTH CALLBACK] Complete user profile:', {
               email: completeUser.email,
               onboarding_completed: completeUser.onboarding_completed,
@@ -151,14 +194,17 @@ export default function AuthCallback() {
             // Check onboarding status
             if (completeUser.onboarding_completed !== true || completeUser.usage_type === null) {
               console.log('[AUTH CALLBACK] User needs onboarding, redirecting to onboarding...');
+              AuthDebugger.log('AuthCallback', 'redirect-onboarding', { reason: 'incomplete-onboarding' });
               router.push('/onboarding/select-usage');
             } else {
               console.log('[AUTH CALLBACK] User completed onboarding, redirecting to home...');
+              AuthDebugger.log('AuthCallback', 'redirect-home', { reason: 'onboarding-complete' });
               router.push('/'); // Home page will handle the rest
             }
           } else {
             // If we couldn't fetch the profile, redirect to home and let it handle the logic
             console.log('[AUTH CALLBACK] Could not fetch complete profile, redirecting to home...');
+            AuthDebugger.log('AuthCallback', 'redirect-home', { reason: 'no-profile' });
             router.push('/');
           }
         } else {
@@ -178,10 +224,35 @@ export default function AuthCallback() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Autenticando...</p>
+        <div className="mb-8">
+          <div className="mx-auto mb-6 text-6xl lg:text-7xl font-bold animate-pulse">
+            <span className="text-slate-900 dark:text-slate-100">Infra</span>
+            <span className="bg-gradient-to-r from-emerald-green-500 via-emerald-green-600 to-emerald-green-700 bg-clip-text text-transparent">UX</span>
+          </div>
+        </div>
+        <div className="flex items-center justify-center space-x-3">
+          <svg className="animate-spin h-8 w-8 text-emerald-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="text-xl text-slate-700 dark:text-slate-300 animate-fade-in">
+            {loadingMessage}
+          </p>
+        </div>
+        <div className="mt-8 flex justify-center space-x-2">
+          {loadingMessages.map((_, index) => (
+            <div
+              key={index}
+              className={`h-2 w-2 rounded-full transition-all duration-500 ${
+                index <= loadingStep
+                  ? 'bg-emerald-green-600 w-8'
+                  : 'bg-slate-300 dark:bg-slate-600'
+              }`}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

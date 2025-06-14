@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation'; // Importar useSearchParams
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { createCompany, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../services/companyService'; // Ajustada la ruta e importar prefijo
-import { fetchAndUpdateCurrentUser, getCurrentUser, User } from '../services/authService'; // Importar la nueva función, getCurrentUser y User
+import { createCompany, PERSONAL_SPACE_COMPANY_NAME_PREFIX } from '../services/companyService';
+import { fetchAndUpdateCurrentUser, getCurrentUser, User, isAuthenticated } from '../services/authService';
 
 export default function CreateCompanyPage() {
   const [name, setName] = useState('');
@@ -13,9 +13,10 @@ export default function CreateCompanyPage() {
   const [error, setError] = useState('');
   const [loadingStep, setLoadingStep] = useState(0);
   const router = useRouter();
-  const searchParams = useSearchParams(); // Para leer query params
+  const searchParams = useSearchParams();
   const [isPersonalSpaceSetup, setIsPersonalSpaceSetup] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // Definir User aquí o importar
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
 
   // Mensajes de carga progresivos
   const loadingMessages = [
@@ -40,15 +41,41 @@ export default function CreateCompanyPage() {
     };
   }, []);
 
+  // Verificación de autenticación y onboarding
   useEffect(() => {
+    // Verificación síncrona primero para evitar delays
+    const authenticated = isAuthenticated();
     const user = getCurrentUser();
-    setCurrentUser(user);
-    const setupPersonalQuery = searchParams.get('setup_personal_space');
-    if (setupPersonalQuery === 'true' && user) {
-      setIsPersonalSpaceSetup(true);
-      setName(`${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${user._id}`);
+    
+    if (!authenticated || !user) {
+      console.log('[CREATE-COMPANY] Usuario no autenticado, redirigiendo a login');
+      router.replace('/login');
+      return;
     }
-  }, [searchParams]);
+
+    // IMPORTANTE: Verificar que el usuario haya completado el onboarding
+    if (!user.usage_type) {
+      console.log('[CREATE-COMPANY] Usuario sin usage_type, redirigiendo a onboarding');
+      router.replace('/onboarding/select-usage');
+      return;
+    }
+
+    // TODO: Verificar si el usuario personal ya tiene compañía
+    // Por ahora, permitimos que usuarios personales creen múltiples compañías
+    
+    setCurrentUser(user);
+    setAuthChecking(false);
+  }, [router]);
+
+  useEffect(() => {
+    if (!authChecking && currentUser) {
+      const setupPersonalQuery = searchParams.get('setup_personal_space');
+      if (setupPersonalQuery === 'true') {
+        setIsPersonalSpaceSetup(true);
+        setName(`${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${currentUser._id}`);
+      }
+    }
+  }, [searchParams, currentUser, authChecking]);
   
   useEffect(() => {
     if (isPersonalSpaceSetup) return; // No generar slug si es setup de espacio personal
@@ -59,7 +86,7 @@ export default function CreateCompanyPage() {
       .replace(/ +/g, '-');
     
     setSlug(generatedSlug);
-  }, [name]);
+  }, [name, isPersonalSpaceSetup]);
   
   // Efecto para cambiar los mensajes de carga
   useEffect(() => {
@@ -88,8 +115,6 @@ export default function CreateCompanyPage() {
       let companyNameForCreation = name;
       if (isPersonalSpaceSetup && currentUser) {
         // Asegurarse de que el nombre para el espacio personal sea el correcto
-        // El estado `name` ya debería estar seteado por el useEffect
-        // pero podemos re-asegurarlo o usar directamente el nombre generado.
         companyNameForCreation = `${PERSONAL_SPACE_COMPANY_NAME_PREFIX}${currentUser._id}`;
       }
 
@@ -139,6 +164,15 @@ export default function CreateCompanyPage() {
       setLoading(false);
     }
   }
+
+  // Mostrar loader mientras se verifica autenticación
+  if (authChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
+        <p className="text-slate-600 dark:text-slate-400">Verificando acceso...</p>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen flex selection:bg-purple-500 selection:text-white">
@@ -166,11 +200,10 @@ export default function CreateCompanyPage() {
         
         <div 
           className="relative z-10 w-full max-w-md bg-white dark:bg-slate-800/80 backdrop-blur-md shadow-2xl rounded-xl p-8 sm:p-10 border border-slate-200 dark:border-slate-700 animate-fade-scale-up" 
-          // space-y-6 se movió al div del contenido del formulario para mejor control
         >
-          <div className="space-y-6"> {/* Nuevo div para agrupar cabecera y formulario con espaciado */}
-            <div> {/* Div para la cabecera de la card */}
-              <div className="text-center md:hidden mb-6"> {/* Logo para móviles, con margen inferior */}
+          <div className="space-y-6">
+            <div>
+              <div className="text-center md:hidden mb-6">
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white">
                   <span className="font-extrabold">Infra</span><span className="text-emerald-500 font-semibold">UX</span>
                 </h2>
@@ -178,7 +211,7 @@ export default function CreateCompanyPage() {
               <h1 className="text-2xl sm:text-3xl font-semibold text-slate-800 dark:text-white text-center">
                 Crea tu Organización
               </h1>
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 text-center"> {/* Margen superior ajustado */}
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 text-center">
                 Define los detalles de tu nueva organización en InfraUX.
               </p>
             </div>
@@ -204,11 +237,11 @@ export default function CreateCompanyPage() {
               required
               placeholder={isPersonalSpaceSetup ? "" : "Ej: Mi Startup Increíble"}
               className="mt-1 block w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition duration-150 ease-in-out text-sm"
-              disabled={isPersonalSpaceSetup} // Deshabilitar si es setup de espacio personal
+              disabled={isPersonalSpaceSetup}
             />
           </div>
 
-          {!isPersonalSpaceSetup && ( // Solo mostrar slug si NO es setup de espacio personal
+          {!isPersonalSpaceSetup && (
             <div>
               <label htmlFor="slug" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Identificador Único (URL)
@@ -263,9 +296,8 @@ export default function CreateCompanyPage() {
             </button>
           </div>
         </form>
-      </div> {/* Cierre del div con className="space-y-6" */}
-    </div> {/* Cierre del div principal de la card (className="relative z-10 w-full max-w-md ...") */}
-      {/* El footer se movió al panel izquierdo para pantallas md y superiores */}
+      </div>
+    </div>
       <div className="md:hidden absolute bottom-6 left-0 right-0 text-center text-xs text-slate-500 dark:text-slate-400 z-0">
         InfraUX Technologies &copy; {new Date().getFullYear()}
       </div>

@@ -55,8 +55,10 @@ export default function AppLayout({
   const [authProcessed, setAuthProcessed] = useState(false); 
   const [initialLoadDone, setInitialLoadDone] = useState(false); // Para controlar la carga inicial de datos de compañía/ambientes
 
-  // REMOVIDO: fetchInitialUser se llama desde el dashboard page, no desde aquí
-  // para evitar llamadas duplicadas
+  useEffect(() => {
+    // Iniciar la carga de datos del usuario y la compañía al montar el layout
+    fetchInitialUser();
+  }, [fetchInitialUser]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -110,7 +112,7 @@ export default function AppLayout({
     const currentAuthStatus = isAuthenticated();
     const localUser = user; // user del store
 
-    if (pathname === '/create-company' || pathname === '/onboarding/select-usage') {
+    if (pathname === '/company/create' || pathname === '/onboarding/select-usage') {
       // Permitir acceso a estas páginas incluso si la carga de datos principal está pendiente
       // setIsLoading(false); // setDataLoading(false) se manejará en el store
       // La carga de datos de compañía/ambientes se hará después o en la página específica
@@ -146,15 +148,15 @@ export default function AppLayout({
   }, [router, pathname, authProcessed, user, activeCompany, dataLoading, initialLoadDone]);
 
   // El loader principal ahora depende de authProcessed y dataLoading del store (o initialLoadDone)
-  if (!authProcessed || (isAuthenticated() && dataLoading && !initialLoadDone && pathname !== '/create-company' && pathname !== '/onboarding/select-usage') ) { 
+  if (!authProcessed || (isAuthenticated() && dataLoading && !initialLoadDone && pathname !== '/company/create' && pathname !== '/onboarding/select-usage') ) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
         <p className="text-slate-600 dark:text-slate-400">Cargando...</p>
       </div>
     );
   }
+const showNavigation = pathname !== '/onboarding/select-usage' && pathname !== '/company/create';
 
-  const showNavigation = pathname !== '/onboarding/select-usage' && pathname !== '/create-company';
 
   return (
     <>

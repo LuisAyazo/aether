@@ -40,6 +40,7 @@ function convertSupabaseUser(supabaseUser: SupabaseUser, profile?: any): User {
     email: supabaseUser.email || '',
     name: profile?.name || supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || '',
     auth_provider: authProvider,
+    usage_type: profile?.usage_type || null,  // Incluir usage_type del perfil
     avatar_url: profile?.avatar_url || supabaseUser.user_metadata?.avatar_url,
     workspace_id: profile?.workspace_id,
     company_id: profile?.company_id,
@@ -374,6 +375,7 @@ export async function fetchAndUpdateCurrentUser(): Promise<User | null> {
     // Fetch updated profile from backend
     let profile = null;
     try {
+      console.log('[AUTH SERVICE] Calling /me endpoint...');
       const response = await fetch(`${API_URL}/api/v1/auth/me`, {
         method: 'GET',
         headers: {
@@ -381,16 +383,20 @@ export async function fetchAndUpdateCurrentUser(): Promise<User | null> {
           'Content-Type': 'application/json',
         },
       });
+      console.log(`[AUTH SERVICE] /me endpoint responded with status: ${response.status}`);
 
       if (response.ok) {
         profile = await response.json();
+        console.log('[AUTH SERVICE] Profile fetched successfully:', profile);
       } else if (response.status === 401) {
         console.error("fetchAndUpdateCurrentUser: Unauthorized, logging out");
         await logoutUser();
         return null;
+      } else {
+        console.warn(`[AUTH SERVICE] /me endpoint returned status ${response.status}. Proceeding without profile.`);
       }
     } catch (error) {
-      console.error("fetchAndUpdateCurrentUser: Error fetching profile:", error);
+      console.error("fetchAndUpdateCurrentUser: CRITICAL error fetching profile:", error);
     }
 
     const updatedUser = convertSupabaseUser(user, profile);

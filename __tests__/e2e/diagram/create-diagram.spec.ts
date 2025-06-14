@@ -1,18 +1,20 @@
 import { test, expect } from '@playwright/test';
-import { loginAsUser, createTestCompany, cleanupTestData } from '@/__tests__/e2e/helpers/test-utils';
+import { loginAsUser, createTestCompany, cleanupTestData } from '../helpers/test-utils';
 
 test.describe('Diagram Creation Flow', () => {
-  let companyId: string;
+  let companyId: string | null;
 
   test.beforeEach(async ({ page }) => {
     // Setup: Create test company and login
-    companyId = await createTestCompany();
+    companyId = await createTestCompany(page, 'Test Company');
     await loginAsUser(page, 'test@infraux.com', 'testpass123');
     await page.goto('/dashboard');
   });
 
-  test.afterEach(async () => {
-    await cleanupTestData(companyId);
+  test.afterEach(async ({ page }) => {
+    if (companyId) {
+      await cleanupTestData(page, companyId);
+    }
   });
 
   test('creates a new diagram with AWS resources', async ({ page }) => {

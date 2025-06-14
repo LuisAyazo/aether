@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Spin, message, Typography, Modal, Button } from 'antd';
+import { Spin, message, Modal, Button } from 'antd';
+import { AuthDebugger, interceptRouter } from '../../lib/auth-debug';
 import { 
   FolderIcon as FolderIconOutline, 
   UserCircleIcon as UserCircleIconOutline, 
@@ -60,13 +61,13 @@ import nodeTypesImport from '../../components/nodes/NodeTypes';
 // import { RESOURCE_REGISTRY, SupportedProvider } from '../../config/schemas'; 
 import type { ResourceCategory } from '../../components/flow/types/editorTypes'; // ResourceItem eliminado
 
-const { Text } = Typography;
+// Text removed - not being used
 
 type SidebarSectionKey = 'diagrams' | 'settings' | 'templates' | 'credentials' | 'deployments' | 'team' | 'environments';
 const VALID_SECTIONS: SidebarSectionKey[] = ['diagrams', 'settings', 'templates', 'credentials', 'deployments', 'team', 'environments'];
 
 export default function DashboardPage() {
-  const router = useRouter();
+  const router = interceptRouter(useRouter());
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -80,7 +81,7 @@ export default function DashboardPage() {
   const currentDiagram = useNavigationStore(state => state.currentDiagram);
   const dataLoading = useNavigationStore(state => state.dataLoading);
   const dataError = useNavigationStore(state => state.dataError);
-  const fetchInitialUser = useNavigationStore(state => state.fetchInitialUser);
+  const authInitialized = useNavigationStore(state => state.authInitialized);
   
   const [activeSectionInSidebar, setActiveSectionInSidebar] = useState<SidebarSectionKey>('diagrams');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
@@ -176,24 +177,8 @@ export default function DashboardPage() {
     }
   }, [currentDiagram]);
   
-  useEffect(() => {
-    // Verificar autenticación con Supabase
-    const checkAuth = async () => {
-      const { isAuthenticatedAsync } = await import('../../services/authService');
-      const isAuth = await isAuthenticatedAsync();
-      
-      if (!isAuth) {
-        router.push('/login');
-        return;
-      }
-      
-      if (!user && !dataLoading) {
-        fetchInitialUser();
-      }
-    };
-    
-    checkAuth();
-  }, [user, dataLoading, fetchInitialUser, router]);
+  // El useEffect para llamar a fetchInitialUser se movió al layout principal (app/layout.tsx)
+  // para asegurar que se llame una sola vez al cargar la aplicación.
 
   useEffect(() => {
     if (user && user._id && !dataLoading && !dataError && activeCompany) {
@@ -521,26 +506,33 @@ export default function DashboardPage() {
     return categories;
   }, []); // La dependencia vacía está bien si los tipos de recursos son estáticos
 
+  // Manejar redirección DESPUÉS de que la autenticación se haya inicializado
+  useEffect(() => {
+    if (!authInitialized) {
+      return; // No hacer nada hasta que el store de auth esté listo
+    }
 
-  if (dataLoading && !activeCompany) { 
+    if (!user) {
+      AuthDebugger.log('Dashboard', 'redirect-login-no-user', {
+        reason: 'auth-initialized-no-user'
+      });
+      router.push('/login');
+    } else if (dataError && dataError.includes('No companies found')) {
+      AuthDebugger.log('Dashboard', 'redirect-company-create', {
+        reason: 'no-companies',
+        error: dataError
+      });
+      router.push('/company/create');
+    }
+  }, [authInitialized, user, dataError, router]);
+
+  // Pantalla de carga principal mientras se inicializa el estado de autenticación
+  if (!authInitialized) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850" style={{ height: 'calc(100vh - 3.5rem)' }}>
         <Spin size="large" />
-        <p className="mt-3 text-slate-600 dark:text-slate-400">Cargando datos...</p>
+        <p className="mt-3 text-slate-600 dark:text-slate-400">Verificando autenticación...</p>
       </div>
-    );
-  }
-  
-  // Eliminado - no mostrar pantalla de error completa que oculte el sidebar
-
-  if (!activeCompany && !dataLoading) {
-    // Si no hay compañía activa y no está cargando, redirigir al login
-    router.push('/login');
-    return (
-        <div className="flex-1 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-850 p-8" style={{ height: 'calc(100vh - 3.5rem)' }}>
-            <Spin size="large" />
-            <p className="mt-3 text-slate-600 dark:text-slate-400">Redirigiendo al login...</p>
-        </div>
     );
   }
   

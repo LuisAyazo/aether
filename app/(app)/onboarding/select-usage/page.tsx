@@ -86,7 +86,27 @@ export default function SelectUsagePage() {
   const [howHeard, setHowHeard] = useState<string | null>(null);
   const [iacKnowledge, setIacKnowledge] = useState<string | null>(null); // Nuevo estado para IaC
   const [mainInterests, setMainInterests] = useState<string[]>([]);
+  const [loadingStep, setLoadingStep] = useState(0);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  
+  // Mensajes de carga para usuarios personales
+  const personalLoadingMessages = [
+    'Creando tu espacio personal...',
+    'Configurando tu dashboard...',
+    'Preparando tus herramientas...',
+    '¡Casi listo! Un momento más...'
+  ];
 
+
+  // Efecto para cambiar mensajes de carga
+  useEffect(() => {
+    if (showLoadingScreen && loadingStep < personalLoadingMessages.length - 1) {
+      const timer = setTimeout(() => {
+        setLoadingStep((prev) => prev + 1);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [showLoadingScreen, loadingStep, personalLoadingMessages.length]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -199,24 +219,52 @@ export default function SelectUsagePage() {
       // Si el usuario seleccionó uso personal, crear su espacio personal
       if (selectedUsageType === 'personal') {
         console.log("handleSubmitOnboarding: Creando espacio personal...");
+        
+        // Mostrar pantalla de carga
+        setShowLoadingScreen(true);
+        setLoadingStep(0);
+        
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
         
+        // Esperar un poco para que se vea el primer mensaje
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         try {
+          // Usar el endpoint especializado para crear espacio personal
           const createSpaceResponse = await fetch(`${API_URL}/api/v1/companies/create-personal-space`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
-            },
+            }
           });
           
           if (!createSpaceResponse.ok) {
             const errorData = await createSpaceResponse.json();
             console.error("handleSubmitOnboarding: Error creando espacio personal:", errorData);
-            // No bloquear el flujo, el usuario puede crear la compañía después
+            
+            // Si el error es porque ya tiene un espacio personal, no es un problema
+            if (errorData.detail && errorData.detail.includes('ya tiene')) {
+              console.log("handleSubmitOnboarding: Usuario ya tiene espacio personal o compañías");
+              
+              // Actualizar first_company_created si no está marcado
+              if (newUserData && !newUserData.first_company_created) {
+                newUserData.first_company_created = true;
+                localStorage.setItem('user', JSON.stringify(newUserData));
+              }
+            } else {
+              // Mostrar error pero no bloquear el flujo
+              message.warning('No se pudo crear el espacio personal automáticamente. Puedes crearlo más tarde desde el dashboard.');
+            }
           } else {
             const spaceData = await createSpaceResponse.json();
-            console.log("handleSubmitOnboarding: Espacio personal creado:", spaceData);
+            console.log("handleSubmitOnboarding: Espacio personal creado o recuperado:", spaceData);
+            
+            // Actualizar el usuario para marcar que ya creó su primera compañía
+            if (newUserData) {
+              newUserData.first_company_created = true;
+              localStorage.setItem('user', JSON.stringify(newUserData));
+            }
           }
         } catch (spaceError) {
           console.error("handleSubmitOnboarding: Error al crear espacio personal:", spaceError);
@@ -230,10 +278,12 @@ export default function SelectUsagePage() {
       if (selectedUsageType === 'company') {
         // Si seleccionó company, redirigir a crear compañía (página existente)
         console.log("handleSubmitOnboarding: Usuario seleccionó company, redirigiendo a crear compañía...");
-        router.push('/create-company');
+        router.push('/company/create');
       } else {
         // Si seleccionó personal y ya se creó el espacio, ir al dashboard
-        router.push('/dashboard');
+        console.log("handleSubmitOnboarding: Usuario personal, redirigiendo al dashboard...");
+        // Usar replace en lugar de push para evitar problemas de navegación
+        router.replace('/dashboard');
       }
     } catch (err: unknown) {
       console.error("handleSubmitOnboarding: Error durante el proceso.", err);
@@ -254,6 +304,43 @@ export default function SelectUsagePage() {
         <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
             <p className="text-slate-600 dark:text-slate-400">Cargando...</p>
         </div>
+    );
+  }
+  
+  // Si estamos mostrando la pantalla de carga
+  if (showLoadingScreen) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-900 dark:to-slate-800">
+        <div className="text-center">
+          <div className="mb-8">
+            <div className="mx-auto mb-6 text-6xl lg:text-7xl font-bold animate-pulse">
+              <span className="text-slate-900 dark:text-slate-100">Infra</span>
+              <span className="bg-gradient-to-r from-emerald-green-500 via-emerald-green-600 to-emerald-green-700 bg-clip-text text-transparent">UX</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-center space-x-3">
+            <svg className="animate-spin h-8 w-8 text-emerald-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-xl text-slate-700 dark:text-slate-300 animate-fade-in">
+              {personalLoadingMessages[loadingStep]}
+            </p>
+          </div>
+          <div className="mt-8 flex justify-center space-x-2">
+            {personalLoadingMessages.map((_, index) => (
+              <div
+                key={index}
+                className={`h-2 w-2 rounded-full transition-all duration-500 ${
+                  index <= loadingStep
+                    ? 'bg-emerald-green-600 w-8'
+                    : 'bg-slate-300 dark:bg-slate-600'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -412,7 +499,7 @@ export default function SelectUsagePage() {
                   ¿Qué te interesa explorar?
                 </h2>
                 <p className="text-md text-slate-600 dark:text-slate-400 mb-8">
-                  Selecciona algunas áreas que te gustaría conocer (opcional).
+                  Selecciona al menos un área que te gustaría conocer.
                 </p>
                 
                 <div className="grid grid-cols-2 gap-4 mb-8">
@@ -439,8 +526,14 @@ export default function SelectUsagePage() {
                 </div>
 
                 <button
-                    onClick={handleSubmitOnboarding}
-                    disabled={!!loading}
+                    onClick={() => {
+                      if (mainInterests.length === 0) {
+                        setError("Por favor, selecciona al menos un área de interés.");
+                        return;
+                      }
+                      handleSubmitOnboarding();
+                    }}
+                    disabled={!!loading || mainInterests.length === 0}
                     className="w-full px-6 py-3 bg-emerald-green-600 hover:bg-emerald-green-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-300 disabled:opacity-50"
                 >
                     {loading === 'submit' ? 'Procesando...' : 'Finalizar Onboarding e Ir al Dashboard'}

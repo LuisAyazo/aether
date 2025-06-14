@@ -130,8 +130,8 @@ const handleDiagramChange = useNavigationStore(state => state.handleDiagramChang
     { type: 'divider' as const },
     { key: 'logout', icon: <LogoutOutlined />, label: 'Cerrar Sesión', onClick: handleLogout },
   ];
-  
-  const hideNavigation = pathname === '/login' || pathname === '/register' || pathname === '/onboarding/select-usage' || pathname === '/create-company';
+  const hideNavigation = pathname === '/login' || pathname === '/register' || pathname === '/onboarding/select-usage' || pathname === '/company/create';
+
   
   if (hideNavigation) return null;
   

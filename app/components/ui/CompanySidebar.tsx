@@ -297,7 +297,7 @@ const CompanySidebar: React.FC<CompanySidebarProps> = ({
                       <div className="border-t border-slate-200 dark:border-slate-700 mt-2 pt-2">
                         <button
                           onClick={() => {
-                            router.push('/create-company');
+                            router.push('/company/create');
                             setCompanySelectorOpen(false);
                           }}
                           className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"

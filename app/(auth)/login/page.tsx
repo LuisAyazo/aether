@@ -123,18 +123,15 @@ export default function LoginPage() {
         
         // Now redirect based on updated user state
         if (!data.user.onboarding_completed) {
-          // If user has companies, they can skip onboarding
-          if (data.user.first_company_created) {
-            console.log('[LOGIN PAGE] Invited user, skipping onboarding, redirecting to dashboard');
-            router.push('/dashboard');
-          } else {
-            console.log('[LOGIN PAGE] New user needs onboarding, redirecting...');
-            router.push('/onboarding/select-usage');
-          }
-        } else if (!data.user.first_company_created) {
-          console.log('[LOGIN PAGE] User needs to create first company, redirecting to onboarding...');
+          // Paso 1: Onboarding
+          console.log('[LOGIN PAGE] User needs onboarding, redirecting...');
           router.push('/onboarding/select-usage');
+        } else if (data.user.usage_type === 'company' && !data.user.first_company_created) {
+          // Paso 2: Usuarios company necesitan crear su primera compañía
+          console.log('[LOGIN PAGE] Company user needs to create first company, redirecting...');
+          router.push('/company/create');
         } else {
+          // Paso 3: Todo completado, ir al dashboard
           console.log('[LOGIN PAGE] User ready for dashboard, redirecting...');
           router.push('/dashboard');
         }
